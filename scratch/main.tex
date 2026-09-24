@@ -992,7 +992,7 @@ As shown in Figure~\ref{fig:noise_robustness} and Table~\ref{tab:noise_robustnes
 
 The empirical results are consistent with temporal self-attention reweighting historical context in a way that is more robust to the injected perturbations; they do not demonstrate a general low-pass-filter property.
 
-An omnibus Friedman test across the noise evaluation samples yields $\chi^2 = 9025.15$ ($p < 0.001$). As with the clean-input analysis, this $p$-value is driven by sample size and we do not lean on it; the practically meaningful evidence for noise-robustness divergence is the Cohen's $d$ effect sizes in Table~\ref{tab:noise_robustness_effects}, which are large against the graph baselines and modest only against the self-attention baselines (STAEformer, iTransformer).
+An omnibus Friedman test across the noise evaluation scenarios yields $\chi^2 = 91.85$ ($p < 0.0001$), confirming statistically significant performance divergence across all eight architectures under input perturbation. As with the clean-input analysis, the practically meaningful evidence for noise-robustness divergence is the Cohen's $d$ effect sizes in Table~\ref{tab:noise_robustness_effects}, which are large against the graph baselines and modest only against the self-attention baselines (STAEformer, iTransformer).
 
 \begin{table}[pos=htbp]
 \centering

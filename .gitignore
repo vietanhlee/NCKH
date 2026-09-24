@@ -1,9 +1,27 @@
-__pycache__
-temp
-.gemini
+__pycache__/
+temp/
+.gemini/
 note.md
-nckh
+nckh/
+
+# Ignore large archives, weights, and embeddings
+*.zip
+*.tar.gz
+*.pth
+*.pt
+*.bin
+*.h5
+
+# Ignore checkpoints and datasets
+checkpoints/
+data/
+*.csv
+!traffic_*.csv
+
+# Media & Docs exclusions if needed
 *.pdf
 *.png
 *.md
+!README.md
+!research_ideas_ssl.md
 *.json

@@ -17,6 +17,8 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
+from scipy.stats import friedmanchisquare, wilcoxon
+import json
 
 import sys
 
@@ -484,13 +486,49 @@ def run_noise_robustness_experiment():
     print(f"   - PDF : {fig_pdf}")
     print(f"   - PNG : {fig_png}")
 
+    # 5. Phân tích Kiểm định Thống kê Omnibus (Friedman Test) cho Tập Nhiễu
+    friedman_results = {}
+    print(f"\n🧪 PHÂN TÍCH KIỂM ĐỊNH THỐNG KÊ OMNIBUS (FRIEDMAN TEST) CHO TẬP NHIỄU")
+    for n_info in noise_levels:
+        noise_mae = n_info['mae_noise']
+        model_maes = [results[m_name][noise_mae] for m_name in models_to_test if results[m_name][noise_mae]]
+        if len(model_maes) >= 2:
+            try:
+                stat, p_val = friedmanchisquare(*model_maes)
+                friedman_results[f"Noise_MAE_{noise_mae:.2f}"] = {"stat": float(stat), "p_value": float(p_val)}
+                print(f"   ▶ Noise MAE={noise_mae:.2f} | Friedman Chi-Square Stat: {stat:.4f} (p-value: {p_val:.4e})")
+            except Exception as e:
+                print(f"   ⚠️ Noise MAE={noise_mae:.2f} | Lỗi chạy Friedman test: {e}")
+
+    # Friedman test gộp trên tất cả các noise levels và seeds
+    all_noise_maes_per_model = []
+    for m_name in models_to_test:
+        combined_maes = []
+        for n_info in noise_levels:
+            combined_maes.extend(results[m_name][n_info['mae_noise']])
+        all_noise_maes_per_model.append(combined_maes)
+    
+    if len(all_noise_maes_per_model) >= 2 and all(len(c) > 0 for c in all_noise_maes_per_model):
+        try:
+            stat_omnibus, p_val_omnibus = friedmanchisquare(*all_noise_maes_per_model)
+            friedman_results["Omnibus_All_Noise_Levels"] = {"stat": float(stat_omnibus), "p_value": float(p_val_omnibus)}
+            print(f"   🌐 Friedman Test Tổng thể (Tất cả Noise Levels): Stat={stat_omnibus:.4f}, p-value={p_val_omnibus:.4e}")
+        except Exception as e:
+            print(f"   ⚠️ Lỗi chạy Friedman test tổng thể: {e}")
+
+    with open("noise_statistical_tests.json", "w", encoding="utf-8") as f_json:
+        json.dump(friedman_results, f_json, indent=4)
+
     report_path = "noise_robustness_report.md"
-    with open(report_path, "write" if hasattr(report_path, 'write') else "w", encoding="utf-8") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("# 🛡️ Báo cáo Phân tích Độ nhạy với Nhiễu Nhận dạng Cho Tất cả Model\n\n")
         f.write("Báo cáo giải quyết triệt để phản biện của Reviewer về **Vấn đề Lan truyền sai số (Error Propagation)** từ Giai đoạn 1 sang Giai đoạn 2.\n\n")
         f.write("## 📊 Bảng Kết quả Đánh giá Độ suy giảm Hiệu năng\n\n")
         f.write(df_report.to_markdown(index=False))
-        f.write("\n\n---\n\n## 💡 Kết luận Khoa học:\n")
+        f.write("\n\n---\n\n## 🧪 Phân tích Kiểm định Thống kê Friedman (Noise Evaluation)\n\n")
+        for k, v in friedman_results.items():
+            f.write(f"- **{k}**: Chi-Square Stat = `{v['stat']:.4f}`, p-value = `{v['p_value']:.4e}`\n")
+        f.write("\n---\n\n## 💡 Kết luận Khoa học:\n")
         f.write("1. **Độ dốc đường cong MAE**: Khi mức nhiễu đầu vào tăng từ 0.0 lên 3.74 (đúng bằng sai số thực tế Stage 1 ResNet-50), sai số dự báo của các mô hình Baseline tăng nhanh.\n")
         f.write("2. **Độ bền vững của TA-STGCN**: Đường cong MAE của TA-STGCN có độ dốc thoải nhất, chứng minh cơ chế **Model-Level Multi-Head Temporal Self-Attention** hoạt động như một **Bộ lọc thông thấp động (Dynamic Low-Pass Filter)** tự động triệt tiêu các sai số đếm xe tức thời từ camera.\n")
 
