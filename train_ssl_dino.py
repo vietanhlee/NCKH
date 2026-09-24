@@ -29,6 +29,11 @@ from typing import List, Tuple, Dict, Any
 # Note: If xformers is not installed, PyTorch uses native FlashAttention / SDPA.
 # To enable xformers acceleration, run: pip install xformers
 
+import matplotlib
+matplotlib.use("Agg")  # Non-interactive headless backend for background/server training
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 import torch
@@ -500,6 +505,9 @@ def train_ssl_dinov2(args):
 
     scaler = torch.amp.GradScaler('cuda' if device.type == 'cuda' else 'cpu')
 
+    # History tracker for publication-grade training curves
+    history = {"loss": [], "lr_head": [], "lr_backbone": [], "teacher_temp": []}
+
     # 5. Training Loop
     best_loss = float("inf")
     start_time = time.time()
@@ -569,6 +577,12 @@ def train_ssl_dinov2(args):
         avg_loss = total_epoch_loss / len(dataloader)
         print(f"Ep {epoch+1:03d}/{args.epochs:03d} | DINO Loss: {avg_loss:.4f} | Base LR: {curr_base_lr:.6f} | Temp: {dino_loss.teacher_temp_schedule[epoch]:.4f}")
 
+        # Record metrics for figures
+        history["loss"].append(avg_loss)
+        history["lr_head"].append(curr_base_lr)
+        history["lr_backbone"].append(curr_base_lr * args.backbone_lr_scale)
+        history["teacher_temp"].append(float(dino_loss.teacher_temp_schedule[epoch]))
+
         # Save Checkpoint
         if avg_loss < best_loss or (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
             best_loss = min(best_loss, avg_loss)
@@ -583,6 +597,7 @@ def train_ssl_dinov2(args):
                 "loss": avg_loss,
                 "backbone_name": args.backbone,
                 "embed_dim": embed_dim,
+                "history": history,
             }, full_ckpt_path)
 
             # Save Clean Domain-Adapted DINOv2 Backbone (Ready for downstream tasks / graph caching!)
@@ -590,13 +605,141 @@ def train_ssl_dinov2(args):
             torch.save(student[0].state_dict(), backbone_path)
             print(f"   -> Checkpoint saved to: {backbone_path}")
 
+            # Save updated training curves periodically
+            if args.save_figures:
+                save_training_curves(history, args.save_dir)
+
     elapsed = time.time() - start_time
     print(f"\n🏁 DINOv2 Continual Pre-training Completed in {elapsed/60:.2f} minutes!")
     print(f"💾 Adapted DINOv2 Backbone weights ready: {os.path.join(args.save_dir, 'dinov2_traffic_backbone.pth')}\n")
 
+    # Final publication figures: Training Curves + Emergent PCA Feature Maps
+    if args.save_figures:
+        print("🎨 Generating publication-grade figures...")
+        save_training_curves(history, args.save_dir)
+        save_pca_feature_maps(student[0], image_paths, args.save_dir, device)
+
 
 # =====================================================================
-# 5. OFFLINE FEATURE CACHING UTILITY (FOR GRAPH & COUNTING TASKS)
+# 5. PUBLICATION FIGURE GENERATION UTILITIES
+# =====================================================================
+
+def save_training_curves(history: Dict[str, List[float]], save_dir: str):
+    """
+    Plots and saves publication-grade training curves for DINOv2 SSL.
+    Generates both high-res PNG (300 DPI) and vector PDF for LaTeX.
+    """
+    if len(history["loss"]) == 0:
+        return
+
+    epochs = range(1, len(history["loss"]) + 1)
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.5), dpi=300)
+
+    # 1. DINO Self-Distillation Loss
+    axes[0].plot(epochs, history["loss"], color="#1f77b4", linewidth=2.2, marker="o", markersize=3, label="DINO SSL Loss")
+    axes[0].set_xlabel("Epoch", fontsize=11, fontweight="bold")
+    axes[0].set_ylabel("Loss", fontsize=11, fontweight="bold")
+    axes[0].set_title("Self-Distillation Convergence", fontsize=12, fontweight="bold")
+    axes[0].grid(True, linestyle="--", alpha=0.5)
+    axes[0].legend(loc="upper right", frameon=True)
+
+    # 2. Learning Rate Schedule
+    axes[1].plot(epochs, history["lr_head"], color="#2ca02c", linewidth=2.0, label="Head Peak LR")
+    axes[1].plot(epochs, history["lr_backbone"], color="#ff7f0e", linewidth=2.0, linestyle="--", label="Backbone Adapted LR")
+    axes[1].set_xlabel("Epoch", fontsize=11, fontweight="bold")
+    axes[1].set_ylabel("Learning Rate", fontsize=11, fontweight="bold")
+    axes[1].set_title("Cosine Warmup & Decay Schedule", fontsize=12, fontweight="bold")
+    axes[1].grid(True, linestyle="--", alpha=0.5)
+    axes[1].legend(loc="upper right", frameon=True)
+
+    # 3. Teacher Temperature Sharpening
+    axes[2].plot(epochs, history["teacher_temp"], color="#d62728", linewidth=2.2, label="Teacher Temp (Sharpening)")
+    axes[2].set_xlabel("Epoch", fontsize=11, fontweight="bold")
+    axes[2].set_ylabel("Temperature", fontsize=11, fontweight="bold")
+    axes[2].set_title("Teacher Sharpening Dynamics", fontsize=12, fontweight="bold")
+    axes[2].grid(True, linestyle="--", alpha=0.5)
+    axes[2].legend(loc="lower right", frameon=True)
+
+    plt.tight_layout()
+    os.makedirs(save_dir, exist_ok=True)
+    png_path = os.path.join(save_dir, "dinov2_ssl_training_curves.png")
+    pdf_path = os.path.join(save_dir, "dinov2_ssl_training_curves.pdf")
+    plt.savefig(png_path, bbox_inches="tight", dpi=300)
+    plt.savefig(pdf_path, bbox_inches="tight")
+    plt.close()
+    print(f"   📈 Saved Training Curves to: {png_path} and {pdf_path}")
+
+
+@torch.no_grad()
+def save_pca_feature_maps(backbone: nn.Module, sample_paths: List[str], save_dir: str, device: torch.device, num_samples: int = 4):
+    """
+    Renders Meta DINOv2 PCA Feature Maps for representative traffic camera frames.
+    Visualizes emergent visual clustering (cars, motorcycles, road surfaces) without labels!
+    """
+    backbone.eval()
+    selected_paths = sample_paths[:num_samples]
+    if len(selected_paths) == 0:
+        return
+
+    eval_transform = transforms.Compose([
+        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    fig, axes = plt.subplots(len(selected_paths), 2, figsize=(8, 3.2 * len(selected_paths)), dpi=300)
+    if len(selected_paths) == 1:
+        axes = np.expand_dims(axes, 0)
+
+    for idx, path in enumerate(selected_paths):
+        with Image.open(path) as img:
+            img_rgb = img.convert("RGB")
+            orig_resized = img_rgb.resize((224, 224))
+            inp = eval_transform(img_rgb).unsqueeze(0).to(device)
+
+            # Extract patch tokens
+            if hasattr(backbone, "get_intermediate_layers"):
+                patch_tokens = backbone.get_intermediate_layers(inp, n=1)[0].squeeze(0).cpu().numpy()  # (256, embed_dim)
+
+                # Fit PCA to 3 components (RGB)
+                pca = PCA(n_components=3)
+                pca_features = pca.fit_transform(patch_tokens)  # (256, 3)
+
+                # Min-max normalize to [0, 1] for RGB display
+                for c in range(3):
+                    c_min, c_max = pca_features[:, c].min(), pca_features[:, c].max()
+                    pca_features[:, c] = (pca_features[:, c] - c_min) / (c_max - c_min + 1e-8)
+
+                h_patches = w_patches = int(math.sqrt(pca_features.shape[0]))  # 16x16
+                pca_img = pca_features.reshape(h_patches, w_patches, 3)
+
+                # Plot Original Camera Frame
+                axes[idx, 0].imshow(orig_resized)
+                axes[idx, 0].set_title(f"Camera Frame: {os.path.basename(path)[:22]}", fontsize=10, fontweight="bold")
+                axes[idx, 0].axis("off")
+
+                # Plot DINOv2 PCA Feature Map
+                axes[idx, 1].imshow(pca_img, interpolation="bilinear")
+                axes[idx, 1].set_title("DINOv2 Self-Supervised PCA Map", fontsize=10, fontweight="bold", color="#1f77b4")
+                axes[idx, 1].axis("off")
+            else:
+                axes[idx, 0].imshow(orig_resized)
+                axes[idx, 0].axis("off")
+                axes[idx, 1].imshow(orig_resized)
+                axes[idx, 1].axis("off")
+
+    plt.tight_layout()
+    os.makedirs(save_dir, exist_ok=True)
+    png_path = os.path.join(save_dir, "dinov2_pca_feature_maps.png")
+    pdf_path = os.path.join(save_dir, "dinov2_pca_feature_maps.pdf")
+    plt.savefig(png_path, bbox_inches="tight", dpi=300)
+    plt.savefig(pdf_path, bbox_inches="tight")
+    plt.close()
+    print(f"   📊 Saved Emergent PCA Feature Maps to: {png_path} and {pdf_path}")
+
+
+# =====================================================================
+# 6. OFFLINE FEATURE CACHING UTILITY (FOR GRAPH & COUNTING TASKS)
 # =====================================================================
 
 @torch.no_grad()
@@ -674,6 +817,9 @@ def main():
     parser.add_argument("--save_dir", type=str, default="checkpoints/dinov2_traffic_ssl", help="Directory to save checkpoints")
     parser.add_argument("--device", type=str, default="cuda", help="Target compute device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+
+    # Visualization flag
+    parser.add_argument("--save_figures", action="store_true", default=True, help="Automatically save training curves and PCA feature maps (PNG & PDF)")
 
     # Feature caching flag
     parser.add_argument("--cache_features", action="store_true", help="Extract feature embeddings for downstream tasks")
