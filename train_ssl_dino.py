@@ -23,7 +23,12 @@ import os
 import random
 import sys
 import time
+import warnings
 from typing import List, Tuple, Dict, Any
+
+# Suppress harmless third-party notices (xFormers fallback & weight_norm deprecation)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*xFormers is not available.*")
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*weight_norm is deprecated.*")
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
