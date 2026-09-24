@@ -19,10 +19,6 @@ import time
 import warnings
 from typing import Dict, List, Tuple
 
-# Suppress harmless third-party notices
-warnings.filterwarnings("ignore", category=UserWarning, message=".*xFormers is not available.*")
-warnings.filterwarnings("ignore", category=FutureWarning)
-
 import numpy as np
 import pandas as pd
 from PIL import Image

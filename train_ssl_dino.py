@@ -26,9 +26,8 @@ import time
 import warnings
 from typing import List, Tuple, Dict, Any
 
-# Suppress harmless third-party notices (xFormers fallback & weight_norm deprecation)
-warnings.filterwarnings("ignore", category=UserWarning, message=".*xFormers is not available.*")
-warnings.filterwarnings("ignore", category=FutureWarning, message=".*weight_norm is deprecated.*")
+# Note: If xformers is not installed, PyTorch uses native FlashAttention / SDPA.
+# To enable xformers acceleration, run: pip install xformers
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
@@ -197,10 +196,20 @@ class DINOHead(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, bottleneck_dim),
         )
-        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
-        self.last_layer.weight_g.data.fill_(1)
-        if norm_last_layer:
-            self.last_layer.weight_g.requires_grad = False
+        linear = nn.Linear(bottleneck_dim, out_dim, bias=False)
+        try:
+            # Official PyTorch 2.x standard: torch.nn.utils.parametrizations.weight_norm
+            from torch.nn.utils.parametrizations import weight_norm
+            self.last_layer = weight_norm(linear)
+            self.last_layer.parametrizations.weight.original0.data.fill_(1)
+            if norm_last_layer:
+                self.last_layer.parametrizations.weight.original0.requires_grad = False
+        except (ImportError, AttributeError):
+            # Backward compatibility fallback for legacy PyTorch versions
+            self.last_layer = nn.utils.weight_norm(linear)
+            self.last_layer.weight_g.data.fill_(1)
+            if norm_last_layer:
+                self.last_layer.weight_g.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x)
