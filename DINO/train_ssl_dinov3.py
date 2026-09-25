@@ -539,6 +539,22 @@ def get_cosine_schedule(base_value: float, final_value: float, epochs: int, nite
     return schedule
 
 
+def cancel_gradients_last_layer(epoch: int, model: nn.Module, freeze_last_layer_epochs: int):
+    """
+    Freezes gradients of the DINOHead's last (weight-normalized) layer for the
+    first `freeze_last_layer_epochs` epochs. This is a core DINO stability trick:
+    letting the last layer move before the centering/sharpening dynamics have
+    warmed up is one of the most common causes of early representation collapse
+    (loss converging to ln(out_dim) and staying there).
+    """
+    if epoch >= freeze_last_layer_epochs:
+        return
+    model_raw = model.module if hasattr(model, "module") else model
+    head = model_raw[1]  # nn.Sequential(backbone, head)
+    for n, p in head.last_layer.named_parameters():
+        p.grad = None
+
+
 def train_ssl_dinov3(args):
     # Set deterministic seeds
     random.seed(args.seed)
@@ -567,6 +583,8 @@ def train_ssl_dinov3(args):
     print(f" Epochs              : {args.epochs}")
     print(f" Peak LR (Head)      : {args.lr}")
     print(f" Backbone LR Scale   : {args.backbone_lr_scale} (Peak Backbone LR: {args.lr * args.backbone_lr_scale})")
+    print(f" Freeze Last Layer   : {args.freeze_last_layer_epochs} epoch(s) [anti-collapse]")
+    print(f" Center Momentum     : {args.center_momentum}")
     print(f" Global Crop Size    : {size_global}x{size_global} (Patch {patch_size} Divisible)")
     print(f" Local Crop Size     : {size_local}x{size_local} (Patch {patch_size} Divisible)")
     print(f" Local Crops Count   : {args.local_crops}")
@@ -660,14 +678,18 @@ def train_ssl_dinov3(args):
         teacher = nn.DataParallel(teacher)
 
     n_iter_per_epoch = len(dataloader)
-    lr_schedule = get_cosine_schedule(args.lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(5, args.epochs // 5))
+    lr_schedule = get_cosine_schedule(args.lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(args.warmup_epochs, args.epochs // 5 + 1))
     momentum_schedule = get_cosine_schedule(0.996, 1.0, args.epochs, n_iter_per_epoch, warmup_epochs=0)
 
     dino_loss = DINOLoss(
         out_dim=args.out_dim,
         ncrops=2 + args.local_crops,
+        warmup_teacher_temp=args.warmup_teacher_temp,
+        teacher_temp=args.teacher_temp,
+        warmup_teacher_temp_epochs=args.warmup_teacher_temp_epochs,
         nepochs=args.epochs,
         student_temp=0.1,
+        center_momentum=args.center_momentum,
     ).to(device)
 
     scaler = torch.amp.GradScaler('cuda' if device.type == 'cuda' else 'cpu')
@@ -722,6 +744,9 @@ def train_ssl_dinov3(args):
             # Backward & Gradient Update
             if device.type == 'cuda':
                 scaler.scale(loss).backward()
+                # Anti-collapse: freeze last-layer gradients during the initial warmup epochs,
+                # BEFORE unscaling/clipping, mirroring the official DINO implementation.
+                cancel_gradients_last_layer(epoch, student, args.freeze_last_layer_epochs)
                 if args.clip_grad > 0:
                     scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(student.parameters(), args.clip_grad)
@@ -729,6 +754,7 @@ def train_ssl_dinov3(args):
                 scaler.update()
             else:
                 loss.backward()
+                cancel_gradients_last_layer(epoch, student, args.freeze_last_layer_epochs)
                 if args.clip_grad > 0:
                     torch.nn.utils.clip_grad_norm_(student.parameters(), args.clip_grad)
                 optimizer.step()
@@ -1002,8 +1028,9 @@ def main():
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Optional path to local .pth checkpoint for offline loading")
     parser.add_argument("--epochs", type=int, default=30, help="Number of SSL fine-tuning epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per GPU")
-    parser.add_argument("--lr", type=float, default=0.0005, help="Peak learning rate for DINO projection head")
+    parser.add_argument("--lr", type=float, default=0.0002, help="Peak learning rate for DINO projection head")
     parser.add_argument("--backbone_lr_scale", type=float, default=0.1, help="LR multiplier for pre-trained backbone (prevents catastrophic forgetting)")
+    parser.add_argument("--warmup_epochs", type=int, default=10, help="Number of epochs to linearly warm up the LR schedule")
     parser.add_argument("--size_global", type=int, default=224, help="Global crop dimension (divisible by patch size: 16 or 14)")
     parser.add_argument("--size_local", type=int, default=96, help="Local crop dimension (96 for patch 16, 98 for patch 14)")
     parser.add_argument("--out_dim", type=int, default=4096, help="Dimensionality of DINO projection head output")
@@ -1013,6 +1040,23 @@ def main():
     parser.add_argument("--save_dir", type=str, default="checkpoints/dinov3_traffic_ssl", help="Directory to save checkpoints")
     parser.add_argument("--device", type=str, default="cuda", help="Target compute device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+
+    # Anti-collapse controls
+    parser.add_argument("--freeze_last_layer_epochs", type=int, default=1,
+                         help="Number of initial epochs to freeze the DINOHead's last weight-normalized "
+                              "layer gradients. Critical stability trick from the original DINO paper: "
+                              "without this, the head can collapse to a near-uniform output "
+                              "(loss -> ln(out_dim)) before centering/sharpening stabilizes.")
+    parser.add_argument("--center_momentum", type=float, default=0.9,
+                         help="EMA momentum for the teacher output center. Lower values make the center "
+                              "track the (small) batch statistics faster but noisier; raise this "
+                              "(e.g. 0.96-0.98) if you keep a small batch size.")
+    parser.add_argument("--warmup_teacher_temp", type=float, default=0.04, help="Initial (warmup) teacher softmax temperature")
+    parser.add_argument("--teacher_temp", type=float, default=0.04,
+                         help="Final teacher softmax temperature. Kept low (<=0.04-0.07) since a temperature "
+                              "that ramps too high too fast flattens the teacher target distribution and "
+                              "encourages collapse.")
+    parser.add_argument("--warmup_teacher_temp_epochs", type=int, default=30, help="Epochs to warm up teacher temperature over")
 
     # Visualization flag
     parser.add_argument("--save_figures", action="store_true", default=True, help="Automatically save training curves and PCA feature maps (PNG & PDF)")
