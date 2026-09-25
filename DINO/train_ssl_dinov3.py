@@ -267,6 +267,19 @@ def build_backbone(
             import dinov3.hub.backbones as d3_bb
             model_fn = getattr(d3_bb, hub_name, None)
             if model_fn is not None:
+                # 0. Auto-detect local official Meta DINOv3 weights if present on Kaggle or disk
+                if weights_path is None or not os.path.exists(weights_path):
+                    candidate_paths = [
+                        "/kaggle/input/models/canhdoo/dinov3-b/pytorch/default/1/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
+                        "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
+                        "checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
+                    ]
+                    for cp in candidate_paths:
+                        if os.path.exists(cp):
+                            weights_path = cp
+                            print(f"🎯 [Model Loader] Auto-detected local official Meta DINOv3 checkpoint: {weights_path}")
+                            break
+
                 # 1. Attempt HuggingFace Hub authenticated download if HF_TOKEN is present
                 hf_token = os.environ.get("HF_TOKEN", None)
                 if hf_token and (weights_path is None or not os.path.exists(weights_path)):
@@ -305,19 +318,29 @@ def build_backbone(
                     else:
                         state = torch.load(weights_path, map_location="cpu")
 
-                    if "student" in state:
-                        state = state["student"]
+                    if isinstance(state, dict):
+                        if "model" in state:
+                            state = state["model"]
+                        elif "student" in state:
+                            state = state["student"]
+                        elif "state_dict" in state:
+                            state = state["state_dict"]
+                        elif "teacher" in state:
+                            state = state["teacher"]
+
                     cleaned_state = {}
                     for k, v in state.items():
                         clean_k = k
-                        while clean_k.startswith("module.") or clean_k.startswith("0."):
+                        while clean_k.startswith("module.") or clean_k.startswith("0.") or clean_k.startswith("backbone."):
                             if clean_k.startswith("module."):
                                 clean_k = clean_k[len("module."):]
                             if clean_k.startswith("0."):
                                 clean_k = clean_k[len("0."):]
+                            if clean_k.startswith("backbone."):
+                                clean_k = clean_k[len("backbone."):]
                         cleaned_state[clean_k] = v
-                    model.load_state_dict(cleaned_state, strict=False)
-                    print(f"   [Model Loader] Loaded custom offline DINOv3 weights from: {weights_path}")
+                    msg = model.load_state_dict(cleaned_state, strict=False)
+                    print(f"   ✅ [Model Loader] Loaded official Meta DINOv3 weights from: {weights_path} ({len(cleaned_state)} tensors)")
                 else:
                     try:
                         model = model_fn(pretrained=pretrained)
