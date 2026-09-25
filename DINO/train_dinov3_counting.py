@@ -234,6 +234,46 @@ def train_counting_dinov3(args):
             col_map[c] = "motorcycle"
     df = df.rename(columns=col_map)
 
+    # Filter CSV rows to keep ONLY images that actually exist on disk
+    if os.path.isdir(args.image_dir):
+        print(f"🔍 [Data Filter] Indexing image directory: {args.image_dir}...")
+        existing_disk_images = {}
+        for root, _, files in os.walk(args.image_dir):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in [".jpg", ".jpeg", ".png", ".bmp"]:
+                    rel_p = os.path.relpath(os.path.join(root, f), args.image_dir)
+                    existing_disk_images[f] = rel_p
+                    existing_disk_images[os.path.splitext(f)[0]] = rel_p
+
+        valid_indices = []
+        resolved_filenames = []
+        raw_count = len(df)
+        for idx, row in df.iterrows():
+            fname = str(row["filename"]).strip()
+            base_no_ext = os.path.splitext(os.path.basename(fname))[0]
+            base_with_ext = os.path.basename(fname)
+
+            if fname in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[fname])
+            elif base_with_ext in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[base_with_ext])
+            elif base_no_ext in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[base_no_ext])
+            elif os.path.isfile(os.path.join(args.image_dir, fname)):
+                valid_indices.append(idx)
+                resolved_filenames.append(fname)
+
+        df = df.iloc[valid_indices].reset_index(drop=True)
+        df["filename"] = resolved_filenames
+        clean_count = len(df)
+        print(f"📊 [Data Filter] Total CSV rows: {raw_count} | Found on disk: {clean_count} | Skipped missing: {raw_count - clean_count}")
+        if clean_count == 0:
+            raise FileNotFoundError(f"None of the images listed in {args.csv_file} were found in {args.image_dir}!")
+
     # Train / Val / Test split (70 / 15 / 15)
     train_df, test_df = train_test_split(df, test_size=0.15, random_state=args.seed)
     train_df, val_df = train_test_split(train_df, test_size=0.176, random_state=args.seed)

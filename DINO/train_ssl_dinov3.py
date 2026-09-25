@@ -497,7 +497,7 @@ def train_ssl_dinov3(args):
         raise FileNotFoundError(f"No valid images found in directory: {args.data_dir}")
 
     print(f"   Using image directory: {args.data_dir}")
-    print(f"   Discovered {len(image_paths)} unlabelled traffic camera frames.")
+    print(f"   Discovered {len(image_paths)} unlabelled traffic camera frames on disk (SSL Training on full dataset).")
 
     # 2. Data Loader with Patch-aligned Multi-crop Augmentation
     transform = DataAugmentationDINO(

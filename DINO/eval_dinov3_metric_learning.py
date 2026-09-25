@@ -108,9 +108,10 @@ class TrafficMetricDataset(Dataset):
         return x, label, img_name
 
 
-def prepare_dataframe(csv_path: str) -> pd.DataFrame:
-    """Discovers columns and creates standardized congestion classes."""
+def prepare_dataframe(csv_path: str, image_dir: str = None) -> pd.DataFrame:
+    """Discovers columns, validates image existence on disk, and creates standardized congestion classes."""
     df = pd.read_csv(csv_path)
+    raw_count = len(df)
 
     # Column discovery
     fn_col = None
@@ -132,6 +133,43 @@ def prepare_dataframe(csv_path: str) -> pd.DataFrame:
         if c in df.columns:
             moto_col = c
             break
+
+    # If image_dir is provided, filter CSV to only images that actually exist on disk
+    if image_dir and os.path.isdir(image_dir):
+        print(f"🔍 [Data Filter] Indexing image directory: {image_dir}...")
+        existing_disk_images = {}
+        for root, _, files in os.walk(image_dir):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in [".jpg", ".jpeg", ".png", ".bmp"]:
+                    rel_p = os.path.relpath(os.path.join(root, f), image_dir)
+                    existing_disk_images[f] = rel_p
+                    existing_disk_images[os.path.splitext(f)[0]] = rel_p
+
+        valid_indices = []
+        resolved_filenames = []
+        for idx, row in df.iterrows():
+            fname = str(row[fn_col]).strip()
+            base_no_ext = os.path.splitext(os.path.basename(fname))[0]
+            base_with_ext = os.path.basename(fname)
+
+            if fname in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[fname])
+            elif base_with_ext in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[base_with_ext])
+            elif base_no_ext in existing_disk_images:
+                valid_indices.append(idx)
+                resolved_filenames.append(existing_disk_images[base_no_ext])
+            elif os.path.isfile(os.path.join(image_dir, fname)):
+                valid_indices.append(idx)
+                resolved_filenames.append(fname)
+
+        df = df.iloc[valid_indices].reset_index(drop=True)
+        df[fn_col] = resolved_filenames
+        clean_count = len(df)
+        print(f"📊 [Data Filter] Read CSV: {raw_count} rows | Found valid images on disk: {clean_count} | Skipped missing: {raw_count - clean_count}")
 
     if car_col and moto_col:
         total_veh = df[car_col].astype(float) + df[moto_col].astype(float)
@@ -523,7 +561,7 @@ def evaluate_metric_learning(args):
     # 1. Load Data
     if not os.path.exists(args.csv_file):
         raise FileNotFoundError(f"Annotations CSV not found: {args.csv_file}")
-    df = prepare_dataframe(args.csv_file)
+    df = prepare_dataframe(args.csv_file, args.image_dir)
     print(f"   Loaded {len(df)} total samples. Class Distribution:")
     for c_id, c_name in enumerate(["Low (<10)", "Medium (10-25)", "High (>25)"]):
         count = (df["congestion_class"] == c_id).sum()
