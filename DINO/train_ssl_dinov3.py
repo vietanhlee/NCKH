@@ -267,9 +267,44 @@ def build_backbone(
             import dinov3.hub.backbones as d3_bb
             model_fn = getattr(d3_bb, hub_name, None)
             if model_fn is not None:
+                # 1. Attempt HuggingFace Hub authenticated download if HF_TOKEN is present
+                hf_token = os.environ.get("HF_TOKEN", None)
+                if hf_token and (weights_path is None or not os.path.exists(weights_path)):
+                    try:
+                        from huggingface_hub import hf_hub_download
+                        arch_tag = hub_name.replace('_', '-')
+                        repo_candidates = [
+                            f"facebook/{arch_tag}-pretrain-lvd1689m",
+                            f"facebook/{arch_tag}",
+                            f"facebook/dinov3-{arch_tag.split('-')[-1]}"
+                        ]
+                        print(f"   🔑 [HuggingFace Hub] Checking authenticated access with provided HF_TOKEN...")
+                        for r_id in repo_candidates:
+                            for c_file in ["model.safetensors", "pytorch_model.bin", f"{hub_name}_pretrain_lvd1689m.pth"]:
+                                try:
+                                    dl_file = hf_hub_download(repo_id=r_id, filename=c_file, token=hf_token)
+                                    if dl_file and os.path.exists(dl_file):
+                                        weights_path = dl_file
+                                        print(f"   ✅ [HuggingFace Hub] Successfully retrieved official weights from '{r_id}': {dl_file}")
+                                        break
+                                except Exception:
+                                    continue
+                            if weights_path:
+                                break
+                    except Exception as e_hf:
+                        print(f"   [Notice] HuggingFace Hub check: {e_hf}")
+
                 if weights_path and os.path.exists(weights_path):
                     model = model_fn(pretrained=False)
-                    state = torch.load(weights_path, map_location="cpu")
+                    if str(weights_path).endswith(".safetensors"):
+                        try:
+                            from safetensors.torch import load_file
+                            state = load_file(weights_path)
+                        except Exception:
+                            state = torch.load(weights_path, map_location="cpu")
+                    else:
+                        state = torch.load(weights_path, map_location="cpu")
+
                     if "student" in state:
                         state = state["student"]
                     cleaned_state = {}
@@ -288,8 +323,24 @@ def build_backbone(
                         model = model_fn(pretrained=pretrained)
                     except Exception as e_pt:
                         print(f"   [Notice] Meta DINOv3 official remote weights require HuggingFace gated token / offline file: {e_pt}")
-                        print("   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch...")
                         model = model_fn(pretrained=False)
+                        if pretrained:
+                            # Warm-start DINOv3 from ungated Meta DINOv2 foundation weights!
+                            try:
+                                d2_name = "dinov2_vits14" if "vits" in hub_name else "dinov2_vitb14"
+                                print(f"   💡 [Warm-Start] Bootstrapping DINOv3 Transformer blocks from public Meta DINOv2 '{d2_name}'...")
+                                d2_model = torch.hub.load("facebookresearch/dinov2", d2_name, pretrained=True)
+                                d2_state = d2_model.state_dict()
+                                compatible_state = {}
+                                for k, v in d2_state.items():
+                                    if "pos_embed" in k or "patch_embed" in k:
+                                        continue
+                                    if k in model.state_dict() and model.state_dict()[k].shape == v.shape:
+                                        compatible_state[k] = v
+                                model.load_state_dict(compatible_state, strict=False)
+                                print(f"   ✅ [Warm-Start Success] Initialized {len(compatible_state)} layers (Attention, MLP, LayerNorm) from Meta DINOv2 foundation weights into DINOv3!")
+                            except Exception as e_ws:
+                                print(f"   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch: {e_ws}")
                 embed_dim = getattr(model, "embed_dim", 384)
                 print(f"   [Model Loader] Loaded DINOv3 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
                 return model, embed_dim
@@ -801,35 +852,50 @@ def save_pca_feature_maps(backbone: nn.Module, sample_paths: List[str], save_dir
             orig_resized = img_rgb.resize((224, 224))
             inp = eval_transform(img_rgb).unsqueeze(0).to(device)
 
-            # Extract patch tokens
+            # Extract spatial patch tokens
+            patch_tokens = None
             if hasattr(backbone, "get_intermediate_layers"):
-                patch_tokens = backbone.get_intermediate_layers(inp, n=1)[0].squeeze(0).cpu().numpy()  # (256, embed_dim)
+                try:
+                    raw_tokens = backbone.get_intermediate_layers(inp, n=1)[0].squeeze(0).cpu().numpy()
+                    n_tokens = raw_tokens.shape[0]
+                    # Check if CLS token is present (e.g., 197 for 14x14 patches or 257 for 16x16 patches)
+                    if math.isqrt(n_tokens) ** 2 == n_tokens:
+                        patch_tokens = raw_tokens
+                    elif math.isqrt(n_tokens - 1) ** 2 == (n_tokens - 1):
+                        patch_tokens = raw_tokens[1:]  # Discard CLS token to retain spatial grid
+                    else:
+                        patch_tokens = raw_tokens
+                except Exception:
+                    patch_tokens = None
 
-                # Fit PCA to 3 components (RGB)
+            if patch_tokens is not None and len(patch_tokens) > 0:
+                # Fit PCA to 3 components (RGB channels)
                 pca = PCA(n_components=3)
-                pca_features = pca.fit_transform(patch_tokens)  # (256, 3)
+                pca_features = pca.fit_transform(patch_tokens)  # (N_patches, 3)
 
                 # Min-max normalize to [0, 1] for RGB display
                 for c in range(3):
                     c_min, c_max = pca_features[:, c].min(), pca_features[:, c].max()
                     pca_features[:, c] = (pca_features[:, c] - c_min) / (c_max - c_min + 1e-8)
 
-                h_patches = w_patches = int(math.sqrt(pca_features.shape[0]))  # 16x16
-                pca_img = pca_features.reshape(h_patches, w_patches, 3)
+                h_patches = w_patches = int(math.isqrt(pca_features.shape[0]))
+                pca_img = pca_features[:h_patches * w_patches].reshape(h_patches, w_patches, 3)
 
                 # Plot Original Camera Frame
                 axes[idx, 0].imshow(orig_resized)
                 axes[idx, 0].set_title(f"Camera Frame: {os.path.basename(path)[:22]}", fontsize=10, fontweight="bold")
                 axes[idx, 0].axis("off")
 
-                # Plot DINOv2 PCA Feature Map
+                # Plot Emergent DINOv3 PCA Feature Map
                 axes[idx, 1].imshow(pca_img, interpolation="bilinear")
-                axes[idx, 1].set_title("DINOv2 Self-Supervised PCA Map", fontsize=10, fontweight="bold", color="#1f77b4")
+                axes[idx, 1].set_title("DINOv3 Emergent PCA Feature Map (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
                 axes[idx, 1].axis("off")
             else:
                 axes[idx, 0].imshow(orig_resized)
+                axes[idx, 0].set_title(f"Frame: {os.path.basename(path)[:22]}", fontsize=10, fontweight="bold")
                 axes[idx, 0].axis("off")
                 axes[idx, 1].imshow(orig_resized)
+                axes[idx, 1].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
                 axes[idx, 1].axis("off")
 
     plt.tight_layout()
@@ -932,7 +998,14 @@ def main():
     parser.add_argument("--cache_features", action="store_true", help="Extract feature embeddings for downstream tasks")
     parser.add_argument("--cache_output", type=str, default="traffic_dinov3_embeddings.pt", help="Output path for cached embeddings")
 
+    # Hugging Face Auth Token
+    parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token for gated models")
+
     args = parser.parse_args()
+
+    if args.hf_token:
+        os.environ["HF_TOKEN"] = args.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
 
     if args.cache_features:
         weights = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")

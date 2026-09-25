@@ -706,8 +706,13 @@ def main():
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
     parser.add_argument("--device", type=str, default="cuda", help="Target device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token for gated models")
 
     args = parser.parse_args()
+
+    if args.hf_token:
+        os.environ["HF_TOKEN"] = args.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
 
     # Local fallback path detection (supports running from root or inside DINO subfolder)
     if not os.path.exists(args.csv_file):
