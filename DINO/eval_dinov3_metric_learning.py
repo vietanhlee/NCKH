@@ -662,18 +662,23 @@ def main():
 
     args = parser.parse_args()
 
-    # Local fallback path detection
+    # Local fallback path detection (supports running from root or inside DINO subfolder)
     if not os.path.exists(args.csv_file):
-        for candidate in ["labels1.csv", "traffic_update.csv", "data/traffic_update.csv"]:
+        for candidate in ["labels1.csv", "../labels1.csv", "traffic_update.csv", "../traffic_update.csv", "data/traffic_update.csv", "../data/traffic_update.csv"]:
             if os.path.exists(candidate):
                 args.csv_file = candidate
                 break
 
     if not os.path.exists(args.image_dir):
-        for candidate in ["images", "data/camera_images", "data/images"]:
+        for candidate in ["images", "../images", "data/camera_images", "../data/camera_images", "data/images", "../data/images"]:
             if os.path.exists(candidate):
                 args.image_dir = candidate
                 break
+
+    if args.weights and not os.path.exists(args.weights):
+        alt_w = os.path.join("..", args.weights)
+        if os.path.exists(alt_w):
+            args.weights = alt_w
 
     evaluate_metric_learning(args)
 

@@ -482,6 +482,12 @@ def train_ssl_dinov3(args):
     print("=" * 70)
 
     # 1. Discover Images
+    if not os.path.isdir(args.data_dir):
+        for candidate in ["images", "../images", "data/camera_images", "../data/camera_images", "data/images", "../data/images"]:
+            if os.path.isdir(candidate):
+                args.data_dir = candidate
+                break
+
     image_paths = []
     if os.path.isdir(args.data_dir):
         for ext in ("*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"):
@@ -490,6 +496,7 @@ def train_ssl_dinov3(args):
     if len(image_paths) == 0:
         raise FileNotFoundError(f"No valid images found in directory: {args.data_dir}")
 
+    print(f"   Using image directory: {args.data_dir}")
     print(f"   Discovered {len(image_paths)} unlabelled traffic camera frames.")
 
     # 2. Data Loader with Patch-aligned Multi-crop Augmentation

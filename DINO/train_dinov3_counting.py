@@ -379,6 +379,25 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     args = parser.parse_args()
+
+    # Smart flexible path resolution (supports running from root or inside DINO subfolder)
+    if not os.path.exists(args.csv_file):
+        for candidate in ["labels1.csv", "../labels1.csv", "traffic_update.csv", "../traffic_update.csv", "data/traffic_update.csv", "../data/traffic_update.csv"]:
+            if os.path.exists(candidate):
+                args.csv_file = candidate
+                break
+
+    if not os.path.exists(args.image_dir):
+        for candidate in ["images", "../images", "data/camera_images", "../data/camera_images", "data/images", "../data/images"]:
+            if os.path.exists(candidate):
+                args.image_dir = candidate
+                break
+
+    if args.ssl_weights and not os.path.exists(args.ssl_weights):
+        alt_weights = os.path.join("..", args.ssl_weights)
+        if os.path.exists(alt_weights):
+            args.ssl_weights = alt_weights
+
     train_counting_dinov3(args)
 
 
