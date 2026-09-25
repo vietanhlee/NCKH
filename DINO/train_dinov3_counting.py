@@ -130,8 +130,17 @@ class DINOv3CountingModel(nn.Module):
             print(f"🔄 Loading Traffic-Adapted SSL weights from: {pretrained_weights}")
             state = torch.load(pretrained_weights, map_location="cpu")
             if "student" in state:
-                state = {k.replace("0.", ""): v for k, v in state["student"].items() if k.startswith("0.")}
-            self.backbone.load_state_dict(state, strict=False)
+                state = state["student"]
+            cleaned_state = {}
+            for k, v in state.items():
+                clean_k = k
+                while clean_k.startswith("module.") or clean_k.startswith("0."):
+                    if clean_k.startswith("module."):
+                        clean_k = clean_k[len("module."):]
+                    if clean_k.startswith("0."):
+                        clean_k = clean_k[len("0."):]
+                cleaned_state[clean_k] = v
+            self.backbone.load_state_dict(cleaned_state, strict=False)
             print("✅ Domain-adapted SSL weights loaded successfully!")
 
         if freeze_backbone:
@@ -343,10 +352,18 @@ def train_counting_dinov3(args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     criterion = nn.SmoothL1Loss()  # Huber loss for robust counting regression
 
+    # 4. Multi-GPU DataParallel Setup
+    num_gpus = torch.cuda.device_count() if device.type == "cuda" else 0
+    if num_gpus > 1:
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+        print(f"⚡ [Multi-GPU] Detected {num_gpus} GPUs: {gpu_names}")
+        print(f"⚡ [Multi-GPU] Activating DataParallel for Counting across all {num_gpus} devices.")
+        model = nn.DataParallel(model)
+
     best_val_mae = float("inf")
     best_weights = None
 
-    # 4. Training Loop
+    # 5. Training Loop
     for epoch in range(args.epochs):
         model.train()
         total_loss = 0.0
@@ -372,7 +389,8 @@ def train_counting_dinov3(args):
 
         if curr_val_mae < best_val_mae:
             best_val_mae = curr_val_mae
-            best_weights = copy.deepcopy(model.state_dict())
+            raw_m = model.module if hasattr(model, "module") else model
+            best_weights = copy.deepcopy(raw_m.state_dict())
 
         if (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
             print(
@@ -381,11 +399,12 @@ def train_counting_dinov3(args):
                 f"Best Tot MAE: {best_val_mae:.3f}"
             )
 
-    # 5. Final Evaluation on Unseen Test Split
+    # 6. Final Evaluation on Unseen Test Split
     print("\n" + "=" * 70)
     print(" 🏁 FINAL TEST EVALUATION (BEST CHECKPOINT)")
     print("=" * 70)
-    model.load_state_dict(best_weights)
+    raw_m = model.module if hasattr(model, "module") else model
+    raw_m.load_state_dict(best_weights)
     test_metrics = evaluate(model, test_loader, device)
 
     print(f" 🚗 CARS       : MAE = {test_metrics['car_mae']:.4f} | RMSE = {test_metrics['car_rmse']:.4f} | R2 = {test_metrics['car_r2']:.4f}")

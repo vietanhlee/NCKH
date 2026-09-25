@@ -271,8 +271,17 @@ def build_backbone(
                     model = model_fn(pretrained=False)
                     state = torch.load(weights_path, map_location="cpu")
                     if "student" in state:
-                        state = {k.replace("0.", ""): v for k, v in state["student"].items() if k.startswith("0.")}
-                    model.load_state_dict(state, strict=False)
+                        state = state["student"]
+                    cleaned_state = {}
+                    for k, v in state.items():
+                        clean_k = k
+                        while clean_k.startswith("module.") or clean_k.startswith("0."):
+                            if clean_k.startswith("module."):
+                                clean_k = clean_k[len("module."):]
+                            if clean_k.startswith("0."):
+                                clean_k = clean_k[len("0."):]
+                        cleaned_state[clean_k] = v
+                    model.load_state_dict(cleaned_state, strict=False)
                     print(f"   [Model Loader] Loaded custom offline DINOv3 weights from: {weights_path}")
                 else:
                     try:
@@ -318,8 +327,17 @@ def build_backbone(
                 print(f"   [Model Loader] Applying custom offline weights from: {weights_path}")
                 state = torch.load(weights_path, map_location="cpu")
                 if "student" in state:
-                    state = {k.replace("0.", ""): v for k, v in state["student"].items() if k.startswith("0.")}
-                model.load_state_dict(state, strict=False)
+                    state = state["student"]
+                cleaned_state = {}
+                for k, v in state.items():
+                    clean_k = k
+                    while clean_k.startswith("module.") or clean_k.startswith("0."):
+                        if clean_k.startswith("module."):
+                            clean_k = clean_k[len("module."):]
+                        if clean_k.startswith("0."):
+                            clean_k = clean_k[len("0."):]
+                    cleaned_state[clean_k] = v
+                model.load_state_dict(cleaned_state, strict=False)
 
             print(f"   [Model Loader] Loaded DINOv2 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
             return model, embed_dim
@@ -558,6 +576,15 @@ def train_ssl_dinov3(args):
     ]
     optimizer = torch.optim.AdamW(params_groups)
 
+    # 5. Multi-GPU DataParallel Setup
+    num_gpus = torch.cuda.device_count() if device.type == "cuda" else 0
+    if num_gpus > 1:
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+        print(f"\n⚡ [Multi-GPU] Detected {num_gpus} GPUs: {gpu_names}")
+        print(f"⚡ [Multi-GPU] Activating DataParallel for high-throughput distributed tensor computation across all {num_gpus} devices.")
+        student = nn.DataParallel(student)
+        teacher = nn.DataParallel(teacher)
+
     n_iter_per_epoch = len(dataloader)
     lr_schedule = get_cosine_schedule(args.lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(5, args.epochs // 5))
     momentum_schedule = get_cosine_schedule(0.996, 1.0, args.epochs, n_iter_per_epoch, warmup_epochs=0)
@@ -574,7 +601,7 @@ def train_ssl_dinov3(args):
     # History tracker for publication-grade training curves
     history = {"loss": [], "lr_head": [], "lr_backbone": [], "teacher_temp": []}
 
-    # 5. Training Loop
+    # 6. Training Loop
     best_loss = float("inf")
     start_time = time.time()
 
@@ -608,7 +635,7 @@ def train_ssl_dinov3(args):
                 # 2. Student forward pass (Handled separately to support different global/local resolutions)
                 # Global crops (224x224)
                 student_global_out = student(torch.cat(crops[:2]))
-                # Local crops (98x98)
+                # Local crops (96x96)
                 if len(crops) > 2:
                     student_local_out = student(torch.cat(crops[2:]))
                     student_output = torch.cat([student_global_out, student_local_out], dim=0)
@@ -632,9 +659,11 @@ def train_ssl_dinov3(args):
                     torch.nn.utils.clip_grad_norm_(student.parameters(), args.clip_grad)
                 optimizer.step()
 
-            # 4. EMA Update for Teacher weights
+            # 4. EMA Update for Teacher weights (Always access raw underlying modules safely)
+            student_raw = student.module if hasattr(student, "module") else student
+            teacher_raw = teacher.module if hasattr(teacher, "module") else teacher
             with torch.no_grad():
-                for param_s, param_t in zip(student.parameters(), teacher.parameters()):
+                for param_s, param_t in zip(student_raw.parameters(), teacher_raw.parameters()):
                     param_t.data.mul_(m).add_((1 - m) * param_s.detach().data)
 
             total_epoch_loss += loss.item()
@@ -649,7 +678,10 @@ def train_ssl_dinov3(args):
         history["lr_backbone"].append(curr_base_lr * args.backbone_lr_scale)
         history["teacher_temp"].append(float(dino_loss.teacher_temp_schedule[epoch]))
 
-        # Save Checkpoint
+        # Save Checkpoint (Always save UNWRAPPED model state dicts to prevent 'module.' prefix bugs!)
+        student_raw = student.module if hasattr(student, "module") else student
+        teacher_raw = teacher.module if hasattr(teacher, "module") else teacher
+
         if avg_loss < best_loss or (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
             best_loss = min(best_loss, avg_loss)
 
@@ -657,8 +689,8 @@ def train_ssl_dinov3(args):
             full_ckpt_path = os.path.join(args.save_dir, "dinov3_traffic_ssl_latest.pth")
             torch.save({
                 "epoch": epoch + 1,
-                "student": student.state_dict(),
-                "teacher": teacher.state_dict(),
+                "student": student_raw.state_dict(),
+                "teacher": teacher_raw.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "loss": avg_loss,
                 "backbone_name": args.backbone,
@@ -668,9 +700,9 @@ def train_ssl_dinov3(args):
 
             # Save Clean Domain-Adapted DINOv3 Backbone (Ready for downstream tasks / graph caching!)
             backbone_path = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")
-            torch.save(student[0].state_dict(), backbone_path)
+            torch.save(student_raw[0].state_dict(), backbone_path)
             # Backward compatibility alias
-            torch.save(student[0].state_dict(), os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
+            torch.save(student_raw[0].state_dict(), os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
             print(f"   -> Checkpoint saved to: {backbone_path}")
 
             # Save updated training curves periodically
@@ -684,8 +716,9 @@ def train_ssl_dinov3(args):
     # Final publication figures: Training Curves + Emergent PCA Feature Maps
     if args.save_figures:
         print("🎨 Generating publication-grade figures...")
+        student_raw = student.module if hasattr(student, "module") else student
         save_training_curves(history, args.save_dir)
-        save_pca_feature_maps(student[0], image_paths, args.save_dir, device)
+        save_pca_feature_maps(student_raw[0], image_paths, args.save_dir, device)
 
 
 # =====================================================================

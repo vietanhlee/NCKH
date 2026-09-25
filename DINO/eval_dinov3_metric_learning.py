@@ -572,6 +572,15 @@ def evaluate_metric_learning(args):
     backbone = backbone.to(device)
     backbone.eval()
 
+    num_gpus = torch.cuda.device_count() if device.type == "cuda" else 0
+    if num_gpus > 1:
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+        print(f"⚡ [Multi-GPU] Detected {num_gpus} GPUs: {gpu_names}")
+        print(f"⚡ [Multi-GPU] Parallelizing embedding extraction across all {num_gpus} devices.")
+        backbone_infer = nn.DataParallel(backbone)
+    else:
+        backbone_infer = backbone
+
     # 3. DataLoader
     transform = transforms.Compose([
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
@@ -582,7 +591,7 @@ def evaluate_metric_learning(args):
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     # 4. Extract Embeddings
-    embeddings, labels, filenames = extract_embeddings(backbone, dataloader, device)
+    embeddings, labels, filenames = extract_embeddings(backbone_infer, dataloader, device)
     print(f"\n📦 Extracted Embeddings Shape: {embeddings.shape} | L2 Norm Check: {np.linalg.norm(embeddings[0]):.4f}")
 
     # 5. Compute Metrics
