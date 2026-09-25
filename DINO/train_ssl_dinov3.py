@@ -185,8 +185,9 @@ class TrafficImageDataset(Dataset):
 
 class DINOHead(nn.Module):
     """
-    3-layer MLP projection head with L2-normalized bottleneck and weight-normalized output.
+    3-layer MLP projection head with L2-normalized bottleneck and normalized prototype classifier.
     Maps high-dimensional CLS token embeddings to representation space (e.g., 4096 or 65536).
+    Mathematically exact cosine classifier without brittle weight_norm API parametrization bugs.
     """
     def __init__(
         self,
@@ -204,26 +205,26 @@ class DINOHead(nn.Module):
             nn.GELU(),
             nn.Linear(hidden_dim, bottleneck_dim),
         )
-        linear = nn.Linear(bottleneck_dim, out_dim, bias=False)
-        try:
-            # Official PyTorch 2.x standard: torch.nn.utils.parametrizations.weight_norm
-            from torch.nn.utils.parametrizations import weight_norm
-            self.last_layer = weight_norm(linear)
-            self.last_layer.parametrizations.weight.original0.data.fill_(1)
-            if norm_last_layer:
-                self.last_layer.parametrizations.weight.original0.requires_grad = False
-        except (ImportError, AttributeError):
-            # Backward compatibility fallback for legacy PyTorch versions
-            self.last_layer = nn.utils.weight_norm(linear)
-            self.last_layer.weight_g.data.fill_(1)
-            if norm_last_layer:
-                self.last_layer.weight_g.requires_grad = False
+        self.apply(self._init_weights)
+        self.last_layer = nn.Linear(bottleneck_dim, out_dim, bias=False)
+        nn.init.trunc_normal_(self.last_layer.weight, std=0.02)
+        self.norm_last_layer = norm_last_layer
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.mlp(x)
         x = F.normalize(x, dim=-1, p=2)
-        x = self.last_layer(x)
-        return x
+        if self.norm_last_layer:
+            # Cosine prototype classifier: unit-norm features * unit-norm prototypes
+            w = F.normalize(self.last_layer.weight, dim=-1, p=2)
+            return F.linear(x, w)
+        else:
+            return self.last_layer(x)
 
 
 def build_backbone(
@@ -1052,11 +1053,9 @@ def main():
                               "track the (small) batch statistics faster but noisier; raise this "
                               "(e.g. 0.96-0.98) if you keep a small batch size.")
     parser.add_argument("--warmup_teacher_temp", type=float, default=0.04, help="Initial (warmup) teacher softmax temperature")
-    parser.add_argument("--teacher_temp", type=float, default=0.04,
-                         help="Final teacher softmax temperature. Kept low (<=0.04-0.07) since a temperature "
-                              "that ramps too high too fast flattens the teacher target distribution and "
-                              "encourages collapse.")
-    parser.add_argument("--warmup_teacher_temp_epochs", type=int, default=30, help="Epochs to warm up teacher temperature over")
+    parser.add_argument("--teacher_temp", type=float, default=0.07,
+                         help="Final teacher softmax temperature (0.07 enables proper clustering dynamics as in official DINO).")
+    parser.add_argument("--warmup_teacher_temp_epochs", type=int, default=10, help="Epochs to warm up teacher temperature over")
 
     # Visualization flag
     parser.add_argument("--save_figures", action="store_true", default=True, help="Automatically save training curves and PCA feature maps (PNG & PDF)")
