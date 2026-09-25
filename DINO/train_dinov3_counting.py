@@ -2,8 +2,8 @@
 =============================================================================
  Downstream Vehicle Counting Fine-Tuning with DINOv2
  Supports:
-   1. Official Meta DINOv2 (Off-the-shelf Foundation Baseline)
-   2. Traffic SSL Domain-Adapted DINOv2 (Pre-trained via train_ssl_dino.py)
+   1. Official Meta DINOv3 (Off-the-shelf Foundation Baseline)
+   2. Traffic SSL Domain-Adapted DINOv3 (Pre-trained via train_ssl_dinov3.py)
    3. Few-Shot Evaluation Protocol (1%, 5%, 10%, 20%, 100% labelled data)
    4. Linear Probing vs Full Backbone Fine-Tuning
 =============================================================================
@@ -81,13 +81,13 @@ class VehicleCountingDataset(Dataset):
 
 
 # =====================================================================
-# 2. DINOv2 COUNTING MODEL ARCHITECTURE
+# 2. DINOv3 COUNTING MODEL ARCHITECTURE
 # =====================================================================
 
-class DINOv2CountingModel(nn.Module):
+class DINOv3CountingModel(nn.Module):
     def __init__(
         self,
-        backbone_name: str = "dinov2_vits14",
+        backbone_name: str = "dinov3_vits16",
         pretrained_weights: str = None,
         freeze_backbone: bool = False,
         head_hidden_dim: int = 256,
@@ -107,6 +107,8 @@ class DINOv2CountingModel(nn.Module):
                 hub_name = backbone_name.lower().strip()
                 if hub_name in ["dinov3", "dinov3_small", "dinov3_s", "dinov3_vits"]:
                     hub_name = "dinov3_vits16"
+                elif hub_name in ["dinov3_base", "dinov3_b", "dinov3_vitb"]:
+                    hub_name = "dinov3_vitb16"
                 model_fn = getattr(d3_bb, hub_name, None)
                 if model_fn is not None:
                     try:
@@ -133,7 +135,7 @@ class DINOv2CountingModel(nn.Module):
             print("✅ Domain-adapted SSL weights loaded successfully!")
 
         if freeze_backbone:
-            print("🧊 Freezing DINOv2 Backbone (Linear Probing Mode)...")
+            print("🧊 Freezing DINOv3 Backbone (Linear Probing Mode)...")
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
@@ -201,15 +203,15 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> Dict
     }
 
 
-def train_counting_dinov2(args):
+def train_counting_dinov3(args):
     set_seed(args.seed)
     device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
 
     print("\n" + "=" * 70)
-    print(" 🚗 DINOv2 VEHICLE COUNTING DOWNSTREAM FINE-TUNING")
+    print(" 🚗 DINOv3 VEHICLE COUNTING DOWNSTREAM FINE-TUNING")
     print("=" * 70)
     print(f" Backbone            : {args.backbone}")
-    print(f" SSL Adapted Weights : {args.ssl_weights if args.ssl_weights else 'None (Off-the-shelf Meta DINOv2)'}")
+    print(f" SSL Adapted Weights : {args.ssl_weights if args.ssl_weights else 'None (Off-the-shelf Meta DINOv3)'}")
     print(f" Freeze Backbone     : {args.freeze_backbone} ({'Linear Probe' if args.freeze_backbone else 'End-to-End Fine-Tune'})")
     print(f" Few-Shot Ratio      : {args.few_shot_ratio * 100:.1f}%")
     print(f" Batch Size          : {args.batch_size}")
@@ -281,7 +283,7 @@ def train_counting_dinov2(args):
     )
 
     # 3. Model & Optimizer
-    model = DINOv2CountingModel(
+    model = DINOv3CountingModel(
         backbone_name=args.backbone,
         pretrained_weights=args.ssl_weights,
         freeze_backbone=args.freeze_backbone,
@@ -353,29 +355,36 @@ def train_counting_dinov2(args):
 
     # Save Best Model Checkpoint
     os.makedirs(args.save_dir, exist_ok=True)
-    save_path = os.path.join(args.save_dir, f"dinov2_counting_ratio_{int(args.few_shot_ratio*100)}.pth")
+    save_path = os.path.join(args.save_dir, f"dinov3_counting_ratio_{int(args.few_shot_ratio*100)}.pth")
     torch.save(best_weights, save_path)
+    # Also save dinov2 compatibility alias
+    torch.save(best_weights, os.path.join(args.save_dir, f"dinov2_counting_ratio_{int(args.few_shot_ratio*100)}.pth"))
     print(f"💾 Checkpoint saved to: {save_path}\n")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Downstream Vehicle Counting with DINOv2")
+    parser = argparse.ArgumentParser(description="Downstream Vehicle Counting with DINOv3")
     parser.add_argument("--csv_file", type=str, default="/workspace/traffic_update.csv", help="Path to counting CSV")
     parser.add_argument("--image_dir", type=str, default="/workspace/images", help="Path to camera images")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Backbone model (dinov3_vits16, dinov2_vits14, dinov3_vitb16)")
-    parser.add_argument("--ssl_weights", type=str, default=None, help="Path to SSL domain-adapted weights (from train_ssl_dino.py)")
+    parser.add_argument("--ssl_weights", type=str, default=None, help="Path to SSL domain-adapted weights (from train_ssl_dinov3.py)")
     parser.add_argument("--freeze_backbone", action="store_true", help="Freeze backbone for linear probing")
     parser.add_argument("--few_shot_ratio", type=float, default=1.0, help="Ratio of labelled training data (0.01 to 1.0)")
     parser.add_argument("--epochs", type=int, default=50, help="Training epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/dinov2_counting", help="Output directory")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/dinov3_counting", help="Output directory")
     parser.add_argument("--device", type=str, default="cuda", help="Device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
     args = parser.parse_args()
-    train_counting_dinov2(args)
+    train_counting_dinov3(args)
+
+
+# Backward compatibility aliases
+train_counting_dinov2 = train_counting_dinov3
+DINOv2CountingModel = DINOv3CountingModel
 
 
 if __name__ == "__main__":

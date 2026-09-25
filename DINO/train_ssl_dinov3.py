@@ -1,17 +1,21 @@
 """
 =============================================================================
- DINOv2 Self-Supervised Domain Adaptation for Urban Traffic Surveillance
- Continual SSL Pre-training & Feature Caching on City-Scale CCTV Feeds
+ DINOv3 Self-Supervised Domain Adaptation for Urban Traffic Surveillance
+ Continual SSL Pre-training & Metric Representation Learning on Traffic Feeds
  
  Architecture:
-   - Backbone: Meta's DINOv2 (ViT-S/14, ViT-B/14, ViT-L/14) pre-trained on LVD-142M
+   - Backbone: Meta's DINOv3 (ViT-S/16, ViT-B/16, ViT-L/16 with 2D RoPE & LayerScale)
+   - Fallback: Meta's DINOv2 (ViT-S/14, ViT-B/14 pre-trained on LVD-142M)
    - Distillation: EMA Momentum Teacher with Centering & Sharpening
    - Optimization: Layer-wise Decoupled LR (Backbone LR << Projection Head LR)
-   - Resolution: Patch-14 aligned (Global: 224x224, Local: 98x98)
+   - Multi-Crop Resolution: Patch-16 aligned (Global: 224x224, Local: 96x96)
+                           Patch-14 aligned (Global: 224x224, Local: 98x98)
 
  References:
+   - Meta AI: "DINOv3: Self-Supervised Vision Transformers with RoPE" (2024)
    - Caron et al. "Emerging Properties in Self-Supervised Vision Transformers" (ICCV 2021)
    - Oquab et al. "DINOv2: Learning Robust Visual Features without Supervision" (TMLR 2024)
+   - Wang & Isola: "Understanding Contrastive Representation Learning through Alignment and Uniformity" (ICML 2020)
 =============================================================================
 """
 
@@ -443,7 +447,7 @@ def get_cosine_schedule(base_value: float, final_value: float, epochs: int, nite
     return schedule
 
 
-def train_ssl_dinov2(args):
+def train_ssl_dinov3(args):
     # Set deterministic seeds
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -643,7 +647,7 @@ def train_ssl_dinov2(args):
             best_loss = min(best_loss, avg_loss)
 
             # Save full student/teacher training state
-            full_ckpt_path = os.path.join(args.save_dir, "dinov2_traffic_ssl_latest.pth")
+            full_ckpt_path = os.path.join(args.save_dir, "dinov3_traffic_ssl_latest.pth")
             torch.save({
                 "epoch": epoch + 1,
                 "student": student.state_dict(),
@@ -655,9 +659,11 @@ def train_ssl_dinov2(args):
                 "history": history,
             }, full_ckpt_path)
 
-            # Save Clean Domain-Adapted DINOv2 Backbone (Ready for downstream tasks / graph caching!)
-            backbone_path = os.path.join(args.save_dir, "dinov2_traffic_backbone.pth")
+            # Save Clean Domain-Adapted DINOv3 Backbone (Ready for downstream tasks / graph caching!)
+            backbone_path = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")
             torch.save(student[0].state_dict(), backbone_path)
+            # Backward compatibility alias
+            torch.save(student[0].state_dict(), os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
             print(f"   -> Checkpoint saved to: {backbone_path}")
 
             # Save updated training curves periodically
@@ -665,8 +671,8 @@ def train_ssl_dinov2(args):
                 save_training_curves(history, args.save_dir)
 
     elapsed = time.time() - start_time
-    print(f"\n🏁 DINOv2 Continual Pre-training Completed in {elapsed/60:.2f} minutes!")
-    print(f"💾 Adapted DINOv2 Backbone weights ready: {os.path.join(args.save_dir, 'dinov2_traffic_backbone.pth')}\n")
+    print(f"\n🏁 DINOv3 Continual Pre-training Completed in {elapsed/60:.2f} minutes!")
+    print(f"💾 Adapted DINOv3 Backbone weights ready: {os.path.join(args.save_dir, 'dinov3_traffic_backbone.pth')}\n")
 
     # Final publication figures: Training Curves + Emergent PCA Feature Maps
     if args.save_figures:
@@ -717,10 +723,13 @@ def save_training_curves(history: Dict[str, List[float]], save_dir: str):
 
     plt.tight_layout()
     os.makedirs(save_dir, exist_ok=True)
-    png_path = os.path.join(save_dir, "dinov2_ssl_training_curves.png")
-    pdf_path = os.path.join(save_dir, "dinov2_ssl_training_curves.pdf")
+    png_path = os.path.join(save_dir, "dinov3_ssl_training_curves.png")
+    pdf_path = os.path.join(save_dir, "dinov3_ssl_training_curves.pdf")
     plt.savefig(png_path, bbox_inches="tight", dpi=300)
     plt.savefig(pdf_path, bbox_inches="tight")
+    # Also save dinov2 compatibility names
+    plt.savefig(os.path.join(save_dir, "dinov2_ssl_training_curves.png"), bbox_inches="tight", dpi=300)
+    plt.savefig(os.path.join(save_dir, "dinov2_ssl_training_curves.pdf"), bbox_inches="tight")
     plt.close()
     print(f"   📈 Saved Training Curves to: {png_path} and {pdf_path}")
 
@@ -785,10 +794,13 @@ def save_pca_feature_maps(backbone: nn.Module, sample_paths: List[str], save_dir
 
     plt.tight_layout()
     os.makedirs(save_dir, exist_ok=True)
-    png_path = os.path.join(save_dir, "dinov2_pca_feature_maps.png")
-    pdf_path = os.path.join(save_dir, "dinov2_pca_feature_maps.pdf")
+    png_path = os.path.join(save_dir, "dinov3_pca_feature_maps.png")
+    pdf_path = os.path.join(save_dir, "dinov3_pca_feature_maps.pdf")
     plt.savefig(png_path, bbox_inches="tight", dpi=300)
     plt.savefig(pdf_path, bbox_inches="tight")
+    # Also save dinov2 compatibility names
+    plt.savefig(os.path.join(save_dir, "dinov2_pca_feature_maps.png"), bbox_inches="tight", dpi=300)
+    plt.savefig(os.path.join(save_dir, "dinov2_pca_feature_maps.pdf"), bbox_inches="tight")
     plt.close()
     print(f"   📊 Saved Emergent PCA Feature Maps to: {png_path} and {pdf_path}")
 
@@ -869,7 +881,7 @@ def main():
     parser.add_argument("--local_crops", type=int, default=4, help="Number of local crops in multi-crop augmentation")
     parser.add_argument("--clip_grad", type=float, default=3.0, help="Gradient clipping norm")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/dino_traffic_ssl", help="Directory to save checkpoints")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/dinov3_traffic_ssl", help="Directory to save checkpoints")
     parser.add_argument("--device", type=str, default="cuda", help="Target compute device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
@@ -878,12 +890,14 @@ def main():
 
     # Feature caching flag
     parser.add_argument("--cache_features", action="store_true", help="Extract feature embeddings for downstream tasks")
-    parser.add_argument("--cache_output", type=str, default="traffic_dino_embeddings.pt", help="Output path for cached embeddings")
+    parser.add_argument("--cache_output", type=str, default="traffic_dinov3_embeddings.pt", help="Output path for cached embeddings")
 
     args = parser.parse_args()
 
     if args.cache_features:
-        weights = os.path.join(args.save_dir, "dinov2_traffic_backbone.pth")
+        weights = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")
+        if not os.path.exists(weights):
+            weights = os.path.join(args.save_dir, "dinov2_traffic_backbone.pth")
         extract_feature_cache(
             backbone_weights=weights,
             image_dir=args.data_dir,
@@ -892,7 +906,11 @@ def main():
             device=args.device,
         )
     else:
-        train_ssl_dinov2(args)
+        train_ssl_dinov3(args)
+
+
+# Backward compatibility aliases
+train_ssl_dinov2 = train_ssl_dinov3
 
 
 if __name__ == "__main__":
