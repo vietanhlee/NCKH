@@ -96,9 +96,32 @@ class DINOv2CountingModel(nn.Module):
         super().__init__()
         self.freeze_backbone = freeze_backbone
 
-        print(f"📥 Loading DINOv2 backbone: '{backbone_name}'...")
-        self.backbone = torch.hub.load("facebookresearch/dinov2", backbone_name, pretrained=True)
-        embed_dim = getattr(self.backbone, "embed_dim", 384)
+        if "dinov3" in backbone_name.lower():
+            print(f"📥 Loading DINOv3 backbone: '{backbone_name}'...")
+            try:
+                import sys
+                dinov3_cache = os.path.expanduser("~/.cache/torch/hub/facebookresearch_dinov3_main")
+                if os.path.exists(dinov3_cache) and dinov3_cache not in sys.path:
+                    sys.path.insert(0, dinov3_cache)
+                import dinov3.hub.backbones as d3_bb
+                hub_name = backbone_name.lower().strip()
+                if hub_name in ["dinov3", "dinov3_small", "dinov3_s", "dinov3_vits"]:
+                    hub_name = "dinov3_vits16"
+                model_fn = getattr(d3_bb, hub_name, None)
+                if model_fn is not None:
+                    try:
+                        self.backbone = model_fn(pretrained=(pretrained_weights is None))
+                    except Exception:
+                        self.backbone = model_fn(pretrained=False)
+                    embed_dim = getattr(self.backbone, "embed_dim", 384)
+            except Exception as e:
+                print(f"⚠️ DINOv3 loading fallback: {e}")
+                self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14", pretrained=True)
+                embed_dim = getattr(self.backbone, "embed_dim", 384)
+        else:
+            print(f"📥 Loading DINOv2 backbone: '{backbone_name}'...")
+            self.backbone = torch.hub.load("facebookresearch/dinov2", backbone_name, pretrained=True)
+            embed_dim = getattr(self.backbone, "embed_dim", 384)
 
         # Apply SSL Domain-Adapted Weights if provided
         if pretrained_weights and os.path.exists(pretrained_weights):
@@ -339,7 +362,7 @@ def main():
     parser = argparse.ArgumentParser(description="Downstream Vehicle Counting with DINOv2")
     parser.add_argument("--csv_file", type=str, default="/workspace/traffic_update.csv", help="Path to counting CSV")
     parser.add_argument("--image_dir", type=str, default="/workspace/images", help="Path to camera images")
-    parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="DINOv2 backbone (dinov2_vits14, dinov2_vitb14)")
+    parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Backbone model (dinov3_vits16, dinov2_vits14, dinov3_vitb16)")
     parser.add_argument("--ssl_weights", type=str, default=None, help="Path to SSL domain-adapted weights (from train_ssl_dino.py)")
     parser.add_argument("--freeze_backbone", action="store_true", help="Freeze backbone for linear probing")
     parser.add_argument("--few_shot_ratio", type=float, default=1.0, help="Ratio of labelled training data (0.01 to 1.0)")

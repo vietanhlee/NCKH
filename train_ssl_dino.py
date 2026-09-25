@@ -79,14 +79,12 @@ class Solarization:
         return img
 
 
-class DataAugmentationDINOv2:
+class DataAugmentationDINO:
     """
-    Multi-crop data augmentation strategy for DINOv2 ViT.
+    Multi-crop data augmentation strategy for DINOv3 and DINOv2 ViT.
     NOTE on Resolutions:
-      DINOv2 utilizes a patch size of 14x14.
-      Both Global and Local crop dimensions MUST be multiples of 14:
-        - Global Views: 224 x 224 (16 x 16 patches) -> Fed to both Teacher & Student
-        - Local Views :  98 x  98 ( 7 x  7 patches) -> Fed to Student ONLY
+      - DINOv3 utilizes patch size 16x16: Global 224x224 (14x14 patches), Local 96x96 (6x6 patches).
+      - DINOv2 utilizes patch size 14x14: Global 224x224 (16x16 patches), Local 98x98 (7x7 patches).
     """
     def __init__(
         self,
@@ -94,10 +92,11 @@ class DataAugmentationDINOv2:
         local_crops_scale: Tuple[float, float] = (0.05, 0.4),
         local_crops_number: int = 4,
         size_global: int = 224,
-        size_local: int = 98,
+        size_local: int = 96,
+        patch_size: int = 16,
     ):
-        assert size_global % 14 == 0, f"size_global ({size_global}) must be a multiple of 14 for DINOv2!"
-        assert size_local % 14 == 0, f"size_local ({size_local}) must be a multiple of 14 for DINOv2!"
+        assert size_global % patch_size == 0, f"size_global ({size_global}) must be a multiple of {patch_size}!"
+        assert size_local % patch_size == 0, f"size_local ({size_local}) must be a multiple of {patch_size}!"
 
         self.local_crops_number = local_crops_number
 
@@ -224,20 +223,67 @@ class DINOHead(nn.Module):
 
 
 def build_backbone(
-    model_name: str = "dinov2_vits14",
+    model_name: str = "dinov3_vits16",
     pretrained: bool = True,
     weights_path: str = None
 ) -> Tuple[nn.Module, int]:
     """
-    Initializes Vision Backbone with first-class support for Meta's DINOv2.
+    Initializes Vision Backbone with support for Meta's DINOv3 & DINOv2.
     Supports:
-      - 'dinov2_vits14' (ViT-Small/14, 384-dim, 21M params - Recommended for edge & speed)
-      - 'dinov2_vitb14' (ViT-Base/14, 768-dim, 86M params - SOTA representation)
-      - 'dinov2_vitl14' (ViT-Large/14, 1024-dim, 300M params)
-      - 'dinov2_vits14_reg' (ViT-Small with 4 register tokens)
+      - 'dinov3_vits16' (ViT-Small/16 with 2D RoPE, 384-dim, LVD-1689M 1.7B images)
+      - 'dinov3_vitb16' (ViT-Base/16 with 2D RoPE, 768-dim)
+      - 'dinov3_convnext_tiny' (ConvNeXt-Tiny pre-trained via DINOv3)
+      - 'dinov2_vits14' (ViT-Small/14, 384-dim, 21M params - Ultra-fast & lightweight)
+      - 'dinov2_vitb14' (ViT-Base/14, 768-dim, 86M params)
       - timm ViTs / ConvNeXt / ResNet baselines
     """
-    # 1. Native Meta AI DINOv2 via PyTorch Hub (Official LVD-142M Foundation Weights)
+    # 1. Native Meta AI DINOv3 via facebookresearch/dinov3 (LVD-1689M Foundation Architecture)
+    if "dinov3" in model_name.lower():
+        hub_name = model_name.lower().strip()
+        if hub_name in ["dinov3", "dinov3_small", "dinov3_s", "dinov3_vits"]:
+            hub_name = "dinov3_vits16"
+        elif hub_name in ["dinov3_base", "dinov3_b", "dinov3_vitb"]:
+            hub_name = "dinov3_vitb16"
+        elif hub_name in ["dinov3_large", "dinov3_l", "dinov3_vitl"]:
+            hub_name = "dinov3_vitl16"
+        elif hub_name in ["dinov3_convnext", "dinov3_convnext_tiny"]:
+            hub_name = "dinov3_convnext_tiny"
+
+        print(f"   [Model Loader] Loading official Meta DINOv3 '{hub_name}' (LVD-1689M 1.7B Foundation Model)...")
+        try:
+            import sys
+            dinov3_cache = os.path.expanduser("~/.cache/torch/hub/facebookresearch_dinov3_main")
+            if not os.path.exists(dinov3_cache):
+                try:
+                    torch.hub.help("facebookresearch/dinov3", "dinov3_vits16")
+                except Exception:
+                    pass
+            if os.path.exists(dinov3_cache) and dinov3_cache not in sys.path:
+                sys.path.insert(0, dinov3_cache)
+            import dinov3.hub.backbones as d3_bb
+            model_fn = getattr(d3_bb, hub_name, None)
+            if model_fn is not None:
+                if weights_path and os.path.exists(weights_path):
+                    model = model_fn(pretrained=False)
+                    state = torch.load(weights_path, map_location="cpu")
+                    if "student" in state:
+                        state = {k.replace("0.", ""): v for k, v in state["student"].items() if k.startswith("0.")}
+                    model.load_state_dict(state, strict=False)
+                    print(f"   [Model Loader] Loaded custom offline DINOv3 weights from: {weights_path}")
+                else:
+                    try:
+                        model = model_fn(pretrained=pretrained)
+                    except Exception as e_pt:
+                        print(f"   [Notice] Meta DINOv3 official remote weights require HuggingFace gated token / offline file: {e_pt}")
+                        print("   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch...")
+                        model = model_fn(pretrained=False)
+                embed_dim = getattr(model, "embed_dim", 384)
+                print(f"   [Model Loader] Loaded DINOv3 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
+                return model, embed_dim
+        except Exception as e:
+            print(f"   [Warning] DINOv3 direct load encountered: {e}. Falling back...")
+
+    # 2. Native Meta AI DINOv2 via PyTorch Hub (Official LVD-142M Foundation Weights)
     if "dinov2" in model_name.lower():
         hub_name = model_name.lower().strip()
         # Aliases
@@ -408,17 +454,25 @@ def train_ssl_dinov2(args):
     device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
     os.makedirs(args.save_dir, exist_ok=True)
 
+    # Auto-adjust patch-aligned crop resolutions (DINOv3 uses Patch-16, DINOv2 uses Patch-14)
+    is_patch16 = ("16" in args.backbone.lower() or "dinov3" in args.backbone.lower())
+    patch_size = 16 if is_patch16 else 14
+    size_global = (args.size_global // patch_size) * patch_size
+    size_local = (args.size_local // patch_size) * patch_size
+    if size_local == 0:
+        size_local = 96 if patch_size == 16 else 98
+
     print("\n" + "=" * 70)
-    print(" 🚀 STARTING DINOv2 SELF-SUPERVISED CONTINUAL PRE-TRAINING")
+    print(" 🚀 STARTING DINO SELF-SUPERVISED CONTINUAL PRE-TRAINING")
     print("=" * 70)
-    print(f" Pretrained Backbone : {args.backbone} (Meta LVD-142M Foundation Model)")
+    print(f" Pretrained Backbone : {args.backbone} (Meta Foundation Model)")
     print(f" Compute Device      : {device}")
     print(f" Batch Size          : {args.batch_size}")
     print(f" Epochs              : {args.epochs}")
     print(f" Peak LR (Head)      : {args.lr}")
     print(f" Backbone LR Scale   : {args.backbone_lr_scale} (Peak Backbone LR: {args.lr * args.backbone_lr_scale})")
-    print(f" Global Crop Size    : {args.size_global}x{args.size_global} (Patch 14 Divisible)")
-    print(f" Local Crop Size     : {args.size_local}x{args.size_local} (Patch 14 Divisible)")
+    print(f" Global Crop Size    : {size_global}x{size_global} (Patch {patch_size} Divisible)")
+    print(f" Local Crop Size     : {size_local}x{size_local} (Patch {patch_size} Divisible)")
     print(f" Local Crops Count   : {args.local_crops}")
     print(f" Output Projection   : {args.out_dim}-dim")
     print("=" * 70)
@@ -434,11 +488,12 @@ def train_ssl_dinov2(args):
 
     print(f"   Discovered {len(image_paths)} unlabelled traffic camera frames.")
 
-    # 2. Data Loader with Patch-14 Multi-crop Augmentation
-    transform = DataAugmentationDINOv2(
+    # 2. Data Loader with Patch-aligned Multi-crop Augmentation
+    transform = DataAugmentationDINO(
         local_crops_number=args.local_crops,
-        size_global=args.size_global,
-        size_local=args.size_local,
+        size_global=size_global,
+        size_local=size_local,
+        patch_size=patch_size,
     )
     dataset = TrafficImageDataset(image_paths, transform=transform)
     dataloader = DataLoader(
@@ -799,22 +854,22 @@ def extract_feature_cache(
 # =====================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="DINOv2 Self-Supervised Domain Adaptation for Traffic Cameras")
+    parser = argparse.ArgumentParser(description="DINOv3 / DINOv2 Self-Supervised Domain Adaptation for Traffic Cameras")
     parser.add_argument("--data_dir", type=str, default="data/camera_images", help="Path to traffic camera images directory")
-    parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Backbone model (e.g. dinov2_vits14, dinov2_vitb14, convnext_tiny)")
-    parser.add_argument("--pretrained_init", action="store_true", default=True, help="Initialize with Meta LVD-142M weights before SSL fine-tuning")
+    parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Backbone model (e.g. dinov3_vits16, dinov2_vits14, dinov3_vitb16, dinov3_convnext_tiny)")
+    parser.add_argument("--pretrained_init", action="store_true", default=True, help="Initialize with Meta LVD Foundation weights before SSL fine-tuning")
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Optional path to local .pth checkpoint for offline loading")
     parser.add_argument("--epochs", type=int, default=30, help="Number of SSL fine-tuning epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per GPU")
     parser.add_argument("--lr", type=float, default=0.0005, help="Peak learning rate for DINO projection head")
     parser.add_argument("--backbone_lr_scale", type=float, default=0.1, help="LR multiplier for pre-trained backbone (prevents catastrophic forgetting)")
-    parser.add_argument("--size_global", type=int, default=224, help="Global crop dimension (must be divisible by 14)")
-    parser.add_argument("--size_local", type=int, default=98, help="Local crop dimension (must be divisible by 14, e.g. 98 = 14*7)")
+    parser.add_argument("--size_global", type=int, default=224, help="Global crop dimension (divisible by patch size: 16 or 14)")
+    parser.add_argument("--size_local", type=int, default=96, help="Local crop dimension (96 for patch 16, 98 for patch 14)")
     parser.add_argument("--out_dim", type=int, default=4096, help="Dimensionality of DINO projection head output")
     parser.add_argument("--local_crops", type=int, default=4, help="Number of local crops in multi-crop augmentation")
     parser.add_argument("--clip_grad", type=float, default=3.0, help="Gradient clipping norm")
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/dinov2_traffic_ssl", help="Directory to save checkpoints")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/dino_traffic_ssl", help="Directory to save checkpoints")
     parser.add_argument("--device", type=str, default="cuda", help="Target compute device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
@@ -823,7 +878,7 @@ def main():
 
     # Feature caching flag
     parser.add_argument("--cache_features", action="store_true", help="Extract feature embeddings for downstream tasks")
-    parser.add_argument("--cache_output", type=str, default="traffic_dinov2_embeddings.pt", help="Output path for cached embeddings")
+    parser.add_argument("--cache_output", type=str, default="traffic_dino_embeddings.pt", help="Output path for cached embeddings")
 
     args = parser.parse_args()
 
