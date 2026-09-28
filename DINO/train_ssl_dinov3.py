@@ -227,6 +227,94 @@ class DINOHead(nn.Module):
             return self.last_layer(x)
 
 
+class WeightLoadError(RuntimeError):
+    """Raised when pretrained weights do not match the backbone (must NOT be swallowed by fallbacks)."""
+
+
+def _convert_hf_dinov3_to_hub(state: Dict[str, torch.Tensor], model: nn.Module) -> Dict[str, torch.Tensor]:
+    """
+    Convert a HuggingFace `transformers` DINOv3ViTModel state_dict
+    (facebook/dinov3-*-pretrain-lvd1689m/model.safetensors) into the key layout of
+    Meta's torch.hub `DinoVisionTransformer` (blocks.N.attn.qkv, ls1.gamma, mlp.fc1, ...).
+
+    Without this, `load_state_dict(strict=False)` silently loads ~nothing and the backbone
+    stays RANDOMLY initialised.
+    """
+    if any(k.startswith("model.") for k in state):
+        state = {(k[len("model."):] if k.startswith("model.") else k): v for k, v in state.items()}
+    if any(".gate_proj." in k for k in state):
+        raise WeightLoadError("SwiGLU (gate_proj) DINOv3 variants are not supported by this converter; "
+                              "use the official Meta .pth checkpoint instead.")
+
+    n_layers = 1 + max(int(k.split(".")[1]) for k in state if k.startswith("layer."))
+    model_keys = set(model.state_dict().keys())
+    out: Dict[str, torch.Tensor] = {}
+
+    out["cls_token"] = state["embeddings.cls_token"]
+    if "embeddings.mask_token" in state:
+        out["mask_token"] = state["embeddings.mask_token"].reshape(1, -1)
+    if "embeddings.register_tokens" in state:
+        out["storage_tokens"] = state["embeddings.register_tokens"]
+    out["patch_embed.proj.weight"] = state["embeddings.patch_embeddings.weight"]
+    out["patch_embed.proj.bias"] = state["embeddings.patch_embeddings.bias"]
+    out["norm.weight"] = state["norm.weight"]
+    out["norm.bias"] = state["norm.bias"]
+
+    for i in range(n_layers):
+        p, b = f"layer.{i}.", f"blocks.{i}."
+        for n in ("norm1", "norm2"):
+            out[f"{b}{n}.weight"] = state[f"{p}{n}.weight"]
+            out[f"{b}{n}.bias"] = state[f"{p}{n}.bias"]
+
+        q_w, k_w, v_w = (state[f"{p}attention.{x}_proj.weight"] for x in "qkv")
+        dim = q_w.shape[0]
+        out[f"{b}attn.qkv.weight"] = torch.cat([q_w, k_w, v_w], dim=0)
+        q_b = state.get(f"{p}attention.q_proj.bias", torch.zeros(dim, dtype=q_w.dtype))
+        k_b = state.get(f"{p}attention.k_proj.bias", torch.zeros(dim, dtype=q_w.dtype))
+        v_b = state.get(f"{p}attention.v_proj.bias", torch.zeros(dim, dtype=q_w.dtype))
+        out[f"{b}attn.qkv.bias"] = torch.cat([q_b, k_b, v_b], dim=0)
+        if f"{b}attn.qkv.bias_mask" in model_keys:  # LinearKMaskedBias: K bias is masked out
+            mask = torch.ones(3 * dim, dtype=q_w.dtype)
+            mask[dim:2 * dim] = 0
+            out[f"{b}attn.qkv.bias_mask"] = mask
+        out[f"{b}attn.proj.weight"] = state[f"{p}attention.o_proj.weight"]
+        if f"{p}attention.o_proj.bias" in state:
+            out[f"{b}attn.proj.bias"] = state[f"{p}attention.o_proj.bias"]
+
+        out[f"{b}ls1.gamma"] = state[f"{p}layer_scale1.lambda1"]
+        out[f"{b}ls2.gamma"] = state[f"{p}layer_scale2.lambda1"]
+        for hf_n, hub_n in (("up_proj", "fc1"), ("down_proj", "fc2")):
+            out[f"{b}mlp.{hub_n}.weight"] = state[f"{p}mlp.{hf_n}.weight"]
+            if f"{p}mlp.{hf_n}.bias" in state:
+                out[f"{b}mlp.{hub_n}.bias"] = state[f"{p}mlp.{hf_n}.bias"]
+    return out
+
+
+def _load_backbone_state(model: nn.Module, state: Dict[str, torch.Tensor], source: str = "") -> None:
+    """Load weights into a hub backbone and FAIL LOUDLY if they do not actually match."""
+    if any(k.startswith("embeddings.") or k.startswith("layer.") for k in state):
+        print("   [Model Loader] Detected HuggingFace-transformers key layout -> converting to torch.hub layout...")
+        state = _convert_hf_dinov3_to_hub(state, model)
+
+    model_state = model.state_dict()
+    # RoPE 'periods' is a non-learned buffer already initialised by model.init_weights()
+    required = [k for k in model_state if "rope_embed" not in k]
+    shape_bad = [k for k in state if k in model_state and model_state[k].shape != state[k].shape]
+    if shape_bad:
+        raise WeightLoadError(f"Shape mismatch between checkpoint '{source}' and backbone, e.g. {shape_bad[:5]}")
+    msg = model.load_state_dict(state, strict=False)
+    missing = [k for k in msg.missing_keys if k in required]
+    matched = len(required) - len(missing)
+    print(f"   [Model Loader] Weight match: {matched}/{len(required)} tensors "
+          f"(missing={len(missing)}, unexpected={len(msg.unexpected_keys)}, shape_mismatch={len(shape_bad)})")
+    if missing or shape_bad or matched < 0.98 * len(required):
+        raise WeightLoadError(
+            f"Pretrained weights from '{source}' do NOT match the DINOv3 backbone -> it would stay randomly "
+            f"initialised.\n  missing[:5]={missing[:5]}\n  unexpected[:5]={msg.unexpected_keys[:5]}\n"
+            f"  shape_mismatch[:5]={shape_bad[:5]}"
+        )
+
+
 def build_backbone(
     model_name: str = "dinov3_vits16",
     pretrained: bool = True,
@@ -340,8 +428,8 @@ def build_backbone(
                             if clean_k.startswith("backbone."):
                                 clean_k = clean_k[len("backbone."):]
                         cleaned_state[clean_k] = v
-                    msg = model.load_state_dict(cleaned_state, strict=False)
-                    print(f"   ✅ [Model Loader] Loaded official Meta DINOv3 weights from: {weights_path} ({len(cleaned_state)} tensors)")
+                    _load_backbone_state(model, cleaned_state, weights_path)  # raises WeightLoadError on mismatch
+                    print(f"   ✅ [Model Loader] Loaded official Meta DINOv3 weights from: {weights_path}")
                 else:
                     try:
                         model = model_fn(pretrained=pretrained)
@@ -368,6 +456,8 @@ def build_backbone(
                 embed_dim = getattr(model, "embed_dim", 384)
                 print(f"   [Model Loader] Loaded DINOv3 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
                 return model, embed_dim
+        except WeightLoadError:
+            raise  # never silently fall back to a randomly-initialised / different backbone
         except Exception as e:
             print(f"   [Warning] DINOv3 direct load encountered: {e}. Falling back...")
 
@@ -479,6 +569,7 @@ class DINOLoss(nn.Module):
         self.center_momentum = center_momentum
         self.ncrops = ncrops
         self.register_buffer("center", torch.zeros(1, out_dim))
+        self.last_stats = (0.0, 0.0)  # (teacher sample entropy, teacher marginal entropy)
 
         # Teacher temperature cosine warmup schedule
         warmup_teacher_temp_epochs = min(warmup_teacher_temp_epochs, nepochs)
@@ -497,7 +588,16 @@ class DINOLoss(nn.Module):
         student_out = student_out.chunk(self.ncrops)
 
         temp = self.teacher_temp_schedule[min(epoch, len(self.teacher_temp_schedule) - 1)]
-        teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
+        teacher_out = F.softmax((teacher_output.float() - self.center) / temp, dim=-1)
+        with torch.no_grad():
+            # Collapse diagnostics: per-sample entropy (ln K = uniform/collapsed, ~0 = one-hot) and
+            # entropy of the batch-mean distribution (low = every image maps to the same prototype).
+            p = teacher_out.detach().float()
+            p_mean = p.mean(dim=0)
+            self.last_stats = (
+                float(-(p * torch.log(p + 1e-12)).sum(-1).mean()),
+                float(-(p_mean * torch.log(p_mean + 1e-12)).sum()),
+            )
         teacher_out = teacher_out.detach().chunk(2)
 
         total_loss = 0.0
@@ -632,12 +732,20 @@ def train_ssl_dinov3(args):
     student_head = DINOHead(embed_dim, out_dim=args.out_dim)
     student = nn.Sequential(student_backbone, student_head).to(device)
 
-    teacher_backbone, _ = build_backbone(args.backbone, pretrained=args.pretrained_init, weights_path=args.pretrained_weights)
-    teacher_head = DINOHead(embed_dim, out_dim=args.out_dim)
-    teacher = nn.Sequential(teacher_backbone, teacher_head).to(device)
+    # Optional: only adapt the last N transformer blocks (keeps DINOv3's dense features intact)
+    if args.train_last_n_blocks > 0 and hasattr(student_backbone, "blocks"):
+        n_blocks = len(student_backbone.blocks)
+        for name, p in student_backbone.named_parameters():
+            keep = name.startswith("norm.") or any(
+                name.startswith(f"blocks.{i}.") for i in range(n_blocks - args.train_last_n_blocks, n_blocks)
+            )
+            p.requires_grad = keep
+        n_train = sum(p.numel() for p in student_backbone.parameters() if p.requires_grad)
+        print(f"   [Freeze] Training last {args.train_last_n_blocks}/{n_blocks} blocks only ({n_train/1e6:.1f}M backbone params).")
 
-    # Synchronize teacher weights with student at step 0
-    teacher.load_state_dict(student.state_dict())
+    # Teacher = exact copy of the student at step 0 (same backbone AND head init, single weight load)
+    teacher = copy.deepcopy(student)
+    teacher.eval()
     for p in teacher.parameters():
         p.requires_grad = False
 
@@ -648,7 +756,10 @@ def train_ssl_dinov3(args):
     for name, param in student.named_parameters():
         if not param.requires_grad:
             continue
-        is_decay = ("bias" not in name and len(param.shape) > 1)
+        # No weight decay on biases, norms, LayerScale gammas and (cls / storage / mask) tokens
+        is_decay = not (
+            param.ndim <= 1 or name.endswith(".bias") or "token" in name or "gamma" in name or "norm" in name
+        )
         if name.startswith("0."):  # Backbone parameters
             if is_decay:
                 backbone_decay.append(param)
@@ -700,11 +811,13 @@ def train_ssl_dinov3(args):
 
     # 6. Training Loop
     best_loss = float("inf")
+    collapse_streak = 0
     start_time = time.time()
 
     for epoch in range(args.epochs):
         student.train()
         total_epoch_loss = 0.0
+        total_t_ent, total_t_marg = 0.0, 0.0
 
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1:03d}/{args.epochs}", leave=False)
         for it, crops in enumerate(pbar):
@@ -767,11 +880,31 @@ def train_ssl_dinov3(args):
                 for param_s, param_t in zip(student_raw.parameters(), teacher_raw.parameters()):
                     param_t.data.mul_(m).add_((1 - m) * param_s.detach().data)
 
-            total_epoch_loss += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}", lr=f"{curr_base_lr:.6f}")
+            loss_val = loss.item()
+            if not math.isfinite(loss_val):
+                raise RuntimeError(f"Non-finite loss at epoch {epoch+1}, iter {it}. Lower --lr / check data.")
+            total_epoch_loss += loss_val
+            total_t_ent += dino_loss.last_stats[0]
+            total_t_marg += dino_loss.last_stats[1]
+            pbar.set_postfix(loss=f"{loss_val:.4f}", lr=f"{curr_base_lr:.6f}")
 
         avg_loss = total_epoch_loss / len(dataloader)
-        print(f"Ep {epoch+1:03d}/{args.epochs:03d} | DINO Loss: {avg_loss:.4f} | Base LR: {curr_base_lr:.6f} | Temp: {dino_loss.teacher_temp_schedule[epoch]:.4f}")
+        avg_t_ent = total_t_ent / len(dataloader)
+        avg_t_marg = total_t_marg / len(dataloader)
+        print(f"Ep {epoch+1:03d}/{args.epochs:03d} | DINO Loss: {avg_loss:.4f} | Base LR: {curr_base_lr:.6f} "
+              f"| Temp: {dino_loss.teacher_temp_schedule[epoch]:.4f} "
+              f"| T-Ent: {avg_t_ent:.3f} | T-MargEnt: {avg_t_marg:.3f} (ln K = {math.log(args.out_dim):.3f})")
+
+        # Collapse detector: loss == ln(K) and teacher output uniform => nothing will ever be learned
+        ln_k = math.log(args.out_dim)
+        collapsed = abs(avg_loss - ln_k) < 5e-3 and avg_t_ent > ln_k - 0.05
+        collapse_streak = collapse_streak + 1 if (collapsed and epoch >= args.freeze_last_layer_epochs) else 0
+        if args.abort_on_collapse and collapse_streak >= 3:
+            raise RuntimeError(
+                "Representation collapse detected (loss ~ ln(out_dim) and teacher output uniform for 3 epochs). "
+                "Try: lower --lr / --backbone_lr_scale, --teacher_temp 0.04, --train_last_n_blocks 4, "
+                "and verify the pretrained weight match line printed by the model loader."
+            )
 
         # Record metrics for figures
         history["loss"].append(avg_loss)
@@ -986,8 +1119,11 @@ def extract_feature_cache(
     if os.path.exists(backbone_weights):
         state = torch.load(backbone_weights, map_location="cpu")
         if "student" in state:
-            state = {k.replace("0.", ""): v for k, v in state["student"].items() if k.startswith("0.")}
-        backbone.load_state_dict(state, strict=False)
+            state = {k[2:]: v for k, v in state["student"].items() if k.startswith("0.")}
+        msg = backbone.load_state_dict(state, strict=False)
+        real_missing = [k for k in msg.missing_keys if "rope_embed" not in k]
+        if real_missing:
+            raise WeightLoadError(f"Adapted weights do not match backbone '{backbone_name}': missing {real_missing[:5]}")
         print(f"   Loaded adapted DINOv2 weights from: {backbone_weights}")
     else:
         print("   Notice: Using official Meta DINOv2 pre-trained weights (Zero-shot / Off-the-shelf).")
@@ -1029,9 +1165,10 @@ def main():
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Optional path to local .pth checkpoint for offline loading")
     parser.add_argument("--epochs", type=int, default=30, help="Number of SSL fine-tuning epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per GPU")
-    parser.add_argument("--lr", type=float, default=0.0002, help="Peak learning rate for DINO projection head")
-    parser.add_argument("--backbone_lr_scale", type=float, default=0.1, help="LR multiplier for pre-trained backbone (prevents catastrophic forgetting)")
-    parser.add_argument("--warmup_epochs", type=int, default=10, help="Number of epochs to linearly warm up the LR schedule")
+    parser.add_argument("--lr", type=float, default=0.0002, help="Peak learning rate for DINO projection head (official DINO: 5e-4*bs/256)")
+    parser.add_argument("--backbone_lr_scale", type=float, default=0.05, help="LR multiplier for pre-trained backbone (0.05 -> ~1e-5 at lr=2e-4; prevents catastrophic forgetting)")
+    parser.add_argument("--train_last_n_blocks", type=int, default=0, help="If >0, only fine-tune the last N transformer blocks (0 = all)")
+    parser.add_argument("--warmup_epochs", type=int, default=5, help="Number of epochs to linearly warm up the LR schedule")
     parser.add_argument("--size_global", type=int, default=224, help="Global crop dimension (divisible by patch size: 16 or 14)")
     parser.add_argument("--size_local", type=int, default=96, help="Local crop dimension (96 for patch 16, 98 for patch 14)")
     parser.add_argument("--out_dim", type=int, default=4096, help="Dimensionality of DINO projection head output")
@@ -1053,8 +1190,9 @@ def main():
                               "track the (small) batch statistics faster but noisier; raise this "
                               "(e.g. 0.96-0.98) if you keep a small batch size.")
     parser.add_argument("--warmup_teacher_temp", type=float, default=0.04, help="Initial (warmup) teacher softmax temperature")
-    parser.add_argument("--teacher_temp", type=float, default=0.07,
-                         help="Final teacher softmax temperature (0.07 enables proper clustering dynamics as in official DINO).")
+    parser.add_argument("--teacher_temp", type=float, default=0.04,
+                         help="Final teacher softmax temperature. Official DINO: start at 0.04; values above 0.07 are unstable.")
+    parser.add_argument("--abort_on_collapse", action="store_true", default=True, help="Stop training if loss==ln(out_dim) with uniform teacher output")
     parser.add_argument("--warmup_teacher_temp_epochs", type=int, default=10, help="Epochs to warm up teacher temperature over")
 
     # Visualization flag
