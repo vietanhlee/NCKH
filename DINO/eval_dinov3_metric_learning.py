@@ -23,6 +23,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import time
 from typing import Dict, List, Tuple, Any
@@ -41,7 +42,7 @@ from sklearn.metrics import (
     f1_score,
     silhouette_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 import torch
 import torch.nn as nn
@@ -171,6 +172,8 @@ def prepare_dataframe(csv_path: str, image_dir: str = None) -> pd.DataFrame:
         clean_count = len(df)
         print(f"📊 [Data Filter] Read CSV: {raw_count} rows | Found valid images on disk: {clean_count} | Skipped missing: {raw_count - clean_count}")
 
+    if car_col and not moto_col or moto_col and not car_col:
+        print(f"⚠️  [Labels] Only one of car/motorcycle columns found ({car_col or moto_col}); other vehicle types are ignored.")
     if car_col and moto_col:
         total_veh = df[car_col].astype(float) + df[moto_col].astype(float)
     elif "count" in df.columns:
@@ -178,9 +181,11 @@ def prepare_dataframe(csv_path: str, image_dir: str = None) -> pd.DataFrame:
     else:
         num_cols = df.select_dtypes(include=[np.number]).columns
         if len(num_cols) > 0:
+            print(f"⚠️  [Labels] No car/motorcycle/count columns found; GUESSING '{num_cols[0]}' as vehicle count. "
+                  f"Check that the congestion classes are meaningful (columns: {list(df.columns)}).")
             total_veh = df[num_cols[0]].astype(float)
         else:
-            total_veh = pd.Series(np.zeros(len(df)))
+            raise ValueError(f"Cannot derive vehicle counts: no numeric columns in CSV (columns: {list(df.columns)})")
 
     # Discretize into 3 Standard Congestion Regimes (Low, Medium, High)
     classes = []
@@ -234,6 +239,38 @@ def extract_embeddings(
     embeddings = np.concatenate(embeddings, axis=0)
     labels = np.concatenate(labels, axis=0)
     return embeddings, labels, filenames
+
+
+# =====================================================================
+# 2b. LEAKAGE-AWARE TRAIN/TEST SPLIT
+# =====================================================================
+
+def make_split(embeddings, labels, filenames, seed, group_regex=None, test_size=0.2):
+    """
+    Traffic frames from the same camera / time window are near-duplicates. A plain random split puts
+    near-identical frames on both sides of the k-NN split and inflates accuracy (frame-level leakage).
+    If `group_regex` is given (first capture group = camera/sequence id, matched against the relative
+    file path), whole groups are kept on one side of the split.
+    """
+    if group_regex:
+        rx = re.compile(group_regex)
+        groups = []
+        for f in filenames:
+            m = rx.search(f)
+            groups.append((m.group(1) if m.groups() else m.group(0)) if m else "__nomatch__")
+        groups = np.array(groups)
+        n_groups = len(np.unique(groups))
+        print(f"   [Split] Group-aware split: {n_groups} groups from regex '{group_regex}' "
+              f"({int((groups == '__nomatch__').sum())} files unmatched)")
+        if n_groups < 5:
+            raise ValueError("Too few groups found by --group_regex; check the pattern against your file paths.")
+        sgkf = StratifiedGroupKFold(n_splits=int(round(1.0 / test_size)), shuffle=True, random_state=seed)
+        tr, te = next(sgkf.split(embeddings, labels, groups))
+        return embeddings[tr], embeddings[te], labels[tr], labels[te]
+
+    print("   [Split] ⚠️  Random frame-level split: neighbouring frames of the same camera can land in both "
+          "train and test, so k-NN numbers are optimistic. Use --group_regex for a leakage-free split.")
+    return train_test_split(embeddings, labels, test_size=test_size, random_state=seed, stratify=labels)
 
 
 # =====================================================================
@@ -435,7 +472,8 @@ def plot_publication_figures(
     eff_rank: float,
     intra_inter_ratio: float,
     save_dir: str,
-    model_name: str = "DINOv3 (ViT-S/16)"
+    model_name: str = "DINOv3 (ViT-S/16)",
+    prefix: str = "dinov3"
 ):
     """
     Renders 3 publication-ready figures (300 DPI PNG + vector PDF):
@@ -456,7 +494,11 @@ def plot_publication_figures(
     X_tsne = embeddings[idx]
     y_tsne = labels[idx]
 
-    tsne = TSNE(n_components=2, perplexity=35, random_state=42, n_iter=1000)
+    tsne_kwargs = dict(n_components=2, perplexity=35, random_state=42, init="pca")
+    try:
+        tsne = TSNE(max_iter=1000, **tsne_kwargs)   # scikit-learn >= 1.5
+    except TypeError:
+        tsne = TSNE(n_iter=1000, **tsne_kwargs)     # older scikit-learn
     z_2d = tsne.fit_transform(X_tsne)
 
     plt.figure(figsize=(7, 6), dpi=300)
@@ -477,8 +519,8 @@ def plot_publication_figures(
     plt.legend(loc="upper right", frameon=True, framealpha=0.9, fontsize=9)
     plt.tight_layout()
 
-    fig1_png = os.path.join(save_dir, "dinov3_tsne_manifold.png")
-    fig1_pdf = os.path.join(save_dir, "dinov3_tsne_manifold.pdf")
+    fig1_png = os.path.join(save_dir, f"{prefix}_tsne_manifold.png")
+    fig1_pdf = os.path.join(save_dir, f"{prefix}_tsne_manifold.pdf")
     plt.savefig(fig1_png, bbox_inches="tight", dpi=300)
     plt.savefig(fig1_pdf, bbox_inches="tight")
     plt.close()
@@ -499,15 +541,15 @@ def plot_publication_figures(
     plt.axvline(np.mean(intra_sub), color="#1f77b4", linestyle="--", linewidth=2.0)
     plt.axvline(np.mean(inter_sub), color="#d62728", linestyle="--", linewidth=2.0)
 
-    plt.title(f"Metric Space Separability: {model_name}\nIntra-to-Inter Ratio $\mathcal{{R}}_{{intra/inter}} = {intra_inter_ratio:.4f}$", fontsize=11, fontweight="bold", pad=12)
-    plt.xlabel("Pairwise Cosine Distance $(1 - \cos(z_i, z_j))$", fontsize=10, fontweight="bold")
+    plt.title(rf"Metric Space Separability: {model_name}\nIntra-to-Inter Ratio $\mathcal{{R}}_{{intra/inter}} = {intra_inter_ratio:.4f}$", fontsize=11, fontweight="bold", pad=12)
+    plt.xlabel(r"Pairwise Cosine Distance $(1 - \cos(z_i, z_j))$", fontsize=10, fontweight="bold")
     plt.ylabel("Probability Density", fontsize=10, fontweight="bold")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.legend(loc="upper right", frameon=True, framealpha=0.9, fontsize=9)
     plt.tight_layout()
 
-    fig2_png = os.path.join(save_dir, "dinov3_intra_vs_inter_distances.png")
-    fig2_pdf = os.path.join(save_dir, "dinov3_intra_vs_inter_distances.pdf")
+    fig2_png = os.path.join(save_dir, f"{prefix}_intra_vs_inter_distances.png")
+    fig2_pdf = os.path.join(save_dir, f"{prefix}_intra_vs_inter_distances.pdf")
     plt.savefig(fig2_png, bbox_inches="tight", dpi=300)
     plt.savefig(fig2_pdf, bbox_inches="tight")
     plt.close()
@@ -525,13 +567,13 @@ def plot_publication_figures(
 
     plt.title(f"Singular Value Spectrum & Dimensional Collapse Analysis\nEffective Rank: {eff_rank:.2f} / {len(s_norm)} ({(eff_rank/len(s_norm))*100:.1f}% Manifold Utilization)", fontsize=11, fontweight="bold", pad=12)
     plt.xlabel("Singular Value Index (Rank)", fontsize=10, fontweight="bold")
-    plt.ylabel("Normalized Singular Value $\sigma_k / \sigma_1$ (Log Scale)", fontsize=10, fontweight="bold")
+    plt.ylabel(r"Normalized Singular Value $\sigma_k / \sigma_1$ (Log Scale)", fontsize=10, fontweight="bold")
     plt.grid(True, which="both", linestyle="--", alpha=0.4)
     plt.legend(loc="upper right", frameon=True, framealpha=0.9, fontsize=9)
     plt.tight_layout()
 
-    fig3_png = os.path.join(save_dir, "dinov3_singular_values_rank.png")
-    fig3_pdf = os.path.join(save_dir, "dinov3_singular_values_rank.pdf")
+    fig3_png = os.path.join(save_dir, f"{prefix}_singular_values_rank.png")
+    fig3_pdf = os.path.join(save_dir, f"{prefix}_singular_values_rank.pdf")
     plt.savefig(fig3_png, bbox_inches="tight", dpi=300)
     plt.savefig(fig3_pdf, bbox_inches="tight")
     plt.close()
@@ -568,6 +610,13 @@ def evaluate_metric_learning(args):
         print(f"     - Class {c_id} [{c_name}]: {count} frames ({count/len(df)*100:.1f}%)")
 
     # 2. Build Model & Load Checkpoint
+    if args.weights is not None and not os.path.exists(args.weights):
+        raise FileNotFoundError(
+            f"--weights '{args.weights}' not found. Refusing to continue: the loader would silently fall back "
+            f"to the official pretrained weights and you would evaluate the wrong model."
+        )
+    tag = args.tag or f"{args.backbone}_{'adapted' if args.weights else 'pretrained'}"
+    print(f" Run tag               : {tag}")
     backbone, embed_dim = build_backbone(args.backbone, pretrained=(args.weights is None), weights_path=args.weights)
     backbone = backbone.to(device)
     backbone.eval()
@@ -596,7 +645,7 @@ def evaluate_metric_learning(args):
 
     # 5. Compute Metrics
     print("\n--- 1. Computing k-NN Retrieval Accuracy (Frozen Representations) ---")
-    X_tr, X_te, y_tr, y_te = train_test_split(embeddings, labels, test_size=0.2, random_state=args.seed, stratify=labels)
+    X_tr, X_te, y_tr, y_te = make_split(embeddings, labels, filenames, args.seed, group_regex=args.group_regex)
     knn_results = evaluate_knn_retrieval(X_tr, y_tr, X_te, y_te, k_values=[1, 5, 10, 20])
     for k in [1, 5, 10, 20]:
         print(f"   k={k:02d} | Top-1 Accuracy: {knn_results[f'knn_top1_acc_k{k}']*100:.2f}% | Macro F1: {knn_results[f'knn_macro_f1_k{k}']*100:.2f}%")
@@ -605,7 +654,7 @@ def evaluate_metric_learning(args):
     ratio, mean_intra, mean_inter, intra_dists, inter_dists = compute_intra_to_inter_ratio(embeddings, labels, seed=args.seed)
     print(f"   Mean Intra-Class Distance : {mean_intra:.4f}")
     print(f"   Mean Inter-Class Distance : {mean_inter:.4f}")
-    print(f"   R_intra/inter Ratio       : {ratio:.4f} (Lower is better, ideal < 0.35)")
+    print(f"   R_intra/inter Ratio       : {ratio:.4f} (Lower is better; compare against the pretrained baseline)")
 
     print("\n--- 3. Computing Hyperspherical Alignment & Uniformity (Wang & Isola, ICML 2020) ---")
     alignment, uniformity = compute_alignment_and_uniformity(embeddings, labels, seed=args.seed)
@@ -617,7 +666,7 @@ def evaluate_metric_learning(args):
     print(f"   Effective Rank (Rank_eff) : {eff_rank:.2f} / {embed_dim}")
     print(f"   Dimension Utilization    : {rank_pct:.2f}%")
 
-    print("\n--- 5. Computing Unsupervised Clustering Metrics ---")
+    print("\n--- 5. Computing Label-based Cluster Validity Metrics (ground-truth congestion classes) ---")
     cluster_metrics = compute_clustering_metrics(embeddings, labels)
     print(f"   Silhouette Score          : {cluster_metrics['silhouette_score']:.4f}")
     print(f"   Davies-Bouldin Index      : {cluster_metrics['davies_bouldin_index']:.4f} (Lower is better)")
@@ -634,7 +683,8 @@ def evaluate_metric_learning(args):
         eff_rank=eff_rank,
         intra_inter_ratio=ratio,
         save_dir=args.save_dir,
-        model_name=f"{args.backbone.upper()}"
+        model_name=f"{args.backbone.upper()} [{'adapted' if args.weights else 'pretrained'}]",
+        prefix=tag,
     )
 
     # 7. Export Numerical Results (JSON + Markdown)
@@ -642,6 +692,8 @@ def evaluate_metric_learning(args):
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "model_name": args.backbone,
         "weights_path": args.weights,
+        "tag": tag,
+        "group_regex": args.group_regex,
         "embedding_dim": embed_dim,
         "num_samples": len(embeddings),
         "knn_metrics": knn_results,
@@ -662,13 +714,13 @@ def evaluate_metric_learning(args):
         "clustering_quality": cluster_metrics,
     }
 
-    json_path = os.path.join(args.save_dir, "dinov3_metric_learning_results.json")
+    json_path = os.path.join(args.save_dir, f"{tag}_metric_results.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(final_results, f, indent=2)
     print(f"\n💾 Saved complete numerical results to: {json_path}")
 
     # Generate Markdown Table summary
-    md_path = os.path.join(args.save_dir, "dinov3_metric_learning_summary.md")
+    md_path = os.path.join(args.save_dir, f"{tag}_metric_summary.md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# Báo cáo Định lượng Biểu diễn Metric Learning (DINOv3)\n\n")
         f.write(f"- **Mô hình Backbone:** `{args.backbone}`\n")
@@ -680,12 +732,12 @@ def evaluate_metric_learning(args):
         f.write("| :--- | :---: | :---: | :--- |\n")
         f.write(f"| **k-NN Accuracy (k=20)** | **{knn_results['knn_top1_acc_k20']*100:.2f}%** | Càng cao càng tốt | Độ nhất quán của lân cận không gian đặc trưng |\n")
         f.write(f"| **k-NN Macro F1 (k=20)** | **{knn_results['knn_macro_f1_k20']*100:.2f}%** | Càng cao càng tốt | Cân bằng phân loại giữa các mức mật độ xe |\n")
-        f.write(f"| **Tỷ lệ $\mathcal{{R}}_{{intra/inter}}$** | **{ratio:.4f}** | Càng thấp càng tốt (< 0.35) | Độ gom cụm nội bộ so với khoảng cách tách rời |\n")
-        f.write(f"| **Alignment ($\mathcal{{L}}_{{align}}$)** | **{alignment:.4f}** | Càng thấp càng tốt | Tính bất biến của biểu diễn trước nhiễu |\n")
-        f.write(f"| **Uniformity ($\mathcal{{L}}_{{uniform}}$)** | **{uniformity:.4f}** | Càng âm càng tốt | Phân bố cực đại entropy trên mặt cầu $\mathcal{{S}}^{{d-1}}$ |\n")
-        f.write(f"| **Effective Rank ($\text{{Rank}}_{{eff}}$)** | **{eff_rank:.2f} / {embed_dim}** | Càng cao càng tốt | Mức độ khai thác chiều, chống sụp đổ biểu diễn |\n")
-        f.write(f"| **Hiệu suất sử dụng chiều** | **{rank_pct:.2f}%** | > 30% | Tỷ lệ không gian tiềm ẩn mang thông tin |\n")
-        f.write(f"| **Silhouette Score** | **{cluster_metrics['silhouette_score']:.4f}** | [-1, 1], > 0.3 | Độ phân định rõ ràng giữa các cụm |\n")
+        f.write(rf"| **Tỷ lệ $\mathcal{{R}}_{{intra/inter}}$** | **{ratio:.4f}** | Càng thấp càng tốt (so với baseline) | Độ gom cụm nội bộ so với khoảng cách tách rời |\n")
+        f.write(rf"| **Alignment ($\mathcal{{L}}_{{align}}$)** | **{alignment:.4f}** | Càng thấp càng tốt | Tính bất biến của biểu diễn trước nhiễu |\n")
+        f.write(rf"| **Uniformity ($\mathcal{{L}}_{{uniform}}$)** | **{uniformity:.4f}** | Càng âm càng tốt | Phân bố cực đại entropy trên mặt cầu $\mathcal{{S}}^{{d-1}}$ |\n")
+        f.write(rf"| **Effective Rank ($\text{{Rank}}_{{eff}}$)** | **{eff_rank:.2f} / {embed_dim}** | Càng cao càng tốt | Mức độ khai thác chiều, chống sụp đổ biểu diễn |\n")
+        f.write(f"| **Hiệu suất sử dụng chiều** | **{rank_pct:.2f}%** | Càng cao càng tốt | Tỷ lệ không gian tiềm ẩn mang thông tin |\n")
+        f.write(f"| **Silhouette Score** | **{cluster_metrics['silhouette_score']:.4f}** | [-1, 1], càng cao càng tốt | Độ phân định rõ ràng giữa các cụm |\n")
         f.write(f"| **Davies-Bouldin Index** | **{cluster_metrics['davies_bouldin_index']:.4f}** | Càng thấp càng tốt | Độ tương đồng giữa các cụm |\n\n")
         f.write("### 2. Các Artifacts Hình Ảnh Xuất Bản Đi Kèm (300 DPI & Vector PDF)\n\n")
         f.write(f"1. `dinov3_tsne_manifold.pdf` / `.png`: Bản đồ t-SNE 2 chiều phân cụm trạng thái giao thông.\n")
@@ -706,6 +758,10 @@ def main():
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
     parser.add_argument("--device", type=str, default="cuda", help="Target device ('cuda' or 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--tag", type=str, default=None, help="Prefix for output files (default: <backbone>_<adapted|pretrained>)")
+    parser.add_argument("--group_regex", type=str, default=None,
+                        help="Regex with 1 capture group extracting camera/sequence id from the relative image path, "
+                             "e.g. '^([^/_]+)' ; enables a leakage-free group split for k-NN")
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token for gated models")
 
     args = parser.parse_args()

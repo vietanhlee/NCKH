@@ -935,6 +935,8 @@ def train_ssl_dinov3(args):
             # Save Clean Domain-Adapted DINOv3 Backbone (Ready for downstream tasks / graph caching!)
             backbone_path = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")
             torch.save(student_raw[0].state_dict(), backbone_path)
+            # Teacher (EMA) backbone: DINO evaluates the teacher by default -> compare both in the eval script
+            torch.save(teacher_raw[0].state_dict(), os.path.join(args.save_dir, "dinov3_traffic_backbone_teacher.pth"))
             # Backward compatibility alias
             torch.save(student_raw[0].state_dict(), os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
             print(f"   -> Checkpoint saved to: {backbone_path}")
