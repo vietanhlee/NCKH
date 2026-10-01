@@ -292,10 +292,24 @@ def train_bg_guided_dino(args):
         axes[3].axis("off")
 
         plt.tight_layout()
-        vis_path = os.path.join(args.save_dir, "pca_feature_map_trained.png")
+        vis_path = os.path.join(args.save_dir, "bg_guided_dino_comparison.png")
         plt.savefig(vis_path, bbox_inches="tight")
         plt.close()
-        print(f"✅ [Visualization] Đã lưu ảnh PCA Feature Map tại: {vis_path}")
+        print(f"✅ [Visualization] Đã lưu ảnh đối chiếu 4 ô tại: {vis_path}")
+
+        # Xuất biểu đồ Emergent PCA Feature Maps (4 ảnh x 2 cột) chuẩn báo cáo khoa học
+        from visualize_pca import generate_emergent_pca_maps
+        sample_paths = [p["origin_path"] for p in dataset.pairs[:4]]
+        title_pfx = "DINOv3" if "dinov3" in args.backbone.lower() else "DINOv2"
+        grid_save_path = os.path.join(args.save_dir, "emergent_pca_feature_maps.png")
+        generate_emergent_pca_maps(
+            backbone=raw_model.student_backbone,
+            image_paths=sample_paths,
+            save_path=grid_save_path,
+            device=device,
+            img_size=args.size_global,
+            title_prefix=title_pfx,
+        )
     except Exception as e_vis:
         print(f"💡 [Visualization Notice] {e_vis}")
 
