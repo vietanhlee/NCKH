@@ -66,6 +66,88 @@ Thay vì chỉ sử dụng $\Delta(u, v)$ trong các thuật toán trừ nền t
 
 ---
 
+\section{CƠ SỞ LÝ THUYẾT TỰ HỌC DINO: TỪ DINOv1 ĐẾN DINOv2}
+
+\subsection{Bản Chất Tự Chưng Cất Tri Thức Không Nhãn (Self-Distillation With No Labels)}
+Mô hình tự giám sát DINO (Caron et al., ICCV 2021) vận hành dựa trên cơ chế tự chưng cất tri thức giữa hai mạng nơ-ron có cùng cấu trúc tham số: mạng \textbf{Học sinh (Student)} $g_{\theta_s}$ và mạng \textbf{Giáo viên (Teacher)} $g_{\theta_t}$. Mỗi mạng bao gồm một bộ trích xuất đặc trưng Vision Transformer (Backbone) kết hợp với đầu chiếu đa tầng (MLP Projection Head) nhằm ánh xạ token đại diện $[CLS]$ sang không gian xác suất $K$ chiều ($K = 4096$ hoặc $65536$).
+
+Quy trình tối ưu hóa thiết lập một sự bất đối xứng động học chặt chẽ:
+\begin{enumerate}
+    \item \textbf{Cập nhật mạng Student qua Gradient Descent:} Mạng Student tiếp nhận trực tiếp dòng gradient truyền ngược từ hàm mất mát DINO Loss để tối ưu hóa vector trọng số $\theta_s$.
+    \item \textbf{Cập nhật mạng Teacher qua Trung bình trượt hàm mũ (EMA):} Mạng Teacher không nhận gradient trực tiếp ($\nabla_{\theta_t} \mathcal{L} = 0$). Thay vào đó, trọng số $\theta_t$ được cập nhật chậm rãi theo hàm trung bình trượt động lượng (Momentum Encoder):
+    \begin{equation}
+        \theta_t \leftarrow \lambda \theta_t + (1 - \lambda) \theta_s
+    \end{equation}
+    trong đó $\lambda \in [0.996, 1.0]$ được điều tiết tăng dần theo quy luật Cosine Schedule xuyên suốt quá trình huấn luyện. Cơ chế này đóng vai trò như một bộ tích hợp mô hình theo thời gian (Polyak-Ruppert Averaging), giúp Teacher tạo ra các phân phối xác suất bia mục tiêu ổn định và có tính khái quát hóa cao.
+    \item \textbf{Cơ chế chống sụp đổ biểu diễn (Collapse Prevention):} Trong học tự giám sát không có mẫu âm (Non-contrastive SSL), mô hình rất dễ rơi vào hai trạng thái suy biến: (i) Mọi ảnh đều ánh xạ ra cùng một vector hằng số, hoặc (ii) Một chiều xác suất duy nhất thống trị toàn bộ phân phối. DINO giải quyết triệt để bài toán này bằng sự kết hợp nghịch đảo giữa \textbf{Teacher Centering} và \textbf{Teacher Sharpening}:
+    \begin{equation}
+        P_t(x)^{(k)} = \frac{\exp\left(\frac{g_{\theta_t}(x)^{(k)} - c^{(k)}}{\tau_t}\right)}{\sum_{j=1}^K \exp\left(\frac{g_{\theta_t}(x)^{(j)} - c^{(j)}}{\tau_t}\right)}, \quad P_s(x)^{(k)} = \frac{\exp\left(\frac{g_{\theta_s}(x)^{(k)}}{\tau_s}\right)}{\sum_{j=1}^K \exp\left(\frac{g_{\theta_s}(x)^{(j)}}{\tau_s}\right)}
+    \end{equation}
+    trong đó:
+    \begin{itemize}
+        \item Vector tâm $c \in \mathbb{R}^K$ được cập nhật liên tục theo mini-batch: $c \leftarrow m_c \cdot c + (1 - m_c) \frac{1}{B} \sum_{b=1}^B g_{\theta_t}(x_b)$. Phép trừ $g_{\theta_t}(x) - c$ khử độ lệch kỳ vọng, ngăn chặn một chiều tọa độ lấn át toàn thể.
+        \item Nhiệt độ Teacher $\tau_t$ ($0.04 \to 0.07$) luôn nhỏ hơn nhiệt độ Student $\tau_s = 0.1$, tạo hiệu ứng làm nhọn phân phối xác suất (Sharpening), ngăn chặn phân phối rơi vào trạng thái sụp đổ đồng đều (Uniform Collapse).
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Bước Chuyển Mình Đột Phá Từ DINOv1 Sang DINOv2}
+DINOv2 (Oquab et al., Meta AI 2023) đánh dấu bước nhảy vọt từ một phương pháp học đặc trưng ảnh đơn thuần thành một \textbf{Mô hình Nền tảng Thị giác (Vision Foundation Model)} với 4 cải tiến then chốt:
+\begin{enumerate}
+    \item \textbf{Tích hợp song song Masked Image Modeling (MIM / iBOT):} DINOv1 chỉ tối ưu trên token đại diện toàn cục $[CLS]$. DINOv2 kế thừa kiến trúc iBOT, áp dụng cơ chế tự chưng cất đồng thời trên cả token $[CLS]$ lẫn các \textbf{Patch Tokens} bị che ngẫu nhiên. Hàm mất mát tổng hợp:
+    \begin{equation}
+        \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}([CLS]) + \lambda_{\text{patch}} \mathcal{L}_{\text{iBOT}}(\text{Patch Tokens})
+    \end{equation}
+    nhờ đó mô hình vừa nắm bắt ngữ nghĩa cấp cao của toàn ảnh, vừa hiểu thấu đáo cấu trúc chi tiết từng điểm ảnh ở cấp độ dense patches.
+    \item \textbf{Hiện đại hóa kiến trúc Transformer:} DINOv2 loại bỏ hoàn toàn các lớp Batch Normalization (vốn gây rò rỉ thông tin thống kê giữa các mẫu trong batch); thay thế bằng \textbf{LayerScale} và hàm kích hoạt \textbf{SwiGLU} (Swish Gated Linear Unit), đảm bảo quá trình lan truyền gradient ổn định ở mô hình quy mô lớn (ViT-Small, Base, Large, Giant lên tới 1 tỷ tham số).
+    \item \textbf{Bổ sung Register Tokens:} DINOv2 bổ sung 4 token bộ nhớ ảo (Register Tokens) vào chuỗi đầu vào. Các token này có nhiệm vụ "hấp thụ" các tín hiệu kích hoạt bất thường (outliers) ở các vùng nền phẳng (bầu trời, mặt đường), giúp các Patch Tokens thực thụ bảo toàn năng lượng để mô tả chuẩn xác các vật thể nổi bật (tiền cảnh).
+    \item \textbf{Thích ứng đa độ phân giải (Multi-Resolution Adaptation):} DINOv2 thiết lập giao thức huấn luyện hai pha: pha pre-training diện rộng ở $224 \times 224$ (tiết kiệm tài nguyên) và pha tinh chỉnh ngắn hạn ở $518 \times 518$ (chuẩn hóa độ phân giải cao).
+\end{enumerate}
+
+\subsection{Chiến Lược Đa Góc Nhìn (Multi-Crop Strategy) và Các Đặc Tính Không Gian}
+Trái tim của cơ chế tự giám sát DINO là việc giải bài toán \textbf{"Học từ bộ phận đến toàn cảnh" (Part-to-Whole correspondence)} thông qua chiến lược Multi-crop:
+\begin{enumerate}
+    \item \textbf{Phân loại các góc nhìn (Crops):} Từ mỗi khung hình quan sát $x$, hệ thống trích xuất $V$ góc nhìn con:
+    \begin{itemize}
+        \item \textbf{2 Global Crops ($x_g^{(1)}, x_g^{(2)}$):} Cắt ngẫu nhiên với tỷ lệ diện tích lớn $S_g \in [0.4, 1.0]$ của ảnh gốc, sau đó chuẩn hóa về kích thước $224 \times 224$. Chứa đựng bối cảnh không gian tổng thể của tuyến đường và phương tiện. \textbf{Chỉ mạng Teacher được quyền nhìn thấy các Global crops này.}
+        \item \textbf{$N_l$ Local Crops ($x_l^{(1)}, \dots, x_l^{(N_l)}$) (mặc định $N_l = 4$):} Cắt ngẫu nhiên với diện tích nhỏ $S_l \in [0.05, 0.4]$, chuẩn hóa về kích thước $98 \times 98$ (đối với ViT patch-14, $98 = 7 \times 14$). Góc nhìn này zoom cận cảnh vào các cấu kiện cục bộ (bánh xe, đầu xe, gương chiếu hậu). \textbf{Mạng Student bắt buộc phải nhìn cả Global crops lẫn Local crops.}
+    \end{itemize}
+    \item \textbf{Bản chất toán học của chỉ số IoU giữa các góc nhìn:}
+    Trong DINO, các góc nhìn được cắt \textbf{hoàn toàn ngẫu nhiên và độc lập (Unconditioned Independent Crops)}, không áp đặt điều kiện ràng buộc ngưỡng $\text{IoU}$. 
+    
+    Xét hai Global crops có diện tích tương đối $S_1, S_2 \in [0.4, 1.0]$. Theo nguyên lý hình học Dirichlet, do cả hai vùng cùng chiếm tỷ lệ lớn trên khung hình, xác suất để chúng giao thoa không gian ($A(x_g^{(1)}) \cap A(x_g^{(2)}) \neq \emptyset$) là áp đảo, với kỳ vọng toán học:
+    \begin{equation}
+        \mathbb{E}[\text{IoU}(x_g^{(1)}, x_g^{(2)})] \in [0.15, 0.60]
+    \end{equation}
+    Việc không cố định IoU mang ý nghĩa bản chất:
+    \begin{itemize}
+        \item Nếu ép $\text{IoU} \approx 1.0$: Hai góc nhìn gần như trùng khít, mô hình sẽ học "lối tắt tầm thường" (trivial shortcut) bằng cách ghi nhớ điểm ảnh thay vì học ngữ nghĩa trừu tượng.
+        \item Nếu $\text{IoU} \to 0$ (hai góc nhìn ở hai vị trí xa nhau trên xe buýt): Student bị ép phải liên kết thông tin cục bộ ở đầu xe với bối cảnh đuôi xe của Teacher, thúc đẩy hình thành tri thức ngữ cảnh toàn cục mạnh mẽ.
+    \end{itemize}
+    \item \textbf{Cơ chế xử lý ảnh đầu vào có kích thước nhỏ hơn ($< 224 \times 224$):}
+    Khi ảnh đầu vào có độ phân giải thấp hơn $224 \times 224$ (ví dụ camera đường truyền yếu $160 \times 120$), toán tử `RandomResizedCrop` thực hiện hai công đoạn: (i) Cắt vùng theo tỷ lệ diện tích $S$, và (ii) Phóng to vùng cắt đó lên chính xác $224 \times 224$ bằng thuật toán \textbf{Nội suy Bicubic bậc cao (Bicubic Upsampling)}. Nhờ tính liên tục của hàm cơ sở Bicubic, tensor đầu ra đưa vào ViT luôn có kích thước chuẩn $(3, 224, 224)$. Trong hệ thống camera giám sát thực tế (CCTV TP.HCM), độ phân giải thực luôn từ $720\text{p} \to 1080\text{p}$, do đó thao tác thực chất là phép lấy mẫu thu nhỏ (Downsampling) giúp loại bỏ nhiễu cảm biến và nén giữ tín hiệu trung thực nhất.
+\end{enumerate}
+
+\subsection{Cơ Chế Ghép Batch và Hàm Mất Mát DINO Cross-Entropy}
+Một hiểu lầm phổ biến trong triển khai là ghép nhiều ảnh theo chiều kênh (Channel concatenation). DINO thiết lập quy tắc kiến trúc chuẩn mực:
+\begin{enumerate}
+    \item \textbf{Tuyệt đối không ghép theo chiều Kênh (Channel):} Lớp chiếu đầu vào của Vision Transformer là một phép biến đổi tuyến tính $W_{\text{patch}} \in \mathbb{R}^{D \times (P^2 \cdot C)}$ với số kênh cố định $C = 3$ (RGB). Nếu ghép $V$ ảnh theo chiều channel ($C = 3V$), mô hình sẽ gặp lỗi bất tương thích chiều, đồng thời việc ép các ảnh chồng đè lên nhau tại cùng tọa độ pixel sẽ phá hủy hoàn toàn cấu trúc không gian hình học.
+    \item \textbf{Ghép theo chiều Mẫu (Batch Dimension):} Tất cả các góc nhìn của $B$ khung hình trong mini-batch được xếp chồng dọc theo chiều thứ nhất (`dim=0`), tạo thành siêu tensor:
+    \begin{align}
+        X_{\text{global}} &\in \mathbb{R}^{(B \times 2) \times 3 \times 224 \times 224} \\
+        X_{\text{local}}  &\in \mathbb{R}^{(B \times N_l) \times 3 \times 98 \times 98}
+    \end{align}
+    Mỗi ảnh con được xử lý độc lập và song song qua ViT như một phần tử riêng biệt, xuất ra $B \times 2$ vector đặc trưng Teacher và $B \times (2 + N_l)$ vector đặc trưng Student.
+    \item \textbf{Hàm mất mát so khớp chéo (Cross-Entropy Matching):}
+    Hàm mất mát DINO Loss tính toán độ lệch entropy chéo giữa 2 góc nhìn toàn cảnh của Teacher và toàn bộ các góc nhìn của Student (loại trừ trường hợp so khớp với chính nó):
+    \begin{equation}
+        \mathcal{L}_{\text{DINO}} = \frac{1}{2} \sum_{i=1}^2 \sum_{\substack{v=1 \\ v \neq i}}^{2 + N_l} H\left(P_t(x_g^{(i)}), P_s(x^{(v)})\right)
+    \end{equation}
+    trong đó $H(p, q) = -\sum_{k=1}^K p^{(k)} \log q^{(k)}$. 
+\end{enumerate}
+Cơ sở lý thuyết vững chắc này tạo tiền đề khoa học để tích hợp bản đồ sai khác vật lý $\Delta$ vào quá trình huấn luyện, tạo nên mô hình BG-Guided DINO vượt trội trong các phần tiếp theo.
+
+---
+
 \section{HƯỚNG 1: BG-GUIDED DINO -- TIỀN HUẤN LUYỆN TỰ GIÁM SÁT LIÊN TỤC VỚI FOREGROUND-AWARE MASKING}
 
 \subsection{Hạn Chế của Cơ Chế Che Ngẫu Nhiên Đồng Đều}
