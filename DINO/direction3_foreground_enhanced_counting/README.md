@@ -1,4 +1,4 @@
-# Hướng 4: Foreground-Enhanced Vehicle Counting (Stage 1 Upgrade)
+# Hướng 3: Foreground-Enhanced Vehicle Counting (Stage 1 Upgrade)
 
 ## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐)
 Nâng cấp trực tiếp bài toán ước lượng lưu lượng phương tiện của Stage 1 trong bài báo khoa học hiện tại (`counting_labels_5012.csv`):
@@ -27,7 +27,7 @@ Nâng cấp trực tiếp bài toán ước lượng lưu lượng phương ti�
 ### Kịch bản 1: Chạy thử nghiệm nhanh (Quick Test)
 Kiểm tra pipeline nạp CSV và backward trên 20 mẫu trong 2 epochs:
 ```bash
-python DINO/direction4_foreground_enhanced_counting/train.py \
+python DINO/direction3_foreground_enhanced_counting/train.py \
     --csv_file stage1_perception/counting_labels_5012.csv \
     --origin_dir output \
     --bg_dir traffic_backgrounds \
@@ -36,7 +36,7 @@ python DINO/direction4_foreground_enhanced_counting/train.py \
     --mode 4channel \
     --epochs 2 \
     --batch_size 4 \
-    --save_dir checkpoints/direction4_fg_counting/test_run \
+    --save_dir checkpoints/direction3_fg_counting/test_run \
     --device cuda
 ```
 
@@ -45,7 +45,7 @@ python DINO/direction4_foreground_enhanced_counting/train.py \
 ### Kịch bản 2: Huấn luyện đầy đủ trên Đa GPU (Kaggle 2x T4 / Server Lab)
 Hệ thống **tự động phát hiện toàn bộ số GPU**, chia đều batch qua tất cả các GPU:
 ```bash
-python DINO/direction4_foreground_enhanced_counting/train.py \
+python DINO/direction3_foreground_enhanced_counting/train.py \
     --csv_file stage1_perception/counting_labels_5012.csv \
     --origin_dir output \
     --bg_dir traffic_backgrounds \
@@ -57,7 +57,7 @@ python DINO/direction4_foreground_enhanced_counting/train.py \
     --lr 2e-4 \
     --img_size 224 \
     --few_shot_ratio 1.0 \
-    --save_dir checkpoints/direction4_fg_counting \
+    --save_dir checkpoints/direction3_fg_counting \
     --device cuda
 ```
 
@@ -67,14 +67,14 @@ python DINO/direction4_foreground_enhanced_counting/train.py \
 Thử nghiệm huấn luyện mô hình khi chỉ có **10% hoặc 20% nhãn** để chứng minh kênh $\Delta$ giúp mô hình học nhanh hơn baseline:
 ```bash
 # Huấn luyện chỉ với 10% dữ liệu nhãn (Few-shot 10%):
-python DINO/direction4_foreground_enhanced_counting/train.py \
+python DINO/direction3_foreground_enhanced_counting/train.py \
     --csv_file stage1_perception/counting_labels_5012.csv \
     --origin_dir output \
     --bg_dir traffic_backgrounds \
     --mode 4channel \
     --few_shot_ratio 0.10 \
     --epochs 15 \
-    --save_dir checkpoints/direction4_fg_counting/fewshot_10pct \
+    --save_dir checkpoints/direction3_fg_counting/fewshot_10pct \
     --device cuda
 ```
 
@@ -83,16 +83,16 @@ python DINO/direction4_foreground_enhanced_counting/train.py \
 ### Kịch bản 4: Chạy Đánh Giá So Sánh Đối Đầu & Xuất Bảng LaTeX
 Chạy script kiểm thử đối đầu trên tập Test Disjoint và sinh mã $\text{\LaTeX}$ để chèn trực tiếp vào Overleaf/Paper:
 ```bash
-python DINO/direction4_foreground_enhanced_counting/evaluate.py \
+python DINO/direction3_foreground_enhanced_counting/evaluate.py \
     --csv_file stage1_perception/counting_labels_5012.csv \
     --origin_dir output \
     --bg_dir traffic_backgrounds \
-    --weights checkpoints/direction4_fg_counting/best_counting_model_4channel.pth \
+    --weights checkpoints/direction3_fg_counting/best_counting_model_4channel.pth \
     --mode 4channel \
-    --output_dir checkpoints/direction4_fg_counting/eval \
+    --output_dir checkpoints/direction3_fg_counting/eval \
     --device cuda
 ```
-*Kết quả đầu ra*: Mở file `checkpoints/direction4_fg_counting/eval/benchmark_comparison_table.tex` để lấy mã nguồn bảng LaTeX.
+*Kết quả đầu ra*: Mở file `checkpoints/direction3_fg_counting/eval/benchmark_comparison_table.tex` để lấy mã nguồn bảng LaTeX.
 
 ---
 

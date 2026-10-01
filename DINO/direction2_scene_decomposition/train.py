@@ -219,7 +219,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Traffic Scene Decomposition")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
     parser.add_argument("--origin_dir", type=str, default="output", help="Thư mục origin")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction3_scene_decomp", help="Thư mục lưu")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction2_scene_decomp", help="Thư mục lưu")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--img_size", type=int, default=256)

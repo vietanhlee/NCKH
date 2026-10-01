@@ -1,4 +1,4 @@
-# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 9 HƯỚNG NGHIÊN CỨU KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
+# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 8 HƯỚNG NGHIÊN CỨU KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
 
 **Dự án:** Khai thác tự giám sát cặp ảnh Background tĩnh và Origin phương tiện phục vụ bài toán thị giác máy tính giám sát giao thông đô thị  
 **Dữ liệu thực nghiệm:** Hệ thống camera giao thông đô thị TP.HCM (IC4SD-Traffic-HCM)  
@@ -15,7 +15,7 @@ Trong giám sát giao thông qua camera cố định (CCTV), hệ thống có ha
 Sự kết hợp giữa $I_{\text{origin}}$ và $I_{\text{bg}}$ cung cấp một tín hiệu vật lý quang học tiên nghiệm (Physical Prior) vô cùng mạnh mẽ:
 $$\Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|$$
 
-Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan, hệ thống DINO Suite được xây dựng gồm 9 hướng nghiên cứu độc lập nhưng bổ trợ lẫn nhau, tận dụng $\Delta$ và $I_{\text{bg}}$ để giải quyết triệt để các bài toán cốt lõi của thị giác máy tính trong giao thông thông minh (Intelligent Transportation Systems - ITS).
+Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan, hệ thống DINO Suite được xây dựng gồm **8 hướng nghiên cứu** độc lập nhưng bổ trợ lẫn nhau, tận dụng $\Delta$ và $I_{\text{bg}}$ để giải quyết triệt để các bài toán cốt lõi của thị giác máy tính trong giao thông thông minh (Intelligent Transportation Systems - ITS).
 
 ---
 
@@ -95,87 +95,17 @@ Cơ chế này ép Vision Transformer tự động trừu tượng hóa mối qu
 
 ---
 
-## 3. HƯỚNG 2: ZERO-SHOT VEHICLE SEMANTIC SEGMENTATION
+## 3. HƯỚNG 2: SELF-SUPERVISED SCENE DECOMPOSITION NETWORK (TRAFFIC-DECOMPOSE)
 
 ### 3.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction2_zero_shot_segmentation/`
-* Trích xuất đặc trưng PCA từ ViT: [`pca_extractor.py`](file:///g:/nckh/DINO/direction2_zero_shot_segmentation/pca_extractor.py) (`DINOPCAExtractor`)
-* Động cơ dung hợp nhãn giả: [`fusion.py`](file:///g:/nckh/DINO/direction2_zero_shot_segmentation/fusion.py) (`MaskFusionEngine`)
-* Kiến trúc phân đoạn Student nhẹ và Dice Loss: [`segmentor.py`](file:///g:/nckh/DINO/direction2_zero_shot_segmentation/segmentor.py) (`VehicleSegmentor`, `LightweightSegDecoder`, `DiceLoss`)
-* Pipeline suy luận và trực quan hóa bài báo: [`run_segmentation.py`](file:///g:/nckh/DINO/direction2_zero_shot_segmentation/run_segmentation.py)
+* Thư mục triển khai: `g:/nckh/DINO/direction2_scene_decomposition/`
+* Bộ nạp dữ liệu cặp ảnh đồng bộ: [`dataset.py`](file:///g:/nckh/DINO/direction2_scene_decomposition/dataset.py) (`DecompositionDataset`)
+* Kiến trúc phân rã cảnh 3 nhánh: [`models.py`](file:///g:/nckh/DINO/direction2_scene_decomposition/models.py) (`TrafficDecompositionNet`)
+* Hàm mất mát giám sát vật lý đa mục tiêu: [`losses.py`](file:///g:/nckh/DINO/direction2_scene_decomposition/losses.py) (`DecompositionLoss`)
+* Huấn luyện mạng: [`train.py`](file:///g:/nckh/DINO/direction2_scene_decomposition/train.py)
+* Suy luận Inpainting xóa xe tự động: [`infer.py`](file:///g:/nckh/DINO/direction2_scene_decomposition/infer.py)
 
 ### 3.2. Đặt vấn đề và Mục tiêu
-Việc gán nhãn mặt nạ phân đoạn pixel (Pixel-level Segmentation Mask) cho dữ liệu giao thông thực tế đòi hỏi chi phí nhân công khổng lồ (trung bình mất 15–30 phút cho một bức ảnh đông đúc xe cộ tại TP.HCM). 
-
-**Mục tiêu:** Tự động tạo ra mặt nạ phân đoạn pixel chính xác cho phương tiện mà **hoàn toàn không cần con người can thiệp (Zero-Shot)**, bằng cách khai thác sự giao thoa bù trừ giữa tín hiệu quang học cấp thấp (Low-level Physics) và tín hiệu ngữ nghĩa cấp cao của DINOv3 (High-level Deep Semantics). Dùng nhãn giả chất lượng cao này để huấn luyện một mạng Student SegHead siêu nhẹ (>60 FPS) phục vụ camera giám sát tại biên.
-
-### 3.3. Phương pháp kỹ thuật
-
-```
-                     ┌───────────────────────────────┐
-                     │ Ảnh Origin + Ảnh Background   │
-                     └───────────────┬───────────────┘
-                                     │
-             ┌───────────────────────┴───────────────────────┐
-             ▼                                               ▼
-   [Nhánh Vật Lý: Δ-Map]                         [Nhánh Ngữ Nghĩa: DINOv3 ViT]
-   • Trừ nền LAB                                 • Trích xuất Patch Tokens
-   • Ngưỡng tự động Otsu                         • Chiếu PCA: Phân tích PC1
-   • Phép toán hình thái học                     • Nội suy song tuyến tính
-             │                                               │
-             │ (Mặt nạ nhạy biên, dính bóng đổ)              │ (Mặt nạ ngữ nghĩa xe, biên thô)
-             └───────────────────────┬───────────────────────┘
-                                     │
-                                     ▼
-                        [Động cơ Dung Hợp (Fusion Engine)]
-                        • Giao thoa: M_fused = M_Δ ∩ M_PC1
-                        • Khử bóng đổ mặt đường
-                        • Lọc viền: Guided/Bilateral Filtering
-                                     │
-                                     ▼
-                     [Pseudo Ground-Truth Segmentation Mask]
-```
-
-#### 3.3.1. Nhánh 1: Tín hiệu sai khác vật lý ($\Delta$-Mask)
-* Tính bản đồ sai khác $\Delta$ qua phép trừ nền trong không gian LAB.
-* Phân ngưỡng nhị phân tự động thích nghi theo thuật toán Otsu:
-  $$\tau^* = \arg\max_{\tau} \sigma_B^2(\tau)$$
-* Áp dụng phép toán hình thái học:
-  * Phép mở (Morphological Open) với kernel hình elip $5 \times 5$ nhằm triệt tiêu nhiễu hạt cảm biến camera.
-  * Phép đóng (Morphological Close) với kernel $11 \times 11$ để lấp đầy các khoảng trống bên trong thân xe đồng màu.
-* **Đặc tính:** Cho đường biên bao quanh đối tượng rất sắc nét theo từng pixel, nhưng nhược điểm chí mạng là **luôn bị dính bóng đổ của xe in xuống mặt đường** vì bóng đổ cũng làm thay đổi giá trị điểm ảnh so với nền tĩnh.
-
-#### 3.3.2. Nhánh 2: Tín hiệu ngữ nghĩa sâu (DINOv3 PCA Segmentation)
-* Đưa ảnh origin qua mô hình DINO ViT để lấy ma trận đặc trưng patch tokens ở tầng Transformer cuối cùng:
-  $$X \in \mathbb{R}^{N_{\text{patches}} \times D}$$
-  với $N_{\text{patches}} = 196$, số chiều biểu diễn $D = 384$ (ViT-Small) hoặc $768$ (ViT-Base).
-* Thực hiện phân tích thành phần chính (PCA) trên tập vector patch đã chuẩn hóa trung bình:
-  $$(X - \bar{X}) = U \Sigma V^T$$
-* Chiếu ma trận đặc trưng lên vector riêng thứ nhất $v_1$ (thành phần giải thích phương sai lớn nhất):
-  $$\mathbf{z}_{\text{PC1}} = (X - \bar{X}) v_1 \in \mathbb{R}^{N_{\text{patches}}}$$
-* **Cơ sở khoa học:** Theo khám phá của Caron et al. và Oquab et al., cơ chế Self-Attention trong DINO tự động gom cụm các patch có chung thuộc tính ngữ nghĩa trừu tượng. Vector riêng PC1 phân tách rõ rệt giữa hai phân phối: phân phối của "vật thể tiền cảnh" và phân phối của "bối cảnh nền".
-* **Đặc tính:** PC1 **hoàn toàn không bị đánh lừa bởi bóng đổ mặt đường** (bởi vì bóng đổ về bản chất ngữ nghĩa sâu vẫn là bề mặt nhựa đường, không chứa cấu trúc cơ khí hay hình thái của xe). Nhược điểm là độ phân giải không gian thô ($14 \times 14$ patches).
-
-#### 3.3.3. Cơ chế Dung hợp (Mask Fusion Engine)
-Sự kết hợp giữa hai nhánh triệt tiêu hoàn toàn nhược điểm của nhau:
-$$M_{\text{fused}} = \text{BilateralFilter}\Big( M_{\Delta} \cap \text{Threshold}(\text{Resize}(\mathbf{z}_{\text{PC1}})) \Big)$$
-* Phép giao $\cap$ loại bỏ 100% bóng đổ trên mặt đường (vì nhánh PCA loại bỏ bóng đổ).
-* Phép giao $\cap$ loại bỏ các dao động giả của nền tĩnh như cành cây đung đưa, mặt đường loang nước (vì nhánh PCA xác định đó không phải xe).
-* Bộ lọc song phương (Bilateral Filter) khôi phục lại đường biên chính xác đến từng pixel của vỏ xe dựa trên gradient độ sáng cục bộ của ảnh gốc.
-
----
-
-## 4. HƯỚNG 3: SELF-SUPERVISED SCENE DECOMPOSITION NETWORK (TRAFFIC-DECOMPOSE)
-
-### 4.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction3_scene_decomposition/`
-* Bộ nạp dữ liệu cặp ảnh đồng bộ: [`dataset.py`](file:///g:/nckh/DINO/direction3_scene_decomposition/dataset.py) (`DecompositionDataset`)
-* Kiến trúc phân rã cảnh 3 nhánh: [`models.py`](file:///g:/nckh/DINO/direction3_scene_decomposition/models.py) (`TrafficDecompositionNet`)
-* Hàm mất mát giám sát vật lý đa mục tiêu: [`losses.py`](file:///g:/nckh/DINO/direction3_scene_decomposition/losses.py) (`DecompositionLoss`)
-* Huấn luyện mạng: [`train.py`](file:///g:/nckh/DINO/direction3_scene_decomposition/train.py)
-* Suy luận Inpainting xóa xe tự động: [`infer.py`](file:///g:/nckh/DINO/direction3_scene_decomposition/infer.py)
-
-### 4.2. Đặt vấn đề và Mục tiêu
 Trong đồ họa máy tính và thị giác vật lý, một khung cảnh quan sát được mô hình hóa theo công thức hòa trộn Alpha (Alpha Compositing Formulation):
 $$I_{\text{origin}} = M_{\alpha} \odot I_{\text{fg}} + (1 - M_{\alpha}) \odot I_{\text{bg}}$$
 Trong đó:
@@ -188,9 +118,9 @@ Thông thường, việc phân rã một bức ảnh duy nhất $I_{\text{origin
 
 **Mục tiêu:** Xây dựng một mạng nơ-ron sâu tự giám sát hoàn toàn mang tên **TrafficDecompositionNet**. Bằng cách sử dụng ảnh nền thực tế $I_{\text{bg\_real}}$ làm mỏ neo giám sát vật lý, mạng học cách tự động bóc tách bất kỳ bức ảnh giao thông nào thành 3 lớp vật lý độc lập. Ứng dụng trực tiếp cho bài toán: **Tự động xóa sạch xe cộ trên đường (Inpainting) từ một frame duy nhất** mà không cần thuật toán vá ảnh truyền thống.
 
-### 4.3. Thiết kế Kiến trúc và Hàm Mất Mát Đa Mục Tiêu
+### 3.3. Thiết kế Kiến trúc và Hàm Mất Mát Đa Mục Tiêu
 
-```
+```text
                               ┌────────────────────┐
                               │  Ảnh Origin (x)    │
                               └─────────┬──────────┘
@@ -219,207 +149,193 @@ Thông thường, việc phân rã một bức ảnh duy nhất $I_{\text{origin
 Hàm mục tiêu tối ưu hóa của toàn bộ mạng được thiết kế gồm 4 thành phần ràng buộc vật lý chặt chẽ:
 $$\mathcal{L}_{\text{total}} = \lambda_{\text{rec}} \mathcal{L}_{\text{recon}} + \lambda_{\text{bg}} \mathcal{L}_{\text{bg}} + \lambda_{\text{sparse}} \mathcal{L}_{\text{sparsity}} + \lambda_{\text{tv}} \mathcal{L}_{\text{tv}}$$
 
-#### 4.3.1. Thành phần 1: Mất mát tái tạo khung cảnh ($\mathcal{L}_{\text{recon}}$)
-Đảm bảo rằng khi hòa trộn lớp xe $I_{\text{fg}}$ và lớp nền $I_{\text{bg}}$ thông qua mặt nạ $M_{\alpha}$, kết quả phải tái tạo hoàn hảo bức ảnh ban đầu:
-$$\mathcal{L}_{\text{recon}} = \|I_{\text{origin}} - \hat{I}_{\text{origin}}\|_{1} + \big(1 - \text{SSIM}(I_{\text{origin}}, \hat{I}_{\text{origin}})\big)$$
-Việc kết hợp khoảng cách $L_1$ và chỉ số tương đồng cấu trúc SSIM (Structural Similarity Index) giúp bảo toàn cả độ chính xác màu sắc lẫn độ sắc nét của các cạnh đối tượng.
-
-#### 4.3.2. Thành phần 2: Mất mát giám sát nền thực tế ($\mathcal{L}_{\text{bg}}$)
-Đây là **đóng góp khoa học then chốt (Core Novelty)** giúp giải quyết tính chất vô nghiệm xác định của bài toán. Nhánh dự đoán nền $I_{\text{bg}}$ bị cưỡng chế phải hội tụ về ảnh nền thật $I_{\text{bg\_real}}$ tương ứng của khung giờ đó:
-$$\mathcal{L}_{\text{bg}} = \|\hat{I}_{\text{bg}} - I_{\text{bg\_real}}\|_{1}$$
-Nhờ có mỏ neo này, Decoder nền bị khóa chặt vào cấu trúc lòng đường tĩnh, buộc Decoder phương tiện ($I_{\text{fg}}$) và Decoder Alpha ($M_{\alpha}$) phải hấp thụ toàn bộ phần dư thừa chuyển động (chính là xe cộ).
-
-#### 4.3.3. Thành phần 3: Ràng buộc thưa diện tích phương tiện ($\mathcal{L}_{\text{sparsity}}$)
-Nếu không có ràng buộc này, mạng nơ-ron có thể chọn một nghiệm suy biến tầm thường: gán $M_{\alpha} = 1$ ở khắp mọi nơi và sao chép toàn bộ ảnh gốc vào $I_{\text{fg}}$. Để ngăn chặn điều này, hàm mất mát chuẩn hóa $L_1$ trên mặt nạ Alpha được áp dụng:
-$$\mathcal{L}_{\text{sparsity}} = \frac{1}{H \cdot W} \sum_{u=1}^{H} \sum_{v=1}^{W} M_{\alpha}(u, v)$$
-Ép diện tích xe cộ phải thưa thớt, phản ánh đúng thực tế phương tiện chỉ chiếm một phần diện tích mặt đường.
-
-#### 4.3.4. Thành phần 4: Ràng buộc làm mịn Total Variation ($\mathcal{L}_{\text{tv}}$)
-Khử hiện tượng nhiễu đốm hạt tiêu và viền răng cưa quanh thân xe trên mặt nạ $M_{\alpha}$:
-$$\mathcal{L}_{\text{tv}} = \frac{1}{H \cdot W} \sum_{u=1}^{H} \sum_{v=1}^{W} \left( |M_{\alpha}(u+1, v) - M_{\alpha}(u, v)| + |M_{\alpha}(u, v+1) - M_{\alpha}(u, v)| \right)$$
+* $\mathcal{L}_{\text{recon}} = \|I_{\text{origin}} - \hat{I}_{\text{origin}}\|_{1} + \big(1 - \text{SSIM}(I_{\text{origin}}, \hat{I}_{\text{origin}})\big)$
+* $\mathcal{L}_{\text{bg}} = \|\hat{I}_{\text{bg}} - I_{\text{bg\_real}}\|_{1}$ (Mỏ neo nền thật)
+* $\mathcal{L}_{\text{sparsity}} = \frac{1}{HW} \sum_{u, v} M_\alpha(u, v)$ (Ràng buộc thưa diện tích phương tiện)
+* $\mathcal{L}_{\text{tv}} = \text{TotalVariation}(M_\alpha)$ (Làm mịn đường biên thân xe)
 
 ---
 
-## 5. HƯỚNG 4: FOREGROUND-ENHANCED TRAFFIC COUNTING (STAGE 1 UPGRADE)
+## 4. HƯỚNG 3: FOREGROUND-ENHANCED TRAFFIC COUNTING (STAGE 1 UPGRADE)
+
+### 4.1. Mã nguồn tham chiếu
+* Thư mục triển khai: `g:/nckh/DINO/direction3_foreground_enhanced_counting/`
+* Nạp nhãn đếm và tạo tensor 4 kênh: [`dataset.py`](file:///g:/nckh/DINO/direction3_foreground_enhanced_counting/dataset.py) (`FGCountingDataset`)
+* Kiến trúc ViT mở rộng 4 kênh và Warm-start: [`models.py`](file:///g:/nckh/DINO/direction3_foreground_enhanced_counting/models.py) (`DINOv3FGCountingModel`, `adapt_patch_embed_to_4ch`, `RegressionHead`)
+* Huấn luyện mô hình đếm xe: [`train.py`](file:///g:/nckh/DINO/direction3_foreground_enhanced_counting/train.py)
+* Đánh giá hiệu năng và tự động xuất bảng $\text{\LaTeX}$: [`evaluate.py`](file:///g:/nckh/DINO/direction3_foreground_enhanced_counting/evaluate.py)
+
+### 4.2. Đặt vấn đề và Phương pháp kỹ thuật
+Bài toán ước lượng lưu lượng phương tiện (xe máy, ô tô và tổng lưu lượng) gặp thách thức lớn do hiện tượng che khuất nghiêm trọng (Heavy Occlusion) trong giờ cao điểm và điều kiện học ít mẫu (Few-shot learning: 5%, 10%, 20% nhãn).
+
+**Giải pháp:** Mở rộng tầng Patch Embedding của ViT từ 3 kênh chuẩn (RGB) lên 4 kênh (RGB + $\Delta$), tiêm trực tiếp trường sai khác chuyển động vào tầng sâu của mạng:
+$$X_{\text{4ch}} = [\text{R}, \text{G}, \text{B}, \Delta_{\text{norm}}] \in \mathbb{R}^{4 \times H \times W}$$
+
+**Chiến lược khởi tạo thích ứng ấm (Warm-Start Weight Adaptation):**
+$$W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}, \quad W_{\text{4ch}}[:, 3, :, :] = \frac{1}{3} \sum_{c=0}^{2} W_{\text{pretrained}}[:, c, :, :]$$
+Ba kênh đầu giữ nguyên 100% tri thức trích xuất biên cạnh đã tiền huấn luyện, kênh thứ 4 nhận trung bình cộng cường độ 3 kênh RGB, đảm bảo tại epoch 0 kênh $\Delta$ đóng góp năng lượng đồng mức mà không gây sốc gradient.
+
+Đánh giá chuẩn qua phân chia phân tách không gian (Spatial Disjoint Splitting theo Camera ID) để triệt tiêu hoàn toàn hiện tượng rò rỉ dữ liệu (Data Leakage).
+
+---
+
+## 5. HƯỚNG 4: UNSUPERVISED TRAFFIC ANOMALY DETECTION VIA $\Delta$-CONDITIONED DINO EMBEDDINGS
 
 ### 5.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction4_foreground_enhanced_counting/`
-* Nạp nhãn đếm và tạo tensor 4 kênh: [`dataset.py`](file:///g:/nckh/DINO/direction4_foreground_enhanced_counting/dataset.py) (`FGCountingDataset`)
-* Kiến trúc ViT mở rộng 4 kênh và Warm-start: [`models.py`](file:///g:/nckh/DINO/direction4_foreground_enhanced_counting/models.py) (`DINOv3FGCountingModel`, `adapt_patch_embed_to_4ch`, `RegressionHead`)
-* Huấn luyện mô hình đếm xe: [`train.py`](file:///g:/nckh/DINO/direction4_foreground_enhanced_counting/train.py)
-* Đánh giá hiệu năng và tự động xuất bảng $\text{\LaTeX}$: [`evaluate.py`](file:///g:/nckh/DINO/direction4_foreground_enhanced_counting/evaluate.py)
+* Thư mục triển khai: `g:/nckh/DINO/direction4_anomaly_detection/`
+* Bộ nhớ đặc trưng chuẩn: [`memory_bank.py`](file:///g:/nckh/DINO/direction4_anomaly_detection/memory_bank.py) (`AnomalyMemoryBank`)
+* Trích xuất đặc trưng kết hợp: [`feature_extractor.py`](file:///g:/nckh/DINO/direction4_anomaly_detection/feature_extractor.py) (`DeltaConditionedExtractor`)
+* Thuật toán phát hiện bất thường: [`detector.py`](file:///g:/nckh/DINO/direction4_anomaly_detection/detector.py) (`TrafficAnomalyDetector`)
+* Pipeline suy luận và trực quan hóa: [`run_detection.py`](file:///g:/nckh/DINO/direction4_anomaly_detection/run_detection.py)
 
 ### 5.2. Đặt vấn đề và Mục tiêu
-Bài toán ước lượng lưu lượng phương tiện (Đếm số lượng xe máy, ô tô và tổng lưu lượng) từ một camera CCTV duy nhất gặp rất nhiều thách thức lớn:
-1. **Hiện tượng che khuất nghiêm trọng (Heavy Occlusion):** Trong các khung giờ cao điểm tại TP.HCM, xe máy ken đặc che lấp lẫn nhau, mô hình 3 kênh RGB truyền thống rất khó nhận diện ranh giới từng phương tiện.
-2. **Biến động chiếu sáng khắc nghiệt:** Ban đêm đèn pha xe gây lóa camera, ban ngày bóng đổ của nhà cao tầng và cây cối làm biến dạng đặc trưng thị giác.
-3. **Bài toán học ít mẫu (Few-Shot Regime):** Việc gán nhãn số lượng xe cho từng khung hình rất tốn kém; cần một mô hình hoạt động vượt trội khi chỉ có $5\%$, $10\%$ hoặc $20\%$ dữ liệu có nhãn.
+Các sự kiện bất thường trong giao thông đô thị (tai nạn, xe chết máy dừng giữa đường, phương tiện đi ngược chiều, vật cản rơi vãi) mang bản chất cực kỳ hiếm gặp và phân phối lệch (long-tail), không thể thu thập đủ dữ liệu gán nhãn để huấn luyện các bộ phân loại có giám sát.
 
-**Mục tiêu:** Mở rộng tầng Patch Embedding của DINOv3 từ 3 kênh tiêu chuẩn (RGB) lên 4 kênh (RGB + $\Delta$), trực tiếp tiêm tín hiệu chuyển động vật lý vào tầng sâu của mạng. Cải thiện rõ rệt chỉ số sai số tuyệt đối trung bình (MAE) và sai số bình phương trung bình căn (RMSE).
+### 5.3. Giả thuyết Khoa học và Mô hình Hóa
+* **Trạng thái bình thường:** Trường sai khác $\Delta$ tuân theo một phân phối biến thiên ổn định đặc trưng cho luồng di chuyển đều đặn của dòng xe.
+* **Trạng thái bất thường:** Khi xảy ra sự cố, $\Delta$ lệch hẳn khỏi phân phối bình thường cả về cường độ (vùng sai khác lớn tồn tại tĩnh qua nhiều khung hình) lẫn cấu trúc không gian (nằm ở vị trí bất thường).
 
-### 5.3. Phương pháp kỹ thuật
+Xây dựng bộ mô tả kép kết hợp tín hiệu vật lý quang học và ngữ nghĩa sâu:
+$$\mathbf{f}_{\text{anomaly}} = \text{Concat}\Big(\text{Stats}(\Delta), \ \text{DINO}_{[CLS]}\Big) \in \mathbb{R}^{D + 3}$$
+trong đó $\text{Stats}(\Delta) = [\text{mean}(\Delta), \text{std}(\Delta), \text{ratio}(\Delta > \tau)]$.
 
-#### 5.3.1. Cấu trúc Tensor Đầu Vào 4 Kênh
-Mỗi mẫu dữ liệu huấn luyện được biểu diễn dưới dạng tensor 4 chiều không gian:
-$$X_{\text{4ch}} = [\text{R}, \text{G}, \text{B}, \Delta_{\text{norm}}] \in \mathbb{R}^{4 \times H \times W}$$
-Trong đó kênh thứ 4 được chuẩn hóa về cùng phân phối động với các kênh màu:
-$$\Delta_{\text{norm}} = \frac{\Delta - 0.5}{0.5} \in [-1.0, 1.0]$$
-
-#### 5.3.2. Kỹ thuật Khởi tạo Thích ứng Ấm (Warm-Start Patch Embedding Adaptation)
-Trong Vision Transformer chuẩn, lớp Patch Embedding là một phép tích chập 2D biến đổi patch ảnh kích thước $P \times P$ thành vector không gian $D$ chiều:
-$$W_{\text{3ch}} \in \mathbb{R}^{D \times 3 \times P \times P}, \quad b \in \mathbb{R}^{D}$$
-
-Khi mở rộng thêm kênh thứ 4 ($\Delta$), trọng số biến thành $W_{\text{4ch}} \in \mathbb{R}^{D \times 4 \times P \times P}$. Nếu ta khởi tạo ngẫu nhiên trọng số của kênh thứ 4 (ví dụ lấy mẫu Gaussian ngẫu nhiên), các giá trị kích hoạt (Activation) ở tầng Transformer đầu tiên sẽ bị nhiễu loạn nghiêm trọng, phá hủy toàn bộ tri thức tiền huấn luyện (Pretrained Representation) của DINOv3.
-
-Để giải quyết vấn đề này, thuật toán **Warm-Start Weight Adaptation** được áp dụng:
-$$W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}$$
-$$W_{\text{4ch}}[:, 3, :, :] = \frac{1}{3} \sum_{c=0}^{2} W_{\text{pretrained}}[:, c, :, :]$$
-
-**Ý nghĩa toán học và nghiệp vụ:**
-* Ba kênh đầu giữ nguyên $100\%$ các bộ lọc trích xuất cạnh, kết cấu và hình khối màu sắc đã được Meta AI huấn luyện trên hàng trăm triệu bức ảnh.
-* Trọng số kênh thứ 4 được gán bằng trung bình cộng cường độ của 3 kênh RGB. Vì bản đồ sai khác $\Delta$ biểu diễn cường độ tương phản thị giác, việc khởi tạo này đảm bảo tại epoch 0, kênh $\Delta$ đóng góp vào hàm kích hoạt với thang đo năng lượng hoàn toàn đồng nhất với các kênh màu, không gây sốc gradient cho mạng nơ-ron.
-
-#### 5.3.3. Cơ chế Đánh giá Khách quan Chống Rò rỉ Bối cảnh (Spatial Disjoint Splitting)
-* Tuyệt đối không chia tập Train/Test ngẫu nhiên theo từng frame ảnh (vì hai ảnh kế tiếp nhau từ cùng một camera sẽ có nền đường giống hệt nhau, dẫn tới hiện tượng rò rỉ dữ liệu - Data Leakage).
-* Dữ liệu được phân chia theo danh sách Camera ID độc lập: Camera dùng để huấn luyện sẽ không bao giờ xuất hiện trong tập kiểm thử. Điều này chứng minh năng lực tổng quát hóa của kênh $\Delta$ đối với các tuyến đường hoàn toàn mới.
-* Tự động tính toán các chỉ số thống kê chuẩn khoa học:
-  $$\text{MAE} = \frac{1}{M} \sum_{i=1}^{M} |y_i - \hat{y}_i|, \quad \text{RMSE} = \sqrt{\frac{1}{M} \sum_{i=1}^{M} (y_i - \hat{y}_i)^2}$$
-  và tự động xuất bảng so sánh giữa mô hình 3 kênh RGB và 4 kênh RGB+$\Delta$ ra định dạng mã nguồn $\text{\LaTeX}$ chuẩn IEEE Transactions.
+Điểm bất thường (Anomaly Score) được tính dựa trên khoảng cách $k$-NN đối với ngân hàng nhớ (Memory Bank) lưu trữ các vector chuẩn trạng thái bình thường:
+$$\text{Score}(x) = \frac{1}{k} \sum_{j=1}^k d_{\text{Euclidean}}(\mathbf{f}_x, \text{NN}_j(\text{MemoryBank}))$$
+Memory Bank được cập nhật liên tục qua trung bình trượt hàm mũ (EMA) để thích ứng với biến thiên quang học theo thời gian.
 
 ---
 
-## 6. HƯỚNG 5: UNSUPERVISED TRAFFIC ANOMALY DETECTION VIA $\Delta$-CONDITIONED DINO EMBEDDINGS
+## 6. HƯỚNG 5: TEMPORAL CONTRASTIVE LEARNING FOR TRAFFIC DENSITY ESTIMATION
 
-### 6.1. Đặt vấn đề và Mục tiêu
-Phát hiện bất thường giao thông (như tai nạn, xe dừng đỗ giữa đường, vật cản rơi vãi) là một bài toán phát hiện bất thường không giám sát (Unsupervised Anomaly Detection - UAD) điển hình do sự kiện hiếm gặp và khó thu thập dữ liệu có nhãn.
+### 6.1. Mã nguồn tham chiếu
+* Thư mục triển khai: `g:/nckh/DINO/direction5_temporal_density/`
+* Nạp chuỗi thời gian: [`dataset.py`](file:///g:/nckh/DINO/direction5_temporal_density/dataset.py) (`TemporalTrafficDataset`)
+* Kiến trúc mã hóa thời gian: [`models.py`](file:///g:/nckh/DINO/direction5_temporal_density/models.py) (`TemporalTrafficEncoder`, `DeltaSpatialEncoder`)
+* Hàm mất mát tương phản thời gian: [`losses.py`](file:///g:/nckh/DINO/direction5_temporal_density/losses.py) (`TemporalContrastiveLoss`)
+* Quy trình huấn luyện: [`train.py`](file:///g:/nckh/DINO/direction5_temporal_density/train.py)
 
-### 6.2. Giả thuyết và Phương pháp
-* **Giả thuyết khoa học:** Ở trạng thái bình thường, bản đồ sai khác $\Delta$ tuân theo một phân phối ổn định. Khi có sự kiện bất thường xảy ra, $\Delta$ sẽ lệch hẳn khỏi phân phối học được.
-* **Phương pháp:** Xây dựng một Memory Bank từ đặc trưng kết hợp $f_{\text{anomaly}} = \text{Concat}(\text{Pool}(\Delta), \text{DINO}_{[CLS]})$. Sử dụng khoảng cách Mahalanobis hoặc thuật toán k-NN trong không gian đặc trưng này để tính toán Anomaly Score mà hoàn toàn không cần nhãn bất thường.
+### 6.2. Đặt vấn đề và Động lực Khoa học
+Các phương pháp thị giác hiện tại chủ yếu xử lý từng khung hình độc lập (Static Frame-by-Frame). Tuy nhiên, camera CCTV cung cấp luồng quan sát chuỗi thời gian liên tục $\{I^{t_1}, I^{t_2}, \dots, I^{t_T}\}$. Vận tốc trung bình và xu hướng ùn tắc của dòng xe được phản ánh trực tiếp qua đạo hàm thời gian của trường sai khác $\frac{\partial \Delta}{\partial t}$.
 
-### 6.3. Kiến trúc Pipeline
+### 6.3. Kiến trúc Mạng và Hàm Mất Mát InfoNCE Thời Gian
+Mô hình tổ chức khung hình theo các cửa sổ thời gian kích thước $K$ (mặc định $K=4$). Hai cửa sổ liền kề nhau $W_a = [I^{t_1}, \dots, I^{t_K}]$ và $W_b^+ = [I^{t_{K+1}}, \dots, I^{t_{2K}}]$ từ cùng một camera tạo thành cặp dương tự nhiên (Positive Pair).
+
+Vector đặc trưng tổng hợp thời gian $\mathbf{h} \in \mathbb{R}^{256}$ được hình thành qua:
+$$\mathbf{h} = \text{TemporalTransformer}\Big(\big[\text{DINO}(I^t) \oplus \text{CNN}(\Delta^t) + \text{PE}(t)\big]_{t=1}^K\Big)$$
+
+Mô hình tối ưu hóa hàm mất mát tương phản thời gian đối xứng (Symmetric Temporal InfoNCE):
+$$\mathcal{L}_{\text{temporal}} = -\frac{1}{2} \left[ \log \frac{\exp(\mathbf{z}_a \cdot \mathbf{z}_b^+ / \tau)}{\sum_j \exp(\mathbf{z}_a \cdot \mathbf{z}_j^- / \tau)} + \log \frac{\exp(\mathbf{z}_b^+ \cdot \mathbf{z}_a / \tau)}{\sum_j \exp(\mathbf{z}_b^+ \cdot \mathbf{z}_j^- / \tau)} \right]$$
+Vector $\mathbf{h}$ được kết nối trực tiếp với Regression Head để ước lượng mật độ phương tiện và chỉ số mức độ phục vụ (Level of Service - LoS).
+
+---
+
+## 7. HƯỚNG 6: $\Delta$-GUIDED UNSUPERVISED VEHICLE RE-IDENTIFICATION ACROSS CAMERAS
+
+### 7.1. Mã nguồn tham chiếu
+* Thư mục triển khai: `g:/nckh/DINO/direction6_vehicle_reid/`
+* Trích xuất vùng xe không cần detector: [`roi_extractor.py`](file:///g:/nckh/DINO/direction6_vehicle_reid/roi_extractor.py) (`DeltaRoIExtractor`)
+* Kiến trúc Re-ID chuẩn BNNeck: [`models.py`](file:///g:/nckh/DINO/direction6_vehicle_reid/models.py) (`VehicleReIDModel`)
+* Hàm mất mát tương phản tracklet: [`losses.py`](file:///g:/nckh/DINO/direction6_vehicle_reid/losses.py) (`TrackletContrastiveLoss`)
+* Công cụ so khớp và đánh giá CMC/mAP: [`matcher.py`](file:///g:/nckh/DINO/direction6_vehicle_reid/matcher.py) (`VehicleReIDMatcher`)
+* Pipeline thực thi: [`run_reid.py`](file:///g:/nckh/DINO/direction6_vehicle_reid/run_reid.py)
+
+### 7.2. Đặt vấn đề và Giải pháp Đột phá
+Bài toán nhận dạng lại phương tiện qua mạng lưới camera đô thị (Vehicle Re-ID) thường vấp phải hai rào cản chi phí:
+1. Phụ thuộc vào Object Detector nặng nề (YOLO/Faster R-CNN) để cắt hộp bao xe.
+2. Chi phí gán nhãn danh tính xe (Identity ID) thủ công qua hàng trăm camera là bất khả thi.
+
+**Giải pháp:**
+* **$\Delta$-Guided RoI Extraction:** Tận dụng trực tiếp trường sai khác $\Delta$ qua phân tích thành phần liên thông (Connected Components) kết hợp bộ lọc diện tích và tỷ lệ khung hình để tự động cắt các phương tiện chuyển động mà **hoàn toàn không cần Object Detector**.
+* **DINO ViT + BNNeck Projector:** Tạo vector nhúng danh tính 256 chiều chuẩn hóa $L_2$ có khả năng bất biến với góc nghiêng camera và ánh sáng.
+* **Unsupervised Tracklet Contrastive:** Tận dụng chuỗi frame liên tiếp của cùng camera làm cặp dương tự thân, huấn luyện mô hình phân biệt danh tính xe không cần giám sát.
+* **Đánh giá chuẩn quốc tế:** Đánh giá Cumulative Matching Characteristics (CMC Rank-1, Rank-5) và mean Average Precision (mAP) trên các truy vấn liên camera (Cross-Camera Query-Gallery matching).
+
+---
+
+## 8. HƯỚNG 7: OPEN-VOCABULARY TRAFFIC SCENE UNDERSTANDING VIA $\Delta$-CONDITIONED PROPOSALS
+
+### 8.1. Mã nguồn tham chiếu
+* Thư mục triển khai: `g:/nckh/DINO/direction7_open_vocabulary/`
+* Động cơ sinh đề xuất vùng vật lý: [`proposal_engine.py`](file:///g:/nckh/DINO/direction7_open_vocabulary/proposal_engine.py) (`DeltaProposalEngine`)
+* Quản lý từ vựng văn bản mở: [`text_prompts.py`](file:///g:/nckh/DINO/direction7_open_vocabulary/text_prompts.py) (`TrafficPromptVocabulary`)
+* Mô hình căn chỉnh DINO sang CLIP: [`models.py`](file:///g:/nckh/DINO/direction7_open_vocabulary/models.py) (`OpenVocabTrafficDetector`)
+* Pipeline nhận diện trực quan: [`pipeline.py`](file:///g:/nckh/DINO/direction7_open_vocabulary/pipeline.py)
+
+### 8.2. Đặt vấn đề và Phương pháp kỹ thuật
+Các mô hình nhận diện khép kín (Closed-Set Detectors) chỉ phát hiện được các lớp có sẵn trong tập huấn luyện (ví dụ: xe hơi, xe máy). Trên đường phố thực tế tại Việt Nam, sự xuất hiện của các phương tiện đặc thù (xe cứu thương, xe rác, xe ba gác) hoặc chướng ngại vật bất thường đòi hỏi năng lực hiểu cảnh từ vựng mở (Open-Vocabulary Perception).
+
+**Cơ chế hoạt động:**
+1. **Delta Region Proposals:** $\Delta$-Mask được lọc qua phân ngưỡng đa mức và Non-Maximum Suppression (NMS) để sinh ra các hộp đề xuất vùng đối tượng không phụ thuộc lớp (Class-Agnostic Proposals) thay thế RPN.
+2. **Vision-Language Alignment:** Bộ chiếu đa tầng ánh xạ vector đặc trưng vùng của DINO ViT sang không gian nhúng ngữ nghĩa của CLIP (512 chiều).
+3. **Zero-Shot Classification:** Xác suất phân loại của mỗi vùng $r$ đối với danh mục văn bản $c$ được tính qua độ tương đồng Cosine:
+   $$P(c | r) = \frac{\exp\big(\text{sim}(\mathbf{z}_r, \mathbf{w}_c) / \tau\big)}{\sum_{k} \exp\big(\text{sim}(\mathbf{z}_r, \mathbf{w}_k) / \tau\big)}$$
+   Hỗ trợ người vận hành truy vấn bất kỳ đối tượng nào bằng mô tả ngôn ngữ tự nhiên tiếng Việt hoặc tiếng Anh.
+
+---
+
+## 9. HƯỚNG 8: SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION
+
+### 9.1. Mã nguồn tham chiếu
+* Thư mục triển khai: `g:/nckh/DINO/direction8_road_condition/`
+* Nạp chuỗi ảnh nền 24h: [`dataset.py`](file:///g:/nckh/DINO/direction8_road_condition/dataset.py) (`RoadSurfaceDataset`)
+* Mô hình phân tích đa thuộc tính mặt đường: [`models.py`](file:///g:/nckh/DINO/direction8_road_condition/models.py) (`RoadConditionClassifier`)
+* Hàm mất mát mỏ neo vật lý: [`losses.py`](file:///g:/nckh/DINO/direction8_road_condition/losses.py) (`SurfaceConsistencyLoss`)
+* Đánh giá và gom cụm PCA toàn đô thị: [`eval.py`](file:///g:/nckh/DINO/direction8_road_condition/eval.py)
+
+### 9.2. Đặt vấn đề và Ứng dụng Quản lý Đô thị
+Chuỗi ảnh nền 24 giờ $\{I_{\text{bg}}^{h=0}, \dots, I_{\text{bg}}^{h=23}\}$ trên 608 camera chứa đựng thông tin phong phú về môi trường và hạ tầng mặt đường đô thị:
+* Trạng thái thời tiết: Mặt đường khô ráo vs. mặt đường ẩm ướt, đọng nước (thể hiện qua các vùng phản chiếu gương Specular Reflection).
+* Chu kỳ chiếu sáng: Ngày, chạng vạng hoàng hôn và hệ thống đèn cao áp ban đêm.
+* Chất lượng hạ tầng: Độ suy giảm kết cấu, nứt nẻ, gồ ghề của mặt đường nhựa.
+
+**Phương pháp:**
+* DINO ViT $[CLS]$ token trích xuất vector biểu diễn kết cấu mặt đường $\mathbf{z}_{\text{road}} \in \mathbb{R}^D$.
+* Ba đầu dự đoán đa nhiệm (Multi-Task Heads):
+  1. `pred_wetness`: Chỉ số ẩm ướt / đọng nước $\in [0, 1]$ (được neo vật lý bằng tỷ lệ phản chiếu gương quang học).
+  2. `logits_illum`: Phân loại 3 mức chiếu sáng (Đêm, Chạng vạng, Ngày).
+  3. `pred_degradation`: Chỉ số hư hại kết cấu mặt đường $\in [0, 1]$ (được neo bằng độ biến thiên gradient Sobel).
+* Pipeline tự động gom cụm PCA 2D và xuất báo cáo tình trạng toàn đô thị `road_surface_citywide_report.csv` phục vụ quy hoạch và bảo trì mặt đường thông minh.
+
+---
+
+## 10. TỔNG HỢP VÀ HỆ SINH THÁI 8 HƯỚNG NGHIÊN CỨU
+
+Tám hướng nghiên cứu trên tạo thành một hệ sinh thái khoa học khép kín và có tính kế thừa chặt chẽ, tối ưu hóa triệt để cặp tín hiệu vật lý quang học từ camera giao thông:
 
 ```text
-       ┌───────────────────────┐
-       │ Ảnh Origin + Ảnh Nền  │
-       └──────────┬────────────┘
-                  │
-         ┌────────┴────────┐
-         ▼                 ▼
-     [Δ-Mask]         [DINO ViT]
-         │                 │
-         ▼                 ▼
-   [Pool(Δ)]         [DINO_CLS]
-         │                 │
-         └────────┬────────┘
-                  ▼
-       [Concat Features: f_anomaly]
-                  │
-                  ▼
-    [Memory Bank & Distance Metric (k-NN / Mahalanobis)]
-                  │
-                  ▼
-           [Anomaly Score]
+                           [Dữ Liệu Thô: 608 Camera TP.HCM]
+                                          │
+                                          ▼
+                      [Cặp Ảnh Vật Lý: Origin + Background]
+                                          │
+           ┌──────────────────────────────┼──────────────────────────────┐
+           ▼                              ▼                              ▼
+  [HƯỚNG 1: BG-Guided DINO]      [HƯỚNG 3: FG Counting]       [HƯỚNG 8: Road Surface]
+  • FAM: Ép ViT học xe cộ        • Mở rộng 4 kênh (RGB+Δ)     • Khai thác chuỗi I_bg 24h
+  • Tạo ViT Backbone chuyên biệt • Warm-Start Initialization  • Đánh giá ngập ướt, hạ tầng
+           │                              │                              │
+           ├──────────────────────────────┼──────────────────────────────┘
+           ▼                              ▼
+  [HƯỚNG 2: Scene Decomposition] [HƯỚNG 4: Anomaly Detection]
+  • Tách 3 lớp: Nền + Xe + Alpha • UAD với Δ + DINO Memory Bank
+  • Tự động xóa xe (Inpainting)  • Phát hiện tai nạn, xe dừng đỗ
+           │                              │
+           └──────────────────────────────┼──────────────────────────────┐
+                                          ▼                              ▼
+                             [HƯỚNG 5: Temporal Density]   [HƯỚNG 6 & 7: Re-ID & Open-Vocab]
+                             • Contrastive trên chuỗi Δ-Maps• H6: Re-ID liên camera qua Δ-RoI
+                             • Đo lưu lượng, tốc độ dòng xe• H7: Hiểu cảnh từ vựng mở (CLIP)
 ```
 
----
+### Bảng Tổng Hợp So Sánh 8 Hướng Nghiên Cứu
 
-## 7. HƯỚNG 6: TEMPORAL CONTRASTIVE LEARNING FOR TRAFFIC DENSITY ESTIMATION
-
-### 7.1. Đặt vấn đề và Mục tiêu
-Khai thác tính chất chuỗi thời gian của luồng dữ liệu $\{I^{t_1}, I^{t_2}, \dots\}$ thu được từ cùng một camera cố định, hướng tới việc ước lượng mật độ dòng xe, tốc độ di chuyển và chỉ số ùn tắc giao thông một cách liên tục.
-
-### 7.2. Phương pháp Temporal Contrastive
-* **Chiến lược lấy mẫu:** Tạo ra cặp dương (Positive Pair) bằng cách chọn hai cửa sổ thời gian liên tiếp từ cùng một camera trong cùng một khung giờ. Cặp âm (Negative Pair) được lấy từ các camera khác nhau hoặc các khung giờ khác nhau.
-* **Biểu diễn không gian - thời gian:** $h = \text{TemporalEncoder}(\text{DINO}(I^{t_i}), \Delta^{t_i})$.
-
-Hàm mất mát Contrastive (InfoNCE) được áp dụng:
-$$\mathcal{L}_{\text{contrastive}} = - \log \frac{\exp(\text{sim}(h_i, h_{i^+}) / \tau)}{\sum_{j=1}^{K} \exp(\text{sim}(h_i, h_{j}) / \tau)}$$
-
-* **Downstream task:** Sử dụng vector biểu diễn $h$ để dự đoán các tham số vĩ mô như ước lượng mật độ, tốc độ trung bình, và chỉ số ùn tắc giao thông.
-
----
-
-## 8. HƯỚNG 7: $\Delta$-GUIDED VEHICLE RE-IDENTIFICATION ACROSS CAMERAS
-
-### 8.1. Đặt vấn đề và Mục tiêu
-Bài toán nhận dạng lại phương tiện (Vehicle Re-Identification - ReID) thường yêu cầu các detector chính xác để cắt (crop) đối tượng. Việc phụ thuộc vào detector pretrained gây ra sai số lan truyền.
-
-### 8.2. Phương pháp kỹ thuật
-* **Phân đoạn vùng quan tâm (RoI):** Sử dụng các vùng thành phần liên thông (Connected Components) từ bản đồ sai khác phân ngưỡng $\Delta > \text{Otsu}$ thay cho object detector truyền thống.
-* **Trích xuất đặc trưng DINO:** Lấy đặc trưng $e_i = \text{DINO}_{[CLS]}(\text{Crop}(I_{\text{origin}}, \text{RoI}_i))$.
-* **Khai thác vết tích (Tracklet Mining):** Lấy từ các chuỗi khung hình liên tiếp để tự động tạo ra các cặp phương tiện dương tính tự nhiên.
-* **Ứng dụng:** Truy vết xe vi phạm liên tuyến, tính toán thời gian di chuyển (Travel Time), và xây dựng ma trận Origin-Destination (O-D matrix) nội đô.
-
-### 8.3. Pipeline ReID
-
-```text
-   [Δ-Mask > Otsu] ──► [Connected Components (RoI)] ──► [Crop(I_origin, RoI)]
-                                                               │
-                                                               ▼
-   [Cosine Similarity Match] ◄── [DINO [CLS] Embedding] ◄──────┘
-```
-
----
-
-## 9. HƯỚNG 8: OPEN-VOCABULARY TRAFFIC SCENE UNDERSTANDING VIA $\Delta$-CONDITIONED REGION PROPOSALS
-
-### 9.1. Đặt vấn đề và Phương pháp
-Phát triển hệ thống hiểu cảnh giao thông với từ vựng mở (Open-Vocabulary), cho phép nhận diện các loại phương tiện chưa từng xuất hiện trong tập huấn luyện.
-
-### 9.2. Quy trình trích xuất
-1. $\Delta$-Mask được xử lý qua thuật toán Connected Components để tạo ra các đề xuất vùng (Region Proposals) ở mức class-agnostic (không phụ thuộc nhãn lớp).
-2. Mô hình DINO ViT tiến hành trích xuất đặc trưng cho mỗi vùng cắt này.
-3. Một mạng chiếu (Projection Head) được học để ánh xạ không gian vector của DINO sang không gian chung của mô hình nền tảng ngôn ngữ - hình ảnh CLIP (CLIP space).
-4. Phân loại theo hướng zero-shot open-vocabulary với các nhãn linh hoạt như: xe máy, ô tô, xe buýt, xe tải, người đi bộ, v.v.
-
----
-
-## 10. HƯỚNG 9: SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION
-
-### 10.1. Đặt vấn đề và Mục tiêu
-Việc đánh giá tình trạng mặt đường tự động có vai trò quan trọng trong cảnh báo an toàn giao thông đô thị. Bài toán nhằm khai thác bộ dữ liệu chuỗi $I_{\text{bg}}$ tĩnh của 24 slot giờ từ 608 camera.
-
-### 10.2. Phương pháp Contrastive Learning
-* Đặc trưng mặt đường được trích xuất bằng cách sử dụng token DINO $[CLS]$ trên các ảnh nền $I_{\text{bg}}$ toàn cảnh.
-* **Huấn luyện:** Cặp dương gồm các ảnh nền trong cùng một điều kiện thời tiết hoặc chiếu sáng (cùng camera, các ngày gần nhau). Cặp âm là các ảnh nền khác điều kiện.
-* **Bài toán Downstream:** Xây dựng bộ phân loại đánh giá các tình trạng mặt đường đa dạng: đường khô, đường ướt, đường đêm, đường bị bóng đổ che khuất.
-
----
-
-## 11. TỔNG KẾT VÀ BẢN ĐỒ TIẾN TRÌNH THỰC NGHIỆM
-
-Chín hướng nghiên cứu trên tạo thành một hệ sinh thái khoa học khép kín và có tính kế thừa chặt chẽ:
-
-```text
-[Dữ Liệu Thô: Camera TP.HCM]
-              │
-              ▼
-[Cặp Ảnh Vật Lý: Origin + Background]
-              │
-              ├────────────────────────────────────────┬────────────────────────────────────────┐
-              ▼                                        ▼                                        ▼
-   [HƯỚNG 1: BG-Guided DINO]                [HƯỚNG 4: FG Counting]                   [HƯỚNG 6, 7, 8: Spatial-Temporal & Open-Vocab]
-   • FAM: Ép ViT học biểu diễn xe cộ        • Thêm kênh thứ 4 (RGB + Δ)              • ReID, Tracking, Open-vocabulary
-   • Tạo ViT Backbone chuyên biệt ITS       • Cải thiện trực tiếp MAE/RMSE           • Contrastive Learning trên chuỗi thời gian
-              │                                        │                                        │
-              ▼                                        ▼                                        ▼
-   [HƯỚNG 2: Zero-Shot Segmentation]        [HƯỚNG 5: Anomaly Detection]             [HƯỚNG 9: Road Surface Estimation]
-   • DINO PCA ∩ Δ-Mask                      • UAD với Δ-conditioned DINO             • DINO [CLS] trên ảnh I_bg
-   • Tự sinh nhãn pixel không cần người     • K-NN / Mahalanobis scoring             • Đánh giá thời tiết, ánh sáng
-              │
-              ▼
-   [HƯỚNG 3: Scene Decomposition]
-   • Phân rã vật lý: Mặt đường + Xe + Alpha
-   • Đỉnh cao Novelty (CVPR / ECCV)
-```
-
-1. **Hướng 1** giải quyết bài toán biểu diễn nền tảng (Foundation SSL Representation for Traffic).
-2. **Hướng 2** giải quyết bài toán thiếu hụt nhãn phân đoạn pixel (Data Annotation Bottleneck).
-3. **Hướng 3** mở rộng biên giới lý thuyết về phân rã cảnh quang học tự giám sát (Physics-guided Scene Decomposition).
-4. **Hướng 4** mang lại giá trị ứng dụng thực tiễn ngay lập tức cho bài toán giám sát lưu lượng giao thông đô thị.
-5. **Hướng 5** giải quyết bài toán phát hiện bất thường không giám sát dựa vào Memory Bank.
-6. **Hướng 6** ứng dụng không gian - thời gian để đo lường mật độ và tốc độ dòng giao thông.
-7. **Hướng 7** cung cấp giải pháp nhận dạng lại và truy vết phương tiện qua hệ thống đa camera thay vì phụ thuộc vào object detector.
-8. **Hướng 8** mang khả năng zero-shot linh hoạt của các mô hình đa phương thức cho phân loại phương tiện.
-9. **Hướng 9** tận dụng tối đa kho dữ liệu ảnh nền vô giá để đánh giá điều kiện môi trường.
+| Hướng | Tên Nghiên Cứu | Thư Mục Mã Nguồn | Cơ Chế Cốt Lõi | Độ Mới (Novelty) | Venue Đề Xuất |
+|:---|:---|:---|:---|:---:|:---|
+| **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT tập trung học biểu diễn xe cộ | 4/5 | IEEE T-ITS, EAAI |
+| **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting) | 5/5 | CVPR, ECCV, NeurIPS |
+| **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | 3/5 | EAAI Journal, ITSC |
+| **H4** | **Unsupervised Anomaly Detection** | `direction4_anomaly_detection/` | Biểu diễn kép $\Delta$+DINO, Memory Bank EMA, phát hiện sự cố không cần nhãn | 4/5 | IEEE T-ITS, WACV |
+| **H5** | **Temporal Contrastive Density** | `direction5_temporal_density/` | Học tương phản thời gian trên chuỗi $\Delta$-Maps để ước lượng mật độ và tốc độ | 4.5/5 | CVPR, IEEE T-ITS |
+| **H6** | **Delta-Guided Vehicle Re-ID** | `direction6_vehicle_reid/` | Trích xuất RoI từ $\Delta$, BNNeck DINO, tracklet contrastive, xếp hạng CMC/mAP | 4/5 | IEEE T-ITS, ICPR |
+| **H7** | **Open-Vocabulary Scene Understanding** | `direction7_open_vocabulary/` | Delta proposals không phụ thuộc lớp kết hợp căn chỉnh DINO sang CLIP text | 4/5 | ECCV, WACV |
+| **H8** | **Road Surface Condition Estimation** | `direction8_road_condition/` | Đánh giá đa thuộc tính (đọng nước, chiếu sáng, hư hại) từ chuỗi ảnh nền 24h | 3.5/5 | IEEE T-ITS, TRB |

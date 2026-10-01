@@ -1,4 +1,4 @@
-# Hướng 3: Self-Supervised Scene Decomposition Network (Traffic-Decompose)
+# Hướng 2: Self-Supervised Scene Decomposition Network (Traffic-Decompose)
 
 ## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐⭐⭐)
 Đây là hướng nghiên cứu có độ mới (Novelty) và giá trị khoa học cao nhất, hướng tới các hội nghị thị giác máy tính hàng đầu (CVPR / ECCV / NeurIPS):
@@ -28,7 +28,7 @@
 ### Kịch bản 1: Chạy thử nghiệm nhanh (Quick Test)
 Kiểm tra khả năng học tách lớp trên 20 mẫu ảnh trong 2 epochs:
 ```bash
-python DINO/direction3_scene_decomposition/train.py \
+python DINO/direction2_scene_decomposition/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
     --match_strategy route_hourly \
@@ -36,7 +36,7 @@ python DINO/direction3_scene_decomposition/train.py \
     --epochs 2 \
     --batch_size 4 \
     --max_samples 20 \
-    --save_dir checkpoints/direction3_scene_decomp/test_run \
+    --save_dir checkpoints/direction2_scene_decomp/test_run \
     --device cuda
 ```
 
@@ -45,7 +45,7 @@ python DINO/direction3_scene_decomposition/train.py \
 ### Kịch bản 2: Huấn luyện đầy đủ trên Đa GPU (Kaggle 2x T4 / Server Lab)
 Hệ thống **tự động phát hiện toàn bộ số GPU**, phân phối 3 nhánh decoder song song trên tất cả các GPU:
 ```bash
-python DINO/direction3_scene_decomposition/train.py \
+python DINO/direction2_scene_decomposition/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
     --match_strategy route_hourly \
@@ -57,11 +57,11 @@ python DINO/direction3_scene_decomposition/train.py \
     --lambda_bg 1.5 \
     --lambda_sparse 0.05 \
     --lambda_tv 0.1 \
-    --save_dir checkpoints/direction3_scene_decomp \
+    --save_dir checkpoints/direction2_scene_decomp \
     --device cuda
 ```
 *Lưu ý:* Kiểm tra ảnh tiến trình học tách lớp trực quan sinh ra sau mỗi epoch tại:
-`checkpoints/direction3_scene_decomp/visual_progress/epoch_XXX.png`.
+`checkpoints/direction2_scene_decomp/visual_progress/epoch_XXX.png`.
 
 ---
 
@@ -70,18 +70,18 @@ Sau khi huấn luyện, bạn có thể áp dụng mô hình lên **bất kỳ �
 
 ```bash
 # Chạy trên 1 file ảnh cụ thể:
-python DINO/direction3_scene_decomposition/infer.py \
-    --weights checkpoints/direction3_scene_decomp/best_decomposition_model.pth \
+python DINO/direction2_scene_decomposition/infer.py \
+    --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
     --input_path output/1_1755698811.jpg \
-    --output_dir checkpoints/direction3_scene_decomp/inferred \
+    --output_dir checkpoints/direction2_scene_decomp/inferred \
     --img_size 256 \
     --device cuda
 
 # Hoặc chạy trên toàn bộ thư mục ảnh mới:
-python DINO/direction3_scene_decomposition/infer.py \
-    --weights checkpoints/direction3_scene_decomp/best_decomposition_model.pth \
+python DINO/direction2_scene_decomposition/infer.py \
+    --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
     --input_path output \
-    --output_dir checkpoints/direction3_scene_decomp/inferred_batch \
+    --output_dir checkpoints/direction2_scene_decomp/inferred_batch \
     --img_size 256 \
     --device cuda
 ```

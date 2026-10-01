@@ -116,7 +116,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Inference Traffic Scene Decomposition")
     parser.add_argument("--weights", type=str, required=True, help="Đường dẫn file .pth checkpoint")
     parser.add_argument("--input_path", type=str, required=True, help="File ảnh đơn lẻ hoặc thư mục ảnh cần phân rã")
-    parser.add_argument("--output_dir", type=str, default="checkpoints/direction3_scene_decomp/inferred", help="Thư mục lưu")
+    parser.add_argument("--output_dir", type=str, default="checkpoints/direction2_scene_decomp/inferred", help="Thư mục lưu")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--img_size", type=int, default=256)
     parser.add_argument("--device", type=str, default="cuda")

@@ -212,7 +212,7 @@ def parse_args():
     parser.add_argument("--csv_file", type=str, default="stage1_perception/counting_labels_5012.csv")
     parser.add_argument("--origin_dir", type=str, default="output")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction4_fg_counting")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction3_fg_counting")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--weights", type=str, default=None)

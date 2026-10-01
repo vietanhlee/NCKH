@@ -146,7 +146,7 @@ def parse_args():
     parser.add_argument("--weights", type=str, default=None)
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--mode", type=str, default="4channel", choices=["4channel", "spatial_attention"])
-    parser.add_argument("--output_dir", type=str, default="checkpoints/direction4_fg_counting/eval")
+    parser.add_argument("--output_dir", type=str, default="checkpoints/direction3_fg_counting/eval")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
     parser.add_argument("--device", type=str, default="cuda")
