@@ -163,8 +163,13 @@ def train_bg_guided_dino(args):
     lr_schedule = get_cosine_schedule(effective_lr, 1e-6, total_iters, warmup_iters=len(loader) * 2)
     momentum_schedule = get_cosine_schedule(0.996, 1.0, total_iters)
 
-    # Mixed precision scaler
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda" and args.use_amp))
+    # Mixed precision scaler (Sử dụng torch.amp chuẩn PyTorch 2.x+ thay thế API cũ đã deprecated)
+    device_type = "cuda" if device.type == "cuda" else "cpu"
+    amp_enabled = (device.type == "cuda" and args.use_amp)
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        scaler = torch.amp.GradScaler(device_type, enabled=amp_enabled)
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
 
     # 5. Training Loop
     global_step = 0
@@ -183,7 +188,13 @@ def train_bg_guided_dino(args):
             crops = [c.to(device, non_blocking=True) for c in crops]
             global_crops = crops[:2]
 
-            with torch.cuda.amp.autocast(enabled=(device.type == "cuda" and args.use_amp)):
+            # Quản lý Autocast theo chuẩn PyTorch 2.x+
+            if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+                autocast_ctx = torch.amp.autocast(device_type=device_type, enabled=amp_enabled)
+            else:
+                autocast_ctx = torch.cuda.amp.autocast(enabled=amp_enabled)
+
+            with autocast_ctx:
                 # Teacher forward 2 global views song song trên toàn bộ GPU
                 with torch.no_grad():
                     teacher_out = model(global_crops, mode="teacher")
