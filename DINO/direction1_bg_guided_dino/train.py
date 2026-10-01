@@ -241,6 +241,53 @@ def train_bg_guided_dino(args):
                 verbose=True,
             )
 
+    # 5. Tự động xuất ảnh trực quan hóa PCA Feature Map kiểm chứng mô hình đã học
+    try:
+        from direction2_zero_shot_segmentation.pca_extractor import DINOPCAExtractor
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from PIL import Image
+
+        print("\n🎨 [Visualization] Đang trích xuất PCA Feature Map kiểm chứng chất lượng biểu diễn...")
+        vis_sample = dataset.pairs[0]
+        sample_img = Image.open(vis_sample["origin_path"]).convert("RGB")
+        sample_bg = Image.open(vis_sample["bg_path"]).convert("RGB")
+
+        pca_ext = DINOPCAExtractor(
+            backbone=raw_model.student_backbone,
+            patch_size=patch_size,
+            img_size=args.size_global,
+            device=device,
+        )
+        pca_rgb, pc1_mask = pca_ext.compute_pca_maps(sample_img)
+        delta_norm, _ = dataset.subtractor.compute_delta(sample_img, sample_bg)
+
+        fig, axes = plt.subplots(1, 4, figsize=(18, 4.5), dpi=150)
+        axes[0].imshow(sample_bg)
+        axes[0].set_title(f"1. Background Nền ({vis_sample['route_id']})", fontsize=11, fontweight="bold")
+        axes[0].axis("off")
+
+        axes[1].imshow(sample_img)
+        axes[1].set_title("2. Ảnh gốc Giao thông", fontsize=11, fontweight="bold")
+        axes[1].axis("off")
+
+        axes[2].imshow(delta_norm, cmap="inferno")
+        axes[2].set_title("3. Bản đồ sai khác Δ (Trừ nền)", fontsize=11, fontweight="bold")
+        axes[2].axis("off")
+
+        axes[3].imshow(pca_rgb)
+        axes[3].set_title(f"4. DINO PCA Feature Map ({args.backbone})", fontsize=11, fontweight="bold")
+        axes[3].axis("off")
+
+        plt.tight_layout()
+        vis_path = os.path.join(args.save_dir, "pca_feature_map_trained.png")
+        plt.savefig(vis_path, bbox_inches="tight")
+        plt.close()
+        print(f"✅ [Visualization] Đã lưu ảnh PCA Feature Map tại: {vis_path}")
+    except Exception as e_vis:
+        print(f"💡 [Visualization Notice] {e_vis}")
+
     print("\n🎉 [Train Complete] Quá trình huấn luyện SSL hoàn tất thành công!")
 
 
