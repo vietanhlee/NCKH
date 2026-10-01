@@ -53,22 +53,22 @@ def generate_emergent_pca_maps(
     bg_dir: Optional[str] = None,
     save_path: str = "emergent_pca_feature_maps.png",
     device: str = "cpu",
-    img_size: int = 224,
+    img_size: int = 518,
+    patch_size: int = 14,
+    pca_mode: str = "rgb",
+    keep_aspect_ratio: bool = False,
     title_prefix: str = "DINOv2",
 ):
     """
-    Trích xuất và vẽ đồ thị Emergent PCA Feature Map:
-      - Nếu có bg_dir: Xuất đủ 4 cột [1. Background | 2. Origin | 3. Delta Map Δ | 4. DINO PCA Feature Map].
-      - Nếu không có bg_dir: Xuất 2 cột [Camera Frame | DINO Emergent PCA Feature Map].
+    Trích xuất và vẽ đồ thị Emergent PCA Feature Map độ nét siêu cao (Super-Resolution PCA):
+      - Mặc định img_size=518 theo chuẩn Meta DINOv2 (37x37 = 1369 patches thay vì 16x16 = 256 patches).
+      - Áp dụng Percentile Normalization (1% - 99%) triệt tiêu outlier, tách biên xe sắc nét.
+      - Phóng to Bicubic High-Resolution loại bỏ hoàn toàn răng cưa khối (pixelated) và mờ nhòe.
+      - Hỗ trợ giữ nguyên tỷ lệ khung hình camera (keep_aspect_ratio) tránh méo xe.
+      - Hỗ trợ 3 chế độ: 'rgb' (chuẩn Meta AI), 'foreground' (làm nổi bật xe), 'overlay' (phủ lên ảnh gốc).
     """
     device_obj = torch.device(device)
     backbone = backbone.to(device_obj).eval()
-
-    eval_transform = transforms.Compose([
-        transforms.Resize((img_size, img_size), interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
 
     num_samples = len(image_paths)
     if num_samples == 0:
@@ -89,7 +89,7 @@ def generate_emergent_pca_maps(
 
     n_cols = 4 if has_bg else 2
     fig_w = 16 if has_bg else 8
-    fig, axes = plt.subplots(num_samples, n_cols, figsize=(fig_w, 3.5 * num_samples), dpi=250)
+    fig, axes = plt.subplots(num_samples, n_cols, figsize=(fig_w, 3.6 * num_samples), dpi=250)
     if num_samples == 1:
         axes = np.expand_dims(axes, 0)
 
@@ -97,10 +97,30 @@ def generate_emergent_pca_maps(
         try:
             with Image.open(path) as img:
                 img_rgb = img.convert("RGB")
-                orig_resized = img_rgb.resize((img_size, img_size))
+                orig_w, orig_h = img_rgb.size
+
+                # 1. Tính toán kích thước lưới patch (hỗ trợ cả vuông và giữ tỷ lệ khung hình thật)
+                if keep_aspect_ratio:
+                    scale = img_size / max(orig_w, orig_h)
+                    target_w = max(patch_size, int(round(orig_w * scale / patch_size)) * patch_size)
+                    target_h = max(patch_size, int(round(orig_h * scale / patch_size)) * patch_size)
+                else:
+                    target_w = target_h = max(patch_size, (img_size // patch_size) * patch_size)
+
+                h_patches = target_h // patch_size
+                w_patches = target_w // patch_size
+                n_expected_patches = h_patches * w_patches
+
+                eval_transform = transforms.Compose([
+                    transforms.Resize((target_h, target_w), interpolation=transforms.InterpolationMode.BICUBIC),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ])
+
+                orig_resized = img_rgb.resize((target_w, target_h), Image.BICUBIC)
                 inp = eval_transform(img_rgb).unsqueeze(0).to(device_obj)
 
-                # 1. Trích xuất Spatial Patch Tokens
+                # 2. Trích xuất Spatial Patch Tokens
                 patch_tokens = None
                 if hasattr(backbone, "get_intermediate_layers"):
                     try:
@@ -108,11 +128,10 @@ def generate_emergent_pca_maps(
                         if isinstance(out, tuple):
                             out = out[0]
                         raw_tokens = out.squeeze(0).cpu().numpy()
-                        n_tokens = raw_tokens.shape[0]
-                        if math.isqrt(n_tokens) ** 2 == n_tokens:
-                            patch_tokens = raw_tokens
-                        elif math.isqrt(n_tokens - 1) ** 2 == (n_tokens - 1):
+                        if raw_tokens.shape[0] == n_expected_patches + 1:
                             patch_tokens = raw_tokens[1:]
+                        elif raw_tokens.shape[0] >= n_expected_patches:
+                            patch_tokens = raw_tokens[:n_expected_patches]
                         else:
                             patch_tokens = raw_tokens
                     except Exception as e_tok:
@@ -125,27 +144,61 @@ def generate_emergent_pca_maps(
                             tokens = feat.get("x_norm_patchtokens", feat.get("x_prenorm", None))
                         else:
                             tokens = feat
-                        patch_tokens = tokens.squeeze(0).cpu().numpy()
-                        if math.isqrt(patch_tokens.shape[0] - 1) ** 2 == (patch_tokens.shape[0] - 1):
-                            patch_tokens = patch_tokens[1:]
+                        raw_tokens = tokens.squeeze(0).cpu().numpy()
+                        if raw_tokens.shape[0] == n_expected_patches + 1:
+                            patch_tokens = raw_tokens[1:]
+                        elif raw_tokens.shape[0] >= n_expected_patches:
+                            patch_tokens = raw_tokens[:n_expected_patches]
+                        else:
+                            patch_tokens = raw_tokens
                     except Exception as e_ff:
                         print(f"⚠️ forward_features warning: {e_ff}")
 
-                # 2. Phân tích PCA 3 thành phần chính
-                pca_img = None
-                if patch_tokens is not None and len(patch_tokens) > 0:
+                # 3. Phân tích PCA 3 thành phần chính siêu nét
+                pca_render = None
+                if patch_tokens is not None and len(patch_tokens) >= n_expected_patches:
                     pca = PCA(n_components=3)
-                    tokens_centered = patch_tokens - np.mean(patch_tokens, axis=0, keepdims=True)
-                    pca_features = pca.fit_transform(tokens_centered)
+                    tokens_centered = patch_tokens[:n_expected_patches] - np.mean(patch_tokens[:n_expected_patches], axis=0, keepdims=True)
+                    pca_features = pca.fit_transform(tokens_centered)  # (n_expected_patches, 3)
 
+                    # Chuẩn hóa phân vị (Percentile Normalization 1% - 99%)
+                    # Triệt tiêu ngoại lai (outliers), tăng cường tương phản và độ tách biên chi tiết
                     for c in range(3):
-                        c_min, c_max = pca_features[:, c].min(), pca_features[:, c].max()
-                        pca_features[:, c] = (pca_features[:, c] - c_min) / (c_max - c_min + 1e-8)
+                        p_low = np.percentile(pca_features[:, c], 1.0)
+                        p_high = np.percentile(pca_features[:, c], 99.0)
+                        if p_high > p_low:
+                            pca_features[:, c] = np.clip((pca_features[:, c] - p_low) / (p_high - p_low), 0.0, 1.0)
+                        else:
+                            pca_features[:, c] = 0.5
 
-                    h_patches = w_patches = int(math.isqrt(pca_features.shape[0]))
-                    pca_img = pca_features[: h_patches * w_patches].reshape(h_patches, w_patches, 3)
+                    pca_grid = pca_features[: h_patches * w_patches].reshape(h_patches, w_patches, 3)
 
-                # 3. Hiển thị ra các cột tương ứng
+                    # Xử lý theo chế độ hiển thị
+                    if pca_mode == "foreground":
+                        # PC1 thường phân tách vật thể chuyển động (xe) và nền đường
+                        pc1 = pca_grid[:, :, 0]
+                        if np.mean(pc1 > 0.5) > 0.5:
+                            pc1 = 1.0 - pc1
+                        fg_mask = (pc1 > np.percentile(pc1, 35)).astype(np.float32)
+                        pca_processed = pca_grid.copy()
+                        for c in range(3):
+                            pca_processed[:, :, c] = pca_processed[:, :, c] * (0.25 + 0.75 * fg_mask)
+                    else:
+                        pca_processed = pca_grid
+
+                    # Nội suy Bicubic cao cấp đưa lưới patch lên kích thước pixel đầy đủ (target_w, target_h)
+                    pca_uint8 = (pca_processed * 255.0).clip(0, 255).astype(np.uint8)
+                    pca_pil = Image.fromarray(pca_uint8)
+                    pca_highres = np.array(pca_pil.resize((target_w, target_h), Image.BICUBIC)) / 255.0
+
+                    if pca_mode == "overlay":
+                        orig_norm = np.array(orig_resized) / 255.0
+                        pca_render = np.clip(0.40 * orig_norm + 0.60 * pca_highres, 0.0, 1.0)
+                    else:
+                        pca_render = pca_highres
+
+                # 4. Hiển thị ra các cột tương ứng
+                patch_info = f"({h_patches}x{w_patches} patches)"
                 if has_bg:
                     # Chế độ 4 cột: [1. Background | 2. Origin | 3. Delta Map Δ | 4. DINO PCA Map]
                     route_id, _, hour = matcher.parse_origin_filename(path)
@@ -171,12 +224,12 @@ def generate_emergent_pca_maps(
                                 break
 
                     if bg_path and os.path.isfile(bg_path):
-                        bg_img = Image.open(bg_path).convert("RGB").resize((img_size, img_size))
+                        bg_img = Image.open(bg_path).convert("RGB").resize((target_w, target_h), Image.BICUBIC)
                         delta_norm, _ = subtractor.compute_delta(orig_resized, bg_img)
                         bg_label = f"1. Background (Route {route_id} - {bg_hour}h)" if bg_hour >= 0 else f"1. Background (Route {route_id})"
                     else:
-                        bg_img = Image.new("RGB", (img_size, img_size), (128, 128, 128))
-                        delta_norm = np.zeros((img_size, img_size), dtype=np.float32)
+                        bg_img = Image.new("RGB", (target_w, target_h), (128, 128, 128))
+                        delta_norm = np.zeros((target_h, target_w), dtype=np.float32)
                         bg_label = f"1. Background (Route {route_id} N/A)"
 
                     # Cột 1: Background
@@ -195,9 +248,9 @@ def generate_emergent_pca_maps(
                     axes[idx, 2].axis("off")
 
                     # Cột 4: DINO PCA Map
-                    if pca_img is not None:
-                        axes[idx, 3].imshow(pca_img, interpolation="bilinear")
-                        axes[idx, 3].set_title(f"4. {title_prefix} Emergent PCA (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
+                    if pca_render is not None:
+                        axes[idx, 3].imshow(pca_render)
+                        axes[idx, 3].set_title(f"4. {title_prefix} Emergent PCA {patch_info}", fontsize=10, fontweight="bold", color="#1f77b4")
                     else:
                         axes[idx, 3].imshow(orig_resized)
                         axes[idx, 3].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
@@ -208,9 +261,9 @@ def generate_emergent_pca_maps(
                     axes[idx, 0].set_title(f"Camera Frame: {os.path.basename(path)}", fontsize=10, fontweight="bold")
                     axes[idx, 0].axis("off")
 
-                    if pca_img is not None:
-                        axes[idx, 1].imshow(pca_img, interpolation="bilinear")
-                        axes[idx, 1].set_title(f"{title_prefix} Emergent PCA Feature Map (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
+                    if pca_render is not None:
+                        axes[idx, 1].imshow(pca_render)
+                        axes[idx, 1].set_title(f"{title_prefix} Emergent PCA {patch_info}", fontsize=10, fontweight="bold", color="#1f77b4")
                     else:
                         axes[idx, 1].imshow(orig_resized)
                         axes[idx, 1].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
@@ -255,6 +308,9 @@ def parse_args():
     parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Tên backbone (dinov2_vits14 / dinov3_vits16)")
     parser.add_argument("--save_path", type=str, default="emergent_pca_feature_maps.png", help="Đường dẫn lưu file ảnh kết quả")
     parser.add_argument("--num_samples", type=int, default=4, help="Số lượng ảnh mẫu muốn hiển thị (mặc định 4 ảnh như báo cáo)")
+    parser.add_argument("--img_size", type=int, default=518, help="Kích thước ảnh đầu vào khi suy luận (mặc định 518 cho độ nét cao chuẩn Meta DINOv2: 37x37 patches; có thể dùng 448, 672, 700)")
+    parser.add_argument("--pca_mode", type=str, choices=["rgb", "foreground", "overlay"], default="rgb", help="Chế độ trực quan hóa PCA: 'rgb' (chuẩn Meta 3 thành phần chính), 'foreground' (làm nổi bật phương tiện, giảm nền), 'overlay' (phủ bán trong suốt lên ảnh gốc)")
+    parser.add_argument("--keep_aspect_ratio", action="store_true", help="Giữ nguyên tỷ lệ khung hình thật của camera (ví dụ 16:9), tránh bị ép méo thành hình vuông")
     parser.add_argument("--device", type=str, default="auto", help="Thiết bị ('auto', 'cuda' hoặc 'cpu')")
     return parser.parse_args()
 
@@ -347,6 +403,9 @@ if __name__ == "__main__":
         bg_dir=bg_dir,
         save_path=args.save_path,
         device=device,
-        img_size=224,
+        img_size=args.img_size,
+        patch_size=patch_size,
+        pca_mode=args.pca_mode,
+        keep_aspect_ratio=args.keep_aspect_ratio,
         title_prefix=title,
     )
