@@ -179,7 +179,8 @@ def get_safe_device(requested_device: str) -> str:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Trực quan hóa Emergent PCA Feature Map của DINO")
-    parser.add_argument("--img_dir", type=str, default="output", help="Thư mục chứa ảnh giao thông (hoặc đường dẫn tới 1 file ảnh)")
+    parser.add_argument("--img_dir", type=str, default="output", help="Thư mục chứa ảnh giao thông, đường dẫn 1 ảnh, hoặc mẫu wildcard (ví dụ: 'output/123_*.jpg')")
+    parser.add_argument("--cam_id", "--camera_id", dest="cam_id", type=str, default=None, help="Chỉ định ID camera cụ thể (ví dụ: '123' hoặc danh sách '123,566,101,249')")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file checkpoint đã huấn luyện (.pth)")
     parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Tên backbone (dinov2_vits14 / dinov3_vits16)")
     parser.add_argument("--save_path", type=str, default="emergent_pca_feature_maps.png", help="Đường dẫn lưu file ảnh kết quả")
@@ -192,25 +193,55 @@ if __name__ == "__main__":
     args = parse_args()
     device = get_safe_device(args.device)
 
-    # Thu thập danh sách ảnh
-    if os.path.isfile(args.img_dir):
-        sample_paths = [args.img_dir]
+    # 1. Thu thập danh sách ảnh ban đầu
+    all_found = []
+    if any(ch in args.img_dir for ch in ["*", "?"]):
+        # Mẫu wildcard (ví dụ: output/123_*.jpg)
+        all_found = sorted(glob.glob(args.img_dir))
+    elif os.path.isfile(args.img_dir):
+        all_found = [args.img_dir]
     elif os.path.isdir(args.img_dir):
         patterns = ["*.jpg", "*.jpeg", "*.png", "*.JPG", "*.PNG"]
-        sample_paths = []
         for pat in patterns:
-            sample_paths.extend(glob.glob(os.path.join(args.img_dir, pat)))
-            sample_paths.extend(glob.glob(os.path.join(args.img_dir, "**", pat), recursive=True))
-        sample_paths = sorted(list(set(sample_paths)))[:args.num_samples]
+            all_found.extend(glob.glob(os.path.join(args.img_dir, pat)))
+            all_found.extend(glob.glob(os.path.join(args.img_dir, "**", pat), recursive=True))
+        all_found = sorted(list(set(all_found)))
     else:
-        print(f"❌ Không tìm thấy đường dẫn: {args.img_dir}")
+        print(f"❌ Không tìm thấy đường dẫn hoặc mẫu: {args.img_dir}")
         sys.exit(1)
 
-    if not sample_paths:
+    if not all_found:
         print(f"❌ Không tìm thấy file ảnh nào trong {args.img_dir}!")
         sys.exit(1)
 
-    print(f"🔍 Tìm thấy {len(sample_paths)} ảnh mẫu. Đang nạp backbone '{args.backbone}'...")
+    # 2. Lọc theo camera nếu người dùng chỉ định --cam_id
+    if args.cam_id:
+        target_cams = [c.strip() for c in str(args.cam_id).split(",") if c.strip()]
+        sample_paths = []
+        for cam in target_cams:
+            matched = [
+                p for p in all_found
+                if os.path.basename(p).startswith(f"{cam}_")
+                or f"route_{cam}" in p.replace("\\", "/")
+                or f"/{cam}/" in p.replace("\\", "/")
+                or os.path.basename(p) == cam
+            ]
+            if matched:
+                # Lấy số lượng ảnh phân bổ đều cho từng camera
+                quota = max(1, math.ceil(args.num_samples / len(target_cams)))
+                sample_paths.extend(matched[:quota])
+                print(f"📷 [Camera {cam}] Khớp {len(matched)} ảnh -> Chọn {min(len(matched), quota)} ảnh mẫu.")
+            else:
+                print(f"⚠️ [Camera {cam}] Không tìm thấy ảnh nào bắt đầu bằng '{cam}_' trong {args.img_dir}!")
+        sample_paths = sample_paths[:args.num_samples]
+    else:
+        sample_paths = all_found[:args.num_samples]
+
+    if not sample_paths:
+        print(f"❌ Không chọn được ảnh nào sau khi lọc! Vui lòng kiểm tra lại Camera ID.")
+        sys.exit(1)
+
+    print(f"🔍 Đã chọn {len(sample_paths)} ảnh mẫu. Đang nạp backbone '{args.backbone}'...")
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
         pretrained=True,
