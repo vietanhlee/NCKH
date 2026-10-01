@@ -131,13 +131,13 @@ class TrafficPairMatcher:
         self.indexed = True
         return self.bg_index
 
-    def find_best_background(self, route_id: str, hour: int) -> Optional[Tuple[str, int]]:
+    def find_best_background(self, route_id: str, hour: Optional[int] = None) -> Optional[Tuple[str, int]]:
         """
         Tìm kiếm ảnh background phù hợp nhất cho một tuyến đường và khung giờ.
 
         Args:
             route_id: ID tuyến đường / Camera STT (dạng chuỗi chuẩn hóa số nguyên).
-            hour: Giờ quan sát (0 đến 23).
+            hour: Giờ quan sát (0 đến 23 hoặc None để lấy slot phù hợp nhất/mặc định).
 
         Returns:
             Tuple (đường_dẫn_ảnh, giờ_thực_tế_của_slot) hoặc None nếu không tìm thấy.
@@ -153,18 +153,17 @@ class TrafficPairMatcher:
         if not available_slots:
             return None
 
-        # 1. Khớp chính xác giờ
-        if hour in available_slots:
+        # 1. Khớp chính xác giờ (nếu có chỉ định giờ)
+        if hour is not None and hour in available_slots:
             return available_slots[hour], hour
 
-        # Nếu kích hoạt strict match, không tìm slot thay thế
-        if self.strict_hour_match:
+        # Nếu kích hoạt strict match và có hour cụ thể, không tìm slot thay thế
+        if self.strict_hour_match and hour is not None:
             return None
 
         # 2. Tìm slot giờ gần nhất theo khoảng cách chu kỳ ngày-đêm 24 giờ
-        # (Ví dụ: 23h và 0h chỉ cách nhau 1 tiếng, thay vì khoảng cách thẳng 23 tiếng)
         valid_hours = [h for h in available_slots.keys() if 0 <= h <= 23]
-        if valid_hours:
+        if valid_hours and hour is not None and 0 <= hour <= 23:
             def circular_dist(h1: int, h2: int) -> int:
                 d = abs(h1 - h2)
                 return min(d, 24 - d)
@@ -177,7 +176,12 @@ class TrafficPairMatcher:
             return available_slots[-1], -1
 
         any_slot = next(iter(available_slots.values()))
-        return any_slot, -1
+        first_hour = next(iter(available_slots.keys()))
+        return any_slot, first_hour
+
+    def find_matching_background(self, route_id: str, hour: Optional[int] = None) -> Optional[Tuple[str, int]]:
+        """Alias cho find_best_background phục vụ tính tiện dụng và tương thích chuẩn production."""
+        return self.find_best_background(route_id, hour)
 
     def parse_origin_filename(self, filename: str) -> Tuple[Optional[str], Optional[int], Optional[int]]:
         """

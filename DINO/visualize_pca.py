@@ -42,21 +42,24 @@ dino_dir = os.path.dirname(os.path.abspath(__file__))
 if dino_dir not in sys.path:
     sys.path.insert(0, dino_dir)
 from common.backbone_loader import get_dino_backbone
+from common.matcher import TrafficPairMatcher
+from common.subtraction import BackgroundSubtractor
 
 
 @torch.no_grad()
 def generate_emergent_pca_maps(
     backbone: nn.Module,
     image_paths: List[str],
+    bg_dir: Optional[str] = None,
     save_path: str = "emergent_pca_feature_maps.png",
     device: str = "cpu",
     img_size: int = 224,
     title_prefix: str = "DINOv2",
 ):
     """
-    Trích xuất và vẽ đồ thị Emergent PCA Feature Map chuẩn Meta AI:
-    Cột 1: Camera Frame gốc (224x224)
-    Cột 2: Emergent PCA Feature Map (RGB)
+    Trích xuất và vẽ đồ thị Emergent PCA Feature Map:
+      - Nếu có bg_dir: Xuất đủ 4 cột [1. Background | 2. Origin | 3. Delta Map Δ | 4. DINO PCA Feature Map].
+      - Nếu không có bg_dir: Xuất 2 cột [Camera Frame | DINO Emergent PCA Feature Map].
     """
     device_obj = torch.device(device)
     backbone = backbone.to(device_obj).eval()
@@ -72,7 +75,21 @@ def generate_emergent_pca_maps(
         print("❌ Không có ảnh nào để trực quan hóa!")
         return
 
-    fig, axes = plt.subplots(num_samples, 2, figsize=(8, 3.4 * num_samples), dpi=250)
+    # Khởi tạo matcher và subtractor nếu người dùng cung cấp bg_dir
+    has_bg = False
+    matcher = None
+    subtractor = None
+    if bg_dir and os.path.isdir(bg_dir):
+        origin_sample_dir = os.path.dirname(image_paths[0]) if os.path.isfile(image_paths[0]) else image_paths[0]
+        matcher = TrafficPairMatcher(bg_dir=bg_dir, origin_dir=origin_sample_dir, match_strategy="route_hourly")
+        matcher.build_background_index()
+        subtractor = BackgroundSubtractor(color_space="lab", blur_kernel=5)
+        has_bg = True
+        print(f"🌆 [Background Matcher] Đã liên kết thư mục Background: {bg_dir} -> Chế độ 4 cột đối chiếu đầy đủ.")
+
+    n_cols = 4 if has_bg else 2
+    fig_w = 16 if has_bg else 8
+    fig, axes = plt.subplots(num_samples, n_cols, figsize=(fig_w, 3.5 * num_samples), dpi=250)
     if num_samples == 1:
         axes = np.expand_dims(axes, 0)
 
@@ -115,13 +132,12 @@ def generate_emergent_pca_maps(
                         print(f"⚠️ forward_features warning: {e_ff}")
 
                 # 2. Phân tích PCA 3 thành phần chính
+                pca_img = None
                 if patch_tokens is not None and len(patch_tokens) > 0:
                     pca = PCA(n_components=3)
-                    # Chuẩn hóa tâm đặc trưng
                     tokens_centered = patch_tokens - np.mean(patch_tokens, axis=0, keepdims=True)
-                    pca_features = pca.fit_transform(tokens_centered)  # (N_patches, 3)
+                    pca_features = pca.fit_transform(tokens_centered)
 
-                    # Min-Max normalize về đoạn [0, 1] cho hiển thị kênh màu RGB
                     for c in range(3):
                         c_min, c_max = pca_features[:, c].min(), pca_features[:, c].max()
                         pca_features[:, c] = (pca_features[:, c] - c_min) / (c_max - c_min + 1e-8)
@@ -129,22 +145,75 @@ def generate_emergent_pca_maps(
                     h_patches = w_patches = int(math.isqrt(pca_features.shape[0]))
                     pca_img = pca_features[: h_patches * w_patches].reshape(h_patches, w_patches, 3)
 
-                    # Vẽ Cột Trái: Camera Frame gốc
+                # 3. Hiển thị ra các cột tương ứng
+                if has_bg:
+                    # Chế độ 4 cột: [1. Background | 2. Origin | 3. Delta Map Δ | 4. DINO PCA Map]
+                    route_id, _, hour = matcher.parse_origin_filename(path)
+                    if not route_id:
+                        m_alt = re.search(r"(\d+)", os.path.basename(path))
+                        if m_alt:
+                            route_id = str(int(m_alt.group(1)))
+
+                    bg_res = matcher.find_best_background(route_id, hour) if route_id else None
+                    bg_path, bg_hour = bg_res if bg_res is not None else (None, -1)
+
+                    # Quét dự phòng trực tiếp trong bg_dir nếu chưa tìm thấy qua index
+                    if (not bg_path or not os.path.isfile(bg_path)) and route_id and bg_dir:
+                        possible_bgs = (
+                            glob.glob(os.path.join(bg_dir, f"*{route_id}*.*"))
+                            + glob.glob(os.path.join(bg_dir, f"route_{route_id}", "*.*"))
+                            + glob.glob(os.path.join(bg_dir, f"**/*{route_id}*.*"), recursive=True)
+                        )
+                        for pb in possible_bgs:
+                            if os.path.splitext(pb)[1].lower() in TrafficPairMatcher.SUPPORTED_EXTS:
+                                bg_path = pb
+                                bg_hour = -1
+                                break
+
+                    if bg_path and os.path.isfile(bg_path):
+                        bg_img = Image.open(bg_path).convert("RGB").resize((img_size, img_size))
+                        delta_norm, _ = subtractor.compute_delta(orig_resized, bg_img)
+                        bg_label = f"1. Background (Route {route_id} - {bg_hour}h)" if bg_hour >= 0 else f"1. Background (Route {route_id})"
+                    else:
+                        bg_img = Image.new("RGB", (img_size, img_size), (128, 128, 128))
+                        delta_norm = np.zeros((img_size, img_size), dtype=np.float32)
+                        bg_label = f"1. Background (Route {route_id} N/A)"
+
+                    # Cột 1: Background
+                    axes[idx, 0].imshow(bg_img)
+                    axes[idx, 0].set_title(bg_label, fontsize=10, fontweight="bold")
+                    axes[idx, 0].axis("off")
+
+                    # Cột 2: Origin
+                    axes[idx, 1].imshow(orig_resized)
+                    axes[idx, 1].set_title(f"2. Origin: {os.path.basename(path)}", fontsize=10, fontweight="bold")
+                    axes[idx, 1].axis("off")
+
+                    # Cột 3: Delta Map
+                    axes[idx, 2].imshow(delta_norm, cmap="inferno")
+                    axes[idx, 2].set_title("3. Delta Map Δ (Trừ nền)", fontsize=10, fontweight="bold")
+                    axes[idx, 2].axis("off")
+
+                    # Cột 4: DINO PCA Map
+                    if pca_img is not None:
+                        axes[idx, 3].imshow(pca_img, interpolation="bilinear")
+                        axes[idx, 3].set_title(f"4. {title_prefix} Emergent PCA (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
+                    else:
+                        axes[idx, 3].imshow(orig_resized)
+                        axes[idx, 3].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
+                    axes[idx, 3].axis("off")
+                else:
+                    # Chế độ 2 cột: [Camera Frame | DINO Emergent PCA]
                     axes[idx, 0].imshow(orig_resized)
                     axes[idx, 0].set_title(f"Camera Frame: {os.path.basename(path)}", fontsize=10, fontweight="bold")
                     axes[idx, 0].axis("off")
 
-                    # Vẽ Cột Phải: Emergent PCA Feature Map (RGB)
-                    axes[idx, 1].imshow(pca_img, interpolation="bilinear")
-                    axes[idx, 1].set_title(f"{title_prefix} Emergent PCA Feature Map (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
-                    axes[idx, 1].axis("off")
-                else:
-                    # Fallback nếu không trích xuất được tokens
-                    axes[idx, 0].imshow(orig_resized)
-                    axes[idx, 0].set_title(f"Camera Frame: {os.path.basename(path)}", fontsize=10, fontweight="bold")
-                    axes[idx, 0].axis("off")
-                    axes[idx, 1].imshow(orig_resized)
-                    axes[idx, 1].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
+                    if pca_img is not None:
+                        axes[idx, 1].imshow(pca_img, interpolation="bilinear")
+                        axes[idx, 1].set_title(f"{title_prefix} Emergent PCA Feature Map (RGB)", fontsize=10, fontweight="bold", color="#1f77b4")
+                    else:
+                        axes[idx, 1].imshow(orig_resized)
+                        axes[idx, 1].set_title("Feature Map Fallback", fontsize=10, fontweight="bold")
                     axes[idx, 1].axis("off")
         except Exception as e_img:
             print(f"❌ Lỗi xử lý ảnh {path}: {e_img}")
@@ -152,14 +221,14 @@ def generate_emergent_pca_maps(
     plt.tight_layout()
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
     plt.savefig(save_path, bbox_inches="tight", dpi=250)
-    # Lưu thêm bản PDF chất lượng xuất bản
     pdf_path = os.path.splitext(save_path)[0] + ".pdf"
     try:
         plt.savefig(pdf_path, bbox_inches="tight")
     except Exception:
         pass
     plt.close()
-    print(f"🎉 [Success] Đã lưu Emergent PCA Feature Maps thành công tại:")
+    mode_text = "4 cột đối chiếu [Background, Origin, Delta, PCA]" if has_bg else "2 cột [Frame, PCA]"
+    print(f"🎉 [Success] Đã lưu Emergent PCA Feature Maps ({mode_text}) thành công tại:")
     print(f"   👉 PNG: {os.path.abspath(save_path)}")
     print(f"   👉 PDF: {os.path.abspath(pdf_path)}")
 
@@ -180,6 +249,7 @@ def get_safe_device(requested_device: str) -> str:
 def parse_args():
     parser = argparse.ArgumentParser(description="Trực quan hóa Emergent PCA Feature Map của DINO")
     parser.add_argument("--img_dir", type=str, default="output", help="Thư mục chứa ảnh giao thông, đường dẫn 1 ảnh, hoặc mẫu wildcard (ví dụ: 'output/123_*.jpg')")
+    parser.add_argument("--bg_dir", type=str, default=None, help="Thư mục chứa ảnh background tĩnh (để xuất đủ 4 cột đối chiếu [Background | Origin | Delta Map Δ | DINO PCA Map])")
     parser.add_argument("--cam_id", "--camera_id", dest="cam_id", type=str, default=None, help="Chỉ định ID camera cụ thể (ví dụ: '123' hoặc danh sách '123,566,101,249')")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file checkpoint đã huấn luyện (.pth)")
     parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Tên backbone (dinov2_vits14 / dinov3_vits16)")
@@ -241,6 +311,27 @@ if __name__ == "__main__":
         print(f"❌ Không chọn được ảnh nào sau khi lọc! Vui lòng kiểm tra lại Camera ID.")
         sys.exit(1)
 
+    # 3. Tự động tìm thư mục background tĩnh nếu người dùng chưa truyền cờ --bg_dir
+    bg_dir = args.bg_dir
+    if not bg_dir:
+        candidates = []
+        if os.path.isdir(args.img_dir):
+            parent_dir = os.path.dirname(os.path.abspath(args.img_dir))
+            candidates.append(os.path.join(parent_dir, "traffic_backgrounds"))
+            candidates.append(os.path.join(parent_dir, "backgrounds"))
+            candidates.append(os.path.join(args.img_dir, "traffic_backgrounds"))
+            candidates.append(os.path.join(args.img_dir, "..", "traffic_backgrounds"))
+        candidates.extend([
+            "traffic_backgrounds",
+            "../traffic_backgrounds",
+            "D:/DATN_transport-network-model/thu_thap_du_lieu/traffic_backgrounds",
+        ])
+        for cand in candidates:
+            if os.path.isdir(cand):
+                bg_dir = cand
+                print(f"💡 [Tự động phát hiện] Tìm thấy thư mục ảnh nền tĩnh tại: {cand}")
+                break
+
     print(f"🔍 Đã chọn {len(sample_paths)} ảnh mẫu. Đang nạp backbone '{args.backbone}'...")
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
@@ -253,6 +344,7 @@ if __name__ == "__main__":
     generate_emergent_pca_maps(
         backbone=backbone,
         image_paths=sample_paths,
+        bg_dir=bg_dir,
         save_path=args.save_path,
         device=device,
         img_size=224,
