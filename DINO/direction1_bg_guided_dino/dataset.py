@@ -67,6 +67,12 @@ class MultiCropBGGuidedAugmentation:
         mask_ratio: float = 0.5,
         alpha_fg: float = 0.75,
     ):
+        # Tự động căn chỉnh kích thước crop luôn là bội số của patch_size
+        if size_global % patch_size != 0:
+            size_global = max(patch_size, round(size_global / patch_size) * patch_size)
+        if size_local % patch_size != 0:
+            size_local = max(patch_size, round(size_local / patch_size) * patch_size)
+
         self.local_crops_number = local_crops_number
         self.size_global = size_global
         self.size_local = size_local
@@ -161,9 +167,16 @@ class BGGuidedDINODataset(Dataset):
                 "Vui lòng kiểm tra lại đường dẫn và chiến lược matching."
             )
 
+        # Tự động chuẩn hóa kích thước crop theo patch_size
+        if size_global % patch_size != 0:
+            size_global = max(patch_size, round(size_global / patch_size) * patch_size)
+        if size_local % patch_size != 0:
+            size_local = max(patch_size, round(size_local / patch_size) * patch_size)
+
         self.subtractor = BackgroundSubtractor(color_space="lab", blur_kernel=5)
         self.patch_size = patch_size
         self.size_global = size_global
+        self.size_local = size_local
         self.alpha_fg = alpha_fg
 
         self.augmentor = MultiCropBGGuidedAugmentation(

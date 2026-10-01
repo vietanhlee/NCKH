@@ -138,6 +138,20 @@ try:
     assert sample1["fg_mask"].shape == (14 * 14,), f"Mask shape sai: {sample1['fg_mask'].shape}"
     print(f"   + Dataset sample 1 crops: 2 Global {crops[0].shape}, 2 Local {crops[2].shape}")
 
+    # Test auto-alignment với ViT-14 (patch_size=14, size_local=96 -> phải tự động căn chỉnh lên 98)
+    ds1_vit14 = BGGuidedDINODataset(
+        bg_dir=bg_dir,
+        origin_dir=origin_dir,
+        match_strategy="route_hourly",
+        patch_size=14,
+        size_global=224,
+        size_local=96,
+        local_crops_number=2,
+    )
+    crops_vit14 = ds1_vit14[0]["crops"]
+    assert crops_vit14[2].shape[-1] == 98, f"Kỳ vọng local crop ViT-14 tự động căn chỉnh thành 98, thực tế: {crops_vit14[2].shape[-1]}"
+    print(f"   + Auto-alignment ViT-14 (patch=14, input 96 -> {crops_vit14[2].shape[-1]}): PASSED!")
+
     from direction1_bg_guided_dino.models import DINOHead, BGGuidedDINOModel
     from direction1_bg_guided_dino.losses import BGGuidedDINOLoss
 

@@ -69,27 +69,7 @@ def train_bg_guided_dino(args):
     print(f" Output Checkpoint Dir : {args.save_dir}")
     print("=" * 78)
 
-    # 1. Khởi tạo Dataset
-    print("📦 [Data] Khởi tạo BGGuidedDINODataset...")
-    try:
-        dataset = BGGuidedDINODataset(
-            bg_dir=args.bg_dir,
-            origin_dir=args.origin_dir,
-            match_strategy=args.match_strategy,
-            patch_size=16 if "16" in args.backbone else 14,
-            size_global=args.size_global,
-            size_local=args.size_local,
-            local_crops_number=args.local_crops,
-            mask_ratio=args.mask_ratio,
-            alpha_fg=args.alpha_fg,
-            max_samples=args.max_samples,
-        )
-        print(f"✅ [Data] Đã nạp thành công {len(dataset)} cặp ảnh hợp lệ.")
-    except Exception as e:
-        print(f"❌ [Data Error] {e}")
-        return
-
-    # 2. Khởi tạo Backbone và Tự động cấu hình Toàn bộ GPU (Multi-GPU Engine)
+    # 1. Khởi tạo Backbone và Tự động cấu hình Toàn bộ GPU (Multi-GPU Engine)
     print(f"🧠 [Model] Nạp Backbone '{args.backbone}'...")
     student_backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
@@ -111,6 +91,37 @@ def train_bg_guided_dino(args):
         base_lr=args.lr,
         device_arg=args.device,
     )
+
+    # Tự động chuẩn hóa kích thước crop đảm bảo luôn là bội số nguyên của patch_size
+    if args.size_global % patch_size != 0:
+        old_val = args.size_global
+        args.size_global = max(patch_size, round(args.size_global / patch_size) * patch_size)
+        print(f"📐 [Auto-Align] Điều chỉnh size_global: {old_val} -> {args.size_global} (bội số của patch_size={patch_size})")
+
+    if args.size_local % patch_size != 0:
+        old_val = args.size_local
+        args.size_local = max(patch_size, round(args.size_local / patch_size) * patch_size)
+        print(f"📐 [Auto-Align] Điều chỉnh size_local: {old_val} -> {args.size_local} (bội số của patch_size={patch_size})")
+
+    # 2. Khởi tạo Dataset
+    print("📦 [Data] Khởi tạo BGGuidedDINODataset...")
+    try:
+        dataset = BGGuidedDINODataset(
+            bg_dir=args.bg_dir,
+            origin_dir=args.origin_dir,
+            match_strategy=args.match_strategy,
+            patch_size=patch_size,
+            size_global=args.size_global,
+            size_local=args.size_local,
+            local_crops_number=args.local_crops,
+            mask_ratio=args.mask_ratio,
+            alpha_fg=args.alpha_fg,
+            max_samples=args.max_samples,
+        )
+        print(f"✅ [Data] Đã nạp thành công {len(dataset)} cặp ảnh hợp lệ.")
+    except Exception as e:
+        print(f"❌ [Data Error] {e}")
+        return
 
     def collate_dino(batch):
         n_crops = len(batch[0]["crops"])

@@ -120,6 +120,17 @@ class BGGuidedDINOModel(nn.Module):
         for s in unique_sizes:
             indices = [i for i, sz in enumerate(sizes) if sz == s]
             batch_s = torch.cat([crops[i] for i in indices], dim=0)
+
+            # Phòng vệ chủ động: Tự động nội suy nếu kích thước không chia hết cho patch_size
+            p_size = getattr(self.student_backbone, "patch_size", None)
+            if p_size is None and hasattr(self.student_backbone, "patch_embed"):
+                p_size = getattr(self.student_backbone.patch_embed, "patch_size", None)
+            if isinstance(p_size, (tuple, list)):
+                p_size = p_size[0]
+            if p_size is not None and s % p_size != 0:
+                target_s = max(p_size, round(s / p_size) * p_size)
+                batch_s = F.interpolate(batch_s, size=(target_s, target_s), mode="bicubic", align_corners=False)
+
             feat = self.student_backbone(batch_s)
             if hasattr(feat, "get") and isinstance(feat, dict):
                 feat = feat.get("x_norm_clstoken", list(feat.values())[0])
@@ -144,6 +155,17 @@ class BGGuidedDINOModel(nn.Module):
         Chạy Teacher trên 2 Global unmasked views.
         """
         batch = torch.cat(global_crops, dim=0)
+
+        # Phòng vệ chủ động: Tự động nội suy nếu kích thước không chia hết cho patch_size
+        p_size = getattr(self.teacher_backbone, "patch_size", None)
+        if p_size is None and hasattr(self.teacher_backbone, "patch_embed"):
+            p_size = getattr(self.teacher_backbone.patch_embed, "patch_size", None)
+        if isinstance(p_size, (tuple, list)):
+            p_size = p_size[0]
+        if p_size is not None and batch.shape[-1] % p_size != 0:
+            target_s = max(p_size, round(batch.shape[-1] / p_size) * p_size)
+            batch = F.interpolate(batch, size=(target_s, target_s), mode="bicubic", align_corners=False)
+
         feat = self.teacher_backbone(batch)
         if hasattr(feat, "get") and isinstance(feat, dict):
             feat = feat.get("x_norm_clstoken", list(feat.values())[0])
