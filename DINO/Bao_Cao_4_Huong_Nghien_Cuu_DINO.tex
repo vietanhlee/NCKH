@@ -43,108 +43,125 @@
 \maketitle
 
 \begin{abstract}
-Trong hệ thống camera giám sát giao thông thông minh (CCTV), các camera cố định cung cấp một nguồn tín hiệu vật lý tự nhiên vô cùng quý giá: cặp ảnh quan sát bao gồm ảnh hiện trường có phương tiện giao thông và ảnh nền tĩnh sạch bóng xe được tổng hợp qua thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của bốn hướng nghiên cứu tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu này. Bốn hướng nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với chiến lược che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Phân đoạn ngữ nghĩa phương tiện không cần nhãn (Zero-Shot Semantic Segmentation) qua dung hợp đặc trưng DINO PCA và sai khác quang học; (3) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing; và (4) Mở rộng biểu diễn Patch Embedding 4 kênh (RGB + $\Delta$) phục vụ bài toán đếm xe trong điều kiện ít mẫu (Few-shot learning). Tất cả các phương pháp đều được thiết kế chặt chẽ, tối ưu hóa toán học và không phụ thuộc vào nhãn gán thủ công từ con người.
+Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị thu hình cố định cung cấp cặp tín hiệu quang học bổ trợ: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận của bốn hướng nghiên cứu học tự giám sát (Self-Supervised Learning) nhằm khai thác cặp tín hiệu trên. Các nội dung chính bao gồm: (1) Tiền huấn luyện Vision Transformer với chiến lược che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Phân đoạn ngữ nghĩa phương tiện không cần nhãn (Zero-Shot Semantic Segmentation) thông qua kết hợp đặc trưng DINO PCA và sai khác quang học; (3) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing; và (4) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning). Các phương pháp đề xuất hướng tới tính tối ưu về mặt tính toán và giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công.
 \end{abstract}
 
 \hrule
 \vspace{1em}
 
-\section{ĐẶT VẤN ĐỀ VÀ BẢN CHẤT TÍN HIỆU QUANG HỌC VẬT LÝ}
+\section{ĐẶT VẤN ĐỀ VÀ MÔ HÌNH HÓA TÍN HIỆU QUANG HỌC}
 
-Trong giám sát giao thông đô thị bằng camera tĩnh, mỗi khung hình chụp tại một thời điểm $t$ luôn gắn liền với hai trạng thái không gian quan sát:
+Trong bài toán giám sát giao thông đô thị qua camera tĩnh, mỗi khung hình tại thời điểm $t$ được xem xét dưới hai trạng thái quan sát:
 \begin{enumerate}
-    \item \textbf{Ảnh nguồn chứa phương tiện ($I_{\text{origin}} \in \mathbb{R}^{H \times W \times 3}$):} Chứa các thực thể động (xe máy, ô tô con, xe tải, xe buýt) di chuyển trên nền tuyến đường, chịu sự thay đổi phức tạp về mật độ, góc chiếu sáng và độ che khuất lẫn nhau.
-    \item \textbf{Ảnh nền tĩnh ($I_{\text{bg}} \in \mathbb{R}^{H \times W \times 3}$):} Bề mặt lòng đường sạch hoàn toàn xe cộ, được trích xuất bằng thuật toán trung vị theo thời gian (Temporal Median Filtering) kết hợp chuẩn hóa cường độ sáng trong không gian màu HSV theo từng khung giờ quan sát trong ngày ($00\text{h} - 23\text{h}$).
+    \item \textbf{Khung hình hiện trường ($I_{\text{origin}} \in \mathbb{R}^{H \times W \times 3}$):} Ghi nhận các phương tiện giao thông (xe máy, ô tô, xe buýt, xe tải) chuyển động trên bề mặt tuyến đường, kèm theo các yếu tố biến đổi về mật độ, điều kiện chiếu sáng và mức độ che khuất lẫn nhau.
+    \item \textbf{Ảnh nền tĩnh ($I_{\text{bg}} \in \mathbb{R}^{H \times W \times 3}$):} Thể hiện cấu trúc mặt đường khi không có phương tiện, được ước lượng thông qua thuật toán lọc trung vị theo thời gian (Temporal Median Filtering) kết hợp chuẩn hóa cường độ trong không gian màu HSV theo từng chu kỳ quan sát.
 \end{enumerate}
 
-Sự đối sánh giữa hai ảnh này xác lập một bản đồ sai khác vật lý tiên nghiệm (Physical Prior):
+Mối quan hệ không gian giữa hai khung hình xác lập trường sai khác quang học:
 \begin{equation}
     \Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|
 \end{equation}
 
-Thay vì chỉ sử dụng $\Delta(u, v)$ trong các thuật toán trừ nền truyền thống vốn rất nhạy cảm với nhiễu thời tiết và bóng đổ, báo cáo này tích hợp tín hiệu $\Delta$ vào không gian biểu diễn sâu của các mô hình Vision Transformer (ViT), mở ra các hướng giải quyết mang tính đột phá cho các bài toán thị giác máy tính giao thông.
+Thay vì chỉ áp dụng $\Delta(u, v)$ trong các thuật toán phân đoạn ngưỡng cổ điển vốn nhạy cảm với biến thiên thời tiết và bóng đổ, báo cáo tích hợp tín hiệu sai khác vật lý này vào không gian biểu diễn sâu của Vision Transformer (ViT), tạo tiền đề phát triển các thuật toán phân tích giao thông tự động.
 
 ---
 
-\section{CƠ SỞ LÝ THUYẾT TỰ HỌC DINO: TỪ DINOv1 ĐẾN DINOv2}
+\section{CƠ SỞ PHƯƠNG PHÁP LUẬN: MÔ HÌNH HỌC TỰ GIÁM SÁT DINO VÀ SỰ TIẾN HÓA KIẾN TRÚC}
 
-\subsection{Bản Chất Tự Chưng Cất Tri Thức Không Nhãn (Self-Distillation With No Labels)}
-Mô hình tự giám sát DINO (Caron et al., ICCV 2021) vận hành dựa trên cơ chế tự chưng cất tri thức giữa hai mạng nơ-ron có cùng cấu trúc tham số: mạng \textbf{Học sinh (Student)} $g_{\theta_s}$ và mạng \textbf{Giáo viên (Teacher)} $g_{\theta_t}$. Mỗi mạng bao gồm một bộ trích xuất đặc trưng Vision Transformer (Backbone) kết hợp với đầu chiếu đa tầng (MLP Projection Head) nhằm ánh xạ token đại diện $[CLS]$ sang không gian xác suất $K$ chiều ($K = 4096$ hoặc $65536$).
+\section{CƠ SỞ PHƯƠNG PHÁP LUẬN VỀ HỌC TỰ GIÁM SÁT DINO}
 
-Quy trình tối ưu hóa thiết lập một sự bất đối xứng động học chặt chẽ:
+\subsection{Cơ Chế Chưng Cất Tự Thân và Động Học Ổn Định Biểu Diễn}
+Kiến trúc DINO (Caron et al., ICCV 2021) dựa trên nguyên lý tự chưng cất tri thức (self-distillation) giữa hai mạng nơ-ron có cấu trúc tham số tương đồng: mạng Student $g_{\theta_s}$ và mạng Teacher $g_{\theta_t}$. Mỗi mạng bao gồm một bộ trích xuất đặc trưng Vision Transformer (ViT) kết hợp đầu chiếu phi tuyến đa tầng (MLP Projection Head) nhằm ánh xạ vector đặc trưng $[CLS]$ sang không gian phân phối xác suất $K$ chiều ($K \in \{4096, 65536\}$).
+
+Hệ thống tối ưu hóa vận hành theo quy tắc cập nhật tham số bất đối xứng:
 \begin{enumerate}
-    \item \textbf{Cập nhật mạng Student qua Gradient Descent:} Mạng Student tiếp nhận trực tiếp dòng gradient truyền ngược từ hàm mất mát DINO Loss để tối ưu hóa vector trọng số $\theta_s$.
-    \item \textbf{Cập nhật mạng Teacher qua Trung bình trượt hàm mũ (EMA):} Mạng Teacher không nhận gradient trực tiếp ($\nabla_{\theta_t} \mathcal{L} = 0$). Thay vào đó, trọng số $\theta_t$ được cập nhật chậm rãi theo hàm trung bình trượt động lượng (Momentum Encoder):
+    \item \textbf{Tối ưu hóa Student qua lan truyền ngược:} Tham số $\theta_s$ được cập nhật trực tiếp bằng thuật toán tối ưu hóa ngẫu nhiên (SGD hoặc AdamW) dựa trên độ dốc của hàm mất mát entropy chéo giữa đầu ra Student và Teacher.
+    \item \textbf{Cập nhật Teacher theo trung bình trượt hàm mũ (EMA):} Trọng số của Teacher không tiếp nhận trực tiếp gradient ($\nabla_{\theta_t} \mathcal{L} = 0$), mà tiến hóa theo trung bình trượt động lượng từ tham số Student:
     \begin{equation}
         \theta_t \leftarrow \lambda \theta_t + (1 - \lambda) \theta_s
     \end{equation}
-    trong đó $\lambda \in [0.996, 1.0]$ được điều tiết tăng dần theo quy luật Cosine Schedule xuyên suốt quá trình huấn luyện. Cơ chế này đóng vai trò như một bộ tích hợp mô hình theo thời gian (Polyak-Ruppert Averaging), giúp Teacher tạo ra các phân phối xác suất bia mục tiêu ổn định và có tính khái quát hóa cao.
-    \item \textbf{Cơ chế chống sụp đổ biểu diễn (Collapse Prevention):} Trong học tự giám sát không có mẫu âm (Non-contrastive SSL), mô hình rất dễ rơi vào hai trạng thái suy biến: (i) Mọi ảnh đều ánh xạ ra cùng một vector hằng số, hoặc (ii) Một chiều xác suất duy nhất thống trị toàn bộ phân phối. DINO giải quyết triệt để bài toán này bằng sự kết hợp nghịch đảo giữa \textbf{Teacher Centering} và \textbf{Teacher Sharpening}:
+    trong đó hệ số động lượng $\lambda \in [0.996, 1.0]$ được điều chỉnh tăng dần theo lịch trình cosin. Về mặt giải tích, cơ chế EMA đóng vai trò như bộ lọc thông thấp trong không gian tham số (Polyak-Ruppert Averaging), giúp mạng Teacher cung cấp phân phối xác suất mục tiêu ổn định và có phương sai thấp qua các bước huấn luyện.
+    \item \textbf{Cơ chế kiểm soát sự sụp đổ biểu diễn (Representation Collapse Prevention):} Trong các mô hình học tự giám sát không sử dụng mẫu âm (non-contrastive SSL), hàm mục tiêu có nguy cơ suy biến về hai trạng thái: (i) sụp đổ hằng số (mọi đầu vào đều cho ra cùng một vector đặc trưng), hoặc (ii) sụp đổ đơn chiều (một chiều tọa độ chiếm ưu thế tuyệt đối trong phân phối). DINO kiểm soát hai trạng thái suy biến này bằng việc kết hợp kỹ thuật định tâm (\textit{Centering}) và kỹ thuật làm nhọn phân phối (\textit{Sharpening}):
     \begin{equation}
         P_t(x)^{(k)} = \frac{\exp\left(\frac{g_{\theta_t}(x)^{(k)} - c^{(k)}}{\tau_t}\right)}{\sum_{j=1}^K \exp\left(\frac{g_{\theta_t}(x)^{(j)} - c^{(j)}}{\tau_t}\right)}, \quad P_s(x)^{(k)} = \frac{\exp\left(\frac{g_{\theta_s}(x)^{(k)}}{\tau_s}\right)}{\sum_{j=1}^K \exp\left(\frac{g_{\theta_s}(x)^{(j)}}{\tau_s}\right)}
     \end{equation}
     trong đó:
     \begin{itemize}
-        \item Vector tâm $c \in \mathbb{R}^K$ được cập nhật liên tục theo mini-batch: $c \leftarrow m_c \cdot c + (1 - m_c) \frac{1}{B} \sum_{b=1}^B g_{\theta_t}(x_b)$. Phép trừ $g_{\theta_t}(x) - c$ khử độ lệch kỳ vọng, ngăn chặn một chiều tọa độ lấn át toàn thể.
-        \item Nhiệt độ Teacher $\tau_t$ ($0.04 \to 0.07$) luôn nhỏ hơn nhiệt độ Student $\tau_s = 0.1$, tạo hiệu ứng làm nhọn phân phối xác suất (Sharpening), ngăn chặn phân phối rơi vào trạng thái sụp đổ đồng đều (Uniform Collapse).
+        \item Vector định tâm $c \in \mathbb{R}^K$ ước lượng kỳ vọng bậc một của phân phối đầu ra Teacher, được cập nhật đệ quy theo từng mini-batch: $c \leftarrow m_c \cdot c + (1 - m_c) \frac{1}{B} \sum_{b=1}^B g_{\theta_t}(x_b)$. Việc dịch chuyển gốc tọa độ kích hoạt thông qua $g_{\theta_t}(x) - c$ giúp phân phối năng lượng đồng đều, ngăn chặn hiện tượng co cụm vào một chiều thành phần.
+        \item Nhiệt độ Teacher $\tau_t \in [0.04, 0.07]$ được thiết lập nhỏ hơn nhiệt độ Student $\tau_s = 0.1$, tạo hiệu ứng làm nhọn phân phối xác suất, ngăn chặn xu hướng entropy tiến tới cực đại (sụp đổ về phân phối đều).
     \end{itemize}
 \end{enumerate}
 
-\subsection{Bước Chuyển Mình Đột Phá Từ DINOv1 Sang DINOv2}
-DINOv2 (Oquab et al., Meta AI 2023) đánh dấu bước nhảy vọt từ một phương pháp học đặc trưng ảnh đơn thuần thành một \textbf{Mô hình Nền tảng Thị giác (Vision Foundation Model)} với 4 cải tiến then chốt:
+\subsection{Sự Phát Triển Kiến Trúc Từ DINOv1 Đến DINOv2}
+DINOv2 (Oquab et al., Meta AI 2023) mở rộng khung lý thuyết DINO từ việc học biểu diễn toàn cục $[CLS]$ thành mô hình nền tảng thị giác (Vision Foundation Model) có khả năng sinh biểu diễn dày đặc (dense representations) ở cấp độ từng patch, với các cải tiến kiến trúc then chốt:
 \begin{enumerate}
-    \item \textbf{Tích hợp song song Masked Image Modeling (MIM / iBOT):} DINOv1 chỉ tối ưu trên token đại diện toàn cục $[CLS]$. DINOv2 kế thừa kiến trúc iBOT, áp dụng cơ chế tự chưng cất đồng thời trên cả token $[CLS]$ lẫn các \textbf{Patch Tokens} bị che ngẫu nhiên. Hàm mất mát tổng hợp:
+    \item \textbf{Cơ chế học đa nhiệm tích hợp Masked Image Modeling (MIM / iBOT):} DINOv2 kết hợp đồng thời việc tự chưng cất token toàn cục $[CLS]$ với bài toán phục hồi biểu diễn của các patch bị che ngẫu nhiên:
     \begin{equation}
         \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}([CLS]) + \lambda_{\text{patch}} \mathcal{L}_{\text{iBOT}}(\text{Patch Tokens})
     \end{equation}
-    nhờ đó mô hình vừa nắm bắt ngữ nghĩa cấp cao của toàn ảnh, vừa hiểu thấu đáo cấu trúc chi tiết từng điểm ảnh ở cấp độ dense patches.
-    \item \textbf{Hiện đại hóa kiến trúc Transformer:} DINOv2 loại bỏ hoàn toàn các lớp Batch Normalization (vốn gây rò rỉ thông tin thống kê giữa các mẫu trong batch); thay thế bằng \textbf{LayerScale} và hàm kích hoạt \textbf{SwiGLU} (Swish Gated Linear Unit), đảm bảo quá trình lan truyền gradient ổn định ở mô hình quy mô lớn (ViT-Small, Base, Large, Giant lên tới 1 tỷ tham số).
-    \item \textbf{Bổ sung Register Tokens:} DINOv2 bổ sung 4 token bộ nhớ ảo (Register Tokens) vào chuỗi đầu vào. Các token này có nhiệm vụ "hấp thụ" các tín hiệu kích hoạt bất thường (outliers) ở các vùng nền phẳng (bầu trời, mặt đường), giúp các Patch Tokens thực thụ bảo toàn năng lượng để mô tả chuẩn xác các vật thể nổi bật (tiền cảnh).
-    \item \textbf{Thích ứng đa độ phân giải (Multi-Resolution Adaptation):} DINOv2 thiết lập giao thức huấn luyện hai pha: pha pre-training diện rộng ở $224 \times 224$ (tiết kiệm tài nguyên) và pha tinh chỉnh ngắn hạn ở $518 \times 518$ (chuẩn hóa độ phân giải cao).
+    Nhờ đó, mô hình đồng thời nắm bắt được ngữ nghĩa cấp cao ở cấp độ khung cảnh và đặc trưng không gian chi tiết ở từng patch $P \times P$.
+    \item \textbf{Ổn định hóa truyền gradient trên mô hình quy mô lớn:} DINOv2 loại bỏ các lớp phụ thuộc mẻ dữ liệu; áp dụng chuẩn hóa tiền vị tử (Pre-LayerNorm), hệ số co giãn tầng LayerScale nhằm hạn chế bùng nổ gradient khi tăng số tầng, và thay thế hàm kích hoạt GELU bằng hàm cổng phi tuyến SwiGLU (Swish Gated Linear Unit).
+    \item \textbf{Khử nhiễu đặc trưng cục bộ qua Register Tokens:} Ở các mô hình ViT sâu, các vùng ảnh đồng nhất (như mặt đường hoặc bầu trời) có xu hướng tích lũy các kích hoạt ngoại lai có chuẩn $L_2$ lớn. DINOv2 bổ sung 4 register tokens vào chuỗi đầu vào để hấp thụ các tín hiệu kích hoạt dư thừa này, giúp bảo toàn tính phân tách và chất lượng biểu diễn của các patch tokens đối với đối tượng tiền cảnh.
+    \item \textbf{Huấn luyện thích ứng đa độ phân giải (Multi-Resolution Training):} Mô hình thực hiện tiền huấn luyện trên lưới $224 \times 224$ để tối ưu hóa hiệu năng tính toán, sau đó tinh chỉnh ở giai đoạn cuối với độ phân giải cao $518 \times 518$ (tương ứng lưới $37 \times 37$ patches kích thước $14 \times 14$).
 \end{enumerate}
 
-\subsection{Chiến Lược Đa Góc Nhìn (Multi-Crop Strategy) và Các Đặc Tính Không Gian}
-Trái tim của cơ chế tự giám sát DINO là việc giải bài toán \textbf{"Học từ bộ phận đến toàn cảnh" (Part-to-Whole correspondence)} thông qua chiến lược Multi-crop:
+\subsection{Chiến Lược Trích Xuất Đa Góc Nhìn (Multi-Crop) và Phân Tích Hình Học Không Gian}
+Chiến lược đa góc nhìn (Multi-crop strategy) thiết lập bài toán tối ưu hóa tương quan giữa các phần cấu thành và thực thể toàn cục (Part-to-Whole correspondence):
 \begin{enumerate}
-    \item \textbf{Phân loại các góc nhìn (Crops):} Từ mỗi khung hình quan sát $x$, hệ thống trích xuất $V$ góc nhìn con:
+    \item \textbf{Phân loại và cấu hình các góc nhìn:} Từ mỗi khung hình quan sát $I \in \mathbb{R}^{H_0 \times W_0 \times 3}$, toán tử lấy mẫu sinh ra tập hợp $V = N_g + N_l$ góc nhìn con:
     \begin{itemize}
-        \item \textbf{2 Global Crops ($x_g^{(1)}, x_g^{(2)}$):} Cắt ngẫu nhiên với tỷ lệ diện tích lớn $S_g \in [0.4, 1.0]$ của ảnh gốc, sau đó chuẩn hóa về kích thước $224 \times 224$. Chứa đựng bối cảnh không gian tổng thể của tuyến đường và phương tiện. \textbf{Chỉ mạng Teacher được quyền nhìn thấy các Global crops này.}
-        \item \textbf{$N_l$ Local Crops ($x_l^{(1)}, \dots, x_l^{(N_l)}$) (mặc định $N_l = 4$):} Cắt ngẫu nhiên với diện tích nhỏ $S_l \in [0.05, 0.4]$, chuẩn hóa về kích thước $98 \times 98$ (đối với ViT patch-14, $98 = 7 \times 14$). Góc nhìn này zoom cận cảnh vào các cấu kiện cục bộ (bánh xe, đầu xe, gương chiếu hậu). \textbf{Mạng Student bắt buộc phải nhìn cả Global crops lẫn Local crops.}
+        \item \textbf{$N_g = 2$ góc nhìn toàn cảnh (Global Crops -- $x_g^{(1)}, x_g^{(2)}$):} Có tỷ lệ diện tích $s_g \in [0.4, 1.0]$ so với ảnh gốc, được chuẩn hóa về kích thước $224 \times 224$. Các góc nhìn này được nạp vào cả mạng Teacher và mạng Student.
+        \item \textbf{$N_l = 4$ đến $8$ góc nhìn cục bộ (Local Crops -- $x_l^{(1)}, \dots, x_l^{(N_l)}$):} Có tỷ lệ diện tích $s_l \in [0.05, 0.4]$, chuẩn hóa về kích thước $98 \times 98$ (đối với patch size $P=14$, tương ứng $7 \times 7$ patches). Các góc nhìn này chỉ được nạp vào mạng Student nhằm tiết kiệm chi phí tính toán và bộ nhớ GPU.
     \end{itemize}
-    \item \textbf{Bản chất toán học của chỉ số IoU giữa các góc nhìn:}
-    Trong DINO, các góc nhìn được cắt \textbf{hoàn toàn ngẫu nhiên và độc lập (Unconditioned Independent Crops)}, không áp đặt điều kiện ràng buộc ngưỡng $\text{IoU}$. 
+
+    \item \textbf{Phân tích độ giao thoa không gian ($\text{IoU}$) giữa hai góc nhìn toàn cảnh:}
+    Trong pipeline chuẩn của DINO, hai vùng cắt toàn cảnh được lấy mẫu độc lập ngẫu nhiên (Uniform Random Sampling) trên không gian tọa độ hợp lệ, không áp đặt ràng buộc tiền nghiệm về điều kiện giao thoa $\text{IoU} \ge \tau$.
     
-    Xét hai Global crops có diện tích tương đối $S_1, S_2 \in [0.4, 1.0]$. Theo nguyên lý hình học Dirichlet, do cả hai vùng cùng chiếm tỷ lệ lớn trên khung hình, xác suất để chúng giao thoa không gian ($A(x_g^{(1)}) \cap A(x_g^{(2)}) \neq \emptyset$) là áp đảo, với kỳ vọng toán học:
+    Gọi $\Omega = [0, W_0] \times [0, H_0]$ là không gian tọa độ ảnh gốc. Hai vùng cắt $B_1, B_2 \subset \Omega$ có diện tích tương đối $|B_1|/|\Omega| = s_1$, $|B_2|/|\Omega| = s_2$ với $s_1, s_2 \sim \mathcal{U}(0.4, 1.0)$. Theo nguyên lý bao hàm -- loại trừ (Inclusion-Exclusion Principle):
     \begin{equation}
-        \mathbb{E}[\text{IoU}(x_g^{(1)}, x_g^{(2)})] \in [0.15, 0.60]
+        |B_1 \cap B_2| = |B_1| + |B_2| - |B_1 \cup B_2| \ge (s_1 + s_2 - 1)|\Omega|
     \end{equation}
-    Việc không cố định IoU mang ý nghĩa bản chất:
+    Khi $s_1 + s_2 > 1.0$, phần giao không gian luôn tồn tại ($B_1 \cap B_2 \neq \emptyset$). Do phân phối đều trên dải $[0.4, 1.0]$, kỳ vọng toán học của chỉ số $\text{IoU}$ thỏa mãn:
+    \begin{equation}
+        \mathbb{E}[\text{IoU}(B_1, B_2)] \in [0.15, \ 0.60]
+    \end{equation}
+    Tính biến thiên ngẫu nhiên của $\text{IoU}$ đóng vai trò quan trọng trong việc định hình không gian biểu diễn:
     \begin{itemize}
-        \item Nếu ép $\text{IoU} \approx 1.0$: Hai góc nhìn gần như trùng khít, mô hình sẽ học "lối tắt tầm thường" (trivial shortcut) bằng cách ghi nhớ điểm ảnh thay vì học ngữ nghĩa trừu tượng.
-        \item Nếu $\text{IoU} \to 0$ (hai góc nhìn ở hai vị trí xa nhau trên xe buýt): Student bị ép phải liên kết thông tin cục bộ ở đầu xe với bối cảnh đuôi xe của Teacher, thúc đẩy hình thành tri thức ngữ cảnh toàn cục mạnh mẽ.
+        \item Khi $\text{IoU} > 0.4$: Hai góc nhìn có mức độ trùng lặp cao, mạng học tính bất biến đối với các biến đổi quang học (biến thiên chiếu sáng, làm mờ, nhiễu màu).
+        \item Khi $\text{IoU} \to 0$: Hai góc nhìn quan sát các bộ phận không giao nhau của cùng một phương tiện (như đầu xe và đuôi xe), mạng Student buộc phải trừu tượng hóa ngữ cảnh toàn cục để nhận diện các thành phần rời rạc này thuộc cùng một thực thể phương tiện.
     \end{itemize}
-    \item \textbf{Cơ chế xử lý ảnh đầu vào có kích thước nhỏ hơn ($< 224 \times 224$):}
-    Khi ảnh đầu vào có độ phân giải thấp hơn $224 \times 224$ (ví dụ camera đường truyền yếu $160 \times 120$), toán tử `RandomResizedCrop` thực hiện hai công đoạn: (i) Cắt vùng theo tỷ lệ diện tích $S$, và (ii) Phóng to vùng cắt đó lên chính xác $224 \times 224$ bằng thuật toán \textbf{Nội suy Bicubic bậc cao (Bicubic Upsampling)}. Nhờ tính liên tục của hàm cơ sở Bicubic, tensor đầu ra đưa vào ViT luôn có kích thước chuẩn $(3, 224, 224)$. Trong hệ thống camera giám sát thực tế (CCTV TP.HCM), độ phân giải thực luôn từ $720\text{p} \to 1080\text{p}$, do đó thao tác thực chất là phép lấy mẫu thu nhỏ (Downsampling) giúp loại bỏ nhiễu cảm biến và nén giữ tín hiệu trung thực nhất.
+
+    \item \textbf{Xử lý ảnh đầu vào có kích thước nhỏ hơn kích thước danh định:}
+    Khi ảnh gốc có độ phân giải nhỏ hơn $224 \times 224$ ($\min(H_0, W_0) < 224$), toán tử `RandomResizedCrop` thực hiện phép nội suy Bicubic liên tục bậc ba để mở rộng miền giá trị về kích thước danh định $(3, 224, 224)$:
+    \begin{equation}
+        \tilde{I}(x, y) = \sum_{i=-1}^2 \sum_{j=-1}^2 I(\lfloor x \rfloor + i, \lfloor y \rfloor + j) \cdot \mathcal{K}(x - (\lfloor x \rfloor + i)) \cdot \mathcal{K}(y - (\lfloor y \rfloor + j))
+    \end{equation}
+    với $\mathcal{K}(\cdot)$ là nhân spline Keys. Nhờ tính khả vi của hàm nội suy bậc ba, tensor đầu vào đưa vào ViT luôn duy trì cấu trúc liên tục và kích thước danh định. Tuy nhiên, việc phóng đại quá mức từ ảnh kích thước nhỏ sẽ làm suy giảm thông tin tần số cao (mờ đường biên). Trong bối cảnh camera giám sát giao thông thực tế, độ phân giải thường đạt từ chuẩn HD ($720\text{p}$) trở lên, do đó toán tử này chủ yếu thực hiện hạ mẫu (downsampling) kết hợp lọc khử hiện tượng răng cưa.
 \end{enumerate}
 
-\subsection{Cơ Chế Ghép Batch và Hàm Mất Mát DINO Cross-Entropy}
-Một hiểu lầm phổ biến trong triển khai là ghép nhiều ảnh theo chiều kênh (Channel concatenation). DINO thiết lập quy tắc kiến trúc chuẩn mực:
+\subsection{Cấu Trúc Tổ Chức Tensor Đầu Vào và Tối Ưu Hóa Hàm Mất Mát Đối Sánh}
+Về mặt đại số tuyến tính, việc ghép nhiều góc nhìn quan sát đòi hỏi sự tương thích nghiêm ngặt với cấu trúc chiếu của Vision Transformer:
 \begin{enumerate}
-    \item \textbf{Tuyệt đối không ghép theo chiều Kênh (Channel):} Lớp chiếu đầu vào của Vision Transformer là một phép biến đổi tuyến tính $W_{\text{patch}} \in \mathbb{R}^{D \times (P^2 \cdot C)}$ với số kênh cố định $C = 3$ (RGB). Nếu ghép $V$ ảnh theo chiều channel ($C = 3V$), mô hình sẽ gặp lỗi bất tương thích chiều, đồng thời việc ép các ảnh chồng đè lên nhau tại cùng tọa độ pixel sẽ phá hủy hoàn toàn cấu trúc không gian hình học.
-    \item \textbf{Ghép theo chiều Mẫu (Batch Dimension):} Tất cả các góc nhìn của $B$ khung hình trong mini-batch được xếp chồng dọc theo chiều thứ nhất (`dim=0`), tạo thành siêu tensor:
-    \begin{align}
-        X_{\text{global}} &\in \mathbb{R}^{(B \times 2) \times 3 \times 224 \times 224} \\
-        X_{\text{local}}  &\in \mathbb{R}^{(B \times N_l) \times 3 \times 98 \times 98}
-    \end{align}
-    Mỗi ảnh con được xử lý độc lập và song song qua ViT như một phần tử riêng biệt, xuất ra $B \times 2$ vector đặc trưng Teacher và $B \times (2 + N_l)$ vector đặc trưng Student.
-    \item \textbf{Hàm mất mát so khớp chéo (Cross-Entropy Matching):}
-    Hàm mất mát DINO Loss tính toán độ lệch entropy chéo giữa 2 góc nhìn toàn cảnh của Teacher và toàn bộ các góc nhìn của Student (loại trừ trường hợp so khớp với chính nó):
+    \item \textbf{Giới hạn cấu trúc của phép ghép kênh (Channel Concatenation):} 
+    Toán tử Patch Embedding trong Vision Transformer ánh xạ một patch không gian $\mathbf{x}_p \in \mathbb{R}^{P \times P \times 3}$ thành vector ẩn $\mathbf{z}_p \in \mathbb{R}^D$ qua ma trận chiếu tham số:
     \begin{equation}
-        \mathcal{L}_{\text{DINO}} = \frac{1}{2} \sum_{i=1}^2 \sum_{\substack{v=1 \\ v \neq i}}^{2 + N_l} H\left(P_t(x_g^{(i)}), P_s(x^{(v)})\right)
+        \mathbf{z}_p = \text{vec}(\mathbf{x}_p) \mathbf{W}_E + \mathbf{b}_E, \quad \mathbf{W}_E \in \mathbb{R}^{(3P^2) \times D}
+    \end{equation}
+    Nếu ghép $V$ góc nhìn theo chiều kênh ($C' = 3V$), kích thước tensor đầu vào trở nên không tương thích với ma trận chiếu $\mathbf{W}_E$. Hơn nữa, việc ghép kênh đồng nghĩa với việc xếp chồng điểm ảnh tại cùng một vị trí tọa độ từ các góc nhìn khác nhau, phá vỡ cấu trúc hình học quang học của ảnh quan sát.
+    \item \textbf{Tổ chức theo chiều lô dữ liệu (Batch Dimension):} 
+    Các góc nhìn từ $B$ khung hình trong mini-batch được sắp xếp dọc theo chiều mẫu đầu tiên (`dim=0`). Do góc nhìn toàn cảnh ($224 \times 224$) và góc nhìn cục bộ ($98 \times 98$) có kích thước không gian khác nhau, dữ liệu được tổ chức thành hai khối tensor độc lập:
+    \begin{align}
+        \mathbf{X}_{\text{global}} &\in \mathbb{R}^{(B \cdot N_g) \times 3 \times 224 \times 224} \\
+        \mathbf{X}_{\text{local}}  &\in \mathbb{R}^{(B \cdot N_l) \times 3 \times 98 \times 98}
+    \end{align}
+    Mỗi góc nhìn được xử lý song song qua mạng ViT như một thực thể quan sát độc lập, trích xuất ra $B \cdot N_g$ vector biểu diễn Teacher và $B \cdot (N_g + N_l)$ vector biểu diễn Student.
+    \item \textbf{Hàm mất mát entropy chéo đa góc nhìn:}
+    Mạng tối ưu hóa độ lệch entropy chéo giữa phân phối xác suất dự đoán của Teacher trên các góc nhìn toàn cảnh và phân phối của Student trên toàn bộ các góc nhìn:
+    \begin{equation}
+        \mathcal{L}_{\text{DINO}} = \frac{1}{N_g} \sum_{i=1}^{N_g} \sum_{\substack{v=1 \\ v \neq i}}^{N_g + N_l} H\left(P_t(x_g^{(i)}), \ P_s(x^{(v)})\right)
     \end{equation}
     trong đó $H(p, q) = -\sum_{k=1}^K p^{(k)} \log q^{(k)}$. 
 \end{enumerate}
-Cơ sở lý thuyết vững chắc này tạo tiền đề khoa học để tích hợp bản đồ sai khác vật lý $\Delta$ vào quá trình huấn luyện, tạo nên mô hình BG-Guided DINO vượt trội trong các phần tiếp theo.
 
 ---
 
@@ -180,32 +197,30 @@ Xác suất để một patch $p$ được chọn để che được mô hình h
 \end{equation}
 trong đó $\epsilon = 10^{-8}$ là hằng số chống chia cho 0 và $\alpha \in [0, 1]$ là hệ số cân bằng (chọn $\alpha = 0.75$).
 
-\subsection{Lý Giải Bản Chất Toán Học của Công Thức Xác Suất Che}
-Công thức (\ref{eq:fam_prob}) được thiết kế dựa trên nguyên lý cân bằng giữa Khai thác (Exploitation) và Thăm dò (Exploration) trong lý thuyết quyết định:
+\subsection{Phân Tích Cơ Sở Toán Học của Xác Suất Che}
+Công thức (\ref{eq:fam_prob}) được thiết lập dựa trên nguyên lý cân bằng giữa khai thác đặc trưng nổi bật (Exploitation) và thăm dò ngẫu nhiên (Exploration):
 \begin{enumerate}
-    \item \textbf{Thành phần Khai thác Tiền cảnh $\frac{w_p}{\max_q w_q + \epsilon}$ (Foreground Exploitation Term):} 
-    Đóng vai trò là hàm mật độ nổi bật (Saliency Density). Phép chuẩn hóa cục bộ chia cho $\max_q w_q$ đưa cường độ biến động quang học của mọi patch về miền $[0, 1]$. Những patch chứa thân xe, đầu xe có độ sai khác lớn so với nền đường sẽ có $w_p \approx \max_q w_q$, khiến xác suất bị che đạt giá trị cực đại. Khi vùng xe bị che, mạng Student bị tước đi tín hiệu trực tiếp và bắt buộc phải học mối tương quan ngữ cảnh xung quanh để suy diễn ra phương tiện.
-    \item \textbf{Thành phần Thăm dò Nền $\frac{1}{N_{\text{patches}}}$ (Background Exploration Term):} 
-    Đây là phân phối đều tiên nghiệm (Uniform Prior). Nếu chọn $\alpha = 1.0$ (chỉ che theo $\Delta$), hệ thống sẽ gặp hai lỗi nghiêm trọng:
+    \item \textbf{Thành phần khai thác tiền cảnh $\frac{w_p}{\max_q w_q + \epsilon}$ (Foreground Exploitation):} 
+    Đóng vai trò như hàm mật độ nổi bật (Saliency Density). Việc chuẩn hóa theo giá trị cực đại $\max_q w_q$ đưa cường độ sai khác về đoạn $[0, 1]$. Các patch thuộc vùng phương tiện giao thông có độ sai biệt quang học lớn so với nền đường sẽ có $w_p \approx \max_q w_q$, tương ứng xác suất che cao. Khi các patch tiền cảnh bị che khuất, mạng Student không thể dựa vào thông tin cục bộ trực tiếp mà buộc phải khai thác ngữ cảnh xung quanh để suy diễn biểu diễn mục tiêu do mạng Teacher cung cấp.
+    \item \textbf{Thành phần thăm dò nền $\frac{1}{N_{\text{patches}}}$ (Background Exploration):} 
+    Đóng vai trò phân phối đều tiên nghiệm (Uniform Prior). Nếu thiết lập $\alpha = 1.0$ (chỉ che theo $\Delta$), mô hình sẽ gặp hai hạn chế:
     \begin{itemize}
-        \item \textit{Sụp đổ ngữ cảnh nền (Background Context Collapse):} Nền đường không bao giờ bị che, khiến mô hình bỏ qua việc học mối quan hệ không gian giữa lòng đường và xe cộ.
-        \item \textit{Hiện tượng suy biến khi vắng xe:} Ban đêm hoặc khi đường vắng, $w_p \approx 0$ ở mọi patch, khiến phép chia mất ổn định số học hoặc không chọn đủ số lượng patch cần che. Phân phối đều đảm bảo luôn có một baseline ngẫu nhiên tối thiểu.
+        \item \textit{Bỏ sót ngữ cảnh nền:} Các vùng mặt đường không bao giờ bị che, dẫn đến việc mô hình không học được biểu diễn không gian tương hỗ giữa bề mặt đường và phương tiện.
+        \item \textit{Hiện tượng suy biến khi mật độ phương tiện thấp:} Khi khung cảnh vắng xe hoặc quan sát ban đêm, $w_p \approx 0$ trên toàn bộ các patch, gây mất ổn định số học. Thành phần phân phối đều bảo đảm luôn duy trì một tỷ lệ che cơ sở tối thiểu.
     \end{itemize}
-    \item \textbf{Ý nghĩa lựa chọn $\alpha = 0.75$:} 
-    Đây là tỷ lệ điều tiết tối ưu: $75\%$ ngân sách che ưu tiên tập trung vào vùng phương tiện (nơi chứa đặc trưng giao thông cốt lõi), trong khi $25\%$ ngân sách che duy trì việc thăm dò ngẫu nhiên toàn diện khung hình.
+    \item \textbf{Vai trò của hệ số $\alpha = 0.75$:} 
+    Giá trị $\alpha = 0.75$ phân bổ $75\%$ xác suất che tập trung vào các vùng phương tiện (nơi chứa thông tin ngữ nghĩa giao thông trọng tâm), trong khi $25\%$ xác suất còn lại duy trì việc che ngẫu nhiên trên toàn bộ khung hình.
 \end{enumerate}
 
-\subsection{Bản Chất Chiến Lược Multi-Crop: Global Views và Local Views}
-Kiến trúc tự chưng cất tri thức DINO vận hành dựa trên cơ chế đối sánh Multi-Crop:
+\subsection{Tích Hợp Cơ Chế FAM Vào Pipeline Huấn Luyện Multi-Crop}
+Cơ chế che có định hướng tiền cảnh (FAM) được tích hợp vào chiến lược đa góc nhìn của DINO theo quy trình:
 \begin{itemize}
-    \item \textbf{Global Views (Góc nhìn toàn cảnh):} Kích thước $224 \times 224$ pixel, cắt diện tích lớn từ $40\%$ đến $100\%$ khung hình gốc. Hệ thống sinh ra 2 Global Views ($V_1^g, V_2^g$). Teacher Network nhận Global Views ở trạng thái \textbf{nguyên bản không bị che (Unmasked)} để thiết lập mỏ neo ngữ nghĩa chuẩn (Semantic Ground-Truth Representation). Student Network nhận Global Views bị che bởi mặt nạ FAM.
-    \item \textbf{Local Views (Góc nhìn chi tiết cục bộ):} Kích thước nhỏ $96 \times 96$ pixel, cắt phạm vi hẹp từ $5\%$ đến $40\%$ diện tích ảnh gốc, tập trung vào các chi tiết cấu trúc vi mô (bánh xe, biển số, đèn pha). Chỉ duy nhất Student Network được nhận các Local Views ($V_1^l, \dots, V_4^l$); Teacher hoàn toàn không nhận nhằm tiết kiệm bộ nhớ GPU và chống trôi dạt ngữ nghĩa.
-    \item \textbf{Nguyên lý Chưng cất Cục bộ -- Toàn thể (Local-to-Global Correspondence):} 
-    Hàm mất mát ép Student dù chỉ nhìn một mảnh cắt nhỏ $96 \times 96$ vẫn phải dự đoán ra phân bố xác suất ngữ nghĩa của toàn bộ khung cảnh lớn $224 \times 224$ mà Teacher quan sát:
+    \item \textbf{Đối với mạng Teacher:} Tiếp nhận hai góc nhìn toàn cảnh ở trạng thái nguyên vẹn không bị che (unmasked global crops). Điều này bảo đảm Teacher luôn duy trì mỏ neo ngữ nghĩa hoàn chỉnh của khung cảnh làm mục tiêu chưng cất.
+    \item \textbf{Đối với mạng Student:} Tiếp nhận các góc nhìn toàn cảnh đã được áp dụng mặt nạ FAM (masked global crops) cùng các góc nhìn cục bộ (local crops). Hàm mất mát chưng cất buộc Student phải tái tạo phân phối biểu diễn toàn thể ngay cả khi các cấu trúc thành phần của phương tiện bị che khuất.
+    \item \textbf{Hàm mất mát chưng cất đa góc nhìn:}
     \begin{equation}
-        \mathcal{L}_{\text{DINO}} = -\sum_{x \in \{V^g, V^l\}} \sum_{x' \in \{V_1^g, V_2^g\}, x' \neq x} P_t(x') \log P_s(x)
+        \mathcal{L}_{\text{DINO}} = -\sum_{x \in \{V^g_{\text{masked}}, V^l\}} \sum_{x' \in \{V_1^g, V_2^g\}, x' \neq x} P_t(x') \log P_s(x)
     \end{equation}
-    Nhờ đó, mô hình tự động trừu tượng hóa mối quan hệ giữa ``bộ phận'' và ``tổng thể'' mà hoàn toàn không cần nhãn.
 \end{itemize}
 
 ---
@@ -213,130 +228,125 @@ Kiến trúc tự chưng cất tri thức DINO vận hành dựa trên cơ chế
 \section{HƯỚNG 2: ZERO-SHOT VEHICLE SEMANTIC SEGMENTATION}
 
 \subsection{Đặt Vấn Đề}
-Gán nhãn mặt nạ phân đoạn pixel cho dữ liệu giao thông thực tế đòi hỏi chi phí nhân công khổng lồ. Hướng nghiên cứu này giải quyết bài toán: Tự động tạo ra mặt nạ phân đoạn pixel chính xác cho phương tiện mà hoàn toàn không cần con người gán nhãn thủ công (Zero-Shot), bằng cách dung hợp tín hiệu quang học cấp thấp với đặc trưng ngữ nghĩa sâu của DINO.
+Việc thu thập nhãn phân đoạn mức điểm ảnh (pixel-level mask) cho dữ liệu giao thông thực tế đòi hỏi chi phí nhân công rất lớn. Hướng nghiên cứu này đề xuất phương pháp phân đoạn phương tiện không cần dữ liệu huấn luyện có nhãn (Zero-Shot Semantic Segmentation), thông qua việc kết hợp tín hiệu sai khác quang học và không gian biểu diễn ngữ nghĩa sâu của Vision Transformer.
 
-\subsection{Cơ Chế Bù Trừ Giữa Tín Hiệu Vật Lý và Ngữ Nghĩa Sâu}
-Hệ thống kết hợp hai nhánh tín hiệu bù trừ hoàn hảo cho nhau:
+\subsection{Đặc Tính Bổ Trợ Giữa Tín Hiệu Quang Học và Biểu Diễn Ngữ Nghĩa Sâu}
+Hệ thống thiết lập cơ chế kết hợp giữa hai nguồn tín hiệu:
 \begin{enumerate}
-    \item \textbf{Nhánh Vật lý ($\Delta$-Mask):} Phép trừ nền LAB kết hợp phân ngưỡng Otsu tự động và hình thái học (Morphological Open $5 \times 5$, Close $11 \times 11$).
+    \item \textbf{Nhánh sai khác quang học ($\Delta$-Mask):} Phép trừ nền trong không gian màu CIE-LAB kết hợp thuật toán phân ngưỡng tự động Otsu và các phép biến đổi hình thái học (Morphological Open $5 \times 5$, Close $11 \times 11$).
     \begin{itemize}
-        \item \textit{Ưu điểm:} Bắt đường biên chuyển động chính xác đến từng pixel.
-        \item \textit{Nhược điểm:} Luôn bị dính bóng đổ của xe in xuống mặt đường vì bóng đổ làm giảm độ sáng so với nền tĩnh.
+        \item \textit{Đặc tính:} Xác định ranh giới chuyển động chính xác ở cấp độ điểm ảnh.
+        \item \textit{Hạn chế:} Nhạy cảm với bóng đổ của phương tiện trên mặt đường do bóng đổ làm suy giảm cường độ sáng cục bộ.
     \end{itemize}
-    \item \textbf{Nhánh Ngữ nghĩa (DINOv3 PCA PC1):} Trích xuất ma trận patch tokens $X \in \mathbb{R}^{N_{\text{patches}} \times D}$ ở tầng Transformer cuối cùng và chiếu lên thành phần chính thứ nhất (PC1) thông qua phép phân tích thành phần chính (PCA):
+    \item \textbf{Nhánh ngữ nghĩa sâu (DINO PCA PC1):} Trích xuất ma trận patch tokens $X \in \mathbb{R}^{N_{\text{patches}} \times D}$ tại tầng Transformer cuối cùng và chiếu lên thành phần chính thứ nhất thông qua phép phân tích PCA:
     \begin{equation}
         (X - \bar{X}) = U \Sigma V^T \implies \mathbf{z}_{\text{PC1}} = (X - \bar{X}) v_1
     \end{equation}
     \begin{itemize}
-        \item \textit{Ưu điểm:} Cơ chế Self-Attention của DINO gom cụm các patch theo ngữ nghĩa đối tượng. PC1 \textbf{hoàn toàn không bị đánh lừa bởi bóng đổ} vì bóng đổ về bản chất ngữ nghĩa sâu vẫn là bề mặt nhựa đường.
-        \item \textit{Nhược điểm:} Độ phân giải thô theo kích thước patch ($14 \times 14$).
+        \item \textit{Đặc tính:} Cơ chế tự chú ý của DINO nhóm các patch theo tương đồng ngữ nghĩa đối tượng. Thành phần PC1 có khả năng phân tách tốt giữa phương tiện và nền đường, ít chịu ảnh hưởng bởi bóng đổ do vùng bóng đổ vẫn mang đặc trưng ngữ nghĩa của bề mặt đường.
+        \item \textit{Hạn chế:} Độ phân giải không gian thô, phụ thuộc vào kích thước patch ($14 \times 14$).
     \end{itemize}
 \end{enumerate}
 
-\subsection{Động Cơ Dung Hợp (Mask Fusion Engine)}
-Sự kết hợp giao thoa giữa hai nhánh loại bỏ hoàn toàn các lỗi sai sót:
+\subsection{Cơ Chế Dung Hợp Mặt Nạ (Mask Fusion Engine)}
+Sự kết hợp giữa hai nhánh tín hiệu được thực hiện qua toán tử giao không gian và lọc song phương:
 \begin{equation}
     M_{\text{fused}} = \text{BilateralFilter}\Big( M_{\Delta} \cap \text{Threshold}(\text{Resize}(\mathbf{z}_{\text{PC1}})) \Big)
 \end{equation}
-Phép giao thoa $\cap$ loại bỏ $100\%$ bóng đổ mặt đường và dao động nền giả (lá cây, nước mưa). Sau đó, bộ lọc song phương (Bilateral Filter) khôi phục đường viền sắc nét theo độ tương phản cục bộ của ảnh gốc. Nhãn giả chất lượng cao này được sử dụng để huấn luyện mạng phân đoạn siêu nhẹ (Lightweight SegHead) đạt tốc độ thực thi trên $60$ FPS tại thiết bị biên.
+Toán tử giao $\cap$ giúp loại bỏ phần lớn hiện tượng bóng đổ bề mặt đường và các dao động quang học ngẫu nhiên. Sau đó, bộ lọc song phương (Bilateral Filter) làm mịn và căn chỉnh đường biên phân đoạn theo độ tương phản cục bộ của khung hình gốc. Mặt nạ sinh ra có độ tin cậy cao, đóng vai trò nhãn giám sát giả (pseudo-labels) để huấn luyện một mạng phân đoạn nhẹ (Lightweight Segmentation Head) đạt thông lượng xử lý thời gian thực trên thiết bị biên.
 
 ---
 
 \section{HƯỚNG 3: SELF-SUPERVISED SCENE DECOMPOSITION NETWORK}
 
-\subsection{Mô Hình Hóa Vật Lý Alpha Compositing}
-Một khung cảnh giao thông quan sát được mô hình hóa theo phương trình hòa trộn quang học:
+\subsection{Mô Hình Hóa Alpha Compositing}
+Khung cảnh quan sát được mô hình hóa theo phương trình hòa trộn quang học:
 \begin{equation}
     I_{\text{origin}} = M_{\alpha} \odot I_{\text{fg}} + (1 - M_{\alpha}) \odot I_{\text{bg}}
 \end{equation}
-trong đó:
-\begin{itemize}
-    \item $I_{\text{bg}} \in \mathbb{R}^{H \times W \times 3}$: Lớp nền đường sạch hoàn toàn xe cộ.
-    \item $I_{\text{fg}} \in \mathbb{R}^{H \times W \times 3}$: Lớp chứa các thực thể phương tiện cô lập.
-    \item $M_{\alpha} \in [0, 1]^{H \times W \times 1}$: Mặt nạ mờ trong suốt (Alpha Matte) thể hiện mức độ chiếm dụng không gian của phương tiện.
-\end{itemize}
+trong đó $I_{\text{bg}} \in \mathbb{R}^{H \times W \times 3}$ là lớp nền đường, $I_{\text{fg}} \in \mathbb{R}^{H \times W \times 3}$ là lớp chứa phương tiện, và $M_{\alpha} \in [0, 1]^{H \times W \times 1}$ là mặt nạ mờ (Alpha Matte) thể hiện mức độ chiếm dụng không gian của phương tiện.
 
-Thông thường, việc phân rã một ảnh duy nhất $I_{\text{origin}}$ thành cả 3 thành phần $\{I_{\text{bg}}, I_{\text{fg}}, M_{\alpha}\}$ là bài toán nghịch đảo vô nghiệm xác định (Ill-posed Inverse Problem).
+Thông thường, việc phân rã một ảnh duy nhất $I_{\text{origin}}$ thành cả ba thành phần $\{I_{\text{bg}}, I_{\text{fg}}, M_{\alpha}\}$ là bài toán nghịch đảo thiếu ràng buộc (Ill-posed Inverse Problem).
 
-\subsection{Đóng Góp Khoa Học và Hàm Mất Mát Đa Mục Tiêu}
-Đóng góp cốt lõi của hướng nghiên cứu này là sử dụng ảnh nền thật $I_{\text{bg\_real}}$ (tổng hợp qua Temporal Median) làm mỏ neo vật lý giám sát tự thân. Mạng nơ-ron sử dụng chung Vision Transformer Encoder và phân rã thành ba đầu giải mã (Background Head, Foreground Head, Alpha Head).
+\subsection{Mô Hình Hóa Ràng Buộc với Mỏ Neo Nền Tĩnh}
+Nghiên cứu sử dụng ảnh nền ước lượng $I_{\text{bg\_real}}$ làm mỏ neo vật lý giám sát tự thân. Mạng nơ-ron sử dụng chung bộ trích xuất đặc trưng ViT và phân nhánh thành ba đầu giải mã (Background Head, Foreground Head, Alpha Head).
 
-Hàm mục tiêu tối ưu hóa toàn diện gồm 4 thành phần ràng buộc:
+Hàm mục tiêu tối ưu hóa toàn diện gồm bốn thành phần:
 \begin{equation}
     \mathcal{L}_{\text{total}} = \lambda_{\text{rec}} \mathcal{L}_{\text{recon}} + \lambda_{\text{bg}} \mathcal{L}_{\text{bg}} + \lambda_{\text{sparse}} \mathcal{L}_{\text{sparsity}} + \lambda_{\text{tv}} \mathcal{L}_{\text{tv}}
 \end{equation}
 \begin{enumerate}
-    \item \textbf{Mất mát Tái tạo ($\mathcal{L}_{\text{recon}}$):} Kết hợp khoảng cách $L_1$ và chỉ số tương đồng cấu trúc SSIM ép ảnh hòa trộn tái tạo hoàn hảo ảnh gốc:
+    \item \textbf{Mất mát tái tạo ($\mathcal{L}_{\text{recon}}$):} Kết hợp khoảng cách $L_1$ và chỉ số tương đồng cấu trúc SSIM nhằm bảo đảm ảnh hòa trộn tái tạo khung hình gốc:
     \begin{equation}
         \mathcal{L}_{\text{recon}} = \|I_{\text{origin}} - \hat{I}_{\text{origin}}\|_{1} + \big(1 - \text{SSIM}(I_{\text{origin}}, \hat{I}_{\text{origin}})\big)
     \end{equation}
-    \item \textbf{Mất mát Mỏ neo Nền Thật ($\mathcal{L}_{\text{bg}}$):} Khóa chặt đầu ra của Decoder nền vào cấu trúc lòng đường tĩnh:
+    \item \textbf{Mất mát mỏ neo nền ($\mathcal{L}_{\text{bg}}$):} Ràng buộc đầu ra của Decoder nền tiệm cận cấu trúc nền tĩnh thực tế:
     \begin{equation}
         \mathcal{L}_{\text{bg}} = \|\hat{I}_{\text{bg}} - I_{\text{bg\_real}}\|_{1}
     \end{equation}
-    ràng buộc Decoder phương tiện ($I_{\text{fg}}$) và Alpha ($M_{\alpha}$) phải hấp thụ toàn bộ phần sai khác chuyển động.
-    \item \textbf{Ràng buộc Thưa Diện tích ($\mathcal{L}_{\text{sparsity}}$):} Chuẩn hóa $L_1$ trên mặt nạ Alpha:
+    buộc nhánh phương tiện ($I_{\text{fg}}$) và nhánh Alpha ($M_{\alpha}$) phải hấp thụ toàn bộ các thành phần động.
+    \item \textbf{Ràng buộc độ thưa của mặt nạ Alpha ($\mathcal{L}_{\text{sparsity}}$):} Áp dụng chuẩn $L_1$ trên mặt nạ Alpha:
     \begin{equation}
         \mathcal{L}_{\text{sparsity}} = \frac{1}{H \cdot W} \sum_{u=1}^{H} \sum_{v=1}^{W} M_{\alpha}(u, v)
     \end{equation}
-    ngăn ngừa nghiệm suy biến (nghiệm gán $M_{\alpha} = 1$ ở mọi nơi và sao chép toàn bộ ảnh gốc vào $I_{\text{fg}}$).
-    \item \textbf{Làm mịn Total Variation ($\mathcal{L}_{\text{tv}}$):} Khử nhiễu đốm hạt tiêu và viền răng cưa quanh thân xe:
+    nhằm ngăn ngừa nghiệm suy biến khi mạng gán $M_{\alpha} = 1$ trên toàn bộ không gian.
+    \item \textbf{Làm mịn tổng biến thiên ($\mathcal{L}_{\text{tv}}$):} Khử nhiễu cục bộ và giảm hiện tượng phân mảnh viền:
     \begin{equation}
         \mathcal{L}_{\text{tv}} = \frac{1}{H \cdot W} \sum_{u, v} \Big( |M_{\alpha}(u+1, v) - M_{\alpha}(u, v)| + |M_{\alpha}(u, v+1) - M_{\alpha}(u, v)| \Big)
     \end{equation}
 \end{enumerate}
 
-Mô hình cho phép thực hiện bài toán \textbf{Tự động xóa xe cộ trên đường (Inpainting)} trực tiếp từ một khung hình duy nhất mà không cần kỹ thuật vá ảnh thủ công.
+Mô hình cho phép loại bỏ phương tiện và phục hồi bề mặt nền đường (Scene Inpainting) trực tiếp từ khung hình quan sát đơn lẻ.
 
 ---
 
 \section{HƯỚNG 4: FOREGROUND-ENHANCED TRAFFIC COUNTING}
 
-\subsection{Cấu Trúc Tensor Đầu Vào 4 Kênh}
-Bài toán ước lượng lưu lượng phương tiện (đếm số lượng xe máy, ô tô con và tổng số xe) gặp thách thức lớn khi mật độ phương tiện ken đặc che khuất lẫn nhau và trong điều kiện học ít mẫu (Few-shot learning: $5\%, 10\%, 20\%$ nhãn). 
+\subsection{Mở Rộng Tensor Đầu Vào Bốn Kênh}
+Bài toán ước lượng lưu lượng phương tiện đối mặt với thách thức lớn khi mật độ giao thông cao gây che khuất lẫn nhau và trong điều kiện huấn luyện ít mẫu (Few-shot learning: $5\%, 10\%, 20\%$ nhãn). 
 
-Thay vì chỉ sử dụng 3 kênh RGB thông thường, tensor đầu vào được mở rộng thành 4 kênh:
+Để bổ sung thông tin vị trí chuyển động, tensor đầu vào được mở rộng thành bốn kênh:
 \begin{equation}
     X_{\text{4ch}} = [\text{R}, \text{G}, \text{B}, \Delta_{\text{norm}}] \in \mathbb{R}^{4 \times H \times W}
 \end{equation}
-trong đó kênh thứ 4 là bản đồ sai khác vật lý được chuẩn hóa:
+trong đó kênh thứ tư là bản đồ sai khác quang học được chuẩn hóa:
 \begin{equation}
     \Delta_{\text{norm}} = \frac{\Delta - 0.5}{0.5} \in [-1.0, 1.0]
 \end{equation}
 
-\subsection{Kỹ Thuật Khởi Tạo Thích Ứng Ấm (Warm-Start Initialization)}
-Lớp Patch Embedding trong Vision Transformer biến đổi patch $P \times P$ thành vector $D$ chiều có trọng số $W_{\text{4ch}} \in \mathbb{R}^{D \times 4 \times P \times P}$. Nếu khởi tạo ngẫu nhiên kênh thứ 4, nhiễu loạn activation ban đầu sẽ phá hủy toàn bộ tri thức tiền huấn luyện sâu của DINOv3.
+\subsection{Chiến Lược Khởi Tạo Thích Ứng (Warm-Start Initialization)}
+Lớp Patch Embedding trong Vision Transformer ánh xạ patch không gian thành vector $D$ chiều với ma trận trọng số $W_{\text{4ch}} \in \mathbb{R}^{D \times 4 \times P \times P}$. Nếu khởi tạo ngẫu nhiên kênh thứ tư, các giá trị kích hoạt ban đầu sẽ làm mất ổn định không gian đặc trưng đã được tiền huấn luyện của mô hình.
 
-Thuật toán khởi tạo thích ứng ấm được áp dụng:
+Quy tắc khởi tạo thích ứng ấm được thiết lập như sau:
 \begin{align}
     W_{\text{4ch}}[:, 0:3, :, :] &= W_{\text{pretrained}} \\
     W_{\text{4ch}}[:, 3, :, :]   &= \frac{1}{3} \sum_{c=0}^{2} W_{\text{pretrained}}[:, c, :, :]
 \end{align}
-Ba kênh đầu giữ nguyên $100\%$ các bộ lọc trích xuất cạnh và kết cấu đã học. Kênh thứ 4 lấy trung bình cộng cường độ của ba kênh RGB, đảm bảo tại epoch 0 kênh $\Delta$ đóng góp năng lượng đồng nhất vào hàm kích hoạt mà không làm sốc gradient.
+Ba kênh đầu bảo toàn các bộ lọc trích xuất biên cạnh và kết cấu không gian đã học. Kênh thứ tư nhận giá trị trung bình cộng trọng số của ba kênh RGB, bảo đảm tại bước huấn luyện đầu tiên, kênh $\Delta$ đóng góp năng lượng đồng mức mà không gây đột biến gradient.
 
-\subsection{Chiến Lược Đánh Giá Spatial Disjoint}
-Tập dữ liệu được phân chia theo danh sách Camera ID độc lập (camera dùng huấn luyện không bao giờ xuất hiện trong tập kiểm thử), loại bỏ hoàn toàn hiện tượng rò rỉ dữ liệu (Data Leakage) do nền đường giống nhau giữa các frame kế tiếp. Mô hình đánh giá khách quan năng lực tổng quát hóa của kênh $\Delta$ trên các góc nhìn tuyến đường hoàn toàn mới.
+\subsection{Quy Trình Đánh Giá Phân Tách Không Gian (Spatial Disjoint Evaluation)}
+Tập dữ liệu được phân chia theo danh tính camera độc lập (Camera ID Disjoint), bảo đảm camera dùng trong tập huấn luyện không xuất hiện trong tập kiểm thử. Quy trình này loại bỏ nguy cơ rò rỉ dữ liệu (Data Leakage) do nền đường cố định giữa các khung hình liên tiếp, đánh giá khách quan năng lực tổng quát hóa của kênh $\Delta$ trên các góc nhìn tuyến đường hoàn toàn mới.
 
 ---
 
-\section{BẢNG TỔNG HỢP SO SÁNH 4 HƯỚNG NGHIÊN CỨU}
+\section{TỔNG HỢP VÀ ĐÁNH GIÁ CÁC HƯỚNG TIẾP CẬN}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Tổng hợp so sánh phương pháp luận và đóng góp khoa học của 4 hướng nghiên cứu}
+\caption{Tổng hợp phương pháp luận và tiềm năng công bố của bốn hướng nghiên cứu}
 \label{tab:comparison}
-\begin{tabular}{p{2.2cm} p{3.2cm} p{4.2cm} c p{3.0cm}}
+\begin{tabular}{p{2.0cm} p{3.4cm} p{4.2cm} c p{3.0cm}}
 \toprule
 \textbf{Hướng} & \textbf{Tên Nghiên Cứu} & \textbf{Cơ Chế Cốt Lõi} & \textbf{Độ Mới} & \textbf{Venue Đề Xuất} \\
 \midrule
-\textbf{Hướng 1} & BG-Guided DINO Continual SSL & Foreground-Aware Masking (FAM) ép ViT che và học biểu diễn phương tiện & 4/5 & IEEE T-ITS, EAAI, Pattern Recognition \\
+\textbf{Hướng 1} & BG-Guided DINO Continual SSL & Foreground-Aware Masking (FAM) định hướng ViT che và học biểu diễn phương tiện & 4/5 & IEEE T-ITS, EAAI, Pattern Recognition \\
 \addlinespace
-\textbf{Hướng 2} & Zero-Shot Vehicle Segmentation & Dung hợp tín hiệu bù trừ $\Delta$-Mask $\cap$ DINOv3 PCA PC1 & 3/5 & CVPR Workshop, PR Letters \\
+\textbf{Hướng 2} & Zero-Shot Vehicle Segmentation & Dung hợp tín hiệu bổ trợ $\Delta$-Mask $\cap$ DINO PCA PC1 & 3/5 & PR Letters, IEEE Access \\
 \addlinespace
-\textbf{Hướng 3} & Scene Decomposition Network & Mô hình hóa Alpha Compositing với mỏ neo giám sát nền thật & 5/5 & CVPR, ECCV, NeurIPS \\
+\textbf{Hướng 3} & Scene Decomposition Network & Mô hình hóa Alpha Compositing với mỏ neo giám sát nền tĩnh & 5/5 & CVPR, ECCV, NeurIPS \\
 \addlinespace
-\textbf{Hướng 4} & Foreground-Enhanced Counting & Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 2.5/5 & EAAI Journal \\
+\textbf{Hướng 4} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 2.5/5 & EAAI Journal, ITSC \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -344,6 +354,6 @@ Tập dữ liệu được phân chia theo danh sách Camera ID độc lập (ca
 ---
 
 \section{KẾT LUẬN}
-Bốn hướng nghiên cứu được trình bày xác lập một chu trình khoa học khép kín và có tính tương hỗ sâu sắc: Hướng 1 nâng cấp bộ trích xuất đặc trưng ViT chuyên biệt cho giao thông; Hướng 2 giải quyết điểm nghẽn thiếu hụt dữ liệu gán nhãn pixel; Hướng 3 mở ra đột phá lý thuyết về phân rã vật lý quang học và xóa xe tự động; trong khi Hướng 4 giải quyết trực tiếp bài toán đo lường lưu lượng thực tế với độ chính xác cao. Toàn bộ phương pháp luận đều lấy nền tảng từ việc khai thác thông minh cặp ảnh nền tĩnh và ảnh hiện trường từ hệ thống camera quan sát đô thị.
+Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và đề xuất bốn hướng nghiên cứu khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Các phương pháp trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), tạo nhãn giả phân đoạn không giám sát (Hướng 2), phân rã bối cảnh tự thân (Hướng 3), đến ước lượng lưu lượng phương tiện ít mẫu (Hướng 4). Việc kết hợp có hệ thống giữa các đặc tính quang học vật lý và mô hình học sâu giúp nâng cao độ chính xác biểu diễn, đồng thời giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công trong các hệ thống giao thông thông minh.
 
 \end{document}
