@@ -81,9 +81,12 @@ def get_dino_backbone(
         patch_size = 16
 
     if weights_path and os.path.isfile(weights_path):
-        state = torch.load(weights_path, map_location="cpu")
+        try:
+            state = torch.load(weights_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            state = torch.load(weights_path, map_location="cpu")
         if isinstance(state, dict):
-            for k in ["model", "student", "teacher", "state_dict"]:
+            for k in ["model_state", "model", "student", "teacher", "state_dict"]:
                 if k in state:
                     state = state[k]
                     break

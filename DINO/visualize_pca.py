@@ -164,6 +164,19 @@ def generate_emergent_pca_maps(
     print(f"   👉 PDF: {os.path.abspath(pdf_path)}")
 
 
+def get_safe_device(requested_device: str) -> str:
+    if requested_device == "cpu":
+        return "cpu"
+    try:
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            # Thử tạo tensor nhỏ trên CUDA để kiểm tra driver
+            _ = torch.zeros(1, device="cuda")
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Trực quan hóa Emergent PCA Feature Map của DINO")
     parser.add_argument("--img_dir", type=str, default="output", help="Thư mục chứa ảnh giao thông (hoặc đường dẫn tới 1 file ảnh)")
@@ -171,12 +184,13 @@ def parse_args():
     parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Tên backbone (dinov2_vits14 / dinov3_vits16)")
     parser.add_argument("--save_path", type=str, default="emergent_pca_feature_maps.png", help="Đường dẫn lưu file ảnh kết quả")
     parser.add_argument("--num_samples", type=int, default=4, help="Số lượng ảnh mẫu muốn hiển thị (mặc định 4 ảnh như báo cáo)")
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị ('cuda' hoặc 'cpu')")
+    parser.add_argument("--device", type=str, default="auto", help="Thiết bị ('auto', 'cuda' hoặc 'cpu')")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+    device = get_safe_device(args.device)
 
     # Thu thập danh sách ảnh
     if os.path.isfile(args.img_dir):
@@ -201,7 +215,7 @@ if __name__ == "__main__":
         model_name=args.backbone,
         pretrained=True,
         weights_path=args.weights,
-        device=args.device,
+        device=device,
     )
 
     title = "DINOv3" if "dinov3" in args.backbone.lower() else "DINOv2"
@@ -209,7 +223,7 @@ if __name__ == "__main__":
         backbone=backbone,
         image_paths=sample_paths,
         save_path=args.save_path,
-        device=args.device,
+        device=device,
         img_size=224,
         title_prefix=title,
     )

@@ -490,9 +490,14 @@ def build_backbone(
             # Load local offline checkpoint if specified
             if weights_path and os.path.exists(weights_path):
                 print(f"   [Model Loader] Applying custom offline weights from: {weights_path}")
-                state = torch.load(weights_path, map_location="cpu")
-                if "student" in state:
-                    state = state["student"]
+                try:
+                    state = torch.load(weights_path, map_location="cpu", weights_only=False)
+                except TypeError:
+                    state = torch.load(weights_path, map_location="cpu")
+                for k in ["model_state", "student", "model", "state_dict"]:
+                    if isinstance(state, dict) and k in state:
+                        state = state[k]
+                        break
                 cleaned_state = {}
                 for k, v in state.items():
                     clean_k = k

@@ -230,10 +230,24 @@ def save_checkpoint(
     raw_model = unwrap_model(model)
     cleaned_state = clean_state_dict(raw_model.state_dict())
 
+    # Chuẩn hóa metrics thành kiểu dữ liệu nguyên bản Python (tránh lỗi NumPy scalar trên PyTorch 2.6+)
+    clean_metrics = {}
+    if metrics:
+        for mk, mv in metrics.items():
+            if hasattr(mv, "item"):
+                clean_metrics[mk] = mv.item()
+            elif isinstance(mv, (float, int, str, bool)):
+                clean_metrics[mk] = mv
+            else:
+                try:
+                    clean_metrics[mk] = float(mv)
+                except Exception:
+                    clean_metrics[mk] = str(mv)
+
     checkpoint: Dict[str, Any] = {
         "model_state": cleaned_state,
         "epoch": epoch,
-        "metrics": metrics,
+        "metrics": clean_metrics,
     }
 
     if optimizer is not None:
@@ -270,8 +284,11 @@ def load_checkpoint(
     if verbose:
         print(f"📂 [Checkpoint] Đang nạp checkpoint từ: {load_path}...")
 
-    # Load sang CPU trước để an toàn bộ nhớ
-    raw_data = torch.load(load_path, map_location="cpu")
+    # Load sang CPU trước để an toàn bộ nhớ (tương thích PyTorch 2.6+ weights_only)
+    try:
+        raw_data = torch.load(load_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        raw_data = torch.load(load_path, map_location="cpu")
 
     # 1. Trích xuất state_dict của mô hình
     state_to_load = None
