@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị thu hình cố định cung cấp cặp tín hiệu quang học bổ trợ: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận của bốn hướng nghiên cứu học tự giám sát (Self-Supervised Learning) nhằm khai thác cặp tín hiệu trên. Các nội dung chính bao gồm: (1) Tiền huấn luyện Vision Transformer với chiến lược che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Phân đoạn ngữ nghĩa phương tiện không cần nhãn (Zero-Shot Semantic Segmentation) thông qua kết hợp đặc trưng DINO PCA và sai khác quang học; (3) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing; và (4) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning). Các phương pháp đề xuất hướng tới tính tối ưu về mặt tính toán và giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công.
+Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị thu hình cố định cung cấp cặp tín hiệu quang học bổ trợ: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận của chín hướng nghiên cứu học tự giám sát (Self-Supervised Learning) nhằm khai thác cặp tín hiệu trên. Các nội dung chính bao gồm: (1) Tiền huấn luyện Vision Transformer với chiến lược che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Phân đoạn ngữ nghĩa phương tiện không cần nhãn (Zero-Shot Semantic Segmentation) thông qua kết hợp đặc trưng DINO PCA và sai khác quang học; (3) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing; và (4) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning). Các phương pháp đề xuất hướng tới tính tối ưu về mặt tính toán và giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công.
 \end{abstract}
 
 \hrule
@@ -329,12 +329,95 @@ Tập dữ liệu được phân chia theo danh tính camera độc lập (Camer
 
 ---
 
+\section{HƯỚNG 5: PHÁT HIỆN BẤT THƯỜNG GIAO THÔNG KHÔNG GIÁM SÁT}
+\subsection{Đặt vấn đề}
+Bài toán phát hiện bất thường không giám sát (Unsupervised Anomaly Detection - UAD) tập trung vào việc nhận diện các sự kiện hiếm gặp trong giao thông như tai nạn, vật cản hoặc sự cố dừng đỗ sai quy định, mà không cần dữ liệu huấn luyện có nhãn.
+
+\subsection{Biểu diễn kép $\Delta$ và DINO}
+Đặc trưng của mỗi vùng không gian được kết hợp từ sai khác quang học và biểu diễn ngữ nghĩa:
+\begin{equation}
+    f_{\text{anomaly}} = \text{Concat}(\text{Pool}(\Delta^t), [CLS]^t) \in \mathbb{R}^{D+d_{\Delta}}
+\end{equation}
+
+\subsection{Memory Bank và Anomaly Score}
+Hệ thống duy trì một bộ nhớ (Memory Bank) lưu trữ các biểu diễn trạng thái bình thường. Điểm bất thường (Anomaly Score) tại thời điểm $t$ được tính toán dựa trên khoảng cách Mahalanobis:
+\begin{equation}
+    \text{score}(t) = d_{\text{Mahalanobis}}(f^t, \text{Memory Bank})
+\end{equation}
+Memory Bank được cập nhật liên tục theo cơ chế trung bình trượt hàm mũ (EMA) nhằm thích ứng với biến đổi quang học theo thời gian.
+
+---
+
+\section{HƯỚNG 6: HỌC TƯƠNG PHẢN THỜI GIAN CHO ƯỚC LƯỢNG MẬT ĐỘ GIAO THÔNG}
+\subsection{Khai thác chuỗi thời gian (Temporal Sequence)}
+Việc khai thác sự liên tục trong chuỗi thời gian của các khung hình cho phép cải thiện chất lượng ước lượng mật độ, tốc độ và mức độ phục vụ (Level of Service).
+
+\subsection{Contrastive Loss Temporal}
+Hàm mất mát tương phản thời gian được thiết kế để kéo gần các biểu diễn kề nhau và đẩy xa các biểu diễn khác biệt:
+\begin{equation}
+    \mathcal{L}_{\text{temporal}} = -\log\left(\frac{\exp(\text{sim}(h_a, h_b^+)/\tau)}{\exp(\text{sim}(h_a, h_b^+)/\tau) + \sum \exp(\text{sim}(h_a, h_j^-)/\tau)}\right)
+\end{equation}
+
+\subsection{TemporalEncoder}
+Mạng TemporalEncoder kết hợp đặc trưng toàn cục từ DINO và sai khác $\Delta$ qua nhiều khung hình, phục vụ trực tiếp cho các tác vụ downstream (mật độ, tốc độ, Level of Service).
+
+---
+
+\section{HƯỚNG 7: NHẬN DẠNG LẠI PHƯƠNG TIỆN LIÊN CAMERA DỰA TRÊN $\Delta$-MASK}
+\subsection{Trích xuất RoI (Region of Interest)}
+Các vùng quan tâm được trích xuất thông qua phân tích thành phần liên thông (Connected Components) trên mặt nạ $\Delta > \text{Otsu}$.
+
+\subsection{Biểu diễn Phương Tiện}
+Mỗi phương tiện $i$ được trích xuất đặc trưng bằng mô hình DINO trên vùng cắt tương ứng:
+\begin{equation}
+    e_i = \text{DINO}_{[CLS]}(\text{Crop}(I, \text{RoI}_i))
+\end{equation}
+
+\subsection{Tracklet Mining và Hàm Mất Mát}
+Các tracklet được khai thác cho bài toán Re-ID không giám sát thông qua kết hợp hàm mất mát nội (intra-tracklet) và ngoại (inter-tracklet):
+\begin{equation}
+    \mathcal{L}_{\text{ReID}} = \mathcal{L}_{\text{intra-tracklet}} + \mathcal{L}_{\text{inter-tracklet}}
+\end{equation}
+
+---
+
+\section{HƯỚNG 8: HIỂU CẢNH GIAO THÔNG MỞ TỪ VỰNG VỚI $\Delta$ REGION PROPOSALS}
+\subsection{Class-Agnostic Proposals}
+Mặt nạ $\Delta$ cung cấp các đề xuất vùng (proposals) không phụ thuộc lớp (class-agnostic), đóng vai trò như các đối tượng tiềm năng trong khung cảnh.
+
+\subsection{Phân Tích Đặc Trưng DINO và CLIP}
+Đặc trưng DINO được trích xuất trên từng vùng và ánh xạ (Projection) sang không gian đặc trưng của CLIP.
+
+\subsection{Điểm Tương Đồng}
+Mức độ phù hợp giữa một vùng $r$ và mô tả văn bản $\text{text}$ được tính bằng độ tương đồng cosine:
+\begin{equation}
+    \text{score}(r, \text{text}) = \text{sim}(\text{DINO}(r), \text{CLIP}_{\text{text}}(\text{text}))
+\end{equation}
+
+---
+
+\section{HƯỚNG 9: ƯỚC LƯỢNG ĐIỀU KIỆN MẶT ĐƯỜNG TỰ GIÁM SÁT}
+\subsection{Chuỗi Ảnh Nền}
+Thu thập chuỗi ảnh nền $I_{\text{bg}}$ trong 24 giờ từ 608 camera để xây dựng không gian dữ liệu đánh giá tình trạng mặt đường.
+
+\subsection{Biểu Diễn Tình Trạng Đường}
+Mô hình trích xuất đặc trưng DINO từ các khung hình nền:
+\begin{equation}
+    z_{\text{road}} = \text{DINO}_{[CLS]}(I_{\text{bg}}^{c,h})
+\end{equation}
+
+\subsection{Contrastive Learning}
+Huấn luyện học tương phản (Contrastive learning) trên chuỗi thời gian ảnh nền nhằm phát hiện các biến đổi như đọng nước, vỡ nứt hoặc tuyết phủ.
+
+
+---
+
 \section{TỔNG HỢP VÀ ĐÁNH GIÁ CÁC HƯỚNG TIẾP CẬN}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Tổng hợp phương pháp luận và tiềm năng công bố của bốn hướng nghiên cứu}
+\caption{Tổng hợp phương pháp luận và tiềm năng công bố của chín hướng nghiên cứu}
 \label{tab:comparison}
 \begin{tabular}{p{2.0cm} p{3.4cm} p{4.2cm} c p{3.0cm}}
 \toprule
@@ -347,6 +430,16 @@ Tập dữ liệu được phân chia theo danh tính camera độc lập (Camer
 \textbf{Hướng 3} & Scene Decomposition Network & Mô hình hóa Alpha Compositing với mỏ neo giám sát nền tĩnh & 5/5 & CVPR, ECCV, NeurIPS \\
 \addlinespace
 \textbf{Hướng 4} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 2.5/5 & EAAI Journal, ITSC \\
+\addlinespace
+\textbf{Hướng 5} & Unsupervised Traffic Anomaly Detection & Biểu diễn kép $\Delta$+DINO, Memory Bank với cập nhật EMA & 4/5 & IEEE T-ITS, ICIP \\
+\addlinespace
+\textbf{Hướng 6} & Temporal Contrastive Learning & Khai thác chuỗi thời gian cho ước lượng mật độ & 3.5/5 & IEEE T-IV, ITSC \\
+\addlinespace
+\textbf{Hướng 7} & Unsupervised Vehicle Re-ID & Trích xuất RoI từ $\Delta$, tracklet mining, intra/inter-tracklet loss & 4/5 & CVPR, ICCV \\
+\addlinespace
+\textbf{Hướng 8} & Open-Vocabulary Scene Understanding & $\Delta$ proposals và chiếu DINO sang không gian CLIP & 4.5/5 & CVPR, ECCV \\
+\addlinespace
+\textbf{Hướng 9} & Ước lượng mặt đường tự giám sát & Contrastive learning trên chuỗi $I_{\text{bg}}$ 24h & 3/5 & IEEE T-ITS, TRB \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -354,6 +447,6 @@ Tập dữ liệu được phân chia theo danh tính camera độc lập (Camer
 ---
 
 \section{KẾT LUẬN}
-Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và đề xuất bốn hướng nghiên cứu khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Các phương pháp trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), tạo nhãn giả phân đoạn không giám sát (Hướng 2), phân rã bối cảnh tự thân (Hướng 3), đến ước lượng lưu lượng phương tiện ít mẫu (Hướng 4). Việc kết hợp có hệ thống giữa các đặc tính quang học vật lý và mô hình học sâu giúp nâng cao độ chính xác biểu diễn, đồng thời giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công trong các hệ thống giao thông thông minh.
+Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và đề xuất chín hướng nghiên cứu khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Các phương pháp trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), tạo nhãn giả phân đoạn không giám sát (Hướng 2), phân rã bối cảnh tự thân (Hướng 3), đến ước lượng lưu lượng phương tiện ít mẫu (Hướng 4), cùng các mở rộng ứng dụng trong phát hiện bất thường, ước lượng mật độ, nhận dạng lại, hiểu cảnh mở từ vựng và đánh giá mặt đường (Hướng 5-9). Việc kết hợp có hệ thống giữa các đặc tính quang học vật lý và mô hình học sâu giúp nâng cao độ chính xác biểu diễn, đồng thời giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công trong các hệ thống giao thông thông minh.
 
 \end{document}

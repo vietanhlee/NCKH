@@ -1,4 +1,4 @@
-# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 4 HƯỚNG NGHIÊN CỨU KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
+# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 9 HƯỚNG NGHIÊN CỨU KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
 
 **Dự án:** Khai thác tự giám sát cặp ảnh Background tĩnh và Origin phương tiện phục vụ bài toán thị giác máy tính giám sát giao thông đô thị  
 **Dữ liệu thực nghiệm:** Hệ thống camera giao thông đô thị TP.HCM (IC4SD-Traffic-HCM)  
@@ -15,7 +15,7 @@ Trong giám sát giao thông qua camera cố định (CCTV), hệ thống có ha
 Sự kết hợp giữa $I_{\text{origin}}$ và $I_{\text{bg}}$ cung cấp một tín hiệu vật lý quang học tiên nghiệm (Physical Prior) vô cùng mạnh mẽ:
 $$\Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|$$
 
-Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan, hệ thống DINO Suite được xây dựng gồm 4 hướng nghiên cứu độc lập nhưng bổ trợ lẫn nhau, tận dụng $\Delta$ và $I_{\text{bg}}$ để giải quyết triệt để các bài toán cốt lõi của thị giác máy tính trong giao thông thông minh (Intelligent Transportation Systems - ITS).
+Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan, hệ thống DINO Suite được xây dựng gồm 9 hướng nghiên cứu độc lập nhưng bổ trợ lẫn nhau, tận dụng $\Delta$ và $I_{\text{bg}}$ để giải quyết triệt để các bài toán cốt lõi của thị giác máy tính trong giao thông thông minh (Intelligent Transportation Systems - ITS).
 
 ---
 
@@ -288,26 +288,125 @@ $$W_{\text{4ch}}[:, 3, :, :] = \frac{1}{3} \sum_{c=0}^{2} W_{\text{pretrained}}[
 
 ---
 
-## 6. TỔNG KẾT VÀ BẢN ĐỒ TIẾN TRÌNH THỰC NGHIỆM
+## 6. HƯỚNG 5: UNSUPERVISED TRAFFIC ANOMALY DETECTION VIA $\Delta$-CONDITIONED DINO EMBEDDINGS
 
-Bốn hướng nghiên cứu trên tạo thành một hệ sinh thái khoa học khép kín và có tính kế thừa chặt chẽ:
+### 6.1. Đặt vấn đề và Mục tiêu
+Phát hiện bất thường giao thông (như tai nạn, xe dừng đỗ giữa đường, vật cản rơi vãi) là một bài toán phát hiện bất thường không giám sát (Unsupervised Anomaly Detection - UAD) điển hình do sự kiện hiếm gặp và khó thu thập dữ liệu có nhãn.
 
+### 6.2. Giả thuyết và Phương pháp
+* **Giả thuyết khoa học:** Ở trạng thái bình thường, bản đồ sai khác $\Delta$ tuân theo một phân phối ổn định. Khi có sự kiện bất thường xảy ra, $\Delta$ sẽ lệch hẳn khỏi phân phối học được.
+* **Phương pháp:** Xây dựng một Memory Bank từ đặc trưng kết hợp $f_{\text{anomaly}} = \text{Concat}(\text{Pool}(\Delta), \text{DINO}_{[CLS]})$. Sử dụng khoảng cách Mahalanobis hoặc thuật toán k-NN trong không gian đặc trưng này để tính toán Anomaly Score mà hoàn toàn không cần nhãn bất thường.
+
+### 6.3. Kiến trúc Pipeline
+
+```text
+       ┌───────────────────────┐
+       │ Ảnh Origin + Ảnh Nền  │
+       └──────────┬────────────┘
+                  │
+         ┌────────┴────────┐
+         ▼                 ▼
+     [Δ-Mask]         [DINO ViT]
+         │                 │
+         ▼                 ▼
+   [Pool(Δ)]         [DINO_CLS]
+         │                 │
+         └────────┬────────┘
+                  ▼
+       [Concat Features: f_anomaly]
+                  │
+                  ▼
+    [Memory Bank & Distance Metric (k-NN / Mahalanobis)]
+                  │
+                  ▼
+           [Anomaly Score]
 ```
+
+---
+
+## 7. HƯỚNG 6: TEMPORAL CONTRASTIVE LEARNING FOR TRAFFIC DENSITY ESTIMATION
+
+### 7.1. Đặt vấn đề và Mục tiêu
+Khai thác tính chất chuỗi thời gian của luồng dữ liệu $\{I^{t_1}, I^{t_2}, \dots\}$ thu được từ cùng một camera cố định, hướng tới việc ước lượng mật độ dòng xe, tốc độ di chuyển và chỉ số ùn tắc giao thông một cách liên tục.
+
+### 7.2. Phương pháp Temporal Contrastive
+* **Chiến lược lấy mẫu:** Tạo ra cặp dương (Positive Pair) bằng cách chọn hai cửa sổ thời gian liên tiếp từ cùng một camera trong cùng một khung giờ. Cặp âm (Negative Pair) được lấy từ các camera khác nhau hoặc các khung giờ khác nhau.
+* **Biểu diễn không gian - thời gian:** $h = \text{TemporalEncoder}(\text{DINO}(I^{t_i}), \Delta^{t_i})$.
+
+Hàm mất mát Contrastive (InfoNCE) được áp dụng:
+$$\mathcal{L}_{\text{contrastive}} = - \log \frac{\exp(\text{sim}(h_i, h_{i^+}) / \tau)}{\sum_{j=1}^{K} \exp(\text{sim}(h_i, h_{j}) / \tau)}$$
+
+* **Downstream task:** Sử dụng vector biểu diễn $h$ để dự đoán các tham số vĩ mô như ước lượng mật độ, tốc độ trung bình, và chỉ số ùn tắc giao thông.
+
+---
+
+## 8. HƯỚNG 7: $\Delta$-GUIDED VEHICLE RE-IDENTIFICATION ACROSS CAMERAS
+
+### 8.1. Đặt vấn đề và Mục tiêu
+Bài toán nhận dạng lại phương tiện (Vehicle Re-Identification - ReID) thường yêu cầu các detector chính xác để cắt (crop) đối tượng. Việc phụ thuộc vào detector pretrained gây ra sai số lan truyền.
+
+### 8.2. Phương pháp kỹ thuật
+* **Phân đoạn vùng quan tâm (RoI):** Sử dụng các vùng thành phần liên thông (Connected Components) từ bản đồ sai khác phân ngưỡng $\Delta > \text{Otsu}$ thay cho object detector truyền thống.
+* **Trích xuất đặc trưng DINO:** Lấy đặc trưng $e_i = \text{DINO}_{[CLS]}(\text{Crop}(I_{\text{origin}}, \text{RoI}_i))$.
+* **Khai thác vết tích (Tracklet Mining):** Lấy từ các chuỗi khung hình liên tiếp để tự động tạo ra các cặp phương tiện dương tính tự nhiên.
+* **Ứng dụng:** Truy vết xe vi phạm liên tuyến, tính toán thời gian di chuyển (Travel Time), và xây dựng ma trận Origin-Destination (O-D matrix) nội đô.
+
+### 8.3. Pipeline ReID
+
+```text
+   [Δ-Mask > Otsu] ──► [Connected Components (RoI)] ──► [Crop(I_origin, RoI)]
+                                                               │
+                                                               ▼
+   [Cosine Similarity Match] ◄── [DINO [CLS] Embedding] ◄──────┘
+```
+
+---
+
+## 9. HƯỚNG 8: OPEN-VOCABULARY TRAFFIC SCENE UNDERSTANDING VIA $\Delta$-CONDITIONED REGION PROPOSALS
+
+### 9.1. Đặt vấn đề và Phương pháp
+Phát triển hệ thống hiểu cảnh giao thông với từ vựng mở (Open-Vocabulary), cho phép nhận diện các loại phương tiện chưa từng xuất hiện trong tập huấn luyện.
+
+### 9.2. Quy trình trích xuất
+1. $\Delta$-Mask được xử lý qua thuật toán Connected Components để tạo ra các đề xuất vùng (Region Proposals) ở mức class-agnostic (không phụ thuộc nhãn lớp).
+2. Mô hình DINO ViT tiến hành trích xuất đặc trưng cho mỗi vùng cắt này.
+3. Một mạng chiếu (Projection Head) được học để ánh xạ không gian vector của DINO sang không gian chung của mô hình nền tảng ngôn ngữ - hình ảnh CLIP (CLIP space).
+4. Phân loại theo hướng zero-shot open-vocabulary với các nhãn linh hoạt như: xe máy, ô tô, xe buýt, xe tải, người đi bộ, v.v.
+
+---
+
+## 10. HƯỚNG 9: SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION
+
+### 10.1. Đặt vấn đề và Mục tiêu
+Việc đánh giá tình trạng mặt đường tự động có vai trò quan trọng trong cảnh báo an toàn giao thông đô thị. Bài toán nhằm khai thác bộ dữ liệu chuỗi $I_{\text{bg}}$ tĩnh của 24 slot giờ từ 608 camera.
+
+### 10.2. Phương pháp Contrastive Learning
+* Đặc trưng mặt đường được trích xuất bằng cách sử dụng token DINO $[CLS]$ trên các ảnh nền $I_{\text{bg}}$ toàn cảnh.
+* **Huấn luyện:** Cặp dương gồm các ảnh nền trong cùng một điều kiện thời tiết hoặc chiếu sáng (cùng camera, các ngày gần nhau). Cặp âm là các ảnh nền khác điều kiện.
+* **Bài toán Downstream:** Xây dựng bộ phân loại đánh giá các tình trạng mặt đường đa dạng: đường khô, đường ướt, đường đêm, đường bị bóng đổ che khuất.
+
+---
+
+## 11. TỔNG KẾT VÀ BẢN ĐỒ TIẾN TRÌNH THỰC NGHIỆM
+
+Chín hướng nghiên cứu trên tạo thành một hệ sinh thái khoa học khép kín và có tính kế thừa chặt chẽ:
+
+```text
 [Dữ Liệu Thô: Camera TP.HCM]
               │
               ▼
 [Cặp Ảnh Vật Lý: Origin + Background]
               │
-              ├────────────────────────────────────────┐
-              ▼                                        ▼
-   [HƯỚNG 1: BG-Guided DINO]                [HƯỚNG 4: FG Counting]
-   • FAM: Ép ViT học biểu diễn xe cộ        • Thêm kênh thứ 4 (RGB + Δ)
-   • Tạo ViT Backbone chuyên biệt ITS       • Cải thiện trực tiếp MAE/RMSE
-              │                                        │
-              ▼                                        ▼
-   [HƯỚNG 2: Zero-Shot Segmentation]        [Báo Cáo Nghiệm Thu / Bài Báo]
-   • DINO PCA ∩ Δ-Mask
-   • Tự sinh nhãn pixel không cần người
+              ├────────────────────────────────────────┬────────────────────────────────────────┐
+              ▼                                        ▼                                        ▼
+   [HƯỚNG 1: BG-Guided DINO]                [HƯỚNG 4: FG Counting]                   [HƯỚNG 6, 7, 8: Spatial-Temporal & Open-Vocab]
+   • FAM: Ép ViT học biểu diễn xe cộ        • Thêm kênh thứ 4 (RGB + Δ)              • ReID, Tracking, Open-vocabulary
+   • Tạo ViT Backbone chuyên biệt ITS       • Cải thiện trực tiếp MAE/RMSE           • Contrastive Learning trên chuỗi thời gian
+              │                                        │                                        │
+              ▼                                        ▼                                        ▼
+   [HƯỚNG 2: Zero-Shot Segmentation]        [HƯỚNG 5: Anomaly Detection]             [HƯỚNG 9: Road Surface Estimation]
+   • DINO PCA ∩ Δ-Mask                      • UAD với Δ-conditioned DINO             • DINO [CLS] trên ảnh I_bg
+   • Tự sinh nhãn pixel không cần người     • K-NN / Mahalanobis scoring             • Đánh giá thời tiết, ánh sáng
               │
               ▼
    [HƯỚNG 3: Scene Decomposition]
@@ -319,3 +418,8 @@ Bốn hướng nghiên cứu trên tạo thành một hệ sinh thái khoa học
 2. **Hướng 2** giải quyết bài toán thiếu hụt nhãn phân đoạn pixel (Data Annotation Bottleneck).
 3. **Hướng 3** mở rộng biên giới lý thuyết về phân rã cảnh quang học tự giám sát (Physics-guided Scene Decomposition).
 4. **Hướng 4** mang lại giá trị ứng dụng thực tiễn ngay lập tức cho bài toán giám sát lưu lượng giao thông đô thị.
+5. **Hướng 5** giải quyết bài toán phát hiện bất thường không giám sát dựa vào Memory Bank.
+6. **Hướng 6** ứng dụng không gian - thời gian để đo lường mật độ và tốc độ dòng giao thông.
+7. **Hướng 7** cung cấp giải pháp nhận dạng lại và truy vết phương tiện qua hệ thống đa camera thay vì phụ thuộc vào object detector.
+8. **Hướng 8** mang khả năng zero-shot linh hoạt của các mô hình đa phương thức cho phân loại phương tiện.
+9. **Hướng 9** tận dụng tối đa kho dữ liệu ảnh nền vô giá để đánh giá điều kiện môi trường.
