@@ -21,6 +21,10 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import warnings
+warnings.filterwarnings("ignore", message=".*xFormers is not available.*")
+warnings.filterwarnings("ignore", category=UserWarning, module=".*dinov2.*")
+
 from typing import Dict, List
 import numpy as np
 import torch

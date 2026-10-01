@@ -8,10 +8,15 @@
 
 import os
 import sys
+import warnings
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# Bỏ qua các cảnh báo phụ thuộc tùy chọn (xFormers) của DINOv2 khi chạy Native PyTorch
+warnings.filterwarnings("ignore", message=".*xFormers is not available.*")
+warnings.filterwarnings("ignore", category=UserWarning, module=".*dinov2.*")
 
 
 def get_dino_backbone(
