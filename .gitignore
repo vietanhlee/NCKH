@@ -20,8 +20,11 @@ data/
 
 # Media & Docs exclusions if needed
 *.pdf
+!DINO/Bao_Cao_4_Huong_Nghien_Cuu_DINO.pdf
 *.png
 *.md
 !README.md
 !research_ideas_ssl.md
+!DINO/*.md
+!DINO/**/README.md
 *.json
