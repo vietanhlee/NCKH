@@ -29,18 +29,16 @@ warnings.filterwarnings("ignore", message=".*xFormers is not available.*")
 warnings.filterwarnings("ignore", category=UserWarning, module=".*dinov2.*")
 
 
-# Hugging Face Access Token mặc định chính thức cho Meta DINOv3 Foundation Model
-DEFAULT_HF_TOKEN = "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"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+# Token mặc định (tránh hardcode token hết hạn, ưu tiên biến môi trường hoặc .env)
+DEFAULT_HF_TOKEN = ""
 
 
 def load_env_credentials(verbose: bool = False) -> str:
     """
     Tự động tìm kiếm và nạp các biến môi trường từ file .env.
     Đồng bộ hóa HF_TOKEN và đăng nhập tự động vào Hugging Face Hub nếu có token hợp lệ.
-    Nếu chưa có, tự động sử dụng token dự phòng chuẩn từ cấu hình hệ thống.
-
-    Returns:
-        token: Chuỗi Hugging Face token hợp lệ.
     """
     candidate_paths = [
         os.path.join(os.getcwd(), ".env"),
@@ -55,13 +53,13 @@ def load_env_credentials(verbose: bool = False) -> str:
             if os.path.isfile(p):
                 dotenv.load_dotenv(p, override=True)
                 if verbose:
-                    print(f"[*] [Credentials] Da nap cau hinh moi truong tu: {p}")
+                    print(f"[*] [Credentials] Đã nạp cấu hình môi trường từ: {p}")
                 break
     except ImportError:
         pass
 
     # Fallback đọc thủ công nếu thiếu thư viện dotenv
-    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or ""
     if not token:
         for p in candidate_paths:
             if os.path.isfile(p):
@@ -75,17 +73,6 @@ def load_env_credentials(verbose: bool = False) -> str:
                                 if k in ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"] and v:
                                     token = v
                                     os.environ[k] = v
-                except Exception:
-                    pass
-
-    # Nếu vẫn chưa tìm thấy token trong môi trường, dùng fallback từ hệ thống và tự động tạo .env
-    if not token:
-        token = DEFAULT_HF_TOKEN
-        for env_path in [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), os.path.join(os.getcwd(), ".env")]:
-            if not os.path.exists(env_path) and token:
-                try:
-                    with open(env_path, "w", encoding="utf-8") as f:
-                        f.write(f"# Hugging Face Hub Credentials for Meta DINOv3 Access\nHF_TOKEN={token}\nHUGGING_FACE_HUB_TOKEN={token}\n")
                 except Exception:
                     pass
 
@@ -103,6 +90,128 @@ def load_env_credentials(verbose: bool = False) -> str:
 
 # Tự động nạp credentials ngay khi module được import
 load_env_credentials()
+
+
+def resolve_dino_weights(
+    model_name: str = "dinov3_vits16",
+    weights_path: Optional[str] = None,
+    hf_token: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Tự động phân giải và tìm kiếm file trọng số mô hình DINO theo thứ tự ưu tiên:
+      1. Đường dẫn weights_path người dùng chỉ định trực tiếp (nếu file tồn tại).
+      2. Tự động quét toàn bộ Local Cache trên hệ thống (Hugging Face Hub snapshots,
+         PyTorch Hub checkpoints, thư mục checkpoints nội bộ project, ổ đĩa, v.v.).
+      3. Thử nạp từ Hugging Face Hub ở chế độ offline (local_files_only=True).
+      4. Tải từ Hugging Face Hub trực tuyến (nếu có token hợp lệ còn hạn).
+
+    Returns:
+        Đường dẫn file trọng số (.safetensors, .pth, .bin) hoặc None nếu cần fallback Warm-Start.
+    """
+    import glob
+
+    # 1. Đường dẫn chỉ định trực tiếp
+    if weights_path and os.path.isfile(weights_path):
+        return weights_path
+
+    # Hỗ trợ URL Hugging Face spec: hf://repo_id:filename
+    if weights_path and (weights_path.startswith("hf://") or ("/" in weights_path and not os.path.exists(weights_path))):
+        try:
+            from huggingface_hub import hf_hub_download
+            hf_spec = weights_path.replace("hf://", "")
+            if ":" in hf_spec:
+                repo_id, filename = hf_spec.split(":", 1)
+            else:
+                repo_id = hf_spec
+                filename = "model.safetensors"
+            print(f"📥 [HuggingFace Hub] Đang tải trọng số từ {repo_id}/{filename}...")
+            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, token=hf_token)
+            if downloaded and os.path.isfile(downloaded):
+                return downloaded
+        except Exception as e_hf_dl:
+            print(f"   ℹ️ [HuggingFace Hub] Tải weights từ HuggingFace notice: {e_hf_dl}")
+
+    # 2. Tự động quét Local Cache toàn diện
+    clean_name = model_name.lower().strip()
+    arch_tag = clean_name.replace('_', '-')
+    search_patterns = [
+        # Hugging Face Hub cache của user hiện tại
+        os.path.expanduser(f"~/.cache/huggingface/hub/models--facebook--{arch_tag}*/snapshots/*/model.safetensors"),
+        os.path.expanduser(f"~/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.safetensors"),
+        os.path.expanduser(f"~/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.bin"),
+        os.path.expanduser(f"~/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.pth"),
+        # Quét các profile người dùng khác trên Windows (Admin, levie,...)
+        f"C:/Users/*/.cache/huggingface/hub/models--facebook--{arch_tag}*/snapshots/*/model.safetensors",
+        f"C:/Users/*/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.safetensors",
+        f"C:/Users/*/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.bin",
+        f"C:/Users/*/.cache/huggingface/hub/models--facebook--{arch_tag}*/**/*.pth",
+        # PyTorch Hub checkpoints
+        os.path.expanduser(f"~/.cache/torch/hub/checkpoints/*{clean_name}*"),
+        f"C:/Users/*/.cache/torch/hub/checkpoints/*{clean_name}*",
+        # Project checkpoints folder
+        os.path.join(os.getcwd(), "checkpoints", f"*{clean_name}*"),
+        os.path.join(os.getcwd(), "checkpoints", f"*{arch_tag}*"),
+        os.path.join(os.getcwd(), f"*{clean_name}*"),
+        os.path.join(os.getcwd(), f"*{arch_tag}*"),
+        # Kaggle input
+        f"/kaggle/input/**/{clean_name}*",
+        f"/kaggle/input/**/{arch_tag}*",
+    ]
+
+    for pat in search_patterns:
+        try:
+            matches = glob.glob(pat, recursive=True)
+            for m in matches:
+                if os.path.isfile(m) and os.path.getsize(m) > 10 * 1024 * 1024:  # Phải là file model thực sự (>10MB)
+                    print(f"   🎯 [Model Loader] Tự động phát hiện trọng số DINOv3 từ local cache: {m}")
+                    return m
+        except Exception:
+            pass
+
+    # 3. Thử Hugging Face Hub chế độ offline (local_files_only=True)
+    repo_candidates = [
+        f"facebook/{arch_tag}-pretrain-lvd1689m",
+        f"facebook/{arch_tag}",
+        f"facebook/dinov3-{arch_tag.split('-')[-1]}" if '-' in arch_tag else f"facebook/dinov3"
+    ]
+    file_candidates = ["model.safetensors", "pytorch_model.bin", f"{clean_name}_pretrain_lvd1689m.pth"]
+
+    try:
+        from huggingface_hub import hf_hub_download
+        for r_id in repo_candidates:
+            for fname in file_candidates:
+                try:
+                    f = hf_hub_download(repo_id=r_id, filename=fname, local_files_only=True)
+                    if f and os.path.isfile(f) and os.path.getsize(f) > 10 * 1024 * 1024:
+                        print(f"   🎯 [HuggingFace Hub] Tận dụng file offline từ snapshot cache: {f}")
+                        return f
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # 4. Thử tải online nếu có HF_TOKEN hợp lệ
+    token_to_use = hf_token or os.environ.get("HF_TOKEN") or ""
+    if token_to_use and not token_to_use.startswith("#") and len(token_to_use) > 10:
+        try:
+            from huggingface_hub import hf_hub_download
+            for r_id in repo_candidates:
+                for fname in file_candidates:
+                    try:
+                        f = hf_hub_download(repo_id=r_id, filename=fname, token=token_to_use)
+                        if f and os.path.isfile(f) and os.path.getsize(f) > 10 * 1024 * 1024:
+                            print(f"   ✅ [HuggingFace Hub] Tải thành công weights DINOv3 từ '{r_id}': {f}")
+                            return f
+                    except Exception as e_dl:
+                        err_str = str(e_dl).lower()
+                        if "expired" in err_str or "401" in err_str or "invalid" in err_str:
+                            print(f"   ℹ️ [HuggingFace Hub] Token HF cung cấp đã hết hạn hoặc không có quyền truy cập repo gated.")
+                            return None
+                        continue
+        except Exception:
+            pass
+
+    return None
 
 
 def get_dino_backbone(
@@ -128,58 +237,12 @@ def get_dino_backbone(
     device = torch.device(device)
     patch_size = 16 if ("16" in model_name.lower() or "dinov3" in model_name.lower()) else 14
 
-    # 0. Nạp biến môi trường và token Hugging Face
+    # 0. Nạp biến môi trường và giải quyết trọng số qua resolve_dino_weights
     hf_token = load_env_credentials()
-
-    # Hỗ trợ tải trực tiếp từ HuggingFace Hub nếu weights_path trỏ tới repo hoặc hf://
-    if weights_path and (weights_path.startswith("hf://") or ("/" in weights_path and not os.path.exists(weights_path))):
-        try:
-            from huggingface_hub import hf_hub_download
-            hf_spec = weights_path.replace("hf://", "")
-            if ":" in hf_spec:
-                repo_id, filename = hf_spec.split(":", 1)
-            else:
-                repo_id = hf_spec
-                filename = "model.safetensors"
-            print(f"📥 [HuggingFace Hub] Đang tải trọng số từ {repo_id}/{filename}...")
-            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, token=hf_token)
-            if downloaded and os.path.isfile(downloaded):
-                weights_path = downloaded
-                print(f"✅ [HuggingFace Hub] Tải thành công weights về cache: {weights_path}")
-        except Exception as e_hf_dl:
-            print(f"⚠️ [HuggingFace Hub] Tải weights từ HuggingFace notice: {e_hf_dl}")
-
-    # Tự động tải weights DINOv3 chính thức từ HuggingFace Hub nếu cần pretrained và chưa có file offline
-    if "dinov3" in model_name.lower() and pretrained and (weights_path is None or not os.path.exists(weights_path)):
-        arch_tag = model_name.lower().strip().replace('_', '-')
-        repo_candidates = [
-            f"facebook/{arch_tag}-pretrain-lvd1689m",
-            f"facebook/{arch_tag}",
-            f"facebook/dinov3-{arch_tag.split('-')[-1]}"
-        ]
-        try:
-            from huggingface_hub import hf_hub_download
-            last_hf_err = None
-            for r_id in repo_candidates:
-                for c_file in ["model.safetensors", "pytorch_model.bin", f"{model_name}_pretrain_lvd1689m.pth"]:
-                    try:
-                        dl_file = hf_hub_download(repo_id=r_id, filename=c_file, token=hf_token)
-                        if dl_file and os.path.exists(dl_file):
-                            weights_path = dl_file
-                            print(f"   ✅ [HuggingFace Hub] Tự động tải thành công weights DINOv3 từ '{r_id}': {dl_file}")
-                            break
-                    except Exception as e_inner:
-                        last_hf_err = e_inner
-                        err_str = str(e_inner).lower()
-                        if "expired" in err_str or "401" in err_str or "invalid" in err_str:
-                            print(f"   ⚠️ [HuggingFace Hub] Cảnh báo xác thực: Token HF không hợp lệ hoặc đã hết hạn ({e_inner})!")
-                        continue
-                if weights_path:
-                    break
-            if not weights_path and last_hf_err:
-                print(f"   ⚠️ [HuggingFace Hub Notice] Không thể tải weights từ remote Hub: {last_hf_err}")
-        except Exception as e_hf_top:
-            print(f"   ⚠️ [HuggingFace Hub Notice] Lỗi kết nối HuggingFace Hub: {e_hf_top}")
+    if pretrained and (weights_path is None or not os.path.exists(weights_path)):
+        resolved_weights = resolve_dino_weights(model_name=model_name, weights_path=weights_path, hf_token=hf_token)
+        if resolved_weights and os.path.isfile(resolved_weights):
+            weights_path = resolved_weights
 
     # 1. Thử tận dụng hàm build_backbone đã viết rất hoàn chỉnh trong train_ssl_dinov3
     dino_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

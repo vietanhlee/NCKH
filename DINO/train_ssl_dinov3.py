@@ -30,6 +30,8 @@ import time
 import warnings
 from typing import List, Tuple, Dict, Any
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 # Cấu hình sys.path tự động giúp chạy từ root hoặc thư mục DINO không bị lỗi module
 _dino_dir = os.path.dirname(os.path.abspath(__file__))
 if _dino_dir not in sys.path:
@@ -368,57 +370,16 @@ def build_backbone(
             import dinov3.hub.backbones as d3_bb
             model_fn = getattr(d3_bb, hub_name, None)
             if model_fn is not None:
-                # 0. Auto-detect local official Meta DINOv3 weights if present on Kaggle or disk
+                # 0. Tự động giải quyết trọng số DINOv3 qua resolve_dino_weights (quét Local Cache, Offline Snapshots, v.v.)
                 if weights_path is None or not os.path.exists(weights_path):
-                    candidate_paths = [
-                        "/kaggle/input/models/canhdoo/dinov3-b/pytorch/default/1/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
-                        "dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
-                        "checkpoints/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth",
-                    ]
-                    for cp in candidate_paths:
-                        if os.path.exists(cp):
-                            weights_path = cp
-                            print(f"🎯 [Model Loader] Auto-detected local official Meta DINOv3 checkpoint: {weights_path}")
-                            break
-
-                # 1. Attempt HuggingFace Hub authenticated download if HF_TOKEN is present
-                try:
-                    from common.backbone_loader import load_env_credentials
-                    load_env_credentials()
-                except Exception:
-                    pass
-                hf_token = os.environ.get("HF_TOKEN", None) or os.environ.get("HUGGING_FACE_HUB_TOKEN", None)
-                if hf_token and (weights_path is None or not os.path.exists(weights_path)):
                     try:
-                        from huggingface_hub import hf_hub_download
-                        arch_tag = hub_name.replace('_', '-')
-                        repo_candidates = [
-                            f"facebook/{arch_tag}-pretrain-lvd1689m",
-                            f"facebook/{arch_tag}",
-                            f"facebook/dinov3-{arch_tag.split('-')[-1]}"
-                        ]
-                        print(f"   🔑 [HuggingFace Hub] Checking authenticated access with provided HF_TOKEN...")
-                        last_dl_err = None
-                        for r_id in repo_candidates:
-                            for c_file in ["model.safetensors", "pytorch_model.bin", f"{hub_name}_pretrain_lvd1689m.pth"]:
-                                try:
-                                    dl_file = hf_hub_download(repo_id=r_id, filename=c_file, token=hf_token)
-                                    if dl_file and os.path.exists(dl_file):
-                                        weights_path = dl_file
-                                        print(f"   ✅ [HuggingFace Hub] Successfully retrieved official weights from '{r_id}': {dl_file}")
-                                        break
-                                except Exception as e_inner:
-                                    last_dl_err = e_inner
-                                    err_str = str(e_inner).lower()
-                                    if "expired" in err_str or "401" in err_str or "invalid" in err_str:
-                                        print(f"   ⚠️ [HuggingFace Hub] Cảnh báo xác thực: Token HF không hợp lệ hoặc đã hết hạn ({e_inner})!")
-                                    continue
-                            if weights_path:
-                                break
-                        if not weights_path and last_dl_err:
-                            print(f"   ⚠️ [HuggingFace Hub Notice] Không thể tải weights từ remote Hub: {last_dl_err}")
-                    except Exception as e_hf:
-                        print(f"   [Notice] HuggingFace Hub check: {e_hf}")
+                        from common.backbone_loader import resolve_dino_weights, load_env_credentials
+                        hf_token = load_env_credentials()
+                        resolved = resolve_dino_weights(model_name=hub_name, weights_path=weights_path, hf_token=hf_token)
+                        if resolved and os.path.exists(resolved):
+                            weights_path = resolved
+                    except Exception:
+                        pass
 
                 if weights_path and os.path.exists(weights_path):
                     model = model_fn(pretrained=False)
@@ -455,28 +416,24 @@ def build_backbone(
                     _load_backbone_state(model, cleaned_state, weights_path)  # raises WeightLoadError on mismatch
                     print(f"   ✅ [Model Loader] Loaded official Meta DINOv3 weights from: {weights_path}")
                 else:
-                    try:
-                        model = model_fn(pretrained=pretrained)
-                    except Exception as e_pt:
-                        print(f"   [Notice] Meta DINOv3 official remote weights require HuggingFace gated token / offline file: {e_pt}")
-                        model = model_fn(pretrained=False)
-                        if pretrained:
-                            # Warm-start DINOv3 from ungated Meta DINOv2 foundation weights!
-                            try:
-                                d2_name = "dinov2_vits14" if "vits" in hub_name else "dinov2_vitb14"
-                                print(f"   💡 [Warm-Start] Bootstrapping DINOv3 Transformer blocks from public Meta DINOv2 '{d2_name}'...")
-                                d2_model = torch.hub.load("facebookresearch/dinov2", d2_name, pretrained=True)
-                                d2_state = d2_model.state_dict()
-                                compatible_state = {}
-                                for k, v in d2_state.items():
-                                    if "pos_embed" in k or "patch_embed" in k:
-                                        continue
-                                    if k in model.state_dict() and model.state_dict()[k].shape == v.shape:
-                                        compatible_state[k] = v
-                                model.load_state_dict(compatible_state, strict=False)
-                                print(f"   ✅ [Warm-Start Success] Initialized {len(compatible_state)} layers (Attention, MLP, LayerNorm) from Meta DINOv2 foundation weights into DINOv3!")
-                            except Exception as e_ws:
-                                print(f"   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch: {e_ws}")
+                    model = model_fn(pretrained=False)
+                    if pretrained:
+                        # Warm-start DINOv3 from ungated Meta DINOv2 foundation weights!
+                        try:
+                            d2_name = "dinov2_vits14" if "vits" in hub_name else "dinov2_vitb14"
+                            print(f"   💡 [Warm-Start] Bootstrapping DINOv3 Transformer blocks from public Meta DINOv2 '{d2_name}'...")
+                            d2_model = torch.hub.load("facebookresearch/dinov2", d2_name, pretrained=True)
+                            d2_state = d2_model.state_dict()
+                            compatible_state = {}
+                            for k, v in d2_state.items():
+                                if "pos_embed" in k or "patch_embed" in k:
+                                    continue
+                                if k in model.state_dict() and model.state_dict()[k].shape == v.shape:
+                                    compatible_state[k] = v
+                            model.load_state_dict(compatible_state, strict=False)
+                            print(f"   ✅ [Warm-Start Success] Initialized {len(compatible_state)} layers (Attention, MLP, LayerNorm) from Meta DINOv2 foundation weights into DINOv3!")
+                        except Exception as e_ws:
+                            print(f"   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch: {e_ws}")
                 embed_dim = getattr(model, "embed_dim", 384)
                 print(f"   [Model Loader] Loaded DINOv3 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
                 return model, embed_dim
