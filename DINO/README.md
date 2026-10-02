@@ -1,54 +1,97 @@
 # DINO Traffic Suite: Khai Thác Cặp Ảnh Background–Origin Cho Thị Giác Giao Thông
 
-Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **4 hướng nghiên cứu trọng tâm** (H1, H2, H3, H4).
+Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống gồm **8 hướng nghiên cứu trọng tâm** (Hướng 1 đến Hướng 8).
 
 ```
 DINO/
-├── common/                                 # Module dùng chung (Matcher, Subtraction, Backbone Loader, Multi-GPU)
+├── common/                                 # Module dùng chung (Matcher, Subtraction, Backbone Loader, Multi-GPU, BDB, FCS, Reliability)
 │   ├── matcher.py                          # Ghép cặp origin (stt_timestamp) và background (route_stt/slot_XXh)
 │   ├── subtraction.py                      # Trừ nền LAB/HSV/RGB, Otsu, Morphology, Patch Probability
-│   ├── backbone_loader.py                  # Tải DINOv3, DINOv2, trích xuất CLS & Patch Tokens
+│   ├── backbone_loader.py                  # Tải DINOv3, DINOv2, trích xuất CLS & Patch Tokens, quản lý HF_TOKEN
+│   ├── reliability.py                      # Ước lượng độ tin cậy vùng tĩnh r_i & Phase Correlation căn chỉnh camera
+│   ├── degradation.py                      # Bộ suy thoái nền BDB (6 loại nhiễu x 5 mức độ nghiêm trọng)
+│   ├── corrupt.py                          # Bộ hư hao khung hình FCS (8 loại hư hao ngoại cảnh thực tế)
 │   └── gpu_utils.py                        # Quản lý DataParallel, auto-scaling, unwrap checkpoint
 │
 ├── direction1_bg_guided_dino/              # [HƯỚNG 1] BG-Guided DINO Continual SSL Pre-training
 │   ├── dataset.py                          # Multi-Crop + Foreground-Aware Masking (FAM)
 │   ├── models.py                           # Student, Teacher EMA, DINOHead Prototype Projection
-│   ├── losses.py                           # Self-Distillation Loss với Centering & Sharpening
+│   ├── losses.py                           # DINO [CLS] + iBOT [Patch] Multi-Crop Loss
 │   ├── train.py                            # CLI huấn luyện Continual SSL
 │   └── README.md
 │
-├── direction2_scene_decomposition/         # [HƯỚNG 2] Self-Supervised Scene Decomposition (Novelty ⭐⭐⭐⭐⭐)
-│   ├── dataset.py                          # Dataset đồng bộ không gian Origin & Background
-│   ├── models.py                           # TrafficDecompositionNet (Alpha Compositing)
-│   ├── losses.py                           # Reconstruction + Background Supervision + Sparsity + TV Loss
+├── direction2_scene_decomposition/         # [HƯỚNG 2] Noise-Aware Scene Decomposition (Laplace σ Prior)
+│   ├── dataset.py                          # Dataset đồng bộ không gian Origin & Background (K ngày khác nhau)
+│   ├── models.py                           # Multi-scale ViT + DPT Head (M_alpha, F, B_hat, sigma)
+│   ├── losses.py                           # Reconstruction + Laplace Prior + Cross-Day Shared Bg + Exclusion Loss
 │   ├── train.py                            # Pipeline huấn luyện phân rã cảnh
 │   ├── infer.py                            # Inpainting tự động: Xóa xe, tách nền đường sạch
 │   └── README.md
 │
 ├── direction3_foreground_enhanced_counting/# [HƯỚNG 3] Foreground-Enhanced Counting (Stage 1 Upgrade)
 │   ├── dataset.py                          # Nạp CSV nhãn, tính Δ map, tạo tensor 4 kênh (RGB + Δ)
-│   ├── models.py                           # DINOv3 4-Channel Patch Embedding & MLP Regressor
-│   ├── train.py                            # Huấn luyện đếm xe chống rò rỉ dữ liệu (Disjoint Cameras)
-│   ├── evaluate.py                         # So sánh 3-ch vs 4-ch, tự động sinh bảng LaTeX bài báo
+│   ├── models.py                           # DINOv3 4 cơ chế tiêm prior (Early, Late, FiLM, None) + Zero-init
+│   ├── train.py                            # Huấn luyện đếm xe chống rò rỉ dữ liệu (Disjoint Cameras, Δ-Dropout)
+│   ├── evaluate.py                         # So sánh đối đầu 4 cơ chế, tự động sinh bảng LaTeX bài báo
 │   └── README.md
 │
-└── direction4_temporal_density/            # [HƯỚNG 4] Spatio-Temporal Density & HCM LoS Estimation
-    ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo vật lý ρ_phys, phân loại HCM LoS
-    ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
-    ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
-    ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
-    ├── eval.py                             # Đánh giá độc lập mô hình, trích xuất MAE và ma trận LoS
+├── direction4_temporal_density/            # [HƯỚNG 4] Road-Space Occupancy & Causal Onset Forecasting
+│   ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo strictly Road Mask ρ_proxy, phân loại LoS
+│   ├── models.py                           # SpatioTemporalDensityModel (Bi-GRU Nowcasting & 1-way Causal GRU)
+│   ├── losses.py                           # Huber Smoothness + Road Occupancy Loss + LoS Cross-Entropy
+│   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
+│   ├── eval.py                             # Đánh giá độc lập mô hình, trích xuất MAE và ma trận LoS
+│   └── README.md
+│
+├── direction5_weak_supervision/            # [HƯỚNG 5] Context-Aware Markov Weak Supervision Label Aggregation
+│   ├── lfs/                                # 5 nguồn nhãn yếu (Detector Box, Background Diff, Temporal, History, VLM)
+│   ├── context.py                          # Bộ trích xuất 54 tổ hợp ngữ cảnh giao thông
+│   ├── label_model.py                      # Context-Aware Markov Label Model (Forward-Backward Log-Sum-Exp EM)
+│   ├── end_model.py                        # DINOv3 + Causal GRU End Model (Tự chủ 100% không cần background)
+│   ├── evaluate.py                         # So sánh với Majority Vote, Dawid-Skene trên Gold Set
+│   └── README.md
+│
+├── direction6_anomaly_detection/           # [HƯỚNG 6] Persistence-Aware Anomaly & Camera Fault Disentanglement
+│   ├── features.py                         # Trích xuất patch token DINOv3 + Road-Aware Masking
+│   ├── pooling.py                          # Temporal Feature Pooling (Median cửa sổ trượt W frames)
+│   ├── bank.py                             # Coreset Normal Memory Bank (K-Center Greedy Selection nén 90%)
+│   ├── score.py                            # Anomaly Scoring (k-NN L2 distance) & Patch Heatmap
+│   ├── camera_fault.py                     # Phân tách Lỗi Camera (Static Anomaly) vs Sự cố Giao thông (Road Anomaly)
+│   ├── events.py                           # Persistence Filtering & Quản lý vòng đời sự kiện
+│   ├── synth_events.py                     # Bộ sinh sự cố tổng hợp có Ground Truth
+│   ├── evaluate.py                         # Pipeline đánh giá định lượng (AUROC, Delay, False Alarms)
+│   └── README.md
+│
+├── direction7_traffic_forecasting/         # [HƯỚNG 7] City-Scale Congestion Forecasting on Camera Graph
+│   ├── graph.py                            # Xây dựng ma trận kề địa lý & Adaptive Adjacency Layer
+│   ├── dataset.py                          # Lưới thời gian 5 phút, Missing mask, Chronological split
+│   ├── models.py                           # ST-GraphWaveNet với Gated Dilated TCN & Multi-Task Heads
+│   ├── losses.py                           # Masked MAE, Focal Onset Loss, Multi-task Loss
+│   ├── evaluate.py                         # Đánh giá đa tầm h=15', 30', 60' & Khảo sát camera offline 10%-50%
+│   └── README.md
+│
+└── direction8_bg_conditioning/             # [HƯỚNG 8] Generalization to Unseen Cameras via Trimmed Background Stats
+    ├── descriptor.py                       # Trích xuất Trimmed Mean/Std Scene Descriptor z từ DINOv3
+    ├── conditioning.py                     # FiLM (Zero-init), Scene Prompt Tokens, Cross-Attention
+    ├── models.py                           # BackgroundConditionedModel + Bg-Dropout (p=0.25)
+    ├── evaluate.py                         # Đánh giá Unseen Camera Generalization & BDB Stress Test
     └── README.md
 ```
 
-## Bảng So Sánh 4 Hướng Nghiên Cứu Trọng Tâm
+---
+
+## Bảng So Sánh 8 Hướng Nghiên Cứu Trọng Tâm
 
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
-| **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, EAAI |
-| **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting xóa xe) | CVPR, ECCV, NeurIPS |
-| **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | EAAI Journal, ITSC |
-| **H4** | **Spatio-Temporal Density & HCM LoS** | `direction4_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
+| **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, CVPR |
+| **H2** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh tự giám sát với Laplace $\sigma$ Prior + Nền dùng chung đa ngày | IEEE TIP, Pattern Recognition |
+| **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Zero-init & $\Delta$-Dropout | IEEE T-ITS, EAAI |
+| **H4** | **Road-Space Occupancy & Causal Onset** | `direction4_temporal_density/` | Định lượng chiếm dụng strictly trên Road Mask + Causal GRU cảnh báo sớm kẹt xe | TR-Part C, IEEE T-ITS |
+| **H5** | **Context-Aware Weak Supervision** | `direction5_weak_supervision/` | Gộp nhãn yếu đa nguồn (5 LFs, 54 ngữ cảnh, Markov EM) & End Model độc lập | IEEE T-ITS, Information Fusion |
+| **H6** | **Persistence Anomaly Detection** | `direction6_anomaly_detection/` | Temporal Feature Median Pooling + Phân tách lỗi camera vs sự cố đường | TR-Part C, Pattern Recognition |
+| **H7** | **City-Scale Traffic Forecasting** | `direction7_traffic_forecasting/` | Mạng nơ-ron đồ thị ST-GraphWaveNet thích ứng với mất tín hiệu camera (Node Dropout) | TR-Part C, IEEE TKDE |
+| **H8** | **Background Conditioning & Adaptation**| `direction8_bg_conditioning/` | Thích ứng camera chưa thấy qua Trimmed Descriptor $z$ và Zero-init FiLM Modulation | Pattern Recognition, EAAI |
 
 ---
 
@@ -63,88 +106,7 @@ Tất cả các pipeline huấn luyện đều được tích hợp module `comm
 
 ---
 
-## 🚀 BẢNG TỔNG HỢP LỆNH CHẠY NHANH (PIPELINE CHEAT SHEET)
-
-### 1. Hướng 1: BG-Guided DINO Continual SSL
-```bash
-python DINO/direction1_bg_guided_dino/train.py \
-    --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --match_strategy route_hourly \
-    --backbone dinov3_vits16 \
-    --epochs 20 \
-    --batch_size 16 \
-    --alpha_fg 0.75 \
-    --save_dir checkpoints/direction1_bg_dino \
-    --device cuda
-```
-
-### 2. Hướng 2: Self-Supervised Scene Decomposition (Traffic-Decompose)
-```bash
-# Huấn luyện phân rã cảnh (Mặt đường, Xe, Alpha Mask):
-python DINO/direction2_scene_decomposition/train.py \
-    --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --save_dir checkpoints/direction2_scene_decomp \
-    --img_size 256 \
-    --epochs 20 \
-    --batch_size 8 \
-    --device cuda
-
-# Suy luận xóa xe tự động (Unsupervised Road Inpainting):
-python DINO/direction2_scene_decomposition/infer.py \
-    --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
-    --input_path output \
-    --output_dir checkpoints/direction2_scene_decomp/inferred \
-    --device cuda
-```
-
-### 3. Hướng 3: Foreground-Enhanced Counting (Stage 1 Upgrade)
-```bash
-# Huấn luyện mô hình 4 kênh (RGB + Δ) với Spatial Disjoint Camera Split:
-python DINO/direction3_foreground_enhanced_counting/train.py \
-    --csv_file stage1_perception/counting_labels_5012.csv \
-    --origin_dir output \
-    --bg_dir traffic_backgrounds \
-    --mode 4channel \
-    --epochs 20 \
-    --batch_size 16 \
-    --save_dir checkpoints/direction3_fg_counting \
-    --device cuda
-
-# Chạy đánh giá đối đầu và xuất bảng LaTeX chèn vào bài báo:
-python DINO/direction3_foreground_enhanced_counting/evaluate.py \
-    --csv_file stage1_perception/counting_labels_5012.csv \
-    --origin_dir output \
-    --bg_dir traffic_backgrounds \
-    --weights checkpoints/direction3_fg_counting/best_counting_model_4channel.pth \
-    --output_dir checkpoints/direction3_fg_counting/eval \
-    --device cuda
-```
-
-### 4. Hướng 4: Spatio-Temporal Density & HCM LoS Estimation
-# Huấn luyện mô hình không-thời gian:
-python DINO/direction4_temporal_density/train.py \
-    --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --seq_len 4 \
-    --batch_size 8 \
-    --epochs 30 \
-    --save_dir checkpoints/direction4_temporal_density \
-    --device cuda
-
-# Đánh giá độc lập mô hình từ checkpoint:
-python DINO/direction4_temporal_density/eval.py \
-    --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --weights checkpoints/direction4_temporal_density/best_temporal_model.pth \
-    --output_dir checkpoints/direction4_temporal_density/eval \
-    --device cuda
-```
-
----
-
-## 🧪 Kiểm Thử Toàn Bộ 4 Hướng Trọng Tâm (Smoke Test Runner)
+## 🧪 Kiểm Thử Toàn Bộ 8 Hướng Trọng Tâm (Smoke Test Runner)
 Chạy script kiểm thử tự động toàn diện với dữ liệu mô phỏng trong vòng 10 giây:
 ```bash
 python DINO/test_all_directions.py

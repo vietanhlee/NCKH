@@ -233,7 +233,7 @@ Phạt bình phương ‖ρ̂\_{t+1} − ρ̂\_t‖² làm mờ các thay đổi
 
 ρ\_proxy trực tiếp; chiếm dụng tính từ box của detector (YOLO/RT-DETR) giao road mask; mô hình đếm mật độ kiểu CSRNet; VLM zero-shot cho mức ùn tắc; DINOv3 + head không có Δ-CNN.
 
-## II.A. Hướng 2 nâng cấp — Phân rã cảnh giao thông từ background prior không hoàn hảo
+## II. Hướng 2 (II.A) nâng cấp — Phân rã cảnh giao thông từ background prior không hoàn hảo
 
 Tên gợi ý: *Noise-Aware Traffic Scene Decomposition with Imperfect Background Priors*. Mục này thay thế hoàn toàn H2 gốc. Ý chính: background median không còn là "đáp án" mà mô hình phải chép theo, mà chỉ là **một gợi ý có thể sai**. Mô hình tự học chỗ nào gợi ý sai, rồi dùng chính dữ liệu nhiều ngày để tạo ra background tốt hơn.
 
@@ -555,7 +555,7 @@ Nếu baseline hai giai đoạn (detector + LaMa) thắng về chất lượng m
 
 **Venue:** IEEE TIP, Pattern Recognition, IEEE TCSVT, IEEE T-ITS.
 
-## II.B. Gộp nhãn yếu đa nguồn cho mức độ ùn tắc
+## II. Hướng 5 (II.B): Gộp nhãn yếu đa nguồn cho mức độ ùn tắc
 
 Tên gợi ý: *Context-Aware Weak Supervision for Congestion Recognition in Motorbike-Dominant Traffic*. Đây là hướng an toàn nhất: background chỉ là một nguồn nhãn yếu, mô hình tự học khi nào nên tin nó.
 
@@ -617,7 +617,7 @@ P(y_{1:T}, \lambda_{1:T}) = P(y_1)\prod_{t=2}^{T} A(y_t \mid y_{t-1}) \prod_{t=1
 
 **Venue:** Information Fusion, EAAI, Expert Systems with Applications, IEEE T-ITS. **Công sức:** 3–4 tháng; phần lớn thời gian là gán gold set và chạy VLM.
 
-## II.C. Phát hiện sự cố bất thường kéo dài (ngập nước, xe chết máy, vật cản)
+## II. Hướng 6 (II.C): Phát hiện sự cố bất thường kéo dài (ngập nước, xe chết máy, vật cản)
 
 Tên gợi ý: *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*. Không cần background chính xác vì so sánh ở không gian feature và theo phân phối nhiều ngày.
 
@@ -668,7 +668,7 @@ Phân biệt **thay đổi bất thường kéo dài** (ngập, vật cản, xe 
 
 **Venue:** IEEE T-ITS, Transportation Research Part C, EAAI, Expert Systems with Applications. **Công sức:** 4–5 tháng, chủ yếu là xây tập đánh giá; phần mô hình nhẹ, không cần huấn luyện backbone.
 
-## II.D. Dự báo ùn tắc trên đồ thị mạng camera
+## II. Hướng 7 (II.D): Dự báo ùn tắc trên đồ thị mạng camera
 
 Tên gợi ý: *City-Scale Congestion Forecasting from Surveillance Camera Networks in Motorbike-Dominant Traffic*. Background gần như không cần dùng.
 
@@ -724,7 +724,7 @@ Benchmark dự báo dựa trên camera quy mô thành phố trong giao thông xe
 
 **Venue:** Transportation Research Part C, IEEE T-ITS, IEEE TKDE. **Công sức:** 4–6 tháng; nên làm sau Hướng B vì dùng mô hình của B để tạo chỉ số.
 
-## II.E. Thích ứng camera mới bằng thống kê toàn cục của background
+## II. Hướng 8 (II.E): Thích ứng camera mới bằng thống kê toàn cục của background
 
 Tên gợi ý: *Background-Conditioned Generalization to Unseen Traffic Cameras with Unreliable Scene Priors*. Đây là hướng nhanh nhất và tận dụng code H3 có sẵn.
 

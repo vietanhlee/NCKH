@@ -22,7 +22,7 @@ data/
 
 # Media & Docs exclusions if needed
 *.pdf
-!DINO/Bao_Cao_4_Huong_Nghien_Cuu_DINO.pdf
+!DINO/Bao_Cao_8_Huong_Nghien_Cuu_DINO.pdf
 *.png
 *.md
 !README.md
