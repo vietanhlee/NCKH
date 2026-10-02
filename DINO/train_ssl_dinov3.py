@@ -398,6 +398,7 @@ def build_backbone(
                             f"facebook/dinov3-{arch_tag.split('-')[-1]}"
                         ]
                         print(f"   🔑 [HuggingFace Hub] Checking authenticated access with provided HF_TOKEN...")
+                        last_dl_err = None
                         for r_id in repo_candidates:
                             for c_file in ["model.safetensors", "pytorch_model.bin", f"{hub_name}_pretrain_lvd1689m.pth"]:
                                 try:
@@ -406,10 +407,16 @@ def build_backbone(
                                         weights_path = dl_file
                                         print(f"   ✅ [HuggingFace Hub] Successfully retrieved official weights from '{r_id}': {dl_file}")
                                         break
-                                except Exception:
+                                except Exception as e_inner:
+                                    last_dl_err = e_inner
+                                    err_str = str(e_inner).lower()
+                                    if "expired" in err_str or "401" in err_str or "invalid" in err_str:
+                                        print(f"   ⚠️ [HuggingFace Hub] Cảnh báo xác thực: Token HF không hợp lệ hoặc đã hết hạn ({e_inner})!")
                                     continue
                             if weights_path:
                                 break
+                        if not weights_path and last_dl_err:
+                            print(f"   ⚠️ [HuggingFace Hub Notice] Không thể tải weights từ remote Hub: {last_dl_err}")
                     except Exception as e_hf:
                         print(f"   [Notice] HuggingFace Hub check: {e_hf}")
 

@@ -159,6 +159,7 @@ def get_dino_backbone(
         ]
         try:
             from huggingface_hub import hf_hub_download
+            last_hf_err = None
             for r_id in repo_candidates:
                 for c_file in ["model.safetensors", "pytorch_model.bin", f"{model_name}_pretrain_lvd1689m.pth"]:
                     try:
@@ -167,12 +168,18 @@ def get_dino_backbone(
                             weights_path = dl_file
                             print(f"   ✅ [HuggingFace Hub] Tự động tải thành công weights DINOv3 từ '{r_id}': {dl_file}")
                             break
-                    except Exception:
+                    except Exception as e_inner:
+                        last_hf_err = e_inner
+                        err_str = str(e_inner).lower()
+                        if "expired" in err_str or "401" in err_str or "invalid" in err_str:
+                            print(f"   ⚠️ [HuggingFace Hub] Cảnh báo xác thực: Token HF không hợp lệ hoặc đã hết hạn ({e_inner})!")
                         continue
                 if weights_path:
                     break
-        except Exception:
-            pass
+            if not weights_path and last_hf_err:
+                print(f"   ⚠️ [HuggingFace Hub Notice] Không thể tải weights từ remote Hub: {last_hf_err}")
+        except Exception as e_hf_top:
+            print(f"   ⚠️ [HuggingFace Hub Notice] Lỗi kết nối HuggingFace Hub: {e_hf_top}")
 
     # 1. Thử tận dụng hàm build_backbone đã viết rất hoàn chỉnh trong train_ssl_dinov3
     dino_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
