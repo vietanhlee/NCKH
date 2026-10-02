@@ -1,8 +1,9 @@
 """
 =============================================================================
- 🚀 CÔNG CỤ TẢI VÀ KIỂM TRA MÔ HÌNH PRETRAINED METAAI DINOv3
- Module độc lập giúp tải trọng số DINOv3 chính thức từ Hugging Face Hub về máy cá nhân,
- kiểm tra độ khớp 100% của trọng số và thực hiện chạy thử (forward test).
+ 🚀 CÔNG CỤ TẢI VÀ XÁC THỰC MÔ HÌNH PRETRAINED METAAI DINOv3
+ Module độc lập: Xác thực token Hugging Face trực tiếp với máy chủ,
+ BỎ QUA cache trên máy, buộc tải mới 100% file 'model.safetensors' từ repo chính thức,
+ nạp vào kiến trúc DINOv3 ViT và chạy thử nghiệm (Forward Test).
 =============================================================================
 """
 
@@ -13,6 +14,7 @@ import sys
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import argparse
+import shutil
 import torch
 import torch.nn as nn
 
@@ -26,7 +28,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Thêm đường dẫn project vào sys.path để gọi các module nội bộ
+# Thêm đường dẫn project vào sys.path để nạp các module nội bộ
 _cur_dir = os.path.dirname(os.path.abspath(__file__))
 if _cur_dir not in sys.path:
     sys.path.insert(0, _cur_dir)
@@ -38,97 +40,115 @@ if _cur_dir not in sys.path:
 # Tạo token miễn phí (chọn Expiration: No expiration) tại:
 # 👉 https://huggingface.co/settings/tokens
 # =============================================================================
-MY_HF_TOKEN = ""  # <--- DÁN TOKEN 'hf_...' CỦA BẠN VÀO ĐÂY NẾU MUỐN CỐ ĐỊNH
+MY_HF_TOKEN = ""  # <--- [ĐIỀN TOKEN CỦA BẠN VÀO ĐÂY, VÍ DỤ "hf_xxxx..."]
+
+
+def verify_hf_token(token: str) -> bool:
+    """
+    Xác thực token trực tiếp với API Hugging Face Hub (HfApi.whoami).
+    Trả về True nếu token hợp lệ và in thông tin tài khoản, False nếu không hợp lệ.
+    """
+    from huggingface_hub import HfApi
+    api = HfApi()
+    try:
+        user_info = api.whoami(token=token)
+        user_name = user_info.get("name", "N/A")
+        user_fullname = user_info.get("fullname", "")
+        auth_type = user_info.get("type", "user")
+        print(f"   ✅ [Xác thực thành công] Đã đăng nhập vào Hugging Face Hub!")
+        print(f"      👤 Tài khoản : @{user_name}" + (f" ({user_fullname})" if user_fullname else ""))
+        print(f"      🏷️ Loại quyền: {auth_type}")
+        return True
+    except Exception as e:
+        err_msg = str(e)
+        print(f"   ❌ [Xác thực thất bại] Token không hợp lệ hoặc đã hết hạn!")
+        if "expired" in err_msg.lower():
+            print(f"      👉 Thông báo từ HF: Token này đã HẾT HẠN (Expired).")
+        elif "invalid" in err_msg.lower() or "401" in err_msg:
+            print(f"      👉 Thông báo từ HF: Token không đúng hoặc không tồn tại (401 Unauthorized).")
+        else:
+            print(f"      👉 Chi tiết lỗi: {err_msg}")
+        print(f"      👉 Hướng dẫn: Truy cập https://huggingface.co/settings/tokens để tạo token mới (chọn No expiration).")
+        return False
 
 
 def download_and_verify_dinov3(
     model_name: str = "dinov3_vits16",
     hf_token: str = "",
     save_dir: str = "checkpoints",
+    force_download: bool = True,
     device: str = "cpu",
 ):
     """
-    Tải file trọng số model.safetensors từ Hugging Face Hub, lưu về máy và kiểm thử forward.
+    Xác thực token, bỏ qua cache máy, tải mới trọng số từ Hugging Face Hub và kiểm thử.
     """
     token = hf_token.strip() or MY_HF_TOKEN.strip() or os.environ.get("HF_TOKEN", "").strip()
 
     print("=" * 78)
-    print(f" 🚀 KHỞI ĐỘNG CÔNG CỤ TẢI & KIỂM TRA METAAI DINOv3")
+    print(f" 🚀 CÔNG CỤ TẢI MỚI & XÁC THỰC MÔ HÌNH METAAI DINOv3")
     print("=" * 78)
     print(f" 📦 Kiến trúc mô hình    : {model_name}")
     print(f" 💾 Thư mục lưu trữ local: {os.path.abspath(save_dir)}")
     print(f" 🖥️ Thiết bị kiểm thử    : {device.upper()}")
-    print(f" 🔑 Hugging Face Token   : {'Đã cung cấp (***' + token[-4:] + ')' if len(token) > 6 else 'Chưa cung cấp'}")
+    print(f" 🔄 Buộc tải mới từ mạng : {'CÓ (Bỏ qua toàn bộ cache cũ)' if force_download else 'KHÔNG'}")
+    print(f" 🔑 Hugging Face Token   : {'Đã nhập (***' + token[-4:] + ')' if len(token) > 6 else 'Chưa nhập'}")
     print("=" * 78)
 
-    # 1. Chuẩn hóa tên kiến trúc và repo trên Hugging Face
+    # BƯỚC 1: XÁC THỰC TOKEN VỚI HUGGING FACE HUB
+    print(f"\n[Bước 1/4] Xác thực token trực tiếp với máy chủ Hugging Face Hub...")
+    if not token:
+        print("   ❌ [Thiếu Token] Bạn chưa cung cấp Hugging Face Token!")
+        print("      Vui lòng điền vào biến MY_HF_TOKEN ở dòng 37 trong file, hoặc truyền qua cờ:")
+        print("      python download_dinov3.py --hf_token \"hf_xxxxxxxxxxxxxx\"")
+        return False
+
+    is_valid = verify_hf_token(token)
+    if not is_valid:
+        return False
+
+    # BƯỚC 2: TẢI TRỌNG SỐ TRỰC TIẾP TỪ HUGGING FACE HUB (BỎ QUA CACHE MÁY)
     clean_name = model_name.lower().strip()
     arch_tag = clean_name.replace("_", "-")
-    
-    # Danh sách các repo ứng viên chính thức của Meta DINOv3
     repo_id = f"facebook/{arch_tag}-pretrain-lvd1689m"
     filename = "model.safetensors"
 
     os.makedirs(save_dir, exist_ok=True)
     local_target_path = os.path.join(save_dir, f"{clean_name}_{filename}")
 
-    # 2. Tải trọng số từ Hugging Face Hub
-    cached_path = None
-    print(f"\n[Bước 1/3] Kết nối Hugging Face Hub tải file '{filename}' từ repo '{repo_id}'...")
-    
+    print(f"\n[Bước 2/4] Tải trực tiếp file '{filename}' từ repo '{repo_id}' (Bỏ qua cache máy)...")
     try:
         from huggingface_hub import hf_hub_download
-        
-        # Thử lấy từ cache offline trước
-        try:
-            cached_path = hf_hub_download(repo_id=repo_id, filename=filename, local_files_only=True)
-            print(f"   🎯 Đã tìm thấy file trong Local Cache của máy: {cached_path}")
-        except Exception:
-            pass
 
-        # Nếu chưa có ở cache local thì tải trực tuyến
-        if not cached_path:
-            if not token:
-                print("   ⚠️ [Chú ý] Bạn chưa điền Hugging Face Token. Đang thử tải ở chế độ public...")
-            else:
-                print("   🔑 [Xác thực] Đang sử dụng HF Token để tải repo chính thức...")
+        print(f"   📥 Đang tải trực tuyến từ Hugging Face Hub (force_download={force_download})...")
+        downloaded_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            token=token,
+            force_download=force_download,
+        )
+        print(f"   ✅ Tải hoàn tất từ máy chủ Hugging Face!")
+        print(f"      Tệp tải về tạm thời: {downloaded_path}")
 
-            cached_path = hf_hub_download(
-                repo_id=repo_id,
-                filename=filename,
-                token=token if token else None,
-            )
-            print(f"   ✅ Tải thành công từ Hugging Face Hub về cache hệ thống!")
-            print(f"      Vị trí cache: {cached_path}")
+        # Sao chép/lưu cố định vào thư mục save_dir của dự án
+        shutil.copy2(downloaded_path, local_target_path)
+        print(f"   💾 Đã lưu checkpoint cố định về thư mục dự án: {local_target_path}")
+        active_weights_path = local_target_path
 
     except Exception as e_dl:
         err_msg = str(e_dl)
-        print(f"\n❌ [Lỗi Tải Trọng Số] Không thể tải được file từ Hugging Face Hub.")
-        if "401" in err_msg or "expired" in err_msg.lower() or "unauthorized" in err_msg.lower():
-            print(f"   👉 Nguyên nhân: Token của bạn đã hết hạn (Expired) hoặc không có quyền.")
-            print(f"   👉 Giải pháp: Vui lòng truy cập https://huggingface.co/settings/tokens")
-            print(f"      Tạo một 'User Access Token' mới (loại Read, Expiration: No expiration),")
-            print(f"      sau đó dán vào biến MY_HF_TOKEN hoặc truyền --hf_token <token_mới>.")
-        elif "404" in err_msg or "not found" in err_msg.lower():
-            print(f"   👉 Repo '{repo_id}' yêu cầu bạn phải được duyệt truy cập hoặc tên repo khác.")
+        print(f"\n❌ [Lỗi Tải Trọng Số] Không thể tải file từ repo '{repo_id}'.")
+        if "403" in err_msg or "gated" in err_msg.lower():
+            print(f"   👉 Repo này yêu cầu chấp thuận điều khoản của Meta AI.")
+            print(f"      Vui lòng truy cập https://huggingface.co/{repo_id} trên trình duyệt,")
+            print(f"      đăng nhập tài khoản của bạn và bấm 'Agree and access repository'.")
+        elif "404" in err_msg:
+            print(f"   👉 Không tìm thấy repo hoặc file '{filename}' trên '{repo_id}'.")
         else:
             print(f"   👉 Chi tiết lỗi: {err_msg}")
         return False
 
-    # 3. Tạo bản sao (hoặc link) vào thư mục save_dir của dự án để tiện lưu trữ
-    try:
-        import shutil
-        if cached_path and os.path.exists(cached_path) and not os.path.exists(local_target_path):
-            shutil.copy2(cached_path, local_target_path)
-            print(f"   💾 Đã sao chép 1 bản checkpoint về thư mục dự án: {local_target_path}")
-            active_weights_path = local_target_path
-        else:
-            active_weights_path = cached_path
-    except Exception:
-        active_weights_path = cached_path
-
-    # 4. Nạp trọng số vào Backbone và kiểm thử độ khớp
-    print(f"\n[Bước 2/3] Nạp trọng số vào kiến trúc ViT '{clean_name}'...")
+    # BƯỚC 3: NẠP TRỌNG SỐ VÀO BACKBONE VÀ KIỂM TRA ĐỘ KHỚP
+    print(f"\n[Bước 3/4] Nạp trọng số vừa tải vào kiến trúc ViT '{clean_name}'...")
     try:
         from train_ssl_dinov3 import build_backbone
         model, embed_dim = build_backbone(
@@ -143,8 +163,8 @@ def download_and_verify_dinov3(
         print(f"   ❌ Lỗi khi nạp mô hình vào bộ nhớ: {e_load}")
         return False
 
-    # 5. Kiểm thử Chạy Thử Nghiệm (Forward Pass)
-    print(f"\n[Bước 3/3] Chạy thử nghiệm Forward Pass với ảnh mẫu giả lập (224x224)...")
+    # BƯỚC 4: CHẠY THỬ NGHIỆM FORWARD PASS (HEALTH CHECK)
+    print(f"\n[Bước 4/4] Chạy thử nghiệm Forward Pass với ảnh mẫu giả lập (224x224)...")
     try:
         dummy_input = torch.randn(1, 3, 224, 224, device=device)
         with torch.no_grad():
@@ -152,16 +172,16 @@ def download_and_verify_dinov3(
                 out = model.get_intermediate_layers(dummy_input, n=1, return_class_token=True)
                 patch_tokens, cls_token = out[0]
                 print(f"   🎯 Kích thước CLS Token    : {cls_token.shape} (Batch=1, Dim={cls_token.shape[-1]})")
-                print(f"   🎯 Kích thước Patch Tokens : {patch_tokens.shape} (196 patches cho ảnh 224x224)")
+                print(f"   🎯 Kích thước Patch Tokens : {patch_tokens.shape} (196 patches không gian cho ảnh 224x224)")
             else:
                 out = model(dummy_input)
                 print(f"   🎯 Kích thước đầu ra       : {out.shape}")
 
         print("\n" + "=" * 78)
-        print(" 🎉 CHÚC MỪNG! MÔ HÌNH METAAI DINOv3 ĐÃ ĐƯỢC TẢI VÀ HOẠT ĐỘNG HOÀN HẢO!")
+        print(" 🎉 CHÚC MỪNG! MÔ HÌNH METAAI DINOv3 ĐÃ ĐƯỢC TẢI & XÁC THỰC THÀNH CÔNG 100%!")
         print("=" * 78)
-        print(f" 📂 Đường dẫn checkpoint sẵn sàng sử dụng: {active_weights_path}")
-        print(f" 💡 Bây giờ bạn có thể dùng file này cho tất cả 8 hướng nghiên cứu với cờ:")
+        print(f" 📂 File trọng số đã sẵn sàng tại: {active_weights_path}")
+        print(f" 💡 Bạn có thể dùng file này cho tất cả các hướng nghiên cứu với tham số:")
         print(f"    --weights \"{active_weights_path}\"")
         print("=" * 78 + "\n")
         return True
@@ -172,7 +192,7 @@ def download_and_verify_dinov3(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Tải và kiểm thử mô hình DINOv3 từ Hugging Face Hub")
+    parser = argparse.ArgumentParser(description="Xác thực token và buộc tải mới mô hình DINOv3 từ Hugging Face Hub")
     parser.add_argument(
         "--model",
         type=str,
@@ -193,6 +213,11 @@ if __name__ == "__main__":
         help="Thư mục lưu trữ file trọng số tải về (mặc định: checkpoints)",
     )
     parser.add_argument(
+        "--no_force",
+        action="store_true",
+        help="Nếu bật cờ này, sẽ cho phép dùng cache cũ thay vì buộc tải mới",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -204,5 +229,6 @@ if __name__ == "__main__":
         model_name=args.model,
         hf_token=args.hf_token,
         save_dir=args.save_dir,
+        force_download=not args.no_force,
         device=args.device,
     )
