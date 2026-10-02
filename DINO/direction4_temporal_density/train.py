@@ -25,9 +25,9 @@ if _dino_dir not in sys.path:
 
 from common.backbone_loader import get_dino_backbone
 from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
-from direction5_temporal_density.dataset import TemporalTrafficDataset
-from direction5_temporal_density.models import SpatioTemporalDensityNet
-from direction5_temporal_density.losses import SpatioTemporalDensityLoss
+from direction4_temporal_density.dataset import TemporalTrafficDataset
+from direction4_temporal_density.models import SpatioTemporalDensityNet
+from direction4_temporal_density.losses import SpatioTemporalDensityLoss
 
 
 def parse_args():
@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
     parser.add_argument("--origin_dir", type=str, default="output", help="Thư mục origin images")
     parser.add_argument("--csv_file", type=str, default=None, help="File CSV nhãn số lượng xe (nếu có)")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction5_temporal_density", help="Thư mục lưu mô hình")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction4_temporal_density", help="Thư mục lưu mô hình")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINO")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn trọng số backbone ban đầu")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")

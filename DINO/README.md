@@ -1,6 +1,6 @@
 # DINO Traffic Suite: Khai Thác Cặp Ảnh Background–Origin Cho Thị Giác Giao Thông
 
-Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **5 hướng nghiên cứu trọng tâm** (H1, H2, H3, H5, H8).
+Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **5 hướng nghiên cứu trọng tâm** (H1, H2, H3, H4, H5).
 
 ```
 DINO/
@@ -32,14 +32,14 @@ DINO/
 │   ├── evaluate.py                         # So sánh 3-ch vs 4-ch, tự động sinh bảng LaTeX bài báo
 │   └── README.md
 │
-├── direction5_temporal_density/            # [HƯỚNG 5] Spatio-Temporal Density & HCM LoS Estimation
+├── direction4_temporal_density/            # [HƯỚNG 4] Spatio-Temporal Density & HCM LoS Estimation
 │   ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo vật lý ρ_phys, phân loại HCM LoS
 │   ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
 │   ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
 │   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
 │   └── README.md
 │
-└── direction8_road_condition/              # [HƯỚNG 8] Self-Supervised Road Surface Condition Estimation
+└── direction5_road_condition/              # [HƯỚNG 5] Self-Supervised Road Surface Condition Estimation
     ├── dataset.py                          # RoadSurfaceDataset nạp chuỗi ảnh nền 24h & mỏ neo quang học
     ├── models.py                           # RoadConditionClassifier (Tri-Head: Wetness, Illumination, Degradation)
     ├── losses.py                           # SurfaceConsistencyLoss với mỏ neo vật lý
@@ -55,8 +55,8 @@ DINO/
 | **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, EAAI |
 | **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting xóa xe) | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | EAAI Journal, ITSC |
-| **H5** | **Spatio-Temporal Density & HCM LoS** | `direction5_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
-| **H8** | **Road Surface Condition Estimation** | `direction8_road_condition/` | Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h | IEEE T-ITS, TRB |
+| **H4** | **Spatio-Temporal Density & HCM LoS** | `direction4_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
+| **H5** | **Road Surface Condition Estimation** | `direction5_road_condition/` | Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h | IEEE T-ITS, TRB |
 
 ---
 
@@ -130,32 +130,32 @@ python DINO/direction3_foreground_enhanced_counting/evaluate.py \
     --device cuda
 ```
 
-### 4. Hướng 5: Spatio-Temporal Density & HCM LoS Estimation
+### 4. Hướng 4: Spatio-Temporal Density & HCM LoS Estimation
 ```bash
-python DINO/direction5_temporal_density/train.py \
+python DINO/direction4_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
     --seq_len 4 \
     --batch_size 8 \
     --epochs 30 \
-    --save_dir checkpoints/direction5_temporal_density \
+    --save_dir checkpoints/direction4_temporal_density \
     --device cuda
 ```
 
-### 5. Hướng 8: Self-Supervised Road Surface Condition Estimation
+### 5. Hướng 5: Self-Supervised Road Surface Condition Estimation
 ```bash
 # Huấn luyện đa thuộc tính mặt đường (ngập nước, chiếu sáng, nứt nẻ):
-python DINO/direction8_road_condition/train.py \
+python DINO/direction5_road_condition/train.py \
     --bg_dir traffic_backgrounds \
     --epochs 25 \
     --batch_size 16 \
-    --save_dir checkpoints/direction8_road_condition \
+    --save_dir checkpoints/direction5_road_condition \
     --device cuda
 
 # Đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị:
-python DINO/direction8_road_condition/eval.py \
+python DINO/direction5_road_condition/eval.py \
     --bg_dir traffic_backgrounds \
-    --output_dir checkpoints/direction8_road_condition \
+    --output_dir checkpoints/direction5_road_condition \
     --device cuda
 ```
 

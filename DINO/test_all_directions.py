@@ -239,12 +239,12 @@ try:
     print("   ✅ [Direction 3] Foreground-Enhanced Counting pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 5. TEST DIRECTION 5: SPATIO-TEMPORAL DENSITY & LoS ESTIMATION
+    # 5. TEST DIRECTION 4: SPATIO-TEMPORAL DENSITY & LoS ESTIMATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 5] Direction 5: Spatio-Temporal Road Occupancy & LoS Estimation ---")
-    from direction5_temporal_density.dataset import TemporalTrafficDataset
-    from direction5_temporal_density.models import SpatioTemporalDensityNet
-    from direction5_temporal_density.losses import SpatioTemporalDensityLoss
+    print("\n--- [TEST 5] Direction 4: Spatio-Temporal Road Occupancy & LoS Estimation ---")
+    from direction4_temporal_density.dataset import TemporalTrafficDataset
+    from direction4_temporal_density.models import SpatioTemporalDensityNet
+    from direction4_temporal_density.losses import SpatioTemporalDensityLoss
 
     ds5 = TemporalTrafficDataset(
         bg_dir=bg_dir,
@@ -284,15 +284,15 @@ try:
     l5_dict = crit5(out5, targets5)
     assert not torch.isnan(l5_dict["loss_total"]) and l5_dict["loss_total"].item() > 0
     print(f"   + Spatio-Temporal Loss: {l5_dict['loss_total'].item():.4f} (Occ: {l5_dict['loss_occupancy'].item():.4f}, LoS: {l5_dict['loss_los'].item():.4f})")
-    print("   ✅ [Direction 5] Spatio-Temporal Density & LoS pass hoàn hảo!")
+    print("   ✅ [Direction 4] Spatio-Temporal Density & LoS pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 6. TEST DIRECTION 8: ROAD SURFACE CONDITION ESTIMATION
+    # 6. TEST DIRECTION 5: ROAD SURFACE CONDITION ESTIMATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 6] Direction 8: Road Surface Condition Estimation ---")
-    from direction8_road_condition.dataset import RoadSurfaceDataset
-    from direction8_road_condition.models import RoadConditionClassifier
-    from direction8_road_condition.losses import SurfaceConsistencyLoss
+    print("\n--- [TEST 6] Direction 5: Road Surface Condition Estimation ---")
+    from direction5_road_condition.dataset import RoadSurfaceDataset
+    from direction5_road_condition.models import RoadConditionClassifier
+    from direction5_road_condition.losses import SurfaceConsistencyLoss
 
     ds8 = RoadSurfaceDataset(bg_dir=bg_dir, img_size=128)
     assert len(ds8) >= 2, f"Kỳ vọng >= 2 ảnh nền, thực tế: {len(ds8)}"
@@ -316,7 +316,7 @@ try:
     l8_dict = crit8(road_out, target8)
     assert not torch.isnan(l8_dict["loss_total"])
     print(f"   + Road Surface Loss: {l8_dict['loss_total'].item():.4f}")
-    print("   ✅ [Direction 8] Road Surface Condition pass hoàn hảo!")
+    print("   ✅ [Direction 5] Road Surface Condition pass hoàn hảo!")
 
     # -------------------------------------------------------------
     # 7. TEST MULTI-GPU SMART SAVE & LOAD CHECKPOINTING

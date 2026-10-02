@@ -1,4 +1,4 @@
-# Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy & Congestion Level of Service (LoS) Estimation
+# Hướng 4: Spatio-Temporal DINO for Continuous Road Space Occupancy & Congestion Level of Service (LoS) Estimation
 
 ## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐⭐⭐)
 Thay vì đếm từng xe (dễ sai lệch nghiêm trọng khi tắc đường xe máy che khuất nhau), bài toán kỹ thuật giao thông hiện đại (ITS) tập trung vào hai chỉ số cốt lõi:
@@ -28,10 +28,10 @@ Thay vì đếm từng xe (dễ sai lệch nghiêm trọng khi tắc đường x
 ## 3. Hướng Dẫn Chạy (CLI Execution)
 
 ```bash
-python direction5_temporal_density/train.py \
+python direction4_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
-    --save_dir checkpoints/direction5_temporal_density \
+    --save_dir checkpoints/direction4_temporal_density \
     --backbone dinov3_vits16 \
     --window_size 4 \
     --batch_size 8 \
@@ -41,7 +41,7 @@ python direction5_temporal_density/train.py \
 ```
 Hoặc tiếp tục huấn luyện từ checkpoint:
 ```bash
-python direction5_temporal_density/train.py \
-    --resume checkpoints/direction5_temporal_density/best_temporal_model.pth \
+python direction4_temporal_density/train.py \
+    --resume checkpoints/direction4_temporal_density/best_temporal_model.pth \
     --epochs 10
 ```

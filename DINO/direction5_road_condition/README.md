@@ -1,6 +1,6 @@
-# Hướng 8: Self-Supervised Road Surface Condition Estimation
+# Hướng 5: Self-Supervised Road Surface Condition Estimation
 
-## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐)
+## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐⭐)
 Mỗi camera giám sát giao thông đô thị ghi nhận chuỗi ảnh nền 24 giờ $\{I_{\text{bg}}^{h=0}, \dots, I_{\text{bg}}^{h=23}\}$. Thay vì chỉ sử dụng ảnh nền để trừ xe, chuỗi ảnh này chứa đựng các biến đổi tự nhiên của môi trường:
 - Tình trạng thời tiết: Mặt đường khô ráo vs. mặt đường ẩm ướt / đọng nước sau mưa (thể hiện qua các phản chiếu gương - Specular Reflections).
 - Chu kỳ chiếu sáng: Ánh sáng ban ngày, ánh hoàng hôn và hệ thống đèn đường ban đêm.
@@ -17,6 +17,7 @@ Mỗi camera giám sát giao thông đô thị ghi nhận chuỗi ảnh nền 24
 - `dataset.py`: `RoadSurfaceDataset` quét toàn bộ ảnh nền 24h, tính toán các chỉ số quang học cơ sở (độ chói, tỷ lệ phản chiếu gương, độ nhám gradient).
 - `models.py`: `RoadConditionClassifier` (ViT Backbone + Wetness, Illumination & Degradation Heads).
 - `losses.py`: `SurfaceConsistencyLoss` (Hàm mất mát đa mục tiêu kết hợp mỏ neo vật lý).
+- `train.py`: Pipeline huấn luyện đa thuộc tính mặt đường với Multi-GPU & AMP.
 - `eval.py`: Pipeline đánh giá toàn đô thị, vẽ biểu đồ gom cụm PCA và xuất báo cáo CSV.
 
 ---
@@ -24,9 +25,18 @@ Mỗi camera giám sát giao thông đô thị ghi nhận chuỗi ảnh nền 24
 ## 3. Hướng Dẫn Chạy (CLI Execution)
 
 ```bash
-python direction8_road_condition/eval.py \
+# Huấn luyện mô hình:
+python direction5_road_condition/train.py \
     --bg_dir traffic_backgrounds \
-    --output_dir checkpoints/direction8_road_condition \
+    --save_dir checkpoints/direction5_road_condition \
+    --backbone dinov3_vits16 \
+    --epochs 15 \
+    --device cuda
+
+# Đánh giá & xuất báo cáo toàn đô thị:
+python direction5_road_condition/eval.py \
+    --bg_dir traffic_backgrounds \
+    --output_dir checkpoints/direction5_road_condition \
     --backbone dinov3_vits16 \
     --device cuda
 ```

@@ -24,9 +24,9 @@ if _dino_dir not in sys.path:
 
 from common.backbone_loader import get_dino_backbone
 from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
-from direction8_road_condition.dataset import RoadSurfaceDataset
-from direction8_road_condition.models import RoadConditionClassifier
-from direction8_road_condition.losses import SurfaceConsistencyLoss
+from direction5_road_condition.dataset import RoadSurfaceDataset
+from direction5_road_condition.models import RoadConditionClassifier
+from direction5_road_condition.losses import SurfaceConsistencyLoss
 
 
 def train_road_condition(args):
@@ -35,7 +35,7 @@ def train_road_condition(args):
     device_arg = args.device
 
     print("=" * 80)
-    print(" 🚀 [Direction 8] KHỞI CHẠY HUẤN LUYỆN ROAD SURFACE CONDITION ESTIMATION")
+    print(" 🚀 [Direction 5] KHỞI CHẠY HUẤN LUYỆN ROAD SURFACE CONDITION ESTIMATION")
     print("=" * 80)
 
     # 1. Khởi tạo Dataset & DataLoader
@@ -203,7 +203,7 @@ def train_road_condition(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Road Surface Condition Estimation")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction8_road_condition", help="Thư mục lưu checkpoint")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction5_road_condition", help="Thư mục lưu checkpoint")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINO")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn trọng số khởi tạo ban đầu")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")

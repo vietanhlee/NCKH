@@ -84,7 +84,7 @@ def plot_road_condition_pca(
 def main():
     parser = argparse.ArgumentParser(description="Citywide Road Surface Condition Evaluation")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
-    parser.add_argument("--output_dir", type=str, default="checkpoints/direction8_road_condition", help="Thư mục xuất kết quả")
+    parser.add_argument("--output_dir", type=str, default="checkpoints/direction5_road_condition", help="Thư mục xuất kết quả")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINO")
     parser.add_argument("--batch_size", type=int, default=16, help="Kích thước batch")
     parser.add_argument("--max_samples", type=int, default=None, help="Giới hạn số mẫu đánh giá")

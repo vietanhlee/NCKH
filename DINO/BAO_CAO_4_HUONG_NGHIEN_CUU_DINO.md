@@ -3,8 +3,12 @@
 **Dự án:** Khai thác tự giám sát cặp ảnh Background tĩnh và Origin phương tiện phục vụ bài toán thị giác máy tính giám sát giao thông đô thị  
 **Dữ liệu thực nghiệm:** Hệ thống camera giao thông đô thị TP.HCM (IC4SD-Traffic-HCM)  
 **Địa chỉ mã nguồn:** Thư mục `g:/nckh/DINO/`  
-**Cấu trúc tinh gọn:** Tập trung vào **5 hướng nghiên cứu trọng tâm** (H1, H2, H3, H5, H8).  
-*(Lược bỏ Hướng 4, Hướng 6 và Hướng 7 nhằm tinh gọn hệ thống, loại bỏ các bài toán thiếu mỏ neo vật lý hoặc dễ bị nhiễu nhận dạng trong giao thông hỗn hợp xe máy, tập trung tối đa nguồn lực vào các bài toán đo lường động học, tách rã cảnh và hạ tầng có tính ứng dụng cao nhất).*
+**Cấu trúc 5 hướng nghiên cứu liên hoàn:**
+* **Hướng 1 (`direction1_bg_guided_dino/`):** Tiền huấn luyện tự giám sát liên tục với cơ chế che định hướng tiền cảnh (Foreground-Aware Masking).
+* **Hướng 2 (`direction2_scene_decomposition/`):** Mạng phân rã bối cảnh tự giám sát (Alpha Compositing & Road Inpainting xóa xe tự động).
+* **Hướng 3 (`direction3_foreground_enhanced_counting/`):** Mở rộng biểu diễn tiền cảnh 4 kênh (RGB+$\Delta$) trong ước lượng lưu lượng ít mẫu.
+* **Hướng 4 (`direction4_temporal_density/`):** Dự đoán mật độ không-thời gian $\rho(t)$ và phân loại cấp độ dịch vụ giao thông theo chuẩn HCM LoS.
+* **Hướng 5 (`direction5_road_condition/`):** Tự giám sát đa thuộc tính điều kiện mặt đường từ chuỗi ảnh nền 24h với mỏ neo vật lý quang học.
 
 ---
 
@@ -17,7 +21,7 @@ Trong giám sát giao thông qua camera cố định (CCTV), hệ thống có ha
 Sự kết hợp giữa $I_{\text{origin}}$ và $I_{\text{bg}}$ cung cấp một tín hiệu vật lý quang học tiên nghiệm (Physical Prior) vô cùng mạnh mẽ:
 $$\Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|$$
 
-Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan hoặc sử dụng các thuật toán trừ nền cổ điển dễ bị nhiễu do thời tiết và bóng đổ, hệ thống DINO Suite được tinh gọn thành **5 hướng nghiên cứu cốt lõi**, tích hợp $\Delta$ và $I_{\text{bg}}$ vào không gian biểu diễn sâu của Vision Transformer (ViT) để giải quyết các bài toán đo lường, bóc tách và giám sát hạ tầng trong Giao thông Thông minh (Intelligent Transportation Systems - ITS).
+Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan hoặc sử dụng các thuật toán trừ nền cổ điển dễ bị nhiễu do thời tiết và bóng đổ, hệ sinh thái DINO Suite được xây dựng gồm **5 hướng nghiên cứu cốt lõi**, tích hợp $\Delta$ và $I_{\text{bg}}$ vào không gian biểu diễn sâu của Vision Transformer (ViT) để giải quyết các bài toán đo lường, bóc tách và giám sát hạ tầng trong Giao thông Thông minh (Intelligent Transportation Systems - ITS).
 
 ---
 
@@ -117,14 +121,14 @@ $$W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}, \quad W_{\text{4ch}}[:, 
 
 ---
 
-## 5. HƯỚNG 5: DỰ ĐOÁN MẬT ĐỘ KHÔNG-THỜI GIAN VÀ CẤP ĐỘ DỊCH VỤ GIAO THÔNG (SPATIO-TEMPORAL DENSITY & HCM LoS ESTIMATION)
+## 5. HƯỚNG 4: DỰ ĐOÁN MẬT ĐỘ KHÔNG-THỜI GIAN VÀ CẤP ĐỘ DỊCH VỤ GIAO THÔNG (SPATIO-TEMPORAL DENSITY & HCM LoS ESTIMATION)
 
 ### 5.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction5_temporal_density/`
-* Nạp chuỗi thời gian & tính mỏ neo vật lý $\rho_{\text{phys}}$: [`dataset.py`](file:///g:/nckh/DINO/direction5_temporal_density/dataset.py) (`TemporalDensityDataset`, `compute_physical_density`, `discretize_los`)
-* Mô hình Không - Thời Gian (ViT + Delta-CNN + BiGRU): [`models.py`](file:///g:/nckh/DINO/direction5_temporal_density/models.py) (`SpatioTemporalDensityModel`, `DeltaSpatialCNN`)
-* Hàm mất mát đa nhiệm không - thời gian: [`losses.py`](file:///g:/nckh/DINO/direction5_temporal_density/losses.py) (`TemporalDensityMultiTaskLoss`)
-* Pipeline huấn luyện chuỗi thời gian với AMP & Multi-GPU: [`train.py`](file:///g:/nckh/DINO/direction5_temporal_density/train.py)
+* Thư mục triển khai: `g:/nckh/DINO/direction4_temporal_density/`
+* Nạp chuỗi thời gian & tính mỏ neo vật lý $\rho_{\text{phys}}$: [`dataset.py`](file:///g:/nckh/DINO/direction4_temporal_density/dataset.py) (`TemporalTrafficDataset`, `compute_physical_density`, `discretize_los`)
+* Mô hình Không - Thời Gian (ViT + Delta-CNN + BiGRU): [`models.py`](file:///g:/nckh/DINO/direction4_temporal_density/models.py) (`SpatioTemporalDensityNet`, `DeltaSpatialEncoder`)
+* Hàm mất mát đa nhiệm không - thời gian: [`losses.py`](file:///g:/nckh/DINO/direction4_temporal_density/losses.py) (`SpatioTemporalDensityLoss`)
+* Pipeline huấn luyện chuỗi thời gian với AMP & Multi-GPU: [`train.py`](file:///g:/nckh/DINO/direction4_temporal_density/train.py)
 
 ### 5.2. Đặt vấn đề và Mục tiêu Khoa học Cụ thể
 1. **Hạn chế của các phương pháp cũ:** Đếm từng chiếc xe máy trong điều kiện ùn tắc đặc nghẹt ở Việt Nam (hàng trăm xe máy đè lên nhau) dẫn đến sai số rất lớn. Các phương pháp InfoNCE cửa sổ thời gian ngẫu nhiên không có mỏ neo vật lý dễ bị phân kỳ khi luồng giao thông biến động đột ngột.
@@ -148,16 +152,16 @@ $$W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}, \quad W_{\text{4ch}}[:, 
 
 ---
 
-## 6. HƯỚNG 8: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ (SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION)
+## 6. HƯỚNG 5: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ (SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION)
 
 ### 6.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction8_road_condition/`
-* Bộ nạp chuỗi ảnh nền 24h và tính toán mỏ neo vật lý quang học: [`dataset.py`](file:///g:/nckh/DINO/direction8_road_condition/dataset.py) (`RoadSurfaceDataset`, `compute_physical_surface_metrics`)
-* Mô hình phân tích đa thuộc tính (Tri-Head Multi-Task): [`models.py`](file:///g:/nckh/DINO/direction8_road_condition/models.py) (`RoadConditionClassifier`)
-* Hàm mất mát tự giám sát kết hợp mỏ neo vật lý: [`losses.py`](file:///g:/nckh/DINO/direction8_road_condition/losses.py) (`SurfaceConsistencyLoss`)
-* Pipeline huấn luyện Multi-GPU & AMP: [`train.py`](file:///g:/nckh/DINO/direction8_road_condition/train.py) (`train_road_condition`)
-* Pipeline đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị: [`eval.py`](file:///g:/nckh/DINO/direction8_road_condition/eval.py) (`plot_road_condition_pca`)
-* Tài liệu kỹ thuật: [`README.md`](file:///g:/nckh/DINO/direction8_road_condition/README.md)
+* Thư mục triển khai: `g:/nckh/DINO/direction5_road_condition/`
+* Bộ nạp chuỗi ảnh nền 24h và tính toán mỏ neo vật lý quang học: [`dataset.py`](file:///g:/nckh/DINO/direction5_road_condition/dataset.py) (`RoadSurfaceDataset`, `compute_physical_surface_metrics`)
+* Mô hình phân tích đa thuộc tính (Tri-Head Multi-Task): [`models.py`](file:///g:/nckh/DINO/direction5_road_condition/models.py) (`RoadConditionClassifier`)
+* Hàm mất mát tự giám sát kết hợp mỏ neo vật lý: [`losses.py`](file:///g:/nckh/DINO/direction5_road_condition/losses.py) (`SurfaceConsistencyLoss`)
+* Pipeline huấn luyện Multi-GPU & AMP: [`train.py`](file:///g:/nckh/DINO/direction5_road_condition/train.py) (`train_road_condition`)
+* Pipeline đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị: [`eval.py`](file:///g:/nckh/DINO/direction5_road_condition/eval.py) (`plot_road_condition_pca`)
+* Tài liệu kỹ thuật: [`README.md`](file:///g:/nckh/DINO/direction5_road_condition/README.md)
 
 ### 6.2. Đặt vấn đề và Động lực Khoa học
 Trong toàn bộ hệ sinh thái giám sát giao thông thông minh (ITS), hơn 95% các nghiên cứu thị giác máy tính truyền thống chỉ tập trung vào việc nhận diện đối tượng tiền cảnh (xe máy, ô tô, người đi bộ) và coi mặt đường là "vùng nền vô giá trị".
@@ -169,11 +173,9 @@ Tuy nhiên, trong bối cảnh thực tế tại các đô thị nhiệt đới 
 
 Kho dữ liệu ảnh nền tĩnh 24 giờ $\{I_{\text{bg}}^{h=0}, \dots, I_{\text{bg}}^{h=23}\}$ trên toàn bộ 608 camera cung cấp góc nhìn toàn cảnh về **lòng đường sạch bóng xe** ở mọi khung giờ trong ngày. Đây chính là mỏ vàng dữ liệu quang học chưa từng được khai thác để xây dựng hệ thống **Tự Động Giám Sát Sức Khỏe Mặt Đường Đô Thị (Urban Road Surface Health Monitoring)** hoàn toàn không cần nhãn thủ công.
 
----
-
 ### 6.3. Cơ Sở Vật Lý Quang Học và Phương Pháp Luận Trích Xuất Mỏ Neo
 
-Khác với các phương pháp học sâu thông thường phụ thuộc vào việc con người gán nhãn "đường ướt" hay "đường hỏng", Hướng 8 xây dựng một **Cơ chế Mỏ neo Vật lý Tự thân (Physics-Based Optical Anchoring)** kết hợp 3 đặc tính quang học trực tiếp từ ảnh nền tĩnh:
+Khác với các phương pháp học sâu thông thường phụ thuộc vào việc con người gán nhãn "đường ướt" hay "đường hỏng", Hướng 5 xây dựng một **Cơ chế Mỏ neo Vật lý Tự thân (Physics-Based Optical Anchoring)** kết hợp 3 đặc tính quang học trực tiếp từ ảnh nền tĩnh:
 
 ```text
                                 [Ảnh Nền Tĩnh I_bg (h)]
@@ -225,8 +227,6 @@ $$y_{\text{illum}} = \begin{cases}
 2 \quad (\text{Ngày: } 07\text{h}-17\text{h} \text{ — Chiếu sáng tự nhiên mặt trời}) 
 \end{cases}$$
 
----
-
 ### 6.4. Thiết Kế Kiến Trúc Mạng Phân Tích Đa Thuộc Tính (RoadConditionClassifier)
 
 ```text
@@ -266,8 +266,6 @@ $$y_{\text{illum}} = \begin{cases}
    * **Đầu ước lượng suy giảm kết cấu mặt đường (`degradation_head`):**
      $$\hat{y}_{\text{deg}} = \sigma\Big(\mathbf{W}_{d2} \text{ReLU}\big(\text{LayerNorm}(\mathbf{W}_{d1} \mathbf{z}_{\text{road}} + \mathbf{b}_{d1})\big) + b_{d2}\Big) \in [0, 1]$$
 
----
-
 ### 6.5. Hàm Mục Tiêu Tối Ưu Hóa (Surface Consistency Multi-Task Loss)
 
 Hàm mất mát toàn cục tích hợp mỏ neo vật lý đa mục tiêu:
@@ -276,10 +274,6 @@ Trong đó:
 * $\mathcal{L}_{\text{CE}}$ là hàm mất mát Entropy chéo đa lớp (Cross-Entropy Loss).
 * $\|\cdot\|_2^2$ là sai số toàn phương trung bình (Mean Squared Error).
 * Trọng số cân bằng thực nghiệm: $\lambda_{\text{illum}} = 1.0$, $\lambda_{\text{wet}} = 2.0$ (ưu tiên cao cho việc phát hiện đường ngập/ướt), $\lambda_{\text{deg}} = 1.0$.
-
-Mô hình học cách ánh xạ các mẫu hình phản chiếu quang học phức tạp trên không gian biểu diễn trừu tượng của DINO khớp với các chỉ số vật lý thực tế.
-
----
 
 ### 6.6. Phân Tích Đa Tạp Không Gian PCA 2D và Chẩn Đoán Hạ Tầng Toàn Đô Thị
 
@@ -291,7 +285,7 @@ $$\mathbf{e}_{\text{road}} = \frac{\mathbf{z}_{\text{road}}}{\|\mathbf{z}_{\text
 * **Trục $PC_2$ (Trạng thái ẩm ướt & Kết cấu nhựa đường):** Mặt đường khô ráo phân bố ở vùng dưới, trong khi các khung hình có đường ướt, đọng nước mưa và phản chiếu gương mạnh bị đẩy vọt lên vùng trên của đa tạp.
 
 #### Báo cáo Hạ tầng Đô thị Tự động (`road_surface_citywide_report.csv`)
-Pipeline [`eval.py`](file:///g:/nckh/DINO/direction8_road_condition/eval.py) tự động quét toàn bộ chuỗi ảnh nền của 608 camera trên địa bàn TP.HCM và xuất ra bảng chẩn đoán định lượng:
+Pipeline [`eval.py`](file:///g:/nckh/DINO/direction5_road_condition/eval.py) tự động quét toàn bộ chuỗi ảnh nền của 608 camera trên địa bàn TP.HCM và xuất ra bảng chẩn đoán định lượng:
 * `cam_id` / `route_id`: Mã định danh camera và nút giao thông.
 * `slot_h`: Khung giờ quan sát.
 * `wetness_score`: Nguy cơ đọng nước / ngập úng $\in [0, 1]$.
@@ -299,13 +293,11 @@ Pipeline [`eval.py`](file:///g:/nckh/DINO/direction8_road_condition/eval.py) t�
 * `degradation_score`: Mức độ nứt nẻ / hư hại bề mặt $\in [0, 1]$.
 * `luminance`: Độ sáng trung bình của mặt đường.
 
-Dữ liệu này cung cấp công cụ đắc lực cho Trung tâm Quản lý Điều hành Giao thông Đô thị để phát hiện sớm các điểm đen ngập úng sau mưa và lên kế hoạch bảo trì thảm nhựa đường kịp thời.
-
 ---
 
 ## 7. TỔNG HỢP VÀ HỆ SINH THÁI 5 HƯỚNG NGHIÊN CỨU TRỌNG TÂM
 
-Năm hướng nghiên cứu hình thành một hệ thống bổ trợ khép kín từ **biểu diễn nền tảng**, **phân rã quang học**, **đo lường động học dòng xe**, đến **giám sát chất lượng hạ tầng**:
+Năm hướng nghiên cứu hình thành một hệ sinh thái liên hoàn khép kín:
 
 ```text
                            [Dữ Liệu Thô: 608 Camera TP.HCM]
@@ -315,7 +307,7 @@ Năm hướng nghiên cứu hình thành một hệ thống bổ trợ khép kí
                                           │
            ┌──────────────────────────────┼──────────────────────────────┐
            ▼                              ▼                              ▼
-  [HƯỚNG 1: BG-Guided DINO]      [HƯỚNG 3: FG Counting]       [HƯỚNG 8: Road Surface]
+  [HƯỚNG 1: BG-Guided DINO]      [HƯỚNG 3: FG Counting]       [HƯỚNG 5: Road Surface]
   • FAM: Ép ViT học xe cộ        • Mở rộng 4 kênh (RGB+Δ)     • Khai thác chuỗi I_bg 24h
   • Pretrained Backbone ITS      • Ước lượng lưu lượng ít mẫu • Giám sát ngập ướt, nứt nẻ
            │                              │                              │
@@ -326,7 +318,7 @@ Năm hướng nghiên cứu hình thành một hệ thống bổ trợ khép kí
                              • Road Inpainting: Xóa sạch xe từ 1 frame
                                           │
                                           ▼
-                             [HƯỚNG 5: Spatio-Temporal Density]
+                             [HƯỚNG 4: Spatio-Temporal Density]
                              • BiGRU + DINO + Δ-CNN
                              • Tỷ lệ chiếm dụng lòng đường ρ(t)
                              • Cấp độ dịch vụ HCM LoS & Xu hướng ∂ρ/∂t
@@ -339,5 +331,5 @@ Năm hướng nghiên cứu hình thành một hệ thống bổ trợ khép kí
 | **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT che & học biểu diễn xe cộ | Pretrained ViT Backbone chuyên biệt cho giao thông | 4/5 | IEEE T-ITS, EAAI |
 | **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật $I_{\text{bg}}$ | Bóc tách 3 lớp $\{I_{\text{bg}}, I_{\text{fg}}, M_\alpha\}$, Road Inpainting | 5/5 | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | Ước lượng lưu lượng xe máy, ô tô trong điều kiện ít mẫu (Few-shot) | 3.5/5 | EAAI Journal, ITSC |
-| **H5** | **Spatio-Temporal Density & HCM LoS** | `direction5_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo vật lý $\rho_{\text{phys}}$ | Tỷ lệ chiếm dụng mặt đường $\rho \in [0, 1]$, Cấp độ HCM LoS, Xu hướng kẹt xe $\partial\rho/\partial t$ | 4.5/5 | IEEE T-ITS, CVPR |
-| **H8** | **Road Surface Condition Estimation** | `direction8_road_condition/` | Đánh giá đa thuộc tính từ chuỗi ảnh nền 24h với mỏ neo quang học | Chỉ số đọng nước, chiếu sáng, hư hại kết cấu mặt đường toàn đô thị | 4/5 | IEEE T-ITS, TRB |
+| **H4** | **Spatio-Temporal Density & HCM LoS** | `direction4_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo vật lý $\rho_{\text{phys}}$ | Tỷ lệ chiếm dụng mặt đường $\rho \in [0, 1]$, Cấp độ HCM LoS, Xu hướng kẹt xe $\partial\rho/\partial t$ | 4.5/5 | IEEE T-ITS, CVPR |
+| **H5** | **Road Surface Condition Estimation** | `direction5_road_condition/` | Đánh giá đa thuộc tính từ chuỗi ảnh nền 24h với mỏ neo quang học | Chỉ số đọng nước, chiếu sáng, hư hại kết cấu mặt đường toàn đô thị | 4/5 | IEEE T-ITS, TRB |

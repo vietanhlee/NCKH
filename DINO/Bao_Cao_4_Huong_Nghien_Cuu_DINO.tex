@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị ghi hình cố định cung cấp cặp tín hiệu quang học tự nhiên có giá trị: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) sạch bóng xe được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của năm hướng nghiên cứu trọng tâm học tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu trên. Hệ sinh thái nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với cơ chế che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing và xóa xe tự động (Inpainting); (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); (5) Dự đoán mật độ không-thời gian và phân loại cấp độ dịch vụ giao thông theo chuẩn Highway Capacity Manual (HCM LoS) dựa trên mạng hợp nhất DINO ViT, CNN và Bi-GRU; và (8) Đánh giá đa thuộc tính điều kiện mặt đường tự giám sát từ chuỗi ảnh nền 24 giờ với mỏ neo vật lý quang học (độ ẩm ướt phản xạ gương, độ nhám kết cấu hư hại qua toán tử Sobel và chu kỳ chiếu sáng). Hệ sinh thái tinh gọn loại bỏ các tiếp cận bất thường không có mỏ neo vật lý hoặc dễ bị nhiễu nhận dạng trong giao thông hỗn hợp để tập trung tối đa nguồn lực vào các bài toán đo lường động học, tách rã cảnh và hạ tầng có tính ứng dụng thực tiễn cao nhất.
+Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị ghi hình cố định cung cấp cặp tín hiệu quang học tự nhiên có giá trị: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) sạch bóng xe được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của năm hướng nghiên cứu trọng tâm học tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu trên. Hệ sinh thái nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với cơ chế che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing và xóa xe tự động (Inpainting); (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); (4) Dự đoán mật độ không-thời gian và phân loại cấp độ dịch vụ giao thông theo chuẩn Highway Capacity Manual (HCM LoS) dựa trên mạng hợp nhất DINO ViT, CNN và Bi-GRU; và (5) Đánh giá đa thuộc tính điều kiện mặt đường tự giám sát từ chuỗi ảnh nền 24 giờ với mỏ neo vật lý quang học (độ ẩm ướt phản xạ gương, độ nhám kết cấu hư hại qua toán tử Sobel và chu kỳ chiếu sáng). Hệ sinh thái tinh gọn loại bỏ các tiếp cận bất thường không có mỏ neo vật lý hoặc dễ bị nhiễu nhận dạng trong giao thông hỗn hợp để tập trung tối đa nguồn lực vào các bài toán đo lường động học, tách rã cảnh và hạ tầng có tính ứng dụng thực tiễn cao nhất.
 \end{abstract}
 
 \hrule
@@ -158,7 +158,7 @@ Nhằm bảo toàn tri thức tiền huấn luyện của ViT, thuật toán War
 \end{equation}
 Trọng số kênh $\Delta$ nhận trung bình cộng ba kênh màu RGB, bảo đảm tại bước huấn luyện đầu tiên kênh sai khác đóng góp năng lượng đồng mức mà không gây sốc gradient cho mạng nơ-ron. Đánh giá được thực hiện qua giao thức phân chia camera phân tách độc lập (Spatial Disjoint Splitting) nhằm triệt tiêu hiện tượng rò rỉ dữ liệu bối cảnh.
 
-\section{HƯỚNG 5: DỰ ĐOÁN MẬT ĐỘ KHÔNG-THỜI GIAN VÀ CẤP ĐỘ DỊCH VỤ GIAO THÔNG (SPATIO-TEMPORAL DENSITY \& HCM LoS)}
+\section{HƯỚNG 4: DỰ ĐOÁN MẬT ĐỘ KHÔNG-THỜI GIAN VÀ CẤP ĐỘ DỊCH VỤ GIAO THÔNG (SPATIO-TEMPORAL DENSITY \& HCM LoS)}
 
 \subsection{Đặt Vấn Đề và Mỏ Neo Vật Lý Tự Thân}
 Các mô hình thị giác truyền thống thường tiếp cận theo hướng đếm phương tiện rời rạc trên từng khung hình tĩnh. Trong dòng giao thông xe máy hỗn hợp đặc trưng tại các đô thị Đông Nam Á (hàng trăm xe máy di chuyển sát nhau), hiện tượng che khuất chồng chéo dẫn đến sai số lũy kế nghiêm trọng.
@@ -198,7 +198,7 @@ Hàm mất mát đa nhiệm tích hợp thành phần làm mịn thời gian:
 \end{split}
 \end{equation}
 
-\section{HƯỚNG 8: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ}
+\section{HƯỚNG 5: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ}
 
 \subsection{Đặt Vấn Đề và Động Lực Khoa Học}
 Trong các hệ thống giám sát giao thông đô thị, phần lớn các giải pháp thị giác máy tính chỉ tập trung nhận dạng đối tượng di động (xe cộ) mà bỏ quên hơn $70\% - 80\%$ diện tích khung hình là kết cấu mặt đường. Tại các đô thị nhiệt đới có lượng mưa lớn như TP.HCM, ngập nước cục bộ và suy giảm kết cấu nhựa đường (ổ gà, nứt nẻ) là những thách thức nghiêm trọng.
@@ -298,14 +298,14 @@ Pipeline tự động sinh tệp báo cáo định lượng \texttt{road\_surfac
 \addlinespace
 \textbf{Hướng 3} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 3.5/5 & EAAI Journal, ITSC \\
 \addlinespace
-\textbf{Hướng 5} & Spatio-Temporal Density \& HCM LoS & Bi-GRU kết hợp DINO và $\Delta$-CNN với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ và LoS & 4.5/5 & IEEE T-ITS, CVPR \\
+\textbf{Hướng 4} & Spatio-Temporal Density \& HCM LoS & Bi-GRU kết hợp DINO và $\Delta$-CNN với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ và LoS & 4.5/5 & IEEE T-ITS, CVPR \\
 \addlinespace
-\textbf{Hướng 8} & Road Surface Condition Estimation & Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h & 4/5 & IEEE T-ITS, TRB \\
+\textbf{Hướng 5} & Road Surface Condition Estimation & Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h & 4/5 & IEEE T-ITS, TRB \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{KẾT LUẬN}
-Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và hoàn thiện năm hướng nghiên cứu trọng tâm có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), dự báo mật độ không-thời gian và cấp độ dịch vụ giao thông (Hướng 5), đến đánh giá toàn diện điều kiện mặt đường đô thị (Hướng 8). Việc loại bỏ các hướng nghiên cứu thiếu tính khả thi trong giao thông hỗn hợp giúp tập trung toàn diện nguồn lực vào các bài toán có mỏ neo vật lý chặt chẽ, nâng cao độ bền vững và khả năng ứng dụng thực tiễn cho hệ thống giao thông thông minh quy mô lớn.
+Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và hoàn thiện năm hướng nghiên cứu trọng tâm có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), dự báo mật độ không-thời gian và cấp độ dịch vụ giao thông (Hướng 4), đến đánh giá toàn diện điều kiện mặt đường đô thị (Hướng 5). Việc loại bỏ các hướng nghiên cứu thiếu tính khả thi trong giao thông hỗn hợp giúp tập trung toàn diện nguồn lực vào các bài toán có mỏ neo vật lý chặt chẽ, nâng cao độ bền vững và khả năng ứng dụng thực tiễn cho hệ thống giao thông thông minh quy mô lớn.
 
 \end{document}
