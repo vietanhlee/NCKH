@@ -249,7 +249,12 @@ def parse_args():
     parser.add_argument("--freeze_backbone", action="store_true", default=False)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
+    parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
+    parsed = parser.parse_args()
+    if parsed.hf_token:
+        os.environ["HF_TOKEN"] = parsed.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
+    return parsed
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@
 =============================================================================
 """
 
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -111,10 +112,32 @@ class BGGuidedDINOLoss(nn.Module):
             s_patch_log_prob = F.log_softmax(student_patch / self.student_temp, dim=-1)
 
             loss_per_patch = torch.sum(-t_patch_prob * s_patch_log_prob, dim=-1)  # (B, N_p)
-            if mask.dtype == torch.bool:
-                masked_loss = loss_per_patch[mask]
+
+            # Defensive Shape Alignment: Đảm bảo mask khớp hoàn hảo kích thước N_p với loss_per_patch
+            cur_mask = mask
+            if loss_per_patch.shape != cur_mask.shape:
+                if loss_per_patch.shape[0] == cur_mask.shape[0]:
+                    if loss_per_patch.shape[1] == 1:
+                        # Fallback nếu backbone chỉ trích xuất 1 token đại diện
+                        cur_mask = (cur_mask.sum(dim=-1, keepdim=True) > 0)
+                    else:
+                        # Nội suy 2D Spatial Nearest nếu số lượng patch khác nhau
+                        N_p = loss_per_patch.shape[1]
+                        N_m = cur_mask.shape[1]
+                        side_p = int(round(math.isqrt(N_p)))
+                        side_m = int(round(math.isqrt(N_m)))
+                        if side_p * side_p == N_p and side_m * side_m == N_m:
+                            m_2d = cur_mask.float().view(cur_mask.shape[0], 1, side_m, side_m)
+                            m_res = F.interpolate(m_2d, size=(side_p, side_p), mode="nearest")
+                            cur_mask = (m_res.view(cur_mask.shape[0], N_p) > 0.5)
+
+            if cur_mask.shape == loss_per_patch.shape:
+                if cur_mask.dtype == torch.bool:
+                    masked_loss = loss_per_patch[cur_mask]
+                else:
+                    masked_loss = loss_per_patch[cur_mask > 0.5]
             else:
-                masked_loss = loss_per_patch[mask > 0.5]
+                masked_loss = loss_per_patch
 
             if masked_loss.numel() > 0:
                 patch_loss = masked_loss.mean()

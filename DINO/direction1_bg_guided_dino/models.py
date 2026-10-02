@@ -113,8 +113,37 @@ class BGGuidedDINOModel(nn.Module):
 
     def extract_features(self, backbone: nn.Module, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Trích xuất (cls_token, patch_tokens) từ backbone linh hoạt.
+        Trích xuất đồng thời (cls_token, patch_tokens) từ backbone linh hoạt.
+        Hỗ trợ đầy đủ chuẩn Meta DINOv2 / DINOv3 API (get_intermediate_layers, forward_features)
+        đảm bảo giữ nguyên chuỗi gradient cho cả Student và Teacher.
         """
+        # 1. Chuẩn Meta DINOv2 / DINOv3 VisionTransformer (Torch Hub / Official)
+        if hasattr(backbone, "get_intermediate_layers"):
+            outputs = backbone.get_intermediate_layers(x, n=1, return_class_token=True)
+            if isinstance(outputs, (list, tuple)) and len(outputs) > 0:
+                if isinstance(outputs[0], tuple):
+                    patch_toks, cls_tok = outputs[0]
+                else:
+                    patch_raw = outputs[0]
+                    cls_tok = patch_raw[:, 0]
+                    patch_toks = patch_raw[:, 1:]
+                return cls_tok, patch_toks
+
+        # 2. Chuẩn forward_features (timm / transformers)
+        if hasattr(backbone, "forward_features"):
+            feat = backbone.forward_features(x)
+            if isinstance(feat, dict):
+                cls_tok = feat.get("x_norm_clstoken", None)
+                patch_toks = feat.get("x_norm_patchtokens", None)
+                if patch_toks is None:
+                    patch_toks = feat.get("x_prenorm", None)
+                if cls_tok is not None and patch_toks is not None:
+                    return cls_tok, patch_toks
+            elif isinstance(feat, torch.Tensor):
+                if feat.dim() == 3:
+                    return feat[:, 0], feat[:, 1:]
+
+        # 3. Standard forward fallback
         out = backbone(x)
         if isinstance(out, dict):
             cls_tok = out.get("x_norm_clstoken", list(out.values())[0])

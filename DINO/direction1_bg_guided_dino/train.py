@@ -394,7 +394,11 @@ def parse_args():
     parser.add_argument("--save_every", type=int, default=5, help="Lưu checkpoint sau mỗi N epochs")
     parser.add_argument("--max_samples", type=int, default=None, help="Giới hạn số mẫu thử nghiệm nhanh")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
     parsed = parser.parse_args()
+    if parsed.hf_token:
+        os.environ["HF_TOKEN"] = parsed.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
     parsed.alpha_fg = parsed.alpha_max
     return parsed
 

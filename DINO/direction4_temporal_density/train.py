@@ -50,7 +50,12 @@ def parse_args():
     parser.add_argument("--num_workers", type=int, default=0, help="Số luồng nạp dữ liệu")
     parser.add_argument("--device", type=str, default="cuda", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    return parser.parse_args()
+    parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
+    parsed = parser.parse_args()
+    if parsed.hf_token:
+        os.environ["HF_TOKEN"] = parsed.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
+    return parsed
 
 
 def train_temporal_density(args):
@@ -248,7 +253,7 @@ def train_temporal_density(args):
             )
 
     elapsed = time.time() - start_time
-    print(f"\n🎉 [Complete] Huấn luyện Direction 5 hoàn tất sau {elapsed/60:.2f} phút! Kỷ lục MAE Occupancy: {best_mae:.4f}")
+    print(f"\n🎉 [Complete] Huấn luyện Direction 4 hoàn tất sau {elapsed/60:.2f} phút! Kỷ lục MAE Occupancy: {best_mae:.4f}")
 
 
 if __name__ == "__main__":
