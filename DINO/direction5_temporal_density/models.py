@@ -1,30 +1,30 @@
 """
 =============================================================================
- Hướng 5: Temporal Contrastive Learning for Traffic Density Estimation
- Module: Model (Mô hình mã hóa tương phản chuỗi thời gian giao thông)
+ Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level of Service (LoS) Estimation
+ Module: Model (Mạng Không-Thời gian ước lượng độ chiếm dụng và cấp độ dịch vụ)
 =============================================================================
 """
 
-import math
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Tuple, Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class DeltaSpatialEncoder(nn.Module):
-    """Mạng tích chập gọn nhẹ trích xuất đặc trưng không gian từ bản đồ sai khác Delta."""
+    """Mạng tích chập gọn nhẹ trích xuất vector đặc trưng chuyển động từ bản đồ sai khác Delta."""
 
     def __init__(self, in_channels: int = 1, out_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=7, stride=4, padding=3),  # (B, 32, H/4, W/4)
+            nn.Conv2d(in_channels, 32, kernel_size=7, stride=4, padding=3),   # (B, 32, H/4, W/4)
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),            # (B, 64, H/8, W/8)
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),             # (B, 64, H/8, W/8)
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, out_dim, kernel_size=3, stride=2, padding=1),       # (B, out_dim, H/16, W/16)
+            nn.Conv2d(64, out_dim, kernel_size=3, stride=2, padding=1),        # (B, out_dim, H/16, W/16)
             nn.BatchNorm2d(out_dim),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1, 1)),
@@ -35,15 +35,17 @@ class DeltaSpatialEncoder(nn.Module):
         return self.net(x)
 
 
-class TemporalTrafficEncoder(nn.Module):
+class SpatioTemporalDensityNet(nn.Module):
     """
-    Mô hình mã hóa tương phản thời gian (Temporal Traffic Encoder).
-    Kết hợp:
-      1. ViT Backbone: Trích xuất biểu diễn ngữ nghĩa của từng khung hình [CLS] token.
-      2. DeltaSpatialEncoder: Trích xuất biểu diễn chuyển động quang học từ bản đồ sai khác Delta.
-      3. Temporal Attention Transformer: Tổng hợp sự biến thiên thời gian qua K khung hình.
-      4. Projection Head: Ánh xạ sang không gian tương phản (128-dim) phục vụ InfoNCE.
-      5. Regression Head: Dự đoán mật độ lưu lượng phương tiện.
+    Mạng Không-Thời gian SpatioTemporalDensityNet:
+      1. ViT Backbone (DINOv3/DINOv2): Trích xuất biểu diễn ngữ nghĩa không gian của xe cộ và cảnh quan (CLS token).
+      2. DeltaSpatialEncoder: Trích xuất tín hiệu sai khác quang học vật lý chuyển động.
+      3. Frame Fusion Layer: Hợp nhất tri thức không gian (RGB) và quang học chuyển động (Delta).
+      4. Temporal Bi-GRU: Học động học thay đổi mật độ phương tiện theo thời gian.
+      5. Multi-Task Heads:
+         - occupancy_head: Ước lượng độ chiếm dụng mặt đường liên tục rho_hat in [0, 1].
+         - los_head: Phân loại 4 mức độ dịch vụ ùn tắc (Free-Flow, Moderate, Slow, Gridlock).
+         - trend_head: Dự đoán xu hướng ùn tắc d(rho)/dt (Gia tăng hay Giải tỏa).
     """
 
     def __init__(
@@ -52,9 +54,7 @@ class TemporalTrafficEncoder(nn.Module):
         embed_dim: int = 384,
         delta_dim: int = 128,
         temporal_dim: int = 256,
-        proj_dim: int = 128,
-        num_temporal_heads: int = 4,
-        max_seq_len: int = 16,
+        num_los_classes: int = 4,
         freeze_backbone: bool = True,
     ):
         super().__init__()
@@ -66,49 +66,51 @@ class TemporalTrafficEncoder(nn.Module):
             for p in self.backbone.parameters():
                 p.requires_grad = False
 
-        # Nhánh mã hóa Delta
         self.delta_encoder = DeltaSpatialEncoder(in_channels=1, out_dim=delta_dim)
 
-        # Hợp nhất đặc trưng mỗi khung hình: DINO CLS (embed_dim) + Delta (delta_dim)
+        # Tầng hợp nhất đặc trưng đơn khung hình
         self.frame_fusion = nn.Sequential(
             nn.Linear(embed_dim + delta_dim, temporal_dim),
             nn.LayerNorm(temporal_dim),
             nn.GELU(),
+            nn.Dropout(0.1),
         )
 
-        # Mã hóa vị trí thời gian (Temporal Positional Embedding)
-        self.pos_embed = nn.Parameter(torch.zeros(1, max_seq_len, temporal_dim))
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
-
-        # Temporal Transformer Encoder Layer
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=temporal_dim,
-            nhead=num_temporal_heads,
-            dim_feedforward=temporal_dim * 2,
-            dropout=0.1,
-            activation="gelu",
+        # Mạng tuần hoàn thời gian 2 chiều (Bidirectional GRU)
+        self.temporal_gru = nn.GRU(
+            input_size=temporal_dim,
+            hidden_size=temporal_dim // 2,
+            num_layers=2,
             batch_first=True,
-        )
-        self.temporal_transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
-
-        # Projection Head cho Contrastive Learning (chuẩn hóa L2)
-        self.proj_head = nn.Sequential(
-            nn.Linear(temporal_dim, temporal_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(temporal_dim, proj_dim),
+            bidirectional=True,
         )
 
-        # Downstream Regression Head (ước lượng mật độ và chỉ số ùn tắc)
-        self.density_head = nn.Sequential(
-            nn.Linear(temporal_dim, 128),
+        # Đầu ra 1: Ước lượng tỷ lệ chiếm dụng mặt đường liên tục rho in [0, 1]
+        self.occupancy_head = nn.Sequential(
+            nn.Linear(temporal_dim, 64),
             nn.ReLU(inplace=True),
-            nn.Linear(128, 1),
-            nn.ReLU(),  # Mật độ >= 0
+            nn.Linear(64, 1),
+            nn.Sigmoid(),  # Đảm bảo rho nằm trọn trong khoảng [0, 1]
+        )
+
+        # Đầu ra 2: Phân loại cấp độ dịch vụ giao thông LoS (4 lớp)
+        self.los_head = nn.Sequential(
+            nn.Linear(temporal_dim, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, num_los_classes),
+        )
+
+        # Đầu ra 3: Dự đoán xu hướng biến thiên d(rho)/dt in [-1, 1]
+        self.trend_head = nn.Sequential(
+            nn.Linear(temporal_dim, 32),
+            nn.ReLU(inplace=True),
+            nn.Linear(32, 1),
+            nn.Tanh(),  # Âm: Giải tỏa ùn tắc; Dương: Ùn tắc đang gia tăng
         )
 
     def extract_frame_features(self, rgb_seq: torch.Tensor, delta_seq: torch.Tensor) -> torch.Tensor:
         """
-        Trích xuất đặc trưng cho chuỗi K khung hình.
+        Trích xuất và hợp nhất đặc trưng không gian cho toàn bộ chuỗi K khung hình.
         Args:
             rgb_seq: (B, K, 3, H, W)
             delta_seq: (B, K, 1, H, W)
@@ -116,13 +118,11 @@ class TemporalTrafficEncoder(nn.Module):
             fused_seq: (B, K, temporal_dim)
         """
         B, K, C, H, W = rgb_seq.shape
-
-        # Trải phẳng chiều thời gian để đưa qua CNN/ViT một lần
         rgb_flat = rgb_seq.view(B * K, C, H, W)
         delta_flat = delta_seq.view(B * K, 1, H, W)
 
-        # 1. Trích xuất DINO CLS
-        with torch.set_grad_enabled(not next(self.backbone.parameters()).is_leaf or any(p.requires_grad for p in self.backbone.parameters())):
+        # 1. Trích xuất CLS token từ ViT Backbone
+        with torch.set_grad_enabled(any(p.requires_grad for p in self.backbone.parameters())):
             if hasattr(self.backbone, "get_intermediate_layers"):
                 out = self.backbone.get_intermediate_layers(rgb_flat, n=1, return_class_token=True)
                 cls_token = out[0][1] if isinstance(out[0], tuple) else out[0][:, 0]
@@ -134,16 +134,12 @@ class TemporalTrafficEncoder(nn.Module):
                 if cls_token.dim() > 2:
                     cls_token = cls_token.mean(dim=(2, 3))
 
-        # 2. Trích xuất đặc trưng Delta
+        # 2. Trích xuất đặc trưng chuyển động Delta
         delta_feat = self.delta_encoder(delta_flat)  # (B*K, delta_dim)
 
-        # 3. Ghép nối và biến đổi tuyến tính
-        combined = torch.cat([cls_token, delta_feat], dim=-1)  # (B*K, embed_dim + delta_dim)
-        frame_feats = self.frame_fusion(combined)              # (B*K, temporal_dim)
-
-        # Khôi phục kích thước chuỗi (B, K, temporal_dim)
-        fused_seq = frame_feats.view(B, K, self.temporal_dim)
-        return fused_seq
+        # 3. Hợp nhất không gian
+        fused = self.frame_fusion(torch.cat([cls_token, delta_feat], dim=-1))  # (B*K, temporal_dim)
+        return fused.view(B, K, self.temporal_dim)
 
     def forward(
         self,
@@ -152,33 +148,38 @@ class TemporalTrafficEncoder(nn.Module):
     ) -> Dict[str, torch.Tensor]:
         """
         Quy trình xử lý thuận:
-          - Mã hóa từng frame: ViT + Delta.
-          - Biến đổi thời gian: Temporal Attention qua K khung hình.
-          - Trích xuất vector biểu diễn thời gian h, vector tương phản z, và dự đoán mật độ.
+          - Trích xuất đặc trưng không gian đa khung hình.
+          - Mô hình hóa động học thời gian qua Bi-GRU.
+          - Dự đoán đồng thời tỷ lệ chiếm dụng, cấp độ phục vụ LoS và xu hướng biến thiên.
         """
         B, K, _, _, _ = rgb_seq.shape
 
-        # Trích xuất chuỗi đặc trưng các frame
         fused_seq = self.extract_frame_features(rgb_seq, delta_seq)  # (B, K, temporal_dim)
 
-        # Thêm positional encoding thời gian
-        pos = self.pos_embed[:, :K, :]
-        fused_seq = fused_seq + pos
+        # Bi-GRU thời gian
+        gru_out, _ = self.temporal_gru(fused_seq)  # (B, K, temporal_dim)
 
-        # Tổng hợp qua Temporal Transformer
-        trans_out = self.temporal_transformer(fused_seq)  # (B, K, temporal_dim)
+        # Đặc trưng của khung hình hiện tại (khung hình cuối cùng trong cửa sổ thời gian)
+        current_feat = gru_out[:, -1, :]  # (B, temporal_dim)
 
-        # Biểu diễn thời gian của toàn cửa sổ (pooling trung bình)
-        h = trans_out.mean(dim=1)  # (B, temporal_dim)
+        # Dự đoán tỷ lệ chiếm dụng cho toàn bộ chuỗi K khung hình
+        pred_occupancy_seq = self.occupancy_head(gru_out).squeeze(-1)  # (B, K)
+        pred_current_occupancy = pred_occupancy_seq[:, -1]             # (B,)
 
-        # Vector chiếu tương phản (chuẩn hóa L2)
-        z = F.normalize(self.proj_head(h), dim=-1, p=2)
+        # Dự đoán phân loại LoS hiện tại
+        logits_los = self.los_head(current_feat)                       # (B, 4)
 
-        # Ước lượng mật độ phương tiện
-        pred_density = self.density_head(h).squeeze(-1)  # (B,)
+        # Dự đoán xu hướng biến thiên
+        pred_trend = self.trend_head(current_feat).squeeze(-1)         # (B,)
 
         return {
-            "temporal_feature": h,
-            "proj_contrastive": z,
-            "pred_density": pred_density,
+            "pred_occupancy_seq": pred_occupancy_seq,
+            "pred_occupancy": pred_current_occupancy,
+            "logits_los": logits_los,
+            "pred_trend": pred_trend,
+            "temporal_feature": current_feat,
         }
+
+
+# Tương thích ngược với tên gọi cũ
+TemporalTrafficEncoder = SpatioTemporalDensityNet

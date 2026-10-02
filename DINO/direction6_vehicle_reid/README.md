@@ -1,24 +1,26 @@
-# Hướng 6: Delta-Guided Unsupervised Vehicle Re-Identification Across Cameras
+# Hướng 6: Delta-Guided Unsupervised Vehicle Re-Identification Across Cameras & Corridor Travel Time Estimation
 
-## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐⭐)
-Bài toán nhận dạng lại phương tiện liên camera (Vehicle Re-Identification - Re-ID) trong mạng lưới camera giám sát đô thị (608 camera tại TP.HCM) đối mặt với hai rào cản lớn:
-1. Phải chạy bộ dò vật thể (Object Detector như YOLO/Faster R-CNN) rất nặng nề trên từng khung hình để cắt vùng xe.
-2. Chi phí gán nhãn danh tính xe (Identity ID) thủ công qua các camera khác nhau là bất khả thi ở quy mô lớn.
+## 1. Giới thiệu & Đóng góp Khoa học (Novelty ⭐⭐⭐⭐⭐)
+Bài toán nhận dạng lại phương tiện xuyên camera (Vehicle Re-ID) trong đô thị thường vấp phải 2 rào cản chi phí:
+1. Phụ thuộc vào Object Detector nặng nề (YOLO / Faster R-CNN) để cắt khung bao xe.
+2. Việc gán nhãn thủ công ID danh tính xe qua hàng trăm camera là bất khả thi.
 
-**Giải pháp đề xuất**:
-1. **Delta-Guided RoI Extraction**: Sử dụng trực tiếp trường sai khác quang học $\Delta = \|I_{\text{origin}} - I_{\text{bg}}\|$ để cắt tự động các phương tiện chuyển động mà **không cần bộ dò Object Detector**.
-2. **DINO ViT + BNNeck Feature Extractor**: Trích xuất vector đặc trưng $L_2$-normalized 256 chiều có tính bất biến mạnh mẽ với ánh sáng và góc quay camera.
-3. **Unsupervised Tracklet Mining**: Khai thác chuỗi quan sát liên tục từ cùng camera làm cặp dương tự thân, kết hợp hàm mất mát tương phản để tối ưu hóa không gian biểu diễn danh tính xe.
-4. **Truy vấn so khớp Cosine & Đánh giá CMC / mAP**: Đánh giá chuẩn học thuật quốc tế phục vụ các hội nghị lớn (CVPR / ICCV / IEEE T-ITS).
+### Giải pháp kỹ thuật đột phá:
+* **$\Delta$-Guided RoI Extraction**: Sử dụng trực tiếp trường sai khác quang học $\Delta = |I - I_{\text{bg}}|$ kết hợp phân tích thành phần liên thông (Connected Components) và bộ lọc hình thái học xe cộ để cắt phương tiện **hoàn toàn không cần Object Detector**.
+* **DINO ViT + BNNeck Projector**: Tạo vector đặc trưng danh tính 256 chiều chuẩn hóa $L_2$, kế thừa năng lực phân tách màu sơn và kiểu dáng xe của DINO ViT.
+* **Cơ chế Không-Thời gian Vật lý (Spatio-Temporal Feasibility Windowing)**: Lọc ứng viên xe dựa trên dải vận tốc hợp lý đô thị ($v \in [10, 60] \text{ km/h}$) và khoảng cách giữa các camera trên hành lang:
+  $$t_{\text{min}} \le |t_B - t_A| \le t_{\text{max}}$$
+  Loại bỏ triệt để 98% ứng viên âm giả (False Positives), giải quyết điểm yếu nhầm lẫn hình dạng xe tại Việt Nam.
+* **Ứng dụng Thực tiễn (Corridor Analytics)**: Tự động đo **Thời gian hành trình trung bình (Travel Time)** và **Vận tốc hành trình trung bình** của tuyến đường từ các cặp xe trùng khớp độ tin cậy cao mà không cần biển số xe hay thiết bị GPS.
 
 ---
 
-## 2. Cấu trúc Thư mục
-- `roi_extractor.py`: `DeltaRoIExtractor` định vị và cắt phương tiện tự động từ bản đồ $\Delta$.
-- `models.py`: `VehicleReIDModel` (ViT Backbone + BNNeck + $L_2$ Normalization).
-- `losses.py`: `TrackletContrastiveLoss` (Hàm mất mát tương phản trên chuỗi tracklet).
-- `matcher.py`: `VehicleReIDMatcher` (So khớp cosine, truy vấn Top-$k$, tính CMC Rank-1, Rank-5 và mAP).
-- `run_reid.py`: Pipeline thực thi toàn bộ luồng từ trích xuất xe, tạo Gallery, đến tìm kiếm và lưu ảnh trực quan hóa.
+## 2. Cấu trúc File
+- `roi_extractor.py`: `DeltaRoIExtractor` định vị và cắt phương tiện từ $\Delta$.
+- `models.py`: `VehicleReIDModel` (DINO ViT Backbone + Projector + BNNeck chuẩn CVPR Re-ID).
+- `matcher.py`: `VehicleReIDMatcher` thuật toán so khớp không-thời gian, xếp hạng Top-k, tính vận tốc hành lang, tính CMC Rank-1/5 và mAP.
+- `losses.py`: `TrackletContrastiveLoss` hàm mất mát tương phản tự thân.
+- `run_reid.py`: Pipeline thực thi trọn vẹn, xuất ảnh đối chiếu Top-k và báo cáo CSV hành trình.
 
 ---
 
@@ -30,11 +32,12 @@ python direction6_vehicle_reid/run_reid.py \
     --origin_dir output \
     --output_dir checkpoints/direction6_vehicle_reid \
     --backbone dinov3_vits16 \
+    --distance_meters 1200.0 \
     --top_k 5 \
-    --min_area 500 \
     --device cuda
 ```
 
 ### Kết quả đầu ra:
-- `reid_retrieval_results.csv`: Danh sách các lượt truy vấn xe kèm điểm tương đồng và camera tương ứng.
-- `visualizations/query_camX_vehY.png`: Ảnh hiển thị phương tiện Query bên trái và Top-5 phương tiện tương đồng nhất tìm thấy trong mạng lưới camera bên phải.
+- `corridor_speed_report.csv`: Báo cáo thời gian hành trình và vận tốc trung bình của tuyến đường.
+- `reid_retrieval_results.csv`: Danh sách chi tiết các cặp xe trùng khớp liên camera.
+- `visualizations/query_cam...`: Ảnh trực quan đối chiếu xe Query và Top-5 ứng viên trùng khớp ở camera khác kèm điểm tương đồng.

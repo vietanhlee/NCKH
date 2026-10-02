@@ -32,26 +32,19 @@ DINO/
 │   ├── evaluate.py                         # So sánh 3-ch vs 4-ch, tự động sinh bảng LaTeX bài báo
 │   └── README.md
 │
-├── direction4_anomaly_detection/           # [HƯỚNG 4] Unsupervised Traffic Anomaly Detection
-│   ├── memory_bank.py                      # Memory Bank lưu trữ vector bình thường với cập nhật EMA
-│   ├── feature_extractor.py                # Trích xuất đặc trưng kết hợp DINO [CLS] + Δ stats
-│   ├── detector.py                         # Detector k-NN Anomaly Score (fit & detect)
-│   ├── run_detection.py                    # Pipeline phát hiện bất thường & highlight trực quan
+├── direction5_temporal_density/            # [HƯỚNG 5] Spatio-Temporal Density & HCM LoS Estimation
+│   ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo vật lý ρ_phys, phân loại HCM LoS
+│   ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
+│   ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
+│   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
 │   └── README.md
 │
-├── direction5_temporal_density/            # [HƯỚNG 5] Temporal Contrastive Learning for Density Estimation
-│   ├── dataset.py                          # Nạp chuỗi thời gian khung hình và bản đồ sai khác quang học
-│   ├── models.py                           # TemporalTrafficEncoder (ViT + Delta CNN + Temporal Attention)
-│   ├── losses.py                           # Symmetric InfoNCE Temporal Loss + Smooth L1
-│   ├── train.py                            # Huấn luyện tương phản thời gian với AMP
-│   └── README.md
-│
-├── direction6_vehicle_reid/                # [HƯỚNG 6] Delta-Guided Vehicle Re-ID Across Cameras
+├── direction6_vehicle_reid/                # [HƯỚNG 6] Corridor-Based Vehicle Re-ID Across Cameras
 │   ├── roi_extractor.py                    # DeltaRoIExtractor tự động cắt xe không cần Object Detector
-│   ├── models.py                           # VehicleReIDModel với BNNeck và chuẩn hóa L2
+│   ├── models.py                           # VehicleReIDModel với GeM Pooling và BNNeck (256-D L2)
 │   ├── losses.py                           # TrackletContrastiveLoss (học danh tính tự giám sát)
-│   ├── matcher.py                          # VehicleReIDMatcher so khớp Cosine, đánh giá CMC & mAP
-│   ├── run_reid.py                         # Pipeline truy vấn phương tiện liên camera
+│   ├── matcher.py                          # VehicleReIDMatcher ràng buộc không-thời gian [v_min, v_max], tính km/h
+│   ├── run_reid.py                         # Pipeline truy vấn phương tiện và đo thời gian hành trình
 │   └── README.md
 │
 ├── direction7_open_vocabulary/             # [HƯỚNG 7] Open-Vocabulary Traffic Scene Understanding
@@ -69,16 +62,15 @@ DINO/
     └── README.md
 ```
 
-## Bảng So Sánh 8 Hướng Nghiên Cứu
+## Bảng So Sánh 7 Hướng Nghiên Cứu
 
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
 | **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, EAAI |
 | **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting) | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | EAAI Journal, ITSC |
-| **H4** | **Unsupervised Anomaly Detection** | `direction4_anomaly_detection/` | Biểu diễn kép $\Delta$+DINO, Memory Bank EMA, phát hiện sự cố không cần nhãn | IEEE T-ITS, WACV |
-| **H5** | **Temporal Contrastive Density** | `direction5_temporal_density/` | Học tương phản thời gian trên chuỗi $\Delta$-Maps để ước lượng mật độ và tốc độ | CVPR, IEEE T-ITS |
-| **H6** | **Delta-Guided Vehicle Re-ID** | `direction6_vehicle_reid/` | Trích xuất RoI từ $\Delta$, BNNeck DINO, tracklet contrastive, xếp hạng CMC/mAP | IEEE T-ITS, ICPR |
+| **H5** | **Spatio-Temporal Density & HCM LoS** | `direction5_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
+| **H6** | **Corridor-Based Vehicle Re-ID** | `direction6_vehicle_reid/` | $\Delta$-RoI không cần detector, GeM+BNNeck, Ràng buộc không-thời gian đo tốc độ $km/h$ | IEEE T-ITS, TRB |
 | **H7** | **Open-Vocabulary Scene Understanding** | `direction7_open_vocabulary/` | Delta proposals không phụ thuộc lớp kết hợp căn chỉnh DINO sang CLIP text | ECCV, WACV |
 | **H8** | **Road Surface Condition Estimation** | `direction8_road_condition/` | Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h | IEEE T-ITS, TRB |
 
@@ -91,6 +83,7 @@ Tất cả các pipeline huấn luyện đều được tích hợp module `comm
 - **Tự động mở rộng Batch Size (Linear Batch Scaling)**: $\text{Total Batch Size} = \text{batch\_size\_per\_gpu} \times N_{\text{gpus}}$.
 - **Tự động điều chỉnh Tốc độ học (Linear LR Scaling Rule)**: $\text{Effective LR} = \text{base\_lr} \times N_{\text{gpus}}$.
 - **Lưu Checkpoint an toàn**: Tự động giải phóng lớp bọc `module.` qua hàm `unwrap_model()`, giúp weights tương thích hoàn toàn khi load lại ở môi trường 1 GPU hoặc CPU.
+- **Resume Training đầy đủ**: Tải lại trọn vẹn trạng thái huấn luyện cũ (`model`, `optimizer`, `scaler`, `epoch`, `best_metric`) qua cờ `--resume_checkpoint <path>` để tiếp tục train không bị gián đoạn.
 
 ---
 
@@ -153,38 +146,27 @@ python DINO/direction3_foreground_enhanced_counting/evaluate.py \
     --device cuda
 ```
 
-### 4. Hướng 4: Unsupervised Traffic Anomaly Detection
-```bash
-python DINO/direction4_anomaly_detection/run_detection.py \
-    --input_dir output \
-    --bg_dir traffic_backgrounds \
-    --output_dir checkpoints/direction4_anomaly_detection \
-    --backbone dinov3_vits16 \
-    --threshold 2.5 \
-    --bank_size 1000 \
-    --device cuda
-```
-
-### 5. Hướng 5: Temporal Contrastive Learning for Traffic Density
+### 5. Hướng 5: Spatio-Temporal Density & HCM LoS Estimation
 ```bash
 python DINO/direction5_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
-    --csv_file stage1_perception/counting_labels_5012.csv \
-    --save_dir checkpoints/direction5_temporal_density \
-    --window_size 4 \
+    --seq_len 4 \
     --batch_size 8 \
     --epochs 30 \
+    --save_dir checkpoints/direction5_temporal_density \
     --device cuda
 ```
 
-### 6. Hướng 6: Delta-Guided Vehicle Re-ID Across Cameras
+### 6. Hướng 6: Corridor-Based Vehicle Re-ID & Travel Time Estimation
 ```bash
 python DINO/direction6_vehicle_reid/run_reid.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
     --output_dir checkpoints/direction6_vehicle_reid \
     --top_k 5 \
+    --min_speed 10.0 \
+    --max_speed 60.0 \
     --min_area 500 \
     --device cuda
 ```
@@ -209,7 +191,7 @@ python DINO/direction8_road_condition/eval.py \
 
 ---
 
-## 🧪 Kiểm Thử Toàn Bộ 8 Hướng (Smoke Test Runner)
+## 🧪 Kiểm Thử Toàn Bộ 7 Hướng (Smoke Test Runner)
 Chạy script kiểm thử tự động toàn diện với dữ liệu mô phỏng trong vòng 10 giây:
 ```bash
 python DINO/test_all_directions.py

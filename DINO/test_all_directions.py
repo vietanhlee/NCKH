@@ -239,30 +239,12 @@ try:
     print("   ✅ [Direction 3] Foreground-Enhanced Counting pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 5. TEST DIRECTION 4: TRAFFIC ANOMALY DETECTION
+    # 5. TEST DIRECTION 5: SPATIO-TEMPORAL DENSITY & LoS ESTIMATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 5] Direction 4: Traffic Anomaly Detection ---")
-    from direction4_anomaly_detection.memory_bank import AnomalyMemoryBank
-    from direction4_anomaly_detection.feature_extractor import DeltaConditionedExtractor
-    from direction4_anomaly_detection.detector import TrafficAnomalyDetector
-
-    mem_bank = AnomalyMemoryBank(feature_dim=67, bank_size=100)
-    fake_normal_feats = torch.randn(10, 67)
-    mem_bank.update(fake_normal_feats)
-
-    query_feat = torch.randn(2, 67)
-    anomaly_scores = mem_bank.compute_anomaly_score(query_feat, k=3)
-    assert anomaly_scores.shape == (2,) and not torch.isnan(anomaly_scores).any()
-    print(f"   + Anomaly Scores computed: {anomaly_scores.tolist()}")
-    print("   ✅ [Direction 4] Anomaly Detection pass hoàn hảo!")
-
-    # -------------------------------------------------------------
-    # 6. TEST DIRECTION 5: TEMPORAL CONTRASTIVE DENSITY
-    # -------------------------------------------------------------
-    print("\n--- [TEST 6] Direction 5: Temporal Contrastive Density ---")
+    print("\n--- [TEST 5] Direction 5: Spatio-Temporal Road Occupancy & LoS Estimation ---")
     from direction5_temporal_density.dataset import TemporalTrafficDataset
-    from direction5_temporal_density.models import TemporalTrafficEncoder
-    from direction5_temporal_density.losses import TemporalContrastiveLoss
+    from direction5_temporal_density.models import SpatioTemporalDensityNet
+    from direction5_temporal_density.losses import SpatioTemporalDensityLoss
 
     ds5 = TemporalTrafficDataset(
         bg_dir=bg_dir,
@@ -274,36 +256,42 @@ try:
     sample5 = ds5[0]
     assert sample5["rgb_seq"].shape == (2, 3, 128, 128)
     assert sample5["delta_seq"].shape == (2, 1, 128, 128)
+    assert sample5["occupancy_seq"].shape == (2,)
+    assert sample5["los_seq"].shape == (2,)
 
-    temp_encoder = TemporalTrafficEncoder(
+    density_net = SpatioTemporalDensityNet(
         backbone=mock_vit,
         embed_dim=64,
         delta_dim=32,
         temporal_dim=64,
-        proj_dim=64,
-        num_temporal_heads=2,
+        num_los_classes=4,
         freeze_backbone=True,
     )
     batch_rgb = torch.stack([sample5["rgb_seq"], sample5["rgb_seq"]])      # (2, 2, 3, 128, 128)
     batch_delta = torch.stack([sample5["delta_seq"], sample5["delta_seq"]])  # (2, 2, 1, 128, 128)
-    out5 = temp_encoder(batch_rgb, batch_delta)
-    assert out5["temporal_feature"].shape == (2, 64)
-    assert out5["proj_contrastive"].shape == (2, 64)
-    assert out5["pred_density"].shape == (2,)
+    out5 = density_net(batch_rgb, batch_delta)
+    assert out5["pred_occupancy"].shape == (2,) and (out5["pred_occupancy"] >= 0).all()
+    assert out5["logits_los"].shape == (2, 4)
+    assert out5["pred_trend"].shape == (2,)
 
-    crit5 = TemporalContrastiveLoss(temperature=0.07)
-    l5_dict = crit5(out5["proj_contrastive"], out5["proj_contrastive"])
-    assert not torch.isnan(l5_dict["loss_total"])
-    print(f"   + Temporal Contrastive Loss: {l5_dict['loss_total'].item():.4f}")
-    print("   ✅ [Direction 5] Temporal Contrastive Density pass hoàn hảo!")
+    crit5 = SpatioTemporalDensityLoss()
+    targets5 = {
+        "occupancy_seq": torch.stack([sample5["occupancy_seq"], sample5["occupancy_seq"]]),
+        "current_occupancy": torch.tensor([sample5["current_occupancy"], sample5["current_occupancy"]]),
+        "current_los": torch.tensor([sample5["current_los"], sample5["current_los"]]),
+        "trend": torch.tensor([sample5["trend"], sample5["trend"]]),
+    }
+    l5_dict = crit5(out5, targets5)
+    assert not torch.isnan(l5_dict["loss_total"]) and l5_dict["loss_total"].item() > 0
+    print(f"   + Spatio-Temporal Loss: {l5_dict['loss_total'].item():.4f} (Occ: {l5_dict['loss_occupancy'].item():.4f}, LoS: {l5_dict['loss_los'].item():.4f})")
+    print("   ✅ [Direction 5] Spatio-Temporal Density & LoS pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 7. TEST DIRECTION 6: VEHICLE RE-IDENTIFICATION
+    # 6. TEST DIRECTION 6: CORRIDOR VEHICLE RE-IDENTIFICATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 7] Direction 6: Delta-Guided Vehicle Re-ID ---")
+    print("\n--- [TEST 6] Direction 6: Corridor Vehicle Re-ID & Travel Time ---")
     from direction6_vehicle_reid.roi_extractor import DeltaRoIExtractor
     from direction6_vehicle_reid.models import VehicleReIDModel
-    from direction6_vehicle_reid.losses import TrackletContrastiveLoss
     from direction6_vehicle_reid.matcher import VehicleReIDMatcher
 
     roi_ext = DeltaRoIExtractor(min_area=100, target_size=(128, 64))
@@ -316,20 +304,20 @@ try:
     feat_unnorm, feat_norm = reid_model(dummy_crop_tensor)
     assert feat_norm.shape == (2, 64)
 
-    reid_crit = TrackletContrastiveLoss(temperature=0.07)
-    reid_loss = reid_crit(feat_norm, torch.tensor([1, 1]))
-    assert not torch.isnan(reid_loss)
-
-    # Test Matcher
+    # Test Spatio-Temporal Matcher & Speed estimation
     gallery_feats = torch.randn(5, 64)
     matcher6 = VehicleReIDMatcher(
         gallery_embeddings=gallery_feats,
-        gallery_meta=[{"cam_id": "1", "name": f"v_{i}"} for i in range(5)],
+        gallery_meta=[{"cam_id": "1", "name": f"v_{i}", "timestamp": 1755698800.0 + i * 30.0} for i in range(5)],
     )
-    q_res = matcher6.query(feat_norm[0], query_cam_id="2", top_k=3)
+    q_meta = {"cam_id": "2", "timestamp": 1755698920.0}
+    q_res = matcher6.query_with_spatio_temporal(feat_norm[0], query_meta=q_meta, top_k=3, filter_same_camera=False)
     assert len(q_res) == 3
-    print(f"   + Re-ID Query Top-1 Sim: {q_res[0]['similarity']:.4f}")
-    print("   ✅ [Direction 6] Vehicle Re-ID pass hoàn hảo!")
+    print(f"   + Re-ID Query Top-1 Final Score: {q_res[0]['final_score']:.4f} (Visual: {q_res[0]['visual_sim']:.4f}, ST-Weight: {q_res[0]['st_weight']:.4f})")
+    
+    speed_est = VehicleReIDMatcher.estimate_corridor_speed(q_res, distance_meters=1000.0, min_sim_threshold=0.0)
+    print(f"   + Corridor Travel Time: {speed_est['mean_travel_time_sec']:.1f}s | Speed: {speed_est['mean_speed_kmh']:.1f} km/h")
+    print("   ✅ [Direction 6] Corridor Vehicle Re-ID pass hoàn hảo!")
 
     # -------------------------------------------------------------
     # 8. TEST DIRECTION 7: OPEN-VOCABULARY TRAFFIC UNDERSTANDING

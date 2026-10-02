@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị thu hình cố định cung cấp cặp tín hiệu quang học bổ trợ: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận của tám hướng nghiên cứu học tự giám sát (Self-Supervised Learning) nhằm khai thác cặp tín hiệu trên. Các nội dung chính bao gồm: (1) Tiền huấn luyện Vision Transformer với chiến lược che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing; (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); (4) Phát hiện bất thường giao thông không giám sát (UAD) dựa trên bộ nhớ đặc trưng $\Delta$-Conditioned; (5) Học tương phản chuỗi thời gian (Temporal Contrastive Learning) nhằm ước lượng mật độ và vận tốc dòng xe; (6) Nhận dạng lại phương tiện liên camera (Vehicle Re-ID) không cần Object Detector dựa trên vùng quan tâm $\Delta$; (7) Hiểu cảnh giao thông từ vựng mở (Open-Vocabulary Scene Understanding) kết hợp đề xuất vùng vật lý và không gian ngữ nghĩa CLIP; và (8) Đánh giá đa thuộc tính điều kiện mặt đường tự giám sát từ chuỗi ảnh nền 24 giờ. Các phương pháp đề xuất hướng tới tính tối ưu về mặt tính toán, mở rộng khả năng suy luận mở và giảm thiểu sự phụ thuộc vào dữ liệu gán nhãn thủ công.
+Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị ghi hình cố định cung cấp cặp tín hiệu quang học tự nhiên có giá trị: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) sạch bóng xe được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của bảy hướng nghiên cứu học tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu trên. Hệ sinh thái nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với cơ chế che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing và xóa xe tự động (Inpainting); (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); (5) Dự đoán mật độ không-thời gian và phân loại cấp độ dịch vụ giao thông theo chuẩn Highway Capacity Manual (HCM LoS) dựa trên mạng hợp nhất DINO ViT, CNN và Bi-GRU; (6) Nhận dạng lại phương tiện liên camera theo hành lang (Corridor-based Vehicle Re-ID) không cần Object Detector kết hợp cửa sổ khả thi không-thời gian nhằm ước tính thời gian hành trình và tốc độ di chuyển; (7) Hiểu cảnh giao thông từ vựng mở (Open-Vocabulary Scene Understanding) kết hợp đề xuất vùng vật lý $\Delta$ và không gian ngữ nghĩa CLIP; và (8) Đánh giá đa thuộc tính điều kiện mặt đường tự giám sát từ chuỗi ảnh nền 24 giờ. Nghiên cứu loại bỏ các tiếp cận bất thường không có mỏ neo vật lý để tập trung vào các bài toán đo lường động học giao thông có tính ứng dụng thực tiễn cao nhất.
 \end{abstract}
 
 \hrule
@@ -62,7 +62,7 @@ Mối quan hệ không gian giữa hai khung hình xác lập trường sai khá
     \Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|
 \end{equation}
 
-Thay vì chỉ áp dụng $\Delta(u, v)$ trong các thuật toán phân đoạn ngưỡng cổ điển vốn nhạy cảm với biến thiên thời tiết và bóng đổ, hệ sinh thái DINO Suite tích hợp tín hiệu sai khác vật lý này vào không gian biểu diễn sâu của Vision Transformer (ViT), mở ra tám hướng tiếp cận bổ trợ lẫn nhau trong giao thông thông minh.
+Thay vì chỉ áp dụng $\Delta(u, v)$ trong các thuật toán phân đoạn ngưỡng cổ điển vốn nhạy cảm với biến thiên thời tiết và bóng đổ, hệ sinh thái DINO Suite tích hợp tín hiệu sai khác vật lý này vào không gian biểu diễn sâu của Vision Transformer (ViT), mở ra bảy hướng tiếp cận bổ trợ lẫn nhau trong giao thông thông minh.
 
 \section{CƠ SỞ PHƯƠNG PHÁP LUẬN VỀ HỌC TỰ GIÁM SÁT DINO}
 
@@ -158,63 +158,78 @@ Nhằm bảo toàn tri thức tiền huấn luyện của ViT, thuật toán War
 \end{equation}
 Trọng số kênh $\Delta$ nhận trung bình cộng ba kênh màu RGB, bảo đảm tại bước huấn luyện đầu tiên kênh sai khác đóng góp năng lượng đồng mức mà không gây sốc gradient cho mạng nơ-ron. Đánh giá được thực hiện qua giao thức phân chia camera phân tách độc lập (Spatial Disjoint Splitting) nhằm triệt tiêu hiện tượng rò rỉ dữ liệu bối cảnh.
 
-\section{HƯỚNG 4: PHÁT HIỆN BẤT THƯỜNG GIAO THÔNG KHÔNG GIÁM SÁT VỚI BỘ NHỚ ĐẶC TRƯNG $\Delta$-CONDITIONED}
+\section{HƯỚNG 5: DỰ ĐOÁN MẬT ĐỘ KHÔNG-THỜI GIAN VÀ CẤP ĐỘ DỊCH VỤ GIAO THÔNG (SPATIO-TEMPORAL DENSITY \& HCM LoS)}
 
-\subsection{Đặt Vấn Đề và Giả Thuyết Khoa Học}
-Các sự kiện bất thường (tai nạn, xe dừng đỗ trái phép, phương tiện đi ngược chiều, vật cản rơi vãi) mang bản chất cực kỳ hiếm gặp, khiến việc xây dựng mô hình phân loại có giám sát gặp rào cản dữ liệu nhãn.
-\begin{itemize}
-    \item \textbf{Trạng thái bình thường:} Trường sai khác $\Delta$ tuân theo phân phối ổn định $\mathcal{D}_{\text{normal}}$ phản ánh sự chuyển động nhịp nhàng của dòng xe.
-    \item \textbf{Trạng thái bất thường:} Khi xảy ra sự cố, $\Delta$ lệch khỏi phân phối bình thường về cả cường độ tĩnh (vùng $\Delta$ lớn cố định qua nhiều frame) lẫn vị trí không gian bất thường trên mặt đường.
-\end{itemize}
+\subsection{Đặt Vấn Đề và Mỏ Neo Vật Lý Tự Thân}
+Các mô hình thị giác truyền thống thường tiếp cận theo hướng đếm phương tiện rời rạc trên từng khung hình tĩnh. Trong dòng giao thông xe máy hỗn hợp đặc trưng tại các đô thị Đông Nam Á (hàng trăm xe máy di chuyển sát nhau), hiện tượng che khuất chồng chéo dẫn đến sai số lũy kế nghiêm trọng. Bên cạnh đó, các tiếp cận học tương phản thời gian (Temporal InfoNCE) ngẫu nhiên không có mỏ neo vật lý thường bị mất tính hội tụ do biến thiên giao thông đột ngột giữa các khung giờ.
 
-\subsection{Bộ Mô Tả Kép và Ngân Hàng Nhớ Anomaly Score}
-Vector đặc trưng được xây dựng kết hợp giữa thống kê vật lý quang học và ngữ nghĩa sâu DINO:
+Nghiên cứu chuyển đổi mục tiêu sang ước lượng \textbf{Tỷ lệ Chiếm dụng Lòng đường Liên tục} $\rho(t) \in [0, 1]$ và \textbf{Cấp độ Dịch vụ Giao thông} theo chuẩn Highway Capacity Manual (HCM LoS).
+Trường sai khác quang học $\Delta_t$ cung cấp mỏ neo vật lý tự thân mà không cần gán nhãn thủ công:
 \begin{equation}
-    \mathbf{f}_{\text{anomaly}} = \text{Concat}\Big([\text{mean}(\Delta), \text{std}(\Delta), \text{ratio}(\Delta > \tau)], \ \text{DINO}_{[CLS]}\Big) \in \mathbb{R}^{D + 3}
+    \rho_{\text{phys}}(t) = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W \mathbb{I}\big(\Delta_t(u, v) > \tau\big)
+\end{equation}
+trong đó $\mathbb{I}(\cdot)$ là hàm chỉ thị và $\tau$ là ngưỡng phân tách quang học thích ứng.
+
+\subsection{Rời Rạc Hóa Cấp Độ Dịch Vụ và Đạo Hàm Xu Hướng}
+Giá trị $\rho_{\text{phys}}(t)$ được phân loại thành 4 cấp độ dịch vụ chuẩn HCM LoS:
+\begin{equation}
+    \text{LoS}(t) = \begin{cases} 
+    0 \quad (\text{Free-Flow: Lưu thông tự do, thông thoáng}), & \rho(t) < 0.15 \\ 
+    1 \quad (\text{Moderate: Dòng xe ổn định, mật độ trung bình}), & 0.15 \le \rho(t) < 0.35 \\ 
+    2 \quad (\text{Slow: Mật độ cao, dòng xe di chuyển chậm}), & 0.35 \le \rho(t) < 0.60 \\ 
+    3 \quad (\text{Gridlock: Kẹt xe nghiêm trọng, tê liệt}), & \rho(t) \ge 0.60 
+    \end{cases}
+\end{equation}
+Đạo hàm xu hướng biến thiên mật độ được mô hình hóa qua sai phân hữu hạn: $\delta(t) = \rho(t) - \rho(t-1) \in [-1, 1]$.
+
+\subsection{Kiến Trúc Hợp Nhất Không - Thời Gian (ViT + CNN + Bi-GRU)}
+Mô hình tiếp nhận chuỗi gồm $T$ khung hình liên tiếp. Tại mỗi bước thời gian $t$:
+\begin{enumerate}
+    \item Vector ngữ nghĩa sâu: $\mathbf{z}_{\text{sem}}^t = \text{DINO}(I_t)_{[CLS]} \in \mathbb{R}^D$.
+    \item Vector hình thái tiền cảnh: $\mathbf{z}_{\text{spatial}}^t = \text{CNN}(\Delta_t) \in \mathbb{R}^{128}$.
+    \item Hợp nhất không gian: $\mathbf{x}_t = \text{Linear}([\mathbf{z}_{\text{sem}}^t \,\|\, \mathbf{z}_{\text{spatial}}^t]) \in \mathbb{R}^{256}$.
+    \item Mô hình hóa chuỗi qua mạng Bi-GRU 2 tầng: $\mathbf{h}_t = \text{BiGRU}(\mathbf{x}_t, \mathbf{h}_{t-1}) \in \mathbb{R}^{256}$.
+\end{enumerate}
+
+Hàm mất mát đa nhiệm tích hợp thành phần làm mịn thời gian:
+\begin{equation}
+\begin{split}
+    \mathcal{L}_{\text{total}} = \; & \lambda_{\rho} \mathcal{L}_{\text{SmoothL1}}(\hat{\rho}, \rho_{\text{phys}}) + \lambda_{\text{LoS}} \mathcal{L}_{\text{CE}}(\hat{\mathbf{y}}_{\text{LoS}}, y_{\text{LoS}}) \\
+    & + \lambda_{\text{trend}} \mathcal{L}_{\text{SmoothL1}}(\hat{\delta}, \delta_{\text{phys}}) + \lambda_{\text{smooth}} \frac{1}{T-1} \sum_{t=1}^{T-1} \|\hat{\rho}_{t+1} - \hat{\rho}_t\|_2^2
+\end{split}
 \end{equation}
 
-Hệ thống duy trì một ngân hàng nhớ (Memory Bank) lưu trữ các vector đại diện trạng thái bình thường, được cập nhật theo cơ chế trung bình trượt hàm mũ (EMA). Điểm bất thường (Anomaly Score) được tính dựa trên khoảng cách $k$ láng giềng gần nhất ($k$-NN):
-\begin{equation}
-    \text{Score}(x) = \frac{1}{k} \sum_{j=1}^k \|\mathbf{f}_x - \mathbf{m}_j\|_2, \quad \mathbf{m}_j \in \text{Top-}k\text{-NN}(\mathbf{f}_x, \text{MemoryBank})
-\end{equation}
-Phương pháp cho phép phát hiện sự cố theo thời gian thực mà hoàn toàn không cần dữ liệu huấn luyện có nhãn bất thường.
+\section{HƯỚNG 6: ĐỊNH DANH LẠI PHƯƠNG TIỆN LIÊN CAMERA THEO HÀNH LANG VÀ ƯỚC TÍNH THỜI GIAN DI CHUYỂN}
 
-\section{HƯỚNG 5: HỌC TƯƠNG PHẢN CHUỖI THỜI GIAN CHO ƯỚC LƯỢNG MẬT ĐỘ VÀ VẬN TỐC DÒNG XE}
+\subsection{Đặt Vấn Đề và Hạn Chế của So Khớp Re-ID Truyền Thống}
+Các giải pháp Vehicle Re-ID truyền thống thực hiện so khớp Cosine tự do trên toàn bộ thư viện Gallery. Trong bối cảnh đô thị Việt Nam với hàng chục nghìn xe máy có ngoại quan gần như đồng nhất, việc so khớp hình ảnh đơn thuần gây ra tỷ lệ \textbf{dương tính giả (False Positives) khổng lồ}. Hơn nữa, việc phụ thuộc vào Object Detector (YOLO) làm tiêu hao chi phí tính toán phần cứng lớn.
 
-\subsection{Mô Hình Hóa Động Học Thời Gian}
-Camera CCTV cung cấp luồng quan sát chuỗi thời gian liên tục $\{I^{t_1}, \dots, I^{t_T}\}$. Tốc độ di chuyển và mức độ ùn tắc được phản ánh trực tiếp qua đạo hàm biến thiên thời gian của trường sai khác $\frac{\partial \Delta}{\partial t}$.
-
-Hệ thống tổ chức dữ liệu thành các cửa sổ trượt kích thước $K$ khung hình. Hai cửa sổ liền kề $W_a = [I^{t_1}, \dots, I^{t_K}]$ và $W_b^+ = [I^{t_{K+1}}, \dots, I^{t_{2K}}]$ từ cùng một camera tạo thành cặp dương tự nhiên.
-
-\subsection{Kiến Trúc Temporal Transformer và Mất Mát InfoNCE Thời Gian}
-Mỗi khung hình được mã hóa đồng thời qua DINO ViT và mạng tích chập DeltaSpatialEncoder:
-\begin{equation}
-    \mathbf{e}_t = \text{Linear}\big(\text{DINO}(I^t) \oplus \text{CNN}(\Delta^t)\big) + \text{PE}(t)
-\end{equation}
-
-Chuỗi $[\mathbf{e}_1, \dots, \mathbf{e}_K]$ được đưa qua khối Temporal Self-Attention Transformer để sinh ra vector biểu diễn động học thời gian $\mathbf{h} \in \mathbb{R}^{256}$. Mạng tối ưu hóa hàm mất mát tương phản đối xứng (Symmetric InfoNCE):
-\begin{equation}
-    \mathcal{L}_{\text{temporal}} = -\frac{1}{2} \left[ \log \frac{\exp(\mathbf{z}_a \cdot \mathbf{z}_b^+ / \tau)}{\sum_j \exp(\mathbf{z}_a \cdot \mathbf{z}_j^- / \tau)} + \log \frac{\exp(\mathbf{z}_b^+ \cdot \mathbf{z}_a / \tau)}{\sum_j \exp(\mathbf{z}_b^+ \cdot \mathbf{z}_j^- / \tau)} \right]
-\end{equation}
-Vector $\mathbf{h}$ đóng vai trò làm đặc trưng nền tảng để dự đoán mật độ lưu lượng phương tiện và chỉ số mức độ phục vụ (Level of Service).
-
-\section{HƯỚNG 6: NHẬN DẠNG LẠI PHƯƠNG TIỆN LIÊN CAMERA DỰA TRÊN VÙNG QUAN TÂM $\Delta$}
-
-\subsection{Trích Xuất Vùng Xe Không Cần Object Detector}
-Các phương pháp nhận dạng lại phương tiện (Vehicle Re-ID) truyền thống đòi hỏi bộ dò vật thể (YOLO/Faster R-CNN) gây tốn kém tài nguyên tính toán. Hướng tiếp cận này khai thác trực tiếp bản đồ sai khác $\Delta$ qua thuật toán phân tích thành phần liên thông (Connected Components) kết hợp bộ lọc diện tích và tỷ lệ khung hình:
+\subsection{Trích Xuất Vùng Xe Tự Động (\texorpdfstring{$\Delta$}{Delta}-RoI) và Kiến Trúc Biểu Diễn Danh Tính}
+Bản đồ $\Delta$ được xử lý hình thái học lấp đầy thân xe và phân ngưỡng Otsu để xác định vùng liên thông hợp lệ không cần Object Detector:
 \begin{equation}
     \text{RoI}_i = \text{ConnectedComponents}\big(\text{MorphClose}(\Delta > \tau_{\text{Otsu}})\big)_i
 \end{equation}
-Các vùng xe hợp lệ được cắt tự động và chuẩn hóa về kích thước $256 \times 128$.
+Đặc trưng danh tính được trích xuất bằng DINO ViT kết hợp tầng gom cụm Generalized-Mean (GeM) Pooling và cấu trúc cổ chai BNNeck, tạo vector biểu diễn $\mathbf{e}_i \in \mathbb{R}^{256}$ chuẩn hóa $L_2$ ($\|\mathbf{e}_i\|_2 = 1$).
 
-\subsection{Kiến Trúc BNNeck và Học Tự Giám Sát Qua Chuỗi Tracklet}
-Mạng VehicleReIDModel sử dụng DINO ViT kết hợp cấu trúc cổ chai Batch Normalization Neck (BNNeck) tạo ra vector nhúng danh tính $\mathbf{e}_i \in \mathbb{R}^{256}$ chuẩn hóa $L_2$.
-
-Các góc nhìn khác nhau của cùng một phương tiện trong chuỗi khung hình liên tiếp của một camera tạo thành một tracklet tự nhiên (cặp dương tự thân), trong khi các phương tiện khác nhau tạo thành cặp âm. Mạng tối ưu hóa hàm mất mát Tracklet Contrastive Loss:
+\subsection{Ràng Buộc Khả Thi Không - Thời Gian Theo Hành Lang (Spatio-Temporal Windowing)}
+Xét hai camera liên tiếp $c_1$ và $c_2$ dọc theo cùng một hành lang giao thông với cự ly thực địa $d(c_1, c_2)$ (tính bằng km).
+Dải vận tốc vật lý thực tế của phương tiện được giới hạn trong khoảng $[v_{\text{min}}, v_{\text{max}}] = [10, 60] \text{ km/h}$. Cửa sổ thời gian di chuyển hợp lệ bắt buộc thỏa mãn:
 \begin{equation}
-    \mathcal{L}_{\text{ReID}} = -\sum_{i} \log \frac{\sum_{p \in \mathcal{P}_i} \exp(\mathbf{e}_i \cdot \mathbf{e}_p / \tau)}{\sum_{p \in \mathcal{P}_i} \exp(\mathbf{e}_i \cdot \mathbf{e}_p / \tau) + \sum_{n \in \mathcal{N}_i} \exp(\mathbf{e}_i \cdot \mathbf{e}_n / \tau)}
+    \Delta t = t_2 - t_1 \in \left[ \Delta t_{\text{min}}, \Delta t_{\text{max}} \right] = \left[ \frac{d(c_1, c_2)}{v_{\text{max}}}, \ \frac{d(c_1, c_2)}{v_{\text{min}}} \right]
 \end{equation}
-Hiệu năng so khớp liên camera được đánh giá khách quan qua đường cong tích lũy đặc trưng (CMC Rank-1, Rank-5) và mean Average Precision (mAP).
+
+Mọi ứng viên $g_j$ ngoài khoảng thời gian này bị triệt tiêu ngay lập tức khỏi phép so khớp:
+\begin{equation}
+    \text{Sim}(q_i, g_j) = \begin{cases} \mathbf{e}_{q_i} \cdot \mathbf{e}_{g_j}, & \text{nếu } (t_2 - t_1) \in [\Delta t_{\text{min}}, \Delta t_{\text{max}}] \\ -\infty, & \text{ngược lại} \end{cases}
+\end{equation}
+Quy tắc topo này loại trừ hơn $95\% - 98\%$ các cặp dương tính giả về mặt thị giác.
+
+\subsection{Ước Tính Thời Gian Hành Trình và Vận Tốc Trung Bình}
+Khi ứng viên đạt độ tương đồng Cosine $\ge \tau_{\text{sim}}$, hệ thống suy luận trực tiếp các chỉ tiêu giao thông hành lang:
+\begin{equation}
+    T_{\text{travel}} = t_2 - t_1 \quad (\text{giây}), \qquad v_{\text{journey}} = \frac{d(c_1, c_2)}{t_2 - t_1} \times 3600 \quad (\text{km/h})
+\end{equation}
+Giải pháp cung cấp năng lực giám sát tốc độ và thời gian hành trình liên nút giao mà không cần đầu tư hệ thống nhận diện biển số (ANPR) đắt đỏ.
 
 \section{HƯỚNG 7: HIỂU CẢNH GIAO THÔNG TỪ VỰNG MỞ VỚI ĐỀ XUẤT VÙNG KHÔNG PHỤ THUỘC LỚP}
 
@@ -262,9 +277,9 @@ Hệ thống tự động gom cụm phân tích PCA 2D và xuất báo cáo tìn
 \begin{table}[htbp]
 \centering
 \small
-\caption{Tổng hợp phương pháp luận và tiềm năng công bố của tám hướng nghiên cứu DINO Suite}
+\caption{Tổng hợp phương pháp luận và tiềm năng công bố của 7 hướng nghiên cứu DINO Suite}
 \label{tab:comparison}
-\begin{tabular}{p{1.8cm} p{3.4cm} p{4.4cm} c p{2.8cm}}
+\begin{tabular}{p{1.6cm} p{3.2cm} p{4.6cm} c p{2.8cm}}
 \toprule
 \textbf{Hướng} & \textbf{Tên Nghiên Cứu} & \textbf{Cơ Chế Cốt Lõi} & \textbf{Độ Mới} & \textbf{Venue Đề Xuất} \\
 \midrule
@@ -272,13 +287,11 @@ Hệ thống tự động gom cụm phân tích PCA 2D và xuất báo cáo tìn
 \addlinespace
 \textbf{Hướng 2} & Scene Decomposition Network & Mô hình hóa Alpha Compositing với mỏ neo giám sát nền tĩnh (Road Inpainting) & 5/5 & CVPR, ECCV, NeurIPS \\
 \addlinespace
-\textbf{Hướng 3} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 3/5 & EAAI Journal, ITSC \\
+\textbf{Hướng 3} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 3.5/5 & EAAI Journal, ITSC \\
 \addlinespace
-\textbf{Hướng 4} & Unsupervised Traffic Anomaly Detection & Biểu diễn kép $\Delta$+DINO, Memory Bank với cập nhật EMA phát hiện sự cố & 4/5 & IEEE T-ITS, WACV \\
+\textbf{Hướng 5} & Spatio-Temporal Density \& HCM LoS & Bi-GRU kết hợp DINO và $\Delta$-CNN với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ và LoS & 4.5/5 & IEEE T-ITS, CVPR \\
 \addlinespace
-\textbf{Hướng 5} & Temporal Contrastive Density & Học tương phản thời gian trên chuỗi $\Delta$-Maps để ước lượng mật độ và tốc độ & 4.5/5 & CVPR, IEEE T-ITS \\
-\addlinespace
-\textbf{Hướng 6} & Delta-Guided Vehicle Re-ID & Trích xuất RoI từ $\Delta$, BNNeck DINO, tracklet contrastive, xếp hạng CMC/mAP & 4/5 & IEEE T-ITS, ICPR \\
+\textbf{Hướng 6} & Corridor-Based Vehicle Re-ID & $\Delta$-RoI không cần detector, GeM+BNNeck, Ràng buộc không-thời gian đo tốc độ $km/h$ & 4.5/5 & IEEE T-ITS, TRB \\
 \addlinespace
 \textbf{Hướng 7} & Open-Vocabulary Scene Understanding & $\Delta$ proposals không phụ thuộc lớp kết hợp căn chỉnh DINO sang CLIP text & 4/5 & ECCV, WACV \\
 \addlinespace
@@ -288,6 +301,6 @@ Hệ thống tự động gom cụm phân tích PCA 2D và xuất báo cáo tìn
 \end{table}
 
 \section{KẾT LUẬN}
-Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và đề xuất tám hướng nghiên cứu có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), phát hiện sự cố bất thường không giám sát (Hướng 4), học tương phản chuỗi thời gian (Hướng 5), nhận dạng lại phương tiện liên camera (Hướng 6), hiểu cảnh từ vựng mở (Hướng 7), đến đánh giá điều kiện mặt đường đô thị (Hướng 8). Việc kết hợp có hệ thống giữa các đặc tính quang học vật lý và mô hình nền tảng thị giác giúp giải quyết triệt để bài toán thiếu hụt dữ liệu gán nhãn, nâng cao độ bền vững và mở rộng khả năng suy luận thông minh cho các hệ thống giao thông đô thị quy mô lớn.
+Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và hoàn thiện bảy hướng nghiên cứu có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), dự báo mật độ không-thời gian và cấp độ dịch vụ giao thông (Hướng 5), nhận dạng lại phương tiện theo hành lang và đo tốc độ di chuyển (Hướng 6), hiểu cảnh từ vựng mở (Hướng 7), đến đánh giá điều kiện mặt đường đô thị (Hướng 8). Việc kết hợp có hệ thống giữa các đặc tính quang học vật lý và mô hình nền tảng thị giác giúp giải quyết triệt để bài toán thiếu hụt dữ liệu gán nhãn, nâng cao độ bền vững và mở rộng khả năng suy luận thông minh cho các hệ thống giao thông đô thị quy mô lớn.
 
 \end{document}

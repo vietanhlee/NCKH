@@ -1,79 +1,108 @@
 """
 =============================================================================
- Hướng 5: Temporal Contrastive Learning for Traffic Density Estimation
- Module: Losses (Hàm mất mát tương phản thời gian và ước lượng mật độ)
+ Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level of Service (LoS) Estimation
+ Module: Losses (Hàm mất mát mỏ neo chiếm dụng vật lý và cấp độ dịch vụ LoS)
 =============================================================================
 """
 
-from typing import Dict, Optional
+from typing import Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class TemporalContrastiveLoss(nn.Module):
+class SpatioTemporalDensityLoss(nn.Module):
     """
-    Hàm mất mát học tương phản thời gian kết hợp giám sát mật độ (nếu có).
-    Bao gồm:
-      1. InfoNCE Contrastive Loss: Kéo gần các cửa sổ thời gian liền kề cùng một camera,
-         đẩy xa các cửa sổ thời gian từ camera khác hoặc khung giờ khác trong mini-batch.
-      2. Supervised Density Loss (Smooth L1): Tùy chọn giám sát downstream bài toán đếm/mật độ.
+    Hàm mất mát đa mục tiêu cho bài toán ước lượng mật độ và ùn tắc giao thông:
+      1. Loss Chiếm dụng Mặt đường (Occupancy Loss): Ràng buộc Smooth L1 giữa rho_hat và rho_phys
+         được tính trực tiếp từ mỏ neo sai khác quang học Delta.
+      2. Loss Phân loại Cấp độ Dịch vụ (LoS Cross-Entropy): Ràng buộc phân loại 4 mức độ dịch vụ HCM.
+      3. Loss Xu hướng Biến thiên (Trend MSE Loss): Ràng buộc tốc độ thay đổi mật độ d(rho)/dt.
+      4. Loss Trơn Thời gian (Temporal Dynamic Smoothness): Đảm bảo tính liên tục tự nhiên của dòng xe.
     """
 
     def __init__(
         self,
-        temperature: float = 0.07,
-        lambda_density: float = 0.5,
+        weight_occupancy: float = 5.0,
+        weight_los: float = 1.0,
+        weight_trend: float = 2.0,
+        weight_smooth: float = 1.0,
     ):
         super().__init__()
-        self.temperature = temperature
-        self.lambda_density = lambda_density
-        self.smooth_l1 = nn.SmoothL1Loss(beta=1.0)
+        self.weight_occupancy = weight_occupancy
+        self.weight_los = weight_los
+        self.weight_trend = weight_trend
+        self.weight_smooth = weight_smooth
+
+        self.smooth_l1 = nn.SmoothL1Loss(beta=0.05)
+        self.ce_loss = nn.CrossEntropyLoss()
+        self.mse_loss = nn.MSELoss()
 
     def forward(
         self,
-        z_a: torch.Tensor,
-        z_b: torch.Tensor,
-        pred_density: Optional[torch.Tensor] = None,
-        target_density: Optional[torch.Tensor] = None,
+        preds: Dict[str, torch.Tensor],
+        targets: Dict[str, torch.Tensor],
     ) -> Dict[str, torch.Tensor]:
         """
-        Tính toán hàm mất mát.
+        Tính toán hàm mất mát tổng hợp.
 
         Args:
-            z_a: Embedding tương phản của cửa sổ gốc, shape (B, D), đã chuẩn hóa L2.
-            z_b: Embedding tương phản của cửa sổ liền kề (cặp dương), shape (B, D), đã chuẩn hóa L2.
-            pred_density: Dự đoán mật độ từ mô hình, shape (B,).
-            target_density: Nhãn mật độ thực tế, shape (B,).
+            preds:
+                - 'pred_occupancy_seq': (B, K)
+                - 'pred_occupancy': (B,)
+                - 'logits_los': (B, 4)
+                - 'pred_trend': (B,)
+            targets:
+                - 'occupancy_seq': (B, K)
+                - 'current_occupancy': (B,)
+                - 'current_los': (B,)
+                - 'trend': (B,)
 
         Returns:
-            Dict chứa 'loss_total', 'loss_contrastive', 'loss_density'.
+            Dict chứa 'loss_total' và các thành phần loss chi tiết.
         """
-        B = z_a.shape[0]
+        device = preds["pred_occupancy"].device
 
-        # 1. Ma trận tương quan cosine giữa tất cả các mẫu trong batch
-        # logits_ab[i, j] = sim(z_a[i], z_b[j]) / tau
-        logits_ab = torch.matmul(z_a, z_b.T) / self.temperature
-        logits_ba = torch.matmul(z_b, z_a.T) / self.temperature
+        target_occ = targets["current_occupancy"].to(device)
+        target_los = targets["current_los"].to(device)
+        target_trend = targets["trend"].to(device)
+        target_occ_seq = targets["occupancy_seq"].to(device)
 
-        # Nhãn mục tiêu là đường chéo chính (i == j là cặp dương)
-        labels = torch.arange(B, device=z_a.device)
+        # 1. Mất mát hồi quy độ chiếm dụng mặt đường hiện tại
+        loss_occ = self.smooth_l1(preds["pred_occupancy"], target_occ)
 
-        loss_a = F.cross_entropy(logits_ab, labels)
-        loss_b = F.cross_entropy(logits_ba, labels)
-        loss_contrastive = 0.5 * (loss_a + loss_b)
+        # 2. Mất mát phân loại cấp độ dịch vụ LoS (HCM)
+        loss_los = self.ce_loss(preds["logits_los"], target_los)
 
-        # 2. Giám sát mật độ (nếu có nhãn hợp lệ >= 0)
-        loss_density = torch.tensor(0.0, device=z_a.device)
-        if pred_density is not None and target_density is not None:
-            mask = target_density >= 0
-            if mask.sum() > 0:
-                loss_density = self.smooth_l1(pred_density[mask], target_density[mask])
+        # 3. Mất mát dự đoán xu hướng biến thiên d(rho)/dt
+        loss_trend = self.mse_loss(preds["pred_trend"], target_trend)
 
-        loss_total = loss_contrastive + self.lambda_density * loss_density
+        # 4. Ràng buộc bảo toàn động học liên tục giữa các khung hình kề nhau
+        pred_seq = preds["pred_occupancy_seq"]
+        if pred_seq.shape[1] > 1:
+            pred_diff = pred_seq[:, 1:] - pred_seq[:, :-1]
+            target_diff = target_occ_seq[:, 1:] - target_occ_seq[:, :-1]
+            loss_smooth = self.mse_loss(pred_diff, target_diff)
+        else:
+            loss_smooth = torch.tensor(0.0, device=device)
+
+        # Tổng hợp mất mát có trọng số
+        loss_total = (
+            self.weight_occupancy * loss_occ
+            + self.weight_los * loss_los
+            + self.weight_trend * loss_trend
+            + self.weight_smooth * loss_smooth
+        )
 
         return {
             "loss_total": loss_total,
-            "loss_contrastive": loss_contrastive,
-            "loss_density": loss_density,
+            "loss_occupancy": loss_occ,
+            "loss_los": loss_los,
+            "loss_trend": loss_trend,
+            "loss_smooth": loss_smooth,
         }
+
+
+# Tương thích ngược với tên gọi cũ
+TemporalContrastiveLoss = SpatioTemporalDensityLoss

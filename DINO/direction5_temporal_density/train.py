@@ -1,7 +1,9 @@
 """
 =============================================================================
- Hướng 5: Temporal Contrastive Learning for Traffic Density Estimation
- Module: Train Pipeline (Quy trình huấn luyện tương phản chuỗi thời gian)
+ Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level of Service (LoS) Estimation
+ Module: Train Pipeline (Quy trình huấn luyện và đánh giá chỉ số ùn tắc đô thị)
+ Hỗ trợ Multi-GPU, Mixed Precision (AMP), Resume Training chuẩn Production
 =============================================================================
 """
 
@@ -10,6 +12,7 @@ import os
 import sys
 import time
 from typing import Dict, Any
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -21,14 +24,14 @@ if _dino_dir not in sys.path:
     sys.path.insert(0, _dino_dir)
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_device, print_gpu_summary, wrap_model_distributed, unwrap_model, save_checkpoint, load_checkpoint
-from dataset import TemporalTrafficDataset
-from models import TemporalTrafficEncoder
-from losses import TemporalContrastiveLoss
+from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
+from direction5_temporal_density.dataset import TemporalTrafficDataset
+from direction5_temporal_density.models import SpatioTemporalDensityNet
+from direction5_temporal_density.losses import SpatioTemporalDensityLoss
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Huấn luyện Temporal Contrastive Learning cho Thị Giác Giao Thông")
+    parser = argparse.ArgumentParser(description="Huấn luyện Spatio-Temporal Traffic Density & LoS Estimation")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
     parser.add_argument("--origin_dir", type=str, default="output", help="Thư mục origin images")
     parser.add_argument("--csv_file", type=str, default=None, help="File CSV nhãn số lượng xe (nếu có)")
@@ -38,97 +41,25 @@ def parse_args():
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--window_size", type=int, default=4, help="Số khung hình trong một cửa sổ thời gian")
     parser.add_argument("--img_size", type=int, default=224, help="Kích thước ảnh đầu vào")
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size (số cửa sổ thời gian)")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size mỗi GPU")
     parser.add_argument("--epochs", type=int, default=20, help="Số epoch huấn luyện")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
-    parser.add_argument("--temperature", type=float, default=0.07, help="Nhiệt độ InfoNCE")
-    parser.add_argument("--lambda_density", type=float, default=0.5, help="Trọng số loss mật độ")
+    parser.add_argument("--freeze_backbone", action="store_true", default=True, help="Đóng băng ViT backbone")
     parser.add_argument("--max_sequences", type=int, default=None, help="Giới hạn số chuỗi kiểm thử nhanh")
-    parser.add_argument("--device", type=str, default="cuda", help="Thiết bị tính toán")
+    parser.add_argument("--num_workers", type=int, default=0, help="Số luồng nạp dữ liệu")
+    parser.add_argument("--device", type=str, default="cuda", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
     return parser.parse_args()
 
 
-def train_one_epoch(
-    model: nn.Module,
-    dataloader: DataLoader,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    scaler: torch.cuda.amp.GradScaler,
-    device: torch.device,
-    epoch: int,
-) -> Dict[str, float]:
-    model.train()
-    total_loss = 0.0
-    total_contrastive = 0.0
-    total_density = 0.0
-    num_batches = 0
-
-    pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}", leave=False)
-    for batch in pbar:
-        rgb_a = batch["rgb_seq"].to(device, non_blocking=True)           # (B, K, 3, H, W)
-        delta_a = batch["delta_seq"].to(device, non_blocking=True)       # (B, K, 1, H, W)
-        rgb_b = batch["rgb_seq_pos"].to(device, non_blocking=True)       # (B, K, 3, H, W)
-        delta_b = batch["delta_seq_pos"].to(device, non_blocking=True)   # (B, K, 1, H, W)
-        targets = batch["density"].to(device, non_blocking=True)         # (B,)
-
-        optimizer.zero_grad()
-
-        use_amp = device.type == "cuda"
-        with torch.cuda.amp.autocast(enabled=use_amp):
-            # Forward cửa sổ A
-            out_a = model(rgb_a, delta_a)
-            # Forward cửa sổ B (cặp dương)
-            out_b = model(rgb_b, delta_b)
-
-            z_a = out_a["proj_contrastive"]
-            z_b = out_b["proj_contrastive"]
-            pred_density = out_a["pred_density"]
-
-            loss_dict = criterion(
-                z_a=z_a,
-                z_b=z_b,
-                pred_density=pred_density,
-                target_density=targets,
-            )
-            loss = loss_dict["loss_total"]
-
-        if use_amp:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            optimizer.step()
-
-        total_loss += loss.item()
-        total_contrastive += loss_dict["loss_contrastive"].item()
-        total_density += loss_dict["loss_density"].item()
-        num_batches += 1
-
-        pbar.set_postfix({
-            "Loss": f"{loss.item():.4f}",
-            "Contrast": f"{loss_dict['loss_contrastive'].item():.4f}",
-        })
-
-    avg_loss = total_loss / max(1, num_batches)
-    avg_contrast = total_contrastive / max(1, num_batches)
-    avg_density = total_density / max(1, num_batches)
-    return {
-        "loss_total": avg_loss,
-        "loss_contrastive": avg_contrast,
-        "loss_density": avg_density,
-    }
-
-
-def main():
-    args = parse_args()
+def train_temporal_density(args):
+    """Quy trình huấn luyện toàn diện mạng SpatioTemporalDensityNet."""
     os.makedirs(args.save_dir, exist_ok=True)
-    device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
-    print_gpu_summary()
+    device_arg = args.device
 
     print("=" * 80)
-    print(" 🚀 [Direction 5] KHỞI CHẠY HUẤN LUYỆN TEMPORAL CONTRASTIVE TRAFFIC DENSITY")
+    print(" 🚀 [Direction 5] KHỞI CHẠY HUẤN LUYỆN SPATIO-TEMPORAL DENSITY & LoS ESTIMATION")
     print("=" * 80)
 
     # 1. Dataset & DataLoader
@@ -146,59 +77,57 @@ def main():
         print("❌ [Lỗi] Không tìm thấy dữ liệu hợp lệ trong thư mục chỉ định.")
         return
 
-    dataloader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=0 if sys.platform == "win32" else 2,
-        pin_memory=(device.type == "cuda"),
-        drop_last=(len(dataset) > args.batch_size),
-    )
-
-    # 2. Tải ViT Backbone
-    print(f"\n📦 Tải Backbone DINO: {args.backbone}...")
+    # 2. Khởi tạo Backbone DINO & Mô hình Không-Thời gian
     backbone, embed_dim, _ = get_dino_backbone(
         model_name=args.backbone,
         pretrained=True,
-        device=device,
+        device=device_arg,
     )
 
-    # 3. Khởi tạo mô hình
-    model = TemporalTrafficEncoder(
+    base_model = SpatioTemporalDensityNet(
         backbone=backbone,
         embed_dim=embed_dim,
         delta_dim=128,
         temporal_dim=256,
-        proj_dim=128,
-        freeze_backbone=True,
-    ).to(device)
-
-    # Đa GPU nếu có
-    model = wrap_model_distributed(model, device)
-
-    # 4. Criterion, Optimizer & Scheduler
-    criterion = TemporalContrastiveLoss(
-        temperature=args.temperature,
-        lambda_density=args.lambda_density,
-    ).to(device)
-
-    optimizer = torch.optim.AdamW(
-        [p for p in model.parameters() if p.requires_grad],
-        lr=args.lr,
-        weight_decay=args.weight_decay,
+        num_los_classes=4,
+        freeze_backbone=args.freeze_backbone,
     )
 
+    model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+        model=base_model,
+        batch_size_per_gpu=args.batch_size,
+        base_lr=args.lr,
+        device_arg=device_arg,
+    )
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=effective_batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=(device.type == "cuda"),
+        drop_last=(len(dataset) > effective_batch_size),
+    )
+
+    # 3. Criterion, Optimizer & Scheduler
+    criterion = SpatioTemporalDensityLoss().to(device)
+
+    raw_model = unwrap_model(model)
+    optimizer = torch.optim.AdamW(
+        [p for p in raw_model.parameters() if p.requires_grad],
+        lr=effective_lr,
+        weight_decay=args.weight_decay,
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+
     device_type = "cuda" if device.type == "cuda" else "cpu"
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
         scaler = torch.amp.GradScaler(device_type, enabled=(device.type == "cuda"))
     else:
         scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
 
-    # 5. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp --weights
+    # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp --weights
     start_epoch = 0
-    raw_model = unwrap_model(model)
-
     if args.resume:
         if not os.path.isfile(args.resume):
             raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
@@ -226,34 +155,85 @@ def main():
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
 
-    # 6. Huấn luyện
-    best_loss = float("inf")
+    # 5. Huấn luyện
+    best_mae = float("inf")
     start_time = time.time()
-    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}] trên {max(1, num_gpus)} thiết bị...")
 
     for epoch in range(start_epoch, args.epochs):
-        metrics = train_one_epoch(
-            model=model,
-            dataloader=dataloader,
-            criterion=criterion,
-            optimizer=optimizer,
-            scaler=scaler,
-            device=device,
-            epoch=epoch,
-        )
+        model.train()
+        total_loss = 0.0
+        total_mae = 0.0
+        correct_los = 0
+        total_samples = 0
+
+        pbar = tqdm(dataloader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
+
+        for batch in pbar:
+            rgb_seq = batch["rgb_seq"].to(device, non_blocking=True)
+            delta_seq = batch["delta_seq"].to(device, non_blocking=True)
+            targets = {
+                "occupancy_seq": batch["occupancy_seq"].to(device, non_blocking=True),
+                "current_occupancy": batch["current_occupancy"].to(device, non_blocking=True),
+                "current_los": batch["current_los"].to(device, non_blocking=True),
+                "trend": batch["trend"].to(device, non_blocking=True),
+            }
+
+            optimizer.zero_grad()
+
+            if scaler.is_enabled():
+                with torch.amp.autocast(device_type=device_type):
+                    preds = model(rgb_seq, delta_seq)
+                    loss_dict = criterion(preds, targets)
+                    loss = loss_dict["loss_total"]
+
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(raw_model.parameters(), max_norm=2.0)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                preds = model(rgb_seq, delta_seq)
+                loss_dict = criterion(preds, targets)
+                loss = loss_dict["loss_total"]
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(raw_model.parameters(), max_norm=2.0)
+                optimizer.step()
+
+            # Thống kê độ chính xác
+            bs = rgb_seq.size(0)
+            mae = torch.abs(preds["pred_occupancy"] - targets["current_occupancy"]).mean().item()
+            pred_los = torch.argmax(preds["logits_los"], dim=-1)
+            correct = (pred_los == targets["current_los"]).sum().item()
+
+            total_loss += loss.item() * bs
+            total_mae += mae * bs
+            correct_los += correct
+            total_samples += bs
+
+            pbar.set_postfix({
+                "loss": f"{loss.item():.4f}",
+                "mae_occ": f"{mae:.3f}",
+                "los_acc": f"{(correct / bs) * 100:.1f}%",
+            })
+
         scheduler.step()
 
+        epoch_loss = total_loss / max(1, total_samples)
+        epoch_mae = total_mae / max(1, total_samples)
+        epoch_acc = (correct_los / max(1, total_samples)) * 100.0
+
         print(
-            f"Epoch [{epoch+1:02d}/{args.epochs:02d}] "
-            f"Loss: {metrics['loss_total']:.4f} | "
-            f"Contrastive: {metrics['loss_contrastive']:.4f} | "
-            f"Density: {metrics['loss_density']:.4f} | "
+            f"📊 Epoch [{epoch+1:02d}/{args.epochs:02d}] "
+            f"Loss: {epoch_loss:.4f} | "
+            f"Occupancy MAE: {epoch_mae:.4f} | "
+            f"LoS Accuracy: {epoch_acc:.2f}% | "
             f"LR: {scheduler.get_last_lr()[0]:.2e}"
         )
 
-        # Lưu checkpoint tốt nhất và checkpoint định kỳ
-        if metrics["loss_total"] < best_loss or (epoch + 1) == args.epochs:
-            best_loss = min(best_loss, metrics["loss_total"])
+        # Lưu checkpoint tốt nhất theo MAE Occupancy và lưu epoch cuối
+        if epoch_mae < best_mae or (epoch + 1) == args.epochs:
+            best_mae = min(best_mae, epoch_mae)
             ckpt_path = os.path.join(args.save_dir, "best_temporal_model.pth")
             save_checkpoint(
                 save_path=ckpt_path,
@@ -262,14 +242,15 @@ def main():
                 scheduler=scheduler,
                 scaler=scaler,
                 epoch=epoch + 1,
-                metrics=metrics,
-                extra_dict={"best_loss": best_loss, "args": vars(args)},
+                metrics={"loss": epoch_loss, "mae_occupancy": epoch_mae, "los_accuracy": epoch_acc},
+                extra_dict={"best_mae": best_mae, "num_gpus": num_gpus, "args": vars(args)},
                 verbose=True,
             )
 
     elapsed = time.time() - start_time
-    print(f"\n🎉 Hoàn tất huấn luyện Direction 5 sau {elapsed/60:.2f} phút! Best Loss: {best_loss:.4f}")
+    print(f"\n🎉 [Complete] Huấn luyện Direction 5 hoàn tất sau {elapsed/60:.2f} phút! Kỷ lục MAE Occupancy: {best_mae:.4f}")
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    train_temporal_density(args)
