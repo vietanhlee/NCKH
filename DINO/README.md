@@ -1,6 +1,6 @@
 # DINO Traffic Suite: Khai Thác Cặp Ảnh Background–Origin Cho Thị Giác Giao Thông
 
-Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **5 hướng nghiên cứu trọng tâm** (H1, H2, H3, H4, H5).
+Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **4 hướng nghiên cứu trọng tâm** (H1, H2, H3, H4).
 
 ```
 DINO/
@@ -32,23 +32,15 @@ DINO/
 │   ├── evaluate.py                         # So sánh 3-ch vs 4-ch, tự động sinh bảng LaTeX bài báo
 │   └── README.md
 │
-├── direction4_temporal_density/            # [HƯỚNG 4] Spatio-Temporal Density & HCM LoS Estimation
-│   ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo vật lý ρ_phys, phân loại HCM LoS
-│   ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
-│   ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
-│   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
-│   └── README.md
-│
-└── direction5_road_condition/              # [HƯỚNG 5] Self-Supervised Road Surface Condition Estimation
-    ├── dataset.py                          # RoadSurfaceDataset nạp chuỗi ảnh nền 24h & mỏ neo quang học
-    ├── models.py                           # RoadConditionClassifier (Tri-Head: Wetness, Illumination, Degradation)
-    ├── losses.py                           # SurfaceConsistencyLoss với mỏ neo vật lý
-    ├── train.py                            # Huấn luyện đa thuộc tính mặt đường với Multi-GPU & AMP
-    ├── eval.py                             # Đánh giá, gom cụm PCA 2D và xuất báo cáo hạ tầng đô thị
+└── direction4_temporal_density/            # [HƯỚNG 4] Spatio-Temporal Density & HCM LoS Estimation
+    ├── dataset.py                          # Nạp chuỗi thời gian, mỏ neo vật lý ρ_phys, phân loại HCM LoS
+    ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
+    ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
+    ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
     └── README.md
 ```
 
-## Bảng So Sánh 5 Hướng Nghiên Cứu Trọng Tâm
+## Bảng So Sánh 4 Hướng Nghiên Cứu Trọng Tâm
 
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
@@ -56,7 +48,6 @@ DINO/
 | **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting xóa xe) | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | EAAI Journal, ITSC |
 | **H4** | **Spatio-Temporal Density & HCM LoS** | `direction4_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
-| **H5** | **Road Surface Condition Estimation** | `direction5_road_condition/` | Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h | IEEE T-ITS, TRB |
 
 ---
 
@@ -142,26 +133,9 @@ python DINO/direction4_temporal_density/train.py \
     --device cuda
 ```
 
-### 5. Hướng 5: Self-Supervised Road Surface Condition Estimation
-```bash
-# Huấn luyện đa thuộc tính mặt đường (ngập nước, chiếu sáng, nứt nẻ):
-python DINO/direction5_road_condition/train.py \
-    --bg_dir traffic_backgrounds \
-    --epochs 25 \
-    --batch_size 16 \
-    --save_dir checkpoints/direction5_road_condition \
-    --device cuda
-
-# Đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị:
-python DINO/direction5_road_condition/eval.py \
-    --bg_dir traffic_backgrounds \
-    --output_dir checkpoints/direction5_road_condition \
-    --device cuda
-```
-
 ---
 
-## 🧪 Kiểm Thử Toàn Bộ 5 Hướng Trọng Tâm (Smoke Test Runner)
+## 🧪 Kiểm Thử Toàn Bộ 4 Hướng Trọng Tâm (Smoke Test Runner)
 Chạy script kiểm thử tự động toàn diện với dữ liệu mô phỏng trong vòng 10 giây:
 ```bash
 python DINO/test_all_directions.py

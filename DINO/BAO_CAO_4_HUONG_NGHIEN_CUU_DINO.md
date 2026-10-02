@@ -1,14 +1,13 @@
-# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 5 HƯỚNG NGHIÊN CỨU TRỌNG TÂM KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
+# BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC 4 HƯỚNG NGHIÊN CỨU TRỌNG TÂM KHAI THÁC CẶP ẢNH NỀN TĨNH VÀ PHƯƠNG TIỆN TRONG THỊ GIÁC GIAO THÔNG
 
 **Dự án:** Khai thác tự giám sát cặp ảnh Background tĩnh và Origin phương tiện phục vụ bài toán thị giác máy tính giám sát giao thông đô thị  
 **Dữ liệu thực nghiệm:** Hệ thống camera giao thông đô thị TP.HCM (IC4SD-Traffic-HCM)  
 **Địa chỉ mã nguồn:** Thư mục `g:/nckh/DINO/`  
-**Cấu trúc 5 hướng nghiên cứu liên hoàn:**
+**Cấu trúc 4 hướng nghiên cứu liên hoàn:**
 * **Hướng 1 (`direction1_bg_guided_dino/`):** Tiền huấn luyện tự giám sát liên tục với cơ chế che định hướng tiền cảnh (Foreground-Aware Masking).
 * **Hướng 2 (`direction2_scene_decomposition/`):** Mạng phân rã bối cảnh tự giám sát (Alpha Compositing & Road Inpainting xóa xe tự động).
 * **Hướng 3 (`direction3_foreground_enhanced_counting/`):** Mở rộng biểu diễn tiền cảnh 4 kênh (RGB+$\Delta$) trong ước lượng lưu lượng ít mẫu.
 * **Hướng 4 (`direction4_temporal_density/`):** Dự đoán mật độ không-thời gian $\rho(t)$ và phân loại cấp độ dịch vụ giao thông theo chuẩn HCM LoS.
-* **Hướng 5 (`direction5_road_condition/`):** Tự giám sát đa thuộc tính điều kiện mặt đường từ chuỗi ảnh nền 24h với mỏ neo vật lý quang học.
 
 ---
 
@@ -21,7 +20,7 @@ Trong giám sát giao thông qua camera cố định (CCTV), hệ thống có ha
 Sự kết hợp giữa $I_{\text{origin}}$ và $I_{\text{bg}}$ cung cấp một tín hiệu vật lý quang học tiên nghiệm (Physical Prior) vô cùng mạnh mẽ:
 $$\Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|$$
 
-Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan hoặc sử dụng các thuật toán trừ nền cổ điển dễ bị nhiễu do thời tiết và bóng đổ, hệ sinh thái DINO Suite được xây dựng gồm **5 hướng nghiên cứu cốt lõi**, tích hợp $\Delta$ và $I_{\text{bg}}$ vào không gian biểu diễn sâu của Vision Transformer (ViT) để giải quyết các bài toán đo lường, bóc tách và giám sát hạ tầng trong Giao thông Thông minh (Intelligent Transportation Systems - ITS).
+Thay vì bỏ phí ảnh nền tĩnh chỉ để xem trực quan hoặc sử dụng các thuật toán trừ nền cổ điển dễ bị nhiễu do thời tiết và bóng đổ, hệ sinh thái DINO Suite được xây dựng gồm **4 hướng nghiên cứu cốt lõi**, tích hợp $\Delta$ và $I_{\text{bg}}$ vào không gian biểu diễn sâu của Vision Transformer (ViT) để giải quyết các bài toán đo lường, bóc tách và giám sát hạ tầng trong Giao thông Thông minh (Intelligent Transportation Systems - ITS).
 
 ---
 
@@ -152,152 +151,9 @@ $$W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}, \quad W_{\text{4ch}}[:, 
 
 ---
 
-## 6. HƯỚNG 5: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ (SELF-SUPERVISED ROAD SURFACE CONDITION ESTIMATION)
+## 6. TỔNG HỢP VÀ HỆ SINH THÁI 4 HƯỚNG NGHIÊN CỨU TRỌNG TÂM
 
-### 6.1. Mã nguồn tham chiếu
-* Thư mục triển khai: `g:/nckh/DINO/direction5_road_condition/`
-* Bộ nạp chuỗi ảnh nền 24h và tính toán mỏ neo vật lý quang học: [`dataset.py`](file:///g:/nckh/DINO/direction5_road_condition/dataset.py) (`RoadSurfaceDataset`, `compute_physical_surface_metrics`)
-* Mô hình phân tích đa thuộc tính (Tri-Head Multi-Task): [`models.py`](file:///g:/nckh/DINO/direction5_road_condition/models.py) (`RoadConditionClassifier`)
-* Hàm mất mát tự giám sát kết hợp mỏ neo vật lý: [`losses.py`](file:///g:/nckh/DINO/direction5_road_condition/losses.py) (`SurfaceConsistencyLoss`)
-* Pipeline huấn luyện Multi-GPU & AMP: [`train.py`](file:///g:/nckh/DINO/direction5_road_condition/train.py) (`train_road_condition`)
-* Pipeline đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị: [`eval.py`](file:///g:/nckh/DINO/direction5_road_condition/eval.py) (`plot_road_condition_pca`)
-* Tài liệu kỹ thuật: [`README.md`](file:///g:/nckh/DINO/direction5_road_condition/README.md)
-
-### 6.2. Đặt vấn đề và Động lực Khoa học
-Trong toàn bộ hệ sinh thái giám sát giao thông thông minh (ITS), hơn 95% các nghiên cứu thị giác máy tính truyền thống chỉ tập trung vào việc nhận diện đối tượng tiền cảnh (xe máy, ô tô, người đi bộ) và coi mặt đường là "vùng nền vô giá trị".
-
-Tuy nhiên, trong bối cảnh thực tế tại các đô thị nhiệt đới gió mùa như TP.HCM:
-1. **Hiện tượng ngập úng và mưa cục bộ:** Các cơn mưa rào nhiệt đới gây ngập tức thời các tuyến đường huyết mạch. Việc lắp đặt cảm biến mực nước vật lý trên hàng trăm tuyến đường đòi hỏi chi phí đầu tư và bảo trì phần cứng cực lớn.
-2. **Xuống cấp hạ tầng mặt đường:** Mặt đường nhựa chịu tải trọng nặng và mưa ngập liên tục dẫn tới bong tróc nhựa, nứt nẻ và hình thành ổ gà nguy hiểm. Hiện nay công tác tuần tra chủ yếu dựa trên con người ghi nhận thủ công rất chậm trễ.
-3. **Biến thiên điều kiện chiếu sáng:** Hệ thống đèn cao áp ban đêm có camera đủ sáng, có camera thiếu sáng hoặc bị chói lóa.
-
-Kho dữ liệu ảnh nền tĩnh 24 giờ $\{I_{\text{bg}}^{h=0}, \dots, I_{\text{bg}}^{h=23}\}$ trên toàn bộ 608 camera cung cấp góc nhìn toàn cảnh về **lòng đường sạch bóng xe** ở mọi khung giờ trong ngày. Đây chính là mỏ vàng dữ liệu quang học chưa từng được khai thác để xây dựng hệ thống **Tự Động Giám Sát Sức Khỏe Mặt Đường Đô Thị (Urban Road Surface Health Monitoring)** hoàn toàn không cần nhãn thủ công.
-
-### 6.3. Cơ Sở Vật Lý Quang Học và Phương Pháp Luận Trích Xuất Mỏ Neo
-
-Khác với các phương pháp học sâu thông thường phụ thuộc vào việc con người gán nhãn "đường ướt" hay "đường hỏng", Hướng 5 xây dựng một **Cơ chế Mỏ neo Vật lý Tự thân (Physics-Based Optical Anchoring)** kết hợp 3 đặc tính quang học trực tiếp từ ảnh nền tĩnh:
-
-```text
-                                [Ảnh Nền Tĩnh I_bg (h)]
-                                           │
-                 ┌─────────────────────────┼─────────────────────────┐
-                 ▼                         ▼                         ▼
-        [Không Gian Màu CIE-LAB]   [Mô Hình Phản Xạ Gương]   [Toán Tử Vi Phân Sobel]
-         Luminance L ∈ [0, 255]     L(u, v) > 215             |∇L| = √(gx² + gy²)
-                 │                         │                         │
-                 ▼                         ▼                         ▼
-      [Chu Kỳ Chiếu Sáng Nhật Khóa] [Chỉ Số Ẩm Ướt Mỏ Neo]   [Chỉ Số Hư Hại Mỏ Neo]
-         0=Đêm, 1=Hoàng hôn, 2=Ngày  y_wet = clip(20*s_spec)   y_deg = clip(5*s_rough)
-                 │                         │                         │
-                 └─────────────────────────┼─────────────────────────┘
-                                           │
-                                           ▼
-                       [Mỏ Neo Giám Sát Tự Thân: Targets Vật Lý]
-```
-
-#### 6.3.1. Phân tách Cường độ Chiếu sáng trong Không gian CIE-LAB
-Ảnh nền $I_{\text{bg}}$ được chuyển đổi từ không gian màu RGB sang không gian màu không tương quan CIE-LAB. Kênh độ chói $L(u, v) \in [0, 255]$ phản ánh năng lượng chiếu sáng bề mặt mà không bị nhiễu bởi các sắc độ màu vạch kẻ đường:
-$$\mu_L = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W \frac{L(u, v)}{255}$$
-
-#### 6.3.2. Mô hình hóa Phản xạ Gương (Specular Reflection) phục vụ Đo lường Ẩm ướt / Ngập nước
-Theo nguyên lý quang học bề mặt (Mô hình Cook-Torrance và Phong Reflection Model):
-* **Mặt đường khô ráo:** Nhựa đường có độ nhám vi mô cao, tán xạ ánh sáng theo cơ chế phản xạ khuếch tán đồng đều (Diffuse Lambertian Reflection). Độ chói phân bố tương đối đồng nhất.
-* **Mặt đường ẩm ướt / đọng nước mưa:** Lớp nước lấp đầy các khe vi mô của nhựa đường tạo thành một màng điện môi nhẵn bóng. Lúc này, phản xạ gương (Specular Reflection) chiếm ưu thế tuyệt đối. Dưới tác động của đèn đường cao áp hoặc ánh sáng bầu trời, bề mặt nước sinh ra các điểm phản xạ chói lóa với cường độ sáng cực đại ($L(u, v) > 215$):
-  $$M_{\text{specular}}(u, v) = \mathbb{I}\big(L(u, v) > 215\big)$$
-* Tỷ lệ diện tích phản chiếu gương sơ cấp được tính bằng:
-  $$s_{\text{specular}} = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W M_{\text{specular}}(u, v)$$
-* Mỏ neo vật lý cho mức độ ẩm ướt / ngập nước được chuẩn hóa về đoạn $[0, 1]$:
-  $$y_{\text{wet\_anchor}} = \text{clip}\big(20.0 \cdot s_{\text{specular}}, \ 0.0, \ 1.0\big)$$
-  Hệ số khuếch đại $20.0$ bảo đảm khi diện tích đọng nước đạt $\ge 5\%$ bề mặt khung hình, chỉ số ngập ướt đạt cực đại $1.0$.
-
-#### 6.3.3. Mô hình hóa Độ nhám Kết cấu (Surface Roughness) qua Toán tử Gradient Sobel
-Mặt đường bị suy giảm chất lượng (ổ gà, nứt nẻ mai rùa, bong tróc bê tông nhựa) có đặc trưng là sự đứt gãy kết cấu quang học, sinh ra các biến thiên độ sáng cục bộ rất cao theo cả hai phương ngang và dọc:
-$$g_x(u, v) = \mathbf{S}_x * L, \quad g_y(u, v) = \mathbf{S}_y * L, \quad \|\nabla L(u, v)\| = \sqrt{g_x(u, v)^2 + g_y(u, v)^2}$$
-trong đó $\mathbf{S}_x, \mathbf{S}_y$ là ma trận tích chập Sobel $3 \times 3$.
-* Độ nhám bề mặt trung bình (Texture Roughness):
-  $$s_{\text{roughness}} = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W \frac{\|\nabla L(u, v)\|}{255}$$
-* Mỏ neo vật lý cho chỉ số suy giảm kết cấu mặt đường:
-  $$y_{\text{deg\_anchor}} = \text{clip}\big(5.0 \cdot s_{\text{roughness}}, \ 0.0, \ 1.0\big)$$
-
-#### 6.3.4. Chu kỳ Chiếu sáng Nhật khóa (Diurnal Illumination Phase Partitioning)
-Thời gian ghi hình $h \in \{0, 1, \dots, 23\}$ trên mỗi camera được tự động gắn nhãn vào 3 pha chiếu sáng tự nhiên:
-$$y_{\text{illum}} = \begin{cases} 
-0 \quad (\text{Đêm: } 00\text{h}-05\text{h}, \ 19\text{h}-23\text{h} \text{ — Chiếu sáng nhân tạo hoặc thiếu sáng}), \\ 
-1 \quad (\text{Chạng vạng: } 06\text{h}, \ 18\text{h} \text{ — Bình minh và Hoàng hôn}), \\ 
-2 \quad (\text{Ngày: } 07\text{h}-17\text{h} \text{ — Chiếu sáng tự nhiên mặt trời}) 
-\end{cases}$$
-
-### 6.4. Thiết Kế Kiến Trúc Mạng Phân Tích Đa Thuộc Tính (RoadConditionClassifier)
-
-```text
-                         [Ảnh Nền Đường I_bg (224x224)]
-                                        │
-                                        ▼
-                         [DINO Vision Transformer ViT]
-                                        │
-                                        ▼
-                         Vector [CLS] Token z_road ∈ R^D
-                                        │
-             ┌──────────────────────────┼──────────────────────────┐
-             ▼                          ▼                          ▼
-      [Wetness Head]             [Illum Head]             [Degradation Head]
-     Linear(D → 128)            Linear(D → 128)            Linear(D → 128)
-       LayerNorm                      ReLU                    LayerNorm
-         ReLU                    Linear(128 → 3)                ReLU
-    Linear(128 → 1)                    │                  Linear(128 → 1)
-        Sigmoid                        ▼                      Sigmoid
-             │                    Logits ∈ R^3                     │
-             ▼                          │                          ▼
-     y_hat_wet ∈ [0, 1]                Softmax             y_hat_deg ∈ [0, 1]
-    (Chỉ số ẩm ướt)                     │                  (Chỉ số hư hại)
-                                        ▼
-                                 y_hat_illum ∈ {0,1,2}
-                                 (Phân loại chiếu sáng)
-```
-
-1. **Trích xuất Đặc trưng Nền tảng:** Mạng tiếp nhận ảnh nền đường tĩnh $I_{\text{bg}}$ kích thước $224 \times 224 \times 3$. Vision Transformer trích xuất vector đại diện toàn cục $[CLS]$:
-   $$\mathbf{z}_{\text{road}} = \text{ViT}(I_{\text{bg}})_{[CLS]} \in \mathbb{R}^D$$
-   Với ViT-Small ($D=384$) hoặc ViT-Base ($D=768$). Trọng số của ViT có thể được đóng băng (`freeze_backbone=True`) để khai thác không gian biểu diễn tổng quát của DINO mà không sợ bị trôi dạt tham số (Catastrophic Forgetting).
-2. **Ba Đầu Giải Mã Đa Nhiệm (Tri-Head Architecture):**
-   * **Đầu ước lượng độ ẩm ướt / đọng nước (`wetness_head`):**
-     $$\hat{y}_{\text{wet}} = \sigma\Big(\mathbf{W}_{w2} \text{ReLU}\big(\text{LayerNorm}(\mathbf{W}_{w1} \mathbf{z}_{\text{road}} + \mathbf{b}_{w1})\big) + b_{w2}\Big) \in [0, 1]$$
-   * **Đầu phân loại điều kiện chiếu sáng (`illum_head`):**
-     $$\hat{\mathbf{y}}_{\text{illum}} = \mathbf{W}_{i2} \text{ReLU}(\mathbf{W}_{i1} \mathbf{z}_{\text{road}} + \mathbf{b}_{i1}) + \mathbf{b}_{i2} \in \mathbb{R}^3$$
-   * **Đầu ước lượng suy giảm kết cấu mặt đường (`degradation_head`):**
-     $$\hat{y}_{\text{deg}} = \sigma\Big(\mathbf{W}_{d2} \text{ReLU}\big(\text{LayerNorm}(\mathbf{W}_{d1} \mathbf{z}_{\text{road}} + \mathbf{b}_{d1})\big) + b_{d2}\Big) \in [0, 1]$$
-
-### 6.5. Hàm Mục Tiêu Tối Ưu Hóa (Surface Consistency Multi-Task Loss)
-
-Hàm mất mát toàn cục tích hợp mỏ neo vật lý đa mục tiêu:
-$$\mathcal{L}_{\text{surface}} = \lambda_{\text{illum}} \mathcal{L}_{\text{CE}}(\hat{\mathbf{y}}_{\text{illum}}, y_{\text{illum}}) + \lambda_{\text{wet}} \|\hat{y}_{\text{wet}} - y_{\text{wet\_anchor}}\|_2^2 + \lambda_{\text{deg}} \|\hat{y}_{\text{deg}} - y_{\text{deg\_anchor}}\|_2^2$$
-Trong đó:
-* $\mathcal{L}_{\text{CE}}$ là hàm mất mát Entropy chéo đa lớp (Cross-Entropy Loss).
-* $\|\cdot\|_2^2$ là sai số toàn phương trung bình (Mean Squared Error).
-* Trọng số cân bằng thực nghiệm: $\lambda_{\text{illum}} = 1.0$, $\lambda_{\text{wet}} = 2.0$ (ưu tiên cao cho việc phát hiện đường ngập/ướt), $\lambda_{\text{deg}} = 1.0$.
-
-### 6.6. Phân Tích Đa Tạp Không Gian PCA 2D và Chẩn Đoán Hạ Tầng Toàn Đô Thị
-
-Sau khi huấn luyện, hệ thống trích xuất vector đặc trưng mặt đường chuẩn hóa $L_2$:
-$$\mathbf{e}_{\text{road}} = \frac{\mathbf{z}_{\text{road}}}{\|\mathbf{z}_{\text{road}}\|_2} \in \mathbb{R}^D$$
-
-Áp dụng giải thuật Phân tích Thành phần Chính (PCA) để chiếu $\mathbf{e}_{\text{road}}$ xuống không gian 2 chiều ($PC_1, PC_2$):
-* **Trục $PC_1$ (Chiếu sáng & Chu kỳ ngày/đêm):** Tự động phân tách rành mạch các trạng thái chiếu sáng của đô thị (Ban ngày ở góc phần tư dương, Ban đêm ở góc phần tư âm, Hoàng hôn/Bình minh nằm ở dải chuyển tiếp trung gian).
-* **Trục $PC_2$ (Trạng thái ẩm ướt & Kết cấu nhựa đường):** Mặt đường khô ráo phân bố ở vùng dưới, trong khi các khung hình có đường ướt, đọng nước mưa và phản chiếu gương mạnh bị đẩy vọt lên vùng trên của đa tạp.
-
-#### Báo cáo Hạ tầng Đô thị Tự động (`road_surface_citywide_report.csv`)
-Pipeline [`eval.py`](file:///g:/nckh/DINO/direction5_road_condition/eval.py) tự động quét toàn bộ chuỗi ảnh nền của 608 camera trên địa bàn TP.HCM và xuất ra bảng chẩn đoán định lượng:
-* `cam_id` / `route_id`: Mã định danh camera và nút giao thông.
-* `slot_h`: Khung giờ quan sát.
-* `wetness_score`: Nguy cơ đọng nước / ngập úng $\in [0, 1]$.
-* `illum_class`: Mức độ chiếu sáng (0=Đêm, 1=Chạng vạng, 2=Ngày).
-* `degradation_score`: Mức độ nứt nẻ / hư hại bề mặt $\in [0, 1]$.
-* `luminance`: Độ sáng trung bình của mặt đường.
-
----
-
-## 7. TỔNG HỢP VÀ HỆ SINH THÁI 5 HƯỚNG NGHIÊN CỨU TRỌNG TÂM
-
-Năm hướng nghiên cứu hình thành một hệ sinh thái liên hoàn khép kín:
+Bốn hướng nghiên cứu hình thành một hệ sinh thái liên hoàn khép kín:
 
 ```text
                            [Dữ Liệu Thô: 608 Camera TP.HCM]
@@ -305,26 +161,26 @@ Năm hướng nghiên cứu hình thành một hệ sinh thái liên hoàn khép
                                           ▼
                       [Cặp Ảnh Vật Lý: Origin + Background]
                                           │
-           ┌──────────────────────────────┼──────────────────────────────┐
-           ▼                              ▼                              ▼
-  [HƯỚNG 1: BG-Guided DINO]      [HƯỚNG 3: FG Counting]       [HƯỚNG 5: Road Surface]
-  • FAM: Ép ViT học xe cộ        • Mở rộng 4 kênh (RGB+Δ)     • Khai thác chuỗi I_bg 24h
-  • Pretrained Backbone ITS      • Ước lượng lưu lượng ít mẫu • Giám sát ngập ướt, nứt nẻ
-           │                              │                              │
-           └──────────────────────────────┼──────────────────────────────┘
+            ┌─────────────────────────────┴─────────────────────────────┐
+            ▼                                                           ▼
+   [HƯỚNG 1: BG-Guided DINO]                                   [HƯỚNG 3: FG Counting]
+   • FAM: Ép ViT học xe cộ thay vì nền                         • Mở rộng 4 kênh (RGB+Δ)
+   • Pretrained ViT Backbone ITS                               • Ước lượng lưu lượng ít mẫu (Few-shot)
+            │                                                           │
+            └─────────────────────────────┬─────────────────────────────┘
                                           ▼
                              [HƯỚNG 2: Scene Decomposition]
-                             • Alpha Compositing tự giám sát
+                             • Alpha Compositing tự giám sát với mỏ neo I_bg
                              • Road Inpainting: Xóa sạch xe từ 1 frame
                                           │
                                           ▼
                              [HƯỚNG 4: Spatio-Temporal Density]
                              • BiGRU + DINO + Δ-CNN
                              • Tỷ lệ chiếm dụng lòng đường ρ(t)
-                             • Cấp độ dịch vụ HCM LoS & Xu hướng ∂ρ/∂t
+                             • Cấp độ dịch vụ HCM LoS & Xu hướng kẹt xe ∂ρ/∂t
 ```
 
-### Bảng Tổng Hợp So Sánh 5 Hướng Nghiên Cứu
+### Bảng Tổng Hợp So Sánh 4 Hướng Nghiên Cứu
 
 | Hướng | Tên Nghiên Cứu | Thư Mục Mã Nguồn | Cơ Chế Cốt Lõi | Mục Tiêu & Output | Độ Mới | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|:---:|:---|
@@ -332,4 +188,3 @@ Năm hướng nghiên cứu hình thành một hệ sinh thái liên hoàn khép
 | **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật $I_{\text{bg}}$ | Bóc tách 3 lớp $\{I_{\text{bg}}, I_{\text{fg}}, M_\alpha\}$, Road Inpainting | 5/5 | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | Ước lượng lưu lượng xe máy, ô tô trong điều kiện ít mẫu (Few-shot) | 3.5/5 | EAAI Journal, ITSC |
 | **H4** | **Spatio-Temporal Density & HCM LoS** | `direction4_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo vật lý $\rho_{\text{phys}}$ | Tỷ lệ chiếm dụng mặt đường $\rho \in [0, 1]$, Cấp độ HCM LoS, Xu hướng kẹt xe $\partial\rho/\partial t$ | 4.5/5 | IEEE T-ITS, CVPR |
-| **H5** | **Road Surface Condition Estimation** | `direction5_road_condition/` | Đánh giá đa thuộc tính từ chuỗi ảnh nền 24h với mỏ neo quang học | Chỉ số đọng nước, chiếu sáng, hư hại kết cấu mặt đường toàn đô thị | 4/5 | IEEE T-ITS, TRB |

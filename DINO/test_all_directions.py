@@ -1,7 +1,7 @@
 """
 =============================================================================
- Comprehensive Smoke Test & Verification Suite for DINO Traffic Suite (8 Directions)
- Kiểm thử toàn diện 8 hướng nghiên cứu và tầng Common Utilities
+ Comprehensive Smoke Test & Verification Suite for DINO Traffic Suite (4 Directions)
+ Kiểm thử toàn diện 4 hướng nghiên cứu trọng tâm và tầng Common Utilities
  Chạy trên dữ liệu mô phỏng (Synthetic Dummy Data) để xác thực 100% không lỗi runtime
 =============================================================================
 """
@@ -32,7 +32,7 @@ if dino_dir not in sys.path:
     sys.path.insert(0, dino_dir)
 
 print("=" * 80)
-print(" [*] STARTING COMPREHENSIVE VERIFICATION SUITE - 8 RESEARCH DIRECTIONS")
+print(" [*] STARTING COMPREHENSIVE VERIFICATION SUITE - 4 RESEARCH DIRECTIONS")
 print("=" * 80)
 
 # Tạo thư mục tạm chứa dữ liệu giả lập chuẩn
@@ -287,41 +287,9 @@ try:
     print("   ✅ [Direction 4] Spatio-Temporal Density & LoS pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 6. TEST DIRECTION 5: ROAD SURFACE CONDITION ESTIMATION
+    # 6. TEST MULTI-GPU SMART SAVE & LOAD CHECKPOINTING
     # -------------------------------------------------------------
-    print("\n--- [TEST 6] Direction 5: Road Surface Condition Estimation ---")
-    from direction5_road_condition.dataset import RoadSurfaceDataset
-    from direction5_road_condition.models import RoadConditionClassifier
-    from direction5_road_condition.losses import SurfaceConsistencyLoss
-
-    ds8 = RoadSurfaceDataset(bg_dir=bg_dir, img_size=128)
-    assert len(ds8) >= 2, f"Kỳ vọng >= 2 ảnh nền, thực tế: {len(ds8)}"
-    sample8 = ds8[0]
-    assert sample8["image"].shape == (3, 128, 128)
-    assert "specular_ratio" in sample8 and "roughness" in sample8
-
-    road_model = RoadConditionClassifier(backbone=mock_vit, embed_dim=64, hidden_dim=32, freeze_backbone=True)
-    dummy_bg_tensor = torch.stack([sample8["image"], sample8["image"]])
-    road_out = road_model(dummy_bg_tensor)
-    assert road_out["pred_wetness"].shape == (2,)
-    assert road_out["logits_illum"].shape == (2, 3)
-    assert road_out["pred_degradation"].shape == (2,)
-
-    crit8 = SurfaceConsistencyLoss()
-    target8 = {
-        "illum_class": torch.tensor([2, 2]),
-        "specular_ratio": torch.tensor([0.05, 0.05]),
-        "roughness": torch.tensor([0.1, 0.1]),
-    }
-    l8_dict = crit8(road_out, target8)
-    assert not torch.isnan(l8_dict["loss_total"])
-    print(f"   + Road Surface Loss: {l8_dict['loss_total'].item():.4f}")
-    print("   ✅ [Direction 5] Road Surface Condition pass hoàn hảo!")
-
-    # -------------------------------------------------------------
-    # 7. TEST MULTI-GPU SMART SAVE & LOAD CHECKPOINTING
-    # -------------------------------------------------------------
-    print("\n--- [TEST 7] Multi-GPU Smart Checkpointing Interoperability ---")
+    print("\n--- [TEST 6] Multi-GPU Smart Checkpointing Interoperability ---")
     from common.gpu_utils import save_checkpoint, load_checkpoint, clean_state_dict, smart_load_state_dict
 
     class DummyNet(nn.Module):
@@ -387,7 +355,7 @@ try:
     print("   ✅ [Checkpointing] Multi-GPU Smart Save, Load & Full Resume pass hoàn hảo!")
 
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ 5 HƯỚNG NGHIÊN CỨU TRỌNG TÂM, COMMON UTILITIES VÀ RESUME ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ 4 HƯỚNG NGHIÊN CỨU TRỌNG TÂM, COMMON UTILITIES VÀ RESUME ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:

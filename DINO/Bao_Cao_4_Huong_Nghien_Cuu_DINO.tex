@@ -43,7 +43,7 @@
 \maketitle
 
 \begin{abstract}
-Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị ghi hình cố định cung cấp cặp tín hiệu quang học tự nhiên có giá trị: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) sạch bóng xe được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của năm hướng nghiên cứu trọng tâm học tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu trên. Hệ sinh thái nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với cơ chế che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing và xóa xe tự động (Inpainting); (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); (4) Dự đoán mật độ không-thời gian và phân loại cấp độ dịch vụ giao thông theo chuẩn Highway Capacity Manual (HCM LoS) dựa trên mạng hợp nhất DINO ViT, CNN và Bi-GRU; và (5) Đánh giá đa thuộc tính điều kiện mặt đường tự giám sát từ chuỗi ảnh nền 24 giờ với mỏ neo vật lý quang học (độ ẩm ướt phản xạ gương, độ nhám kết cấu hư hại qua toán tử Sobel và chu kỳ chiếu sáng). Hệ sinh thái tinh gọn loại bỏ các tiếp cận bất thường không có mỏ neo vật lý hoặc dễ bị nhiễu nhận dạng trong giao thông hỗn hợp để tập trung tối đa nguồn lực vào các bài toán đo lường động học, tách rã cảnh và hạ tầng có tính ứng dụng thực tiễn cao nhất.
+Trong hệ thống camera giám sát giao thông thông minh (CCTV), các thiết bị ghi hình cố định cung cấp cặp tín hiệu quang học tự nhiên có giá trị: ảnh hiện trường ghi nhận phương tiện di chuyển và ảnh nền tĩnh (background) sạch bóng xe được ước lượng qua chuỗi thời gian. Báo cáo này trình bày cơ sở lý thuyết, mô hình hóa toán học và phương pháp luận chuyên sâu của bốn hướng nghiên cứu trọng tâm học tự giám sát (Self-Supervised Learning) nhằm khai thác triệt để cặp tín hiệu trên. Hệ sinh thái nghiên cứu bao gồm: (1) Tiền huấn luyện Vision Transformer với cơ chế che có định hướng tiền cảnh (Foreground-Aware Masking); (2) Mạng phân rã bối cảnh tự giám sát (Scene Decomposition Network) dựa trên mô hình hòa trộn Alpha Compositing và xóa xe tự động (Inpainting); (3) Mở rộng biểu diễn Patch Embedding bốn kênh (RGB + $\Delta$) phục vụ bài toán ước lượng lưu lượng phương tiện trong điều kiện ít mẫu (Few-shot learning); và (4) Dự đoán mật độ không-thời gian và phân loại cấp độ dịch vụ giao thông theo chuẩn Highway Capacity Manual (HCM LoS) dựa trên mạng hợp nhất DINO ViT, CNN và Bi-GRU. Hệ sinh thái tinh gọn loại bỏ các tiếp cận bất thường không có mỏ neo vật lý hoặc dễ bị nhiễu nhận dạng trong giao thông hỗn hợp để tập trung tối đa nguồn lực vào các bài toán đo lường động học, tách rã cảnh và lưu lượng có tính ứng dụng thực tiễn cao nhất.
 \end{abstract}
 
 \hrule
@@ -62,7 +62,7 @@ Mối quan hệ không gian giữa hai khung hình xác lập trường sai khá
     \Delta(u, v) = \|I_{\text{origin}}(u, v) - I_{\text{bg}}(u, v)\|
 \end{equation}
 
-Thay vì chỉ áp dụng $\Delta(u, v)$ trong các thuật toán phân đoạn ngưỡng cổ điển vốn nhạy cảm với biến thiên thời tiết và bóng đổ, hệ sinh thái DINO Suite tích hợp tín hiệu sai khác vật lý này vào không gian biểu diễn sâu của Vision Transformer (ViT), mở ra năm hướng tiếp cận trọng tâm bổ trợ lẫn nhau trong giao thông thông minh.
+Thay vì chỉ áp dụng $\Delta(u, v)$ trong các thuật toán phân đoạn ngưỡng cổ điển vốn nhạy cảm với biến thiên thời tiết và bóng đổ, hệ sinh thái DINO Suite tích hợp tín hiệu sai khác vật lý này vào không gian biểu diễn sâu của Vision Transformer (ViT), mở ra bốn hướng tiếp cận trọng tâm bổ trợ lẫn nhau trong giao thông thông minh.
 
 \section{CƠ SỞ PHƯƠNG PHÁP LUẬN VỀ HỌC TỰ GIÁM SÁT DINO}
 
@@ -198,95 +198,12 @@ Hàm mất mát đa nhiệm tích hợp thành phần làm mịn thời gian:
 \end{split}
 \end{equation}
 
-\section{HƯỚNG 5: TỰ GIÁM SÁT ĐA THUỘC TÍNH ĐIỀU KIỆN MẶT ĐƯỜNG ĐÔ THỊ TỪ CHUỖI ẢNH NỀN 24 GIỜ}
-
-\subsection{Đặt Vấn Đề và Động Lực Khoa Học}
-Trong các hệ thống giám sát giao thông đô thị, phần lớn các giải pháp thị giác máy tính chỉ tập trung nhận dạng đối tượng di động (xe cộ) mà bỏ quên hơn $70\% - 80\%$ diện tích khung hình là kết cấu mặt đường. Tại các đô thị nhiệt đới có lượng mưa lớn như TP.HCM, ngập nước cục bộ và suy giảm kết cấu nhựa đường (ổ gà, nứt nẻ) là những thách thức nghiêm trọng.
-
-Kho ảnh nền tĩnh 24 giờ $\{I_{\text{bg}}^{h=0}, \dots, I_{\text{bg}}^{h=23}\}$ trên 608 camera cung cấp góc quan sát toàn diện về lòng đường sạch bóng xe ở mọi khung giờ trong ngày. Hướng nghiên cứu này xây dựng phương pháp tự giám sát đa nhiệm kết hợp các mỏ neo vật lý quang học để đánh giá đồng thời: (1) Chỉ số ẩm ướt / đọng nước mưa; (2) Trạng thái chiếu sáng ngày/đêm; và (3) Chỉ số suy giảm kết cấu mặt đường (ổ gà, nứt nẻ).
-
-\subsection{Cơ Sở Vật Lý Quang Học và Phương Pháp Luận Trích Xuất Mỏ Neo}
-
-\subsubsection{Phân Tách Cường Độ Chiếu Sáng trong Không Gian CIE-LAB}
-Ảnh nền $I_{\text{bg}}$ được chuyển đổi sang không gian màu không tương quan CIE-LAB. Kênh độ chói $L(u, v) \in [0, 255]$ phản ánh năng lượng chiếu sáng bề mặt mà không bị ảnh hưởng bởi màu sơn vạch kẻ đường:
-\begin{equation}
-    \mu_L = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W \frac{L(u, v)}{255}
-\end{equation}
-
-\subsubsection{Mô Hình Hóa Phản Xạ Gương (Specular Reflection) Đo Lường Độ Ẩm Ướt}
-Theo nguyên lý quang học bề mặt (Mô hình Cook-Torrance và Phong):
-\begin{itemize}
-    \item \textbf{Mặt đường khô ráo:} Nhựa đường có độ nhám vi mô cao, tạo phản xạ khuếch tán đồng đều (Diffuse Lambertian Reflection).
-    \item \textbf{Mặt đường ẩm ướt / đọng nước:} Lớp nước lấp đầy các vi lỗ xốp tạo thành màng phẳng điện môi nhẵn bóng, làm phản xạ gương (Specular Reflection) chiếm ưu thế. Dưới đèn cao áp hoặc ánh sáng bầu trời, các điểm chói lóa có độ sáng cực đại ($L(u, v) > 215$):
-    \begin{equation}
-        M_{\text{specular}}(u, v) = \mathbb{I}\big(L(u, v) > 215\big)
-    \end{equation}
-\end{itemize}
-Tỷ lệ diện tích phản chiếu gương sơ cấp:
-\begin{equation}
-    s_{\text{specular}} = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W M_{\text{specular}}(u, v)
-\end{equation}
-Mỏ neo vật lý cho mức độ ẩm ướt / ngập nước được chuẩn hóa về đoạn $[0, 1]$:
-\begin{equation}
-    y_{\text{wet\_anchor}} = \text{clip}\big(20.0 \cdot s_{\text{specular}}, \ 0.0, \ 1.0\big)
-\end{equation}
-
-\subsubsection{Mô Hình Hóa Độ Nhám Kết Cấu (Surface Roughness) Qua Toán Tử Gradient Sobel}
-Mặt đường bị xuống cấp (nứt nẻ mai rùa, bong tróc nhựa đường, ổ gà) đặc trưng bởi mật độ biến thiên gradient không gian bậc cao. Áp dụng toán tử đạo hàm không gian Sobel $3 \times 3$:
-\begin{equation}
-    g_x(u, v) = \mathbf{S}_x * L, \quad g_y(u, v) = \mathbf{S}_y * L, \quad \|\nabla L(u, v)\| = \sqrt{g_x(u, v)^2 + g_y(u, v)^2}
-\end{equation}
-Chỉ số độ nhám kết cấu trung bình (Texture Roughness):
-\begin{equation}
-    s_{\text{roughness}} = \frac{1}{H \times W} \sum_{u=1}^H \sum_{v=1}^W \frac{\|\nabla L(u, v)\|}{255}
-\end{equation}
-Mỏ neo vật lý cho mức độ hư hại kết cấu mặt đường:
-\begin{equation}
-    y_{\text{deg\_anchor}} = \text{clip}\big(5.0 \cdot s_{\text{roughness}}, \ 0.0, \ 1.0\big)
-\end{equation}
-
-\subsubsection{Chu Kỳ Chiếu Sáng Nhật Khóa (Diurnal Illumination)}
-Khung giờ ghi hình $h \in [0, 23]$ được phân vào ba pha chiếu sáng tự nhiên:
-\begin{equation}
-    y_{\text{illum}} = \begin{cases} 
-    0 \quad (\text{Đêm: } 00\text{h}-05\text{h}, \ 19\text{h}-23\text{h}), \\ 
-    1 \quad (\text{Chạng vạng bình minh / hoàng hôn: } 06\text{h}, \ 18\text{h}), \\ 
-    2 \quad (\text{Ban ngày có ánh nắng: } 07\text{h}-17\text{h}) 
-    \end{cases}
-\end{equation}
-
-\subsection{Kiến Trúc Mạng Ba Đầu Giải Mã (Tri-Head RoadConditionClassifier)}
-Mô hình sử dụng DINO ViT Backbone trích xuất vector $[CLS]$ token đại diện cho toàn cảnh mặt đường:
-\begin{equation}
-    \mathbf{z}_{\text{road}} = \text{ViT}(I_{\text{bg}})_{[CLS]} \in \mathbb{R}^D
-\end{equation}
-với $D = 384$ (ViT-Small). Ba đầu dự đoán đa nhiệm độc lập:
-\begin{enumerate}
-    \item \textbf{Đầu ẩm ướt / đọng nước:} $\hat{y}_{\text{wet}} = \sigma\big(\mathbf{W}_{w2} \text{ReLU}(\text{LN}(\mathbf{W}_{w1} \mathbf{z}_{\text{road}} + \mathbf{b}_{w1})) + b_{w2}\big) \in [0, 1]$.
-    \item \textbf{Đầu phân loại chiếu sáng:} $\hat{\mathbf{y}}_{\text{illum}} = \mathbf{W}_{i2} \text{ReLU}(\mathbf{W}_{i1} \mathbf{z}_{\text{road}} + \mathbf{b}_{i1}) + \mathbf{b}_{i2} \in \mathbb{R}^3$.
-    \item \textbf{Đầu suy giảm kết cấu:} $\hat{y}_{\text{deg}} = \sigma\big(\mathbf{W}_{d2} \text{ReLU}(\text{LN}(\mathbf{W}_{d1} \mathbf{z}_{\text{road}} + \mathbf{b}_{d1})) + b_{d2}\big) \in [0, 1]$.
-\end{enumerate}
-
-\subsection{Hàm Mất Mát Đa Mục Tiêu (Surface Consistency Multi-Task Loss)}
-\begin{equation}
-    \mathcal{L}_{\text{surface}} = \lambda_{\text{illum}} \mathcal{L}_{\text{CE}}(\hat{\mathbf{y}}_{\text{illum}}, y_{\text{illum}}) + \lambda_{\text{wet}} \|\hat{y}_{\text{wet}} - y_{\text{wet\_anchor}}\|_2^2 + \lambda_{\text{deg}} \|\hat{y}_{\text{deg}} - y_{\text{deg\_anchor}}\|_2^2
-\end{equation}
-với trọng số thực nghiệm $\lambda_{\text{illum}} = 1.0, \lambda_{\text{wet}} = 2.0, \lambda_{\text{deg}} = 1.0$.
-
-\subsection{Phân Tích Đa Tạp PCA 2D và Chẩn Đoán Hạ Tầng Toàn Đô Thị}
-Hệ thống chuẩn hóa vector đặc trưng $\mathbf{e}_{\text{road}} = \mathbf{z}_{\text{road}} / \|\mathbf{z}_{\text{road}}\|_2$ và chiếu lên mặt phẳng PCA 2 chiều:
-\begin{itemize}
-    \item Trục $PC_1$ tự động gom cụm phân tách chu kỳ chiếu sáng (Đêm, Chạng vạng, Ngày).
-    \item Trục $PC_2$ phân tách rõ rệt giữa lòng đường khô ráo và các mặt đường bị ngập úng / đọng nước phản xạ cao.
-\end{itemize}
-Pipeline tự động sinh tệp báo cáo định lượng \texttt{road\_surface\_citywide\_report.csv} trên toàn bộ 608 camera đô thị, phục vụ đắc lực cho công tác phát hiện điểm ngập úng và quy hoạch bảo trì mặt đường nhựa của các cơ quan quản lý giao thông.
-
-\section{TỔNG HỢP VÀ ĐÁNH GIÁ 5 HƯỚNG TIẾP CẬN TRỌNG TÂM}
+\section{TỔNG HỢP VÀ ĐÁNH GIÁ 4 HƯỚNG TIẾP CẬN TRỌNG TÂM}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Tổng hợp phương pháp luận và tiềm năng công bố của 5 hướng nghiên cứu trọng tâm DINO Suite}
+\caption{Tổng hợp phương pháp luận và tiềm năng công bố của 4 hướng nghiên cứu trọng tâm DINO Suite}
 \label{tab:comparison}
 \begin{tabular}{p{1.6cm} p{3.2cm} p{4.6cm} c p{2.8cm}}
 \toprule
@@ -299,13 +216,11 @@ Pipeline tự động sinh tệp báo cáo định lượng \texttt{road\_surfac
 \textbf{Hướng 3} & Foreground-Enhanced Counting & Mở rộng Patch Embedding 4 kênh (RGB+$\Delta$) kết hợp Warm-Start & 3.5/5 & EAAI Journal, ITSC \\
 \addlinespace
 \textbf{Hướng 4} & Spatio-Temporal Density \& HCM LoS & Bi-GRU kết hợp DINO và $\Delta$-CNN với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ và LoS & 4.5/5 & IEEE T-ITS, CVPR \\
-\addlinespace
-\textbf{Hướng 5} & Road Surface Condition Estimation & Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h & 4/5 & IEEE T-ITS, TRB \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{KẾT LUẬN}
-Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và hoàn thiện năm hướng nghiên cứu trọng tâm có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), dự báo mật độ không-thời gian và cấp độ dịch vụ giao thông (Hướng 4), đến đánh giá toàn diện điều kiện mặt đường đô thị (Hướng 5). Việc loại bỏ các hướng nghiên cứu thiếu tính khả thi trong giao thông hỗn hợp giúp tập trung toàn diện nguồn lực vào các bài toán có mỏ neo vật lý chặt chẽ, nâng cao độ bền vững và khả năng ứng dụng thực tiễn cho hệ thống giao thông thông minh quy mô lớn.
+Báo cáo đã hệ thống hóa cơ sở lý thuyết về mô hình học tự giám sát DINO và hoàn thiện bốn hướng nghiên cứu trọng tâm có tính bổ trợ chặt chẽ nhằm khai thác cặp tín hiệu ảnh hiện trường và ảnh nền tĩnh trong giám sát giao thông đô thị. Hệ sinh thái trải rộng từ tiền huấn luyện thích ứng miền (Hướng 1), phân rã bối cảnh tự thân (Hướng 2), ước lượng lưu lượng phương tiện ít mẫu (Hướng 3), đến dự báo mật độ không-thời gian và cấp độ dịch vụ giao thông (Hướng 4). Việc loại bỏ các hướng nghiên cứu thiếu tính khả thi trong giao thông hỗn hợp giúp tập trung toàn diện nguồn lực vào các bài toán có mỏ neo vật lý chặt chẽ, nâng cao độ bền vững và khả năng ứng dụng thực tiễn cho hệ thống giao thông thông minh quy mô lớn.
 
 \end{document}
