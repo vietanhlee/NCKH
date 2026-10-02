@@ -119,7 +119,8 @@ def train_bg_guided_dino(args):
             size_local=args.size_local,
             local_crops_number=args.local_crops,
             mask_ratio=args.mask_ratio,
-            alpha_fg=args.alpha_fg,
+            alpha_max=getattr(args, "alpha_max", getattr(args, "alpha_fg", 0.75)),
+            alpha_fg=getattr(args, "alpha_fg", getattr(args, "alpha_max", 0.75)),
             max_samples=args.max_samples,
         )
         print(f"✅ [Data] Đã nạp thành công {len(dataset)} cặp ảnh hợp lệ.")
@@ -381,7 +382,7 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=10, help="Số epochs huấn luyện")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size mỗi step")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate cực đại")
-    parser.add_argument("--alpha_fg", type=float, default=0.75, help="Hệ số tập trung foreground (0.0: ngẫu nhiên, 1.0: thuần xe)")
+    parser.add_argument("--alpha_max", "--alpha_fg", dest="alpha_max", type=float, default=0.75, help="Hệ số tập trung foreground (alpha_max / alpha_fg)")
     parser.add_argument("--mask_ratio", type=float, default=0.5, help="Tỷ lệ diện tích patch bị che")
     parser.add_argument("--size_global", type=int, default=224, help="Kích thước crop toàn cảnh")
     parser.add_argument("--size_local", type=int, default=96, help="Kích thước crop cục bộ")
@@ -393,7 +394,9 @@ def parse_args():
     parser.add_argument("--save_every", type=int, default=5, help="Lưu checkpoint sau mỗi N epochs")
     parser.add_argument("--max_samples", type=int, default=None, help="Giới hạn số mẫu thử nghiệm nhanh")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    parsed.alpha_fg = parsed.alpha_max
+    return parsed
 
 
 if __name__ == "__main__":

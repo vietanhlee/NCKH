@@ -67,7 +67,12 @@ class MultiCropBGGuidedAugmentation:
         mask_ratio: float = 0.5,
         alpha_max: float = 0.75,
         temperature: float = 0.20,
+        alpha_fg: Optional[float] = None,
+        **kwargs,
     ):
+        if alpha_fg is not None:
+            alpha_max = alpha_fg
+
         if size_global % patch_size != 0:
             size_global = max(patch_size, round(size_global / patch_size) * patch_size)
         if size_local % patch_size != 0:
@@ -79,6 +84,7 @@ class MultiCropBGGuidedAugmentation:
         self.patch_size = patch_size
         self.mask_ratio = mask_ratio
         self.alpha_max = alpha_max
+        self.alpha_fg = alpha_max  # Alias tương thích ngược
         self.temperature = temperature
 
         color_jitter = transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)
@@ -170,8 +176,15 @@ class BGGuidedDINODataset(Dataset):
         alpha_max: float = 0.75,
         temperature: float = 0.20,
         max_samples: Optional[int] = None,
+        alpha_fg: Optional[float] = None,
+        **kwargs,
     ):
         super().__init__()
+        if alpha_fg is not None:
+            alpha_max = alpha_fg
+        self.alpha_max = alpha_max
+        self.alpha_fg = alpha_max
+
         self.matcher = TrafficPairMatcher(
             bg_dir=bg_dir,
             origin_dir=origin_dir,
