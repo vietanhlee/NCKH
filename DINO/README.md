@@ -37,6 +37,7 @@ DINO/
     ├── models.py                           # SpatioTemporalDensityModel (DINO + Delta-CNN + Bi-GRU)
     ├── losses.py                           # TemporalDensityMultiTaskLoss (Smooth L1 + LoS CE + Smoothness)
     ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
+    ├── eval.py                             # Đánh giá độc lập mô hình, trích xuất MAE và ma trận LoS
     └── README.md
 ```
 
@@ -122,7 +123,7 @@ python DINO/direction3_foreground_enhanced_counting/evaluate.py \
 ```
 
 ### 4. Hướng 4: Spatio-Temporal Density & HCM LoS Estimation
-```bash
+# Huấn luyện mô hình không-thời gian:
 python DINO/direction4_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
@@ -130,6 +131,14 @@ python DINO/direction4_temporal_density/train.py \
     --batch_size 8 \
     --epochs 30 \
     --save_dir checkpoints/direction4_temporal_density \
+    --device cuda
+
+# Đánh giá độc lập mô hình từ checkpoint:
+python DINO/direction4_temporal_density/eval.py \
+    --bg_dir traffic_backgrounds \
+    --origin_dir output \
+    --weights checkpoints/direction4_temporal_density/best_temporal_model.pth \
+    --output_dir checkpoints/direction4_temporal_density/eval \
     --device cuda
 ```
 

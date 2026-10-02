@@ -22,11 +22,13 @@ Thay vì đếm từng xe (dễ sai lệch nghiêm trọng khi tắc đường x
 - `models.py`: `SpatioTemporalDensityNet` (DINO ViT + DeltaSpatialEncoder + Bi-GRU + Occupancy Head + LoS Head + Trend Head).
 - `losses.py`: `SpatioTemporalDensityLoss` (Smooth L1 Occupancy + Cross-Entropy LoS + Trend MSE + Temporal Smoothness).
 - `train.py`: Pipeline huấn luyện hoàn chỉnh hỗ trợ Multi-GPU, Mixed Precision (AMP), Resume Checkpoint, báo cáo MAE Occupancy và LoS Accuracy.
+- `eval.py`: Đánh giá độc lập mô hình từ checkpoint, xuất báo cáo MAE, RMSE, ma trận nhầm lẫn LoS 4 mức (JSON & Console).
 
 ---
 
 ## 3. Hướng Dẫn Chạy (CLI Execution)
 
+### Huấn luyện:
 ```bash
 python direction4_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
@@ -44,4 +46,14 @@ Hoặc tiếp tục huấn luyện từ checkpoint:
 python direction4_temporal_density/train.py \
     --resume checkpoints/direction4_temporal_density/best_temporal_model.pth \
     --epochs 10
+```
+
+### Đánh giá độc lập (Evaluation & Reporting):
+```bash
+python direction4_temporal_density/eval.py \
+    --bg_dir traffic_backgrounds \
+    --origin_dir output \
+    --weights checkpoints/direction4_temporal_density/best_temporal_model.pth \
+    --output_dir checkpoints/direction4_temporal_density/eval \
+    --device cuda
 ```
