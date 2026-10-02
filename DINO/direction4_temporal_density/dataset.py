@@ -188,11 +188,15 @@ class TemporalTrafficDataset(Dataset):
                 orig_img = Image.fromarray(np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8))
                 bg_img = orig_img
 
-            # Đo độ tin cậy r_i từ vùng tĩnh
-            r_i, _ = estimate_background_reliability(orig_img, bg_img)
+            # Đồng bộ kích thước ảnh chuẩn (self.img_size, self.img_size)
+            orig_resized = orig_img.resize((self.img_size, self.img_size), Image.BICUBIC)
+            bg_resized = bg_img.resize((self.img_size, self.img_size), Image.BICUBIC)
 
-            orig_np = np.array(orig_img.resize((self.img_size, self.img_size)))
-            bg_np = np.array(bg_img.resize((self.img_size, self.img_size)))
+            # Đo độ tin cậy r_i từ vùng tĩnh
+            r_i, _ = estimate_background_reliability(orig_resized, bg_resized)
+
+            orig_np = np.array(orig_resized)
+            bg_np = np.array(bg_resized)
 
             delta_norm, _ = self.subtractor.compute_delta(orig_np, bg_np)
 
@@ -204,7 +208,7 @@ class TemporalTrafficDataset(Dataset):
 
             delta_pil = Image.fromarray((np.clip(delta_norm, 0.0, 1.0) * 255.0).astype(np.uint8))
 
-            rgb_tensor = self.transform_rgb(orig_img)
+            rgb_tensor = self.transform_rgb(orig_resized)
             delta_tensor = self.transform_delta(delta_pil)
 
             rgb_list.append(rgb_tensor)

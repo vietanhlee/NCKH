@@ -59,7 +59,7 @@ def train_temporal_density(args):
     device_arg = args.device
 
     print("=" * 80)
-    print(" 🚀 [Direction 5] KHỞI CHẠY HUẤN LUYỆN SPATIO-TEMPORAL DENSITY & LoS ESTIMATION")
+    print(" 🚀 [Direction 4] KHỞI CHẠY HUẤN LUYỆN SPATIO-TEMPORAL DENSITY & LoS ESTIMATION")
     print("=" * 80)
 
     # 1. Dataset & DataLoader

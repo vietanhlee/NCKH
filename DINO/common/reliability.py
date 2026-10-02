@@ -68,18 +68,29 @@ def estimate_background_reliability(
     elif isinstance(origin, np.ndarray) and origin.dtype == np.uint8:
         origin = origin.astype(np.float32) / 255.0
 
-    if isinstance(background, Image.Image):
-        background = np.array(background.convert("RGB"), dtype=np.float32) / 255.0
-    elif isinstance(background, np.ndarray) and background.dtype == np.uint8:
-        background = background.astype(np.float32) / 255.0
-
     H, W = origin.shape[:2]
+
+    if isinstance(background, Image.Image):
+        if background.size != (W, H):
+            background = background.resize((W, H), Image.BICUBIC)
+        background = np.array(background.convert("RGB"), dtype=np.float32) / 255.0
+    elif isinstance(background, np.ndarray):
+        if background.dtype == np.uint8:
+            background = background.astype(np.float32) / 255.0
+        if background.shape[:2] != (H, W):
+            bg_pil = Image.fromarray((np.clip(background, 0.0, 1.0) * 255.0).astype(np.uint8))
+            bg_pil = bg_pil.resize((W, H), Image.BICUBIC)
+            background = np.array(bg_pil, dtype=np.float32) / 255.0
 
     # Nếu không có static_mask, mặc định lấy 20% hàng phía trên (bầu trời/tòa nhà cao tầng)
     if static_mask is None:
         static_mask = np.zeros((H, W), dtype=bool)
         top_crop = max(1, int(H * 0.20))
         static_mask[:top_crop, :] = True
+    elif static_mask.shape != (H, W):
+        mask_pil = Image.fromarray(static_mask.astype(np.uint8) * 255)
+        mask_pil = mask_pil.resize((W, H), Image.NEAREST)
+        static_mask = np.array(mask_pil) > 128
 
     # Tính sai khác L1 màu trung bình trên vùng tĩnh
     delta_pixel = np.mean(np.abs(origin - background), axis=-1)  # (H, W)
@@ -118,10 +129,19 @@ def check_camera_alignment_phase_correlation(
     elif isinstance(origin, np.ndarray) and origin.ndim == 3:
         origin = 0.2989 * origin[..., 0] + 0.5870 * origin[..., 1] + 0.1140 * origin[..., 2]
 
+    H, W = origin.shape[:2]
+
     if isinstance(background, Image.Image):
+        if background.size != (W, H):
+            background = background.resize((W, H), Image.BICUBIC)
         background = np.array(background.convert("L"), dtype=np.float32)
-    elif isinstance(background, np.ndarray) and background.ndim == 3:
-        background = 0.2989 * background[..., 0] + 0.5870 * background[..., 1] + 0.1140 * background[..., 2]
+    elif isinstance(background, np.ndarray):
+        if background.ndim == 3:
+            background = 0.2989 * background[..., 0] + 0.5870 * background[..., 1] + 0.1140 * background[..., 2]
+        if background.shape[:2] != (H, W):
+            bg_pil = Image.fromarray(np.clip(background, 0, 255).astype(np.uint8))
+            bg_pil = bg_pil.resize((W, H), Image.BICUBIC)
+            background = np.array(bg_pil, dtype=np.float32)
 
     H, W = origin.shape
     if static_mask is not None:
