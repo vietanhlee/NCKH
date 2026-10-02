@@ -1,4 +1,4 @@
-# Hướng C: Phát Hiện Sự Cố Bất Thường Kéo Dài Trong Giám Sát Giao Thông Đô Thị
+# Hướng 6: Phát Hiện Sự Cố Bất Thường Kéo Dài Trong Giám Sát Giao Thông Đô Thị
 
 > **Paper Title Candidate:** *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*  
 > **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / Transportation Research Part C / Pattern Recognition / EAAI  
@@ -54,7 +54,7 @@ $$\tilde{F}_t(p) = \operatorname{median}_{w=0}^{W-1} f_{t-w}(p)$$
 
 ## 3. Cấu trúc Thư mục
 ```
-directionC_anomaly/
+direction6_anomaly_detection/
 ├── features.py          # Trích xuất patch token DINOv3 + Road mask
 ├── pooling.py           # Temporal Feature Pooling (Median cửa sổ W)
 ├── bank.py              # Coreset Normal Memory Bank (K-Center Greedy)
@@ -72,5 +72,5 @@ directionC_anomaly/
 
 ```bash
 # Chạy pipeline đánh giá mẫu
-python directionC_anomaly/evaluate.py
+python direction6_anomaly_detection/evaluate.py
 ```

@@ -862,10 +862,10 @@ DINO/
 ├── direction2_scene_decomposition/  # Hướng A (H2 nâng cấp)
 ├── direction3_foreground_enhanced_counting/  # H3
 ├── direction4_temporal_density/  # H4
-├── directionB_weak_supervision/
-├── directionC_anomaly/
-├── directionD_forecasting/
-├── directionE_bg_conditioning/
+├── direction5_weak_supervision/   # Hướng B (H5)
+├── direction6_anomaly_detection/  # Hướng C (H6)
+├── direction7_traffic_forecasting/ # Hướng D (H7)
+├── direction8_bg_conditioning/    # Hướng E (H8)
 ├── scripts/                      # chạy pipeline, sinh bảng LaTeX, vẽ hình
 ├── tests/                        # pytest cho common/ và từng hướng
 └── outputs/{exp_name}/{run_id}/  # checkpoint, log, metric json
@@ -1296,9 +1296,9 @@ Thiết kế khoa học nằm ở A.6–A.14; mục này chỉ nêu những gì 
 
 **Nghiệm thu:** (1) `build_groups` không bao giờ đưa 2 frame cùng ngày vào một mẫu; (2) mọi frame trong nhóm cùng mode và cam\_epoch; (3) `refine.py` chỉ đọc audit-val để quyết định dừng — assert đường dẫn; (4) `synth.py` chỉ dùng crop xe từ camera train và nền từ camera test, lưu kèm seed.
 
-### IV.9. Spec Hướng B — gộp nhãn yếu đa nguồn
+### IV.9. Spec Hướng B (H5) — gộp nhãn yếu đa nguồn
 
-**File trong `directionB_weak_supervision/`:** `lfs/lf_detector.py`, `lfs/lf_background.py`, `lfs/lf_vlm.py`, `lfs/lf_temporal.py`, `lfs/lf_history.py`, `context.py`, `label_model.py`, `end_model.py`, `evaluate.py`, `baselines.py`.
+**File trong `direction5_weak_supervision/`:** `lfs/lf_detector.py`, `lfs/lf_background.py`, `lfs/lf_vlm.py`, `lfs/lf_temporal.py`, `lfs/lf_history.py`, `context.py`, `label_model.py`, `end_model.py`, `evaluate.py`, `baselines.py`.
 
 **Định dạng đầu ra chung của LF:** `data/lf/{lf_name}.parquet` với cột `frame_id`, `label` (−1 = bỏ qua, 0–3), `raw` (giá trị thô, ví dụ số xe). Ngưỡng của mọi LF chỉnh trên **gold-dev** (200 frame thuộc cụm train), không chạm gold-test.
 
@@ -1343,11 +1343,11 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) **test mô phỏng** — sinh dữ liệu có chuỗi Markov thật, 5 LF với độ chính xác biết trước thay đổi theo ngữ cảnh (ví dụ LF2 đúng 0.85 ban ngày, 0.4 ban đêm); mô hình gộp phải ước lượng lại độ chính xác trong ±0.05 và có accuracy cao hơn bỏ phiếu đa số; (2) không LF nào đọc gold-test; (3) chạy lại cùng seed cho ra đúng cùng nhãn mềm.
 
-### IV.10. Spec Hướng C — phát hiện sự cố
+### IV.10. Spec Hướng C (H6) — phát hiện sự cố
 
 **Chia dữ liệu theo thời gian, không theo cụm camera.** Mô hình "bình thường" xây riêng cho từng camera, nên cái cần tách là thời gian: giai đoạn P1 (xây ngân hàng), P2 (hiệu chỉnh ngưỡng, khoảng 2 tuần), P3 (đánh giá, nên chứa mùa mưa). Ba giai đoạn liên tiếp, không chồng lấn; ghi ranh giới trong `configs/exp/c_*.yaml`.
 
-**File trong `directionC_anomaly/`:** `features.py`, `pooling.py`, `bank.py`, `score.py`, `events.py`, `camera_fault.py`, `synth_events.py`, `mine_candidates.py`, `review_ui.py`, `evaluate.py`, `baselines/`.
+**File trong `direction6_anomaly_detection/`:** `features.py`, `pooling.py`, `bank.py`, `score.py`, `events.py`, `camera_fault.py`, `synth_events.py`, `mine_candidates.py`, `review_ui.py`, `evaluate.py`, `baselines/`.
 
 **Pipeline:**
 
@@ -1372,11 +1372,11 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) vật cản tổng hợp kéo dài ≥ 5 frame được phát hiện trong ≤ N + 2 cửa sổ ở ≥ 90% trường hợp trên dữ liệu P2; (2) vật thoáng qua 1 frame tạo sự kiện ở ≤ 1% trường hợp; (3) tỷ lệ cửa sổ vượt ngưỡng trên chính P2 nằm trong 0.5% ± 0.1%; (4) không file nào của P3 được đọc trong lúc xây ngân hàng hay chọn ngưỡng.
 
-### IV.11. Spec Hướng D — dự báo trên đồ thị camera
+### IV.11. Spec Hướng D (H7) — dự báo trên đồ thị camera
 
-**Điều kiện bắt đầu:** đã có mô hình cuối của Hướng B (hoặc H4) và cache embedding (IV.7). Kiểm tra trước: median khoảng lấy mẫu ≤ 5 phút ở ít nhất 70% camera; nếu không, nâng bước lưới lên 10–15 phút và ghi rõ. Mô hình B (hoặc H4) dùng để tạo đích phải được huấn luyện \*\*chỉ trên giai đoạn train của D\*\*, để không dự đoán nào trong giai đoạn test đến từ một mô hình đã thấy chính các frame đó.
+**Điều kiện bắt đầu:** đã có mô hình cuối của Hướng B (hoặc H4) và cache embedding (IV.7). Kiểm tra trước: median khoảng lấy mẫu ≤ 5 phút ở ít nhất 70% camera; nếu không, nâng bước lưới lên 10–15 phút và ghi rõ. Mô hình B (hoặc H4) dùng để tạo đích phải được huấn luyện **chỉ trên giai đoạn train của D**, để không dự đoán nào trong giai đoạn test đến từ một mô hình đã thấy chính các frame đó.
 
-**File trong `directionD_forecasting/`:** `build_series.py`, `graph.py`, `dataset.py`, `models/`, `train.py`, `evaluate.py`, `gold_eval.py`.
+**File trong `direction7_traffic_forecasting/`:** `build_series.py`, `graph.py`, `dataset.py`, `models/`, `train.py`, `evaluate.py`, `gold_eval.py`.
 
 **1. Chuỗi thời gian (`build_series.py`):** lưới đều Δt = 5 phút theo giờ Việt Nam. Với mỗi (camera, ô thời gian): trung bình các dự đoán mức frame trong ô → `q0..q3`, `level_exp` = Σ y·q\_y, `rho_hat` (nếu dùng H4), embedding PCA 32 chiều (PCA fit trên giai đoạn train); `mask` = 1 nếu ô có ít nhất 1 frame. Lưu tensor `X[T, N, F]`, `M[T, N]` và danh sách camera, mốc thời gian.
 
@@ -1406,9 +1406,9 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) không cửa sổ nào vượt qua ranh giới train/val/test; (2) bộ chuẩn hóa chỉ thấy dữ liệu train (assert theo mốc thời gian); (3) thay đổi giá trị đích tương lai không làm đổi tensor đầu vào; (4) dự báo của baseline "giá trị gần nhất" tính tay khớp với code trên 10 ví dụ.
 
-### IV.12. Spec Hướng E — điều kiện hóa bằng thống kê background
+### IV.12. Spec Hướng E (H8) — điều kiện hóa bằng thống kê background
 
-**File trong `directionE_bg_conditioning/`:** `descriptor.py`, `conditioning.py`, `dataset.py` (dùng lại dataset H3 và gold của B), `train.py`, `evaluate.py`, `analysis.py`.
+**File trong `direction8_bg_conditioning/`:** `descriptor.py`, `conditioning.py`, `dataset.py` (dùng lại dataset H3 và gold của B), `train.py`, `evaluate.py`, `analysis.py`.
 
 **1. Bản mô tả cảnh (`descriptor.py`)** — cache theo (camera, slot, mode, bg\_version):
 

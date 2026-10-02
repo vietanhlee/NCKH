@@ -1,4 +1,4 @@
-# Hướng B: Weak Supervision — Gộp Nhãn Yếu Đa Nguồn Cho Giám Sát Giao Thông Đô Thị
+# Hướng 5: Weak Supervision — Gộp Nhãn Yếu Đa Nguồn Cho Giám Sát Giao Thông Đô Thị
 
 > **Paper Title Candidate:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*  
 > **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / CVPR / ECCV / NeurIPS  
@@ -47,7 +47,7 @@ Không gian ngữ cảnh được phân nhỏ thành 54 tổ hợp:
 
 ## 3. Cấu trúc Thư mục
 ```
-directionB_weak_supervision/
+direction5_weak_supervision/
 ├── lfs/
 │   ├── lf_detector.py      # LF1: Tỷ lệ diện tích phát hiện xe
 │   ├── lf_background.py    # LF2: Sai khác ảnh nền có cổng tin cậy r_i
@@ -70,7 +70,7 @@ Chạy các LF trên chuỗi video camera giao thông.
 
 ### Bước 2: Huấn luyện Label Model
 ```python
-from directionB_weak_supervision.label_model import ContextAwareMarkovLabelModel
+from direction5_weak_supervision.label_model import ContextAwareMarkovLabelModel
 
 model = ContextAwareMarkovLabelModel(num_classes=4, num_lfs=5, num_contexts=54)
 history = model.fit_em(sequences_lf, sequences_ctx, max_iters=50, verbose=True)
@@ -79,7 +79,7 @@ soft_labels = model.predict_soft_labels(test_lf, test_ctx)
 
 ### Bước 3: Đánh giá so sánh thuật toán gộp nhãn
 ```bash
-python directionB_weak_supervision/evaluate.py
+python direction5_weak_supervision/evaluate.py
 ```
 
 ### Bước 4: Huấn luyện End Model

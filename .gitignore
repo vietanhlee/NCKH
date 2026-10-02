@@ -3,6 +3,8 @@ temp/
 .gemini/
 note.md
 nckh/
+.env
+*.env
 
 # Ignore large archives, weights, and embeddings
 *.zip

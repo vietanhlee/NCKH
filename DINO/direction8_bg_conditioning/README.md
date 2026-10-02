@@ -1,4 +1,4 @@
-# Hướng E: Thích Ứng Camera Mới Bằng Thống Kê Toàn Cục Của Background
+# Hướng 8: Thích Ứng Camera Mới Bằng Thống Kê Toàn Cục Của Background
 
 > **Paper Title Candidate:** *Background-Conditioned Generalization to Unseen Traffic Cameras with Unreliable Scene Priors*  
 > **Target:** Pattern Recognition / Engineering Applications of Artificial Intelligence (EAAI) / IEEE T-ITS  
@@ -44,7 +44,7 @@ Bài báo so sánh đối đầu 3 cơ chế điều kiện hóa:
 
 ## 3. Cấu trúc Thư mục
 ```
-directionE_bg_conditioning/
+direction8_bg_conditioning/
 ├── descriptor.py     # Trích xuất Trimmed Mean/Std z từ DINOv3
 ├── conditioning.py   # FiLM (zero-init), Prompt tokens, Cross-Attention
 ├── models.py         # BackgroundConditionedModel + Bg-Dropout
@@ -58,5 +58,5 @@ directionE_bg_conditioning/
 
 ```bash
 # Chạy đánh giá thích ứng camera chưa thấy & kiểm thử BDB
-python directionE_bg_conditioning/evaluate.py
+python direction8_bg_conditioning/evaluate.py
 ```

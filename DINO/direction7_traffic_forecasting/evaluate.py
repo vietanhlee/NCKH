@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng D: Traffic Forecasting — Evaluation & Robustness Stress Test
+ Hướng 7: Traffic Forecasting — Evaluation & Robustness Stress Test
  Đánh giá định lượng trên các chân trời h = 15', 30', 60'
  và Khảo sát độ bền khi hệ thống camera mất tín hiệu 10% - 50%
 =============================================================================
@@ -17,7 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from directionD_forecasting.models import CityScaleTrafficForecastingModel
+from direction7_traffic_forecasting.models import CityScaleTrafficForecastingModel
 
 
 def compute_masked_metrics(

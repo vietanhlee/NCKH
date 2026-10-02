@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng D: Traffic Forecasting — Spatio-Temporal Graph WaveNet Architecture
+ Hướng 7: Traffic Forecasting — Spatio-Temporal Graph WaveNet Architecture
  Mạng nơ-ron Đồ thị Không-Thời gian (STGNN) với Gated Dilated TCN & Adaptive Graph Convolution
  Tích hợp 3 đầu dự báo đa nhiệm: Hồi quy đa tầm, Phân loại mức độ, Cảnh báo khởi phát
 =============================================================================
@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from directionD_forecasting.graph import AdaptiveAdjacencyLayer, calculate_random_walk_matrix
+from direction7_traffic_forecasting.graph import AdaptiveAdjacencyLayer, calculate_random_walk_matrix
 
 
 class DilatedCausalConv1d(nn.Module):

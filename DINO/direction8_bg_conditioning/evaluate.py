@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng E: Background Conditioning — Evaluation & BDB Degradation Benchmark
+ Hướng 8: Background Conditioning — Evaluation & BDB Degradation Benchmark
  Đánh giá so sánh:
    1. Khả năng thích ứng sang Camera chưa thấy (Unseen Camera Generalization)
    2. So sánh FiLM vs Prompt vs Cross-Attention vs Delta-Concatenation vs No-BG
@@ -20,8 +20,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from directionE_bg_conditioning.models import BackgroundConditionedModel
-from directionE_bg_conditioning.descriptor import RobustSceneDescriptorExtractor
+from direction8_bg_conditioning.models import BackgroundConditionedModel
+from direction8_bg_conditioning.descriptor import RobustSceneDescriptorExtractor
 from common.degradation import BackgroundDegradationBenchmark
 
 

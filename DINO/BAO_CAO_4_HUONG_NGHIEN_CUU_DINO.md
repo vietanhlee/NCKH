@@ -15,10 +15,10 @@
 4. [Bài báo 2 (Hướng 2 / II.A): Noise-Aware Traffic Scene Decomposition](#4-bài-báo-2-hướng-2--iia-noise-aware-traffic-scene-decomposition)
 5. [Bài báo 3 (Hướng 3): Foreground-Enhanced Vehicle Counting](#5-bài-báo-3-hướng-3-foreground-enhanced-vehicle-counting)
 6. [Bài báo 4 (Hướng 4): Spatio-Temporal Road Space Occupancy Estimation](#6-bài-báo-4-hướng-4-spatio-temporal-road-space-occupancy-estimation)
-7. [Bài báo 5 (Hướng B): Context-Aware Weak Supervision Label Aggregation](#7-bài-báo-5-hướng-b-context-aware-weak-supervision-label-aggregation)
-8. [Bài báo 6 (Hướng C): Persistence-Aware Anomaly & Camera Fault Detection](#8-bài-báo-6-hướng-c-persistence-aware-anomaly--camera-fault-detection)
-9. [Bài báo 7 (Hướng D): City-Scale Congestion Forecasting on Camera Graph](#9-bài-báo-7-hướng-d-city-scale-congestion-forecasting-on-camera-graph)
-10. [Bài báo 8 (Hướng E): Background-Conditioned Generalization to Unseen Cameras](#10-bài-báo-8-hướng-e-background-conditioned-generalization-to-unseen-cameras)
+7. [Bài báo 5 (Hướng 5): Context-Aware Weak Supervision Label Aggregation](#7-bài-báo-5-hướng-5-context-aware-weak-supervision-label-aggregation)
+8. [Bài báo 6 (Hướng 6): Persistence-Aware Anomaly & Camera Fault Detection](#8-bài-báo-6-hướng-6-persistence-aware-anomaly--camera-fault-detection)
+9. [Bài báo 7 (Hướng 7): City-Scale Congestion Forecasting on Camera Graph](#9-bài-báo-7-hướng-7-city-scale-congestion-forecasting-on-camera-graph)
+10. [Bài báo 8 (Hướng 8): Background-Conditioned Generalization to Unseen Cameras](#10-bài-báo-8-hướng-8-background-conditioned-generalization-to-unseen-cameras)
 11. [Giao thức Thực nghiệm, Phân chia Dữ liệu và Kiểm soát Rò rỉ](#11-giao-thức-thực-nghiệm-phân-chia-dữ-liệu-và-kiểm-soát-rò-rỉ)
 12. [Tổng kết và Lộ trình Triển khai](#12-tổng-kết-và-lộ-trình-triển-khai)
 
@@ -59,11 +59,11 @@ Mọi mô hình phải:
 |                                              |                                                |
 |       +--------------------------------------+---------------------------------------+        |
 |       |                                                                              |        |
-|   [CORE DIRECTIONS (H1 - H4)]                                    [EXPANDED CITY-SCALE DIRECTIONS (B - E)]
-|   1. H1: BG-Guided DINO (DINO + iBOT SSL)                        5. Dir B: Context-Aware Weak Supervision   
-|   2. H2: Noise-Aware Scene Decomposition                         6. Dir C: Persistence Anomaly Detection    
-|   3. H3: Foreground-Enhanced Counting                            7. Dir D: Spatio-Temporal Graph WaveNet    
-|   4. H4: Road-Space Occupancy & LoS                              8. Dir E: Background-Conditioned Adaptation
+|   [CORE DIRECTIONS (H1 - H4)]                                    [EXPANDED CITY-SCALE DIRECTIONS (H5 - H8)]
+|   1. H1: BG-Guided DINO (DINO + iBOT SSL)                        5. H5: Context-Aware Weak Supervision   
+|   2. H2: Noise-Aware Scene Decomposition                         6. H6: Persistence Anomaly Detection    
+|   3. H3: Foreground-Enhanced Counting                            7. H7: Spatio-Temporal Graph WaveNet    
+|   4. H4: Road-Space Occupancy & LoS                              8. H8: Background-Conditioned Adaptation
 |                                                                                               |
 +-----------------------------------------------------------------------------------------------+
 ```
@@ -163,11 +163,11 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 7. BÀI BÁO 5 (HƯỚNG B): CONTEXT-AWARE WEAK SUPERVISION LABEL AGGREGATION
+## 7. BÀI BÁO 5 (HƯỚNG 5): CONTEXT-AWARE WEAK SUPERVISION LABEL AGGREGATION
 
 > **Tên bài báo:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*  
 > **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / Information Fusion / EAAI  
-> **Mã nguồn:** `directionB_weak_supervision/`
+> **Mã nguồn:** `direction5_weak_supervision/`
 
 ### 7.1. Đóng góp Khoa học
 1. **Không gian Ngữ cảnh 54 tổ hợp (`context.py`):** Phân chia chi tiết theo Ánh sáng (Ngày / Đêm IR), Khung giờ (Cao điểm / Thấp điểm / Đêm), Loại đường, và Tình trạng Camera.
@@ -182,11 +182,11 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 8. BÀI BÁO 6 (HƯỚNG C): PERSISTENCE-AWARE ANOMALY & CAMERA FAULT DETECTION
+## 8. BÀI BÁO 6 (HƯỚNG 6): PERSISTENCE-AWARE ANOMALY & CAMERA FAULT DETECTION
 
 > **Tên bài báo:** *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*  
 > **Target:** Transportation Research Part C / Pattern Recognition / IEEE T-ITS  
-> **Mã nguồn:** `directionC_anomaly/`
+> **Mã nguồn:** `direction6_anomaly_detection/`
 
 ### 8.1. Đóng góp Khoa học
 1. **Temporal Feature Pooling trong không gian đặc trưng (`pooling.py`):**
@@ -199,11 +199,11 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 9. BÀI BÁO 7 (HƯỚNG D): CITY-SCALE CONGESTION FORECASTING ON CAMERA GRAPH
+## 9. BÀI BÁO 7 (HƯỚNG 7): CITY-SCALE CONGESTION FORECASTING ON CAMERA GRAPH
 
 > **Tên bài báo:** *City-Scale Congestion Forecasting from Surveillance Camera Networks in Motorbike-Dominant Traffic*  
 > **Target:** Transportation Research Part C / IEEE Transactions on Intelligent Transportation Systems (T-ITS) / IEEE TKDE  
-> **Mã nguồn:** `directionD_forecasting/`
+> **Mã nguồn:** `direction7_traffic_forecasting/`
 
 ### 9.1. Đóng góp Khoa học
 1. **Biến mạng lưới camera thành mạng cảm biến thành phố:** Thay thế bài toán cảm biến vòng từ cao tốc (METR-LA) bằng mạng lưới camera đô thị hỗn hợp.
@@ -214,11 +214,11 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 10. BÀI BÁO 8 (HƯỚNG E): BACKGROUND-CONDITIONED GENERALIZATION TO UNSEEN CAMERAS
+## 10. BÀI BÁO 8 (HƯỚNG 8): BACKGROUND-CONDITIONED GENERALIZATION TO UNSEEN CAMERAS
 
 > **Tên bài báo:** *Background-Conditioned Generalization to Unseen Traffic Cameras with Unreliable Scene Priors*  
 > **Target:** Pattern Recognition / Engineering Applications of Artificial Intelligence (EAAI) / IEEE T-ITS  
-> **Mã nguồn:** `directionE_bg_conditioning/`
+> **Mã nguồn:** `direction8_bg_conditioning/`
 
 ### 10.1. Đóng góp Khoa học
 1. **Bản mô tả cảnh toàn cục cắt tỉa (Trimmed Scene Descriptor $z$):**
@@ -237,7 +237,7 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 Tuyệt đối không phân chia ngẫu nhiên (Random Split) ở mức frame:
 - **Cụm Camera (Camera Clusters):** Các camera thuộc cùng một nút giao hoặc trục đường liền kề bắt buộc phải nằm chung một cụm.
 - **Tỷ lệ:** 70% số cụm cho Train, 10% cho Val, 20% cho Test.
-- **Dữ liệu Chuỗi Thời gian (Hướng D):** Chia nghiêm ngặt theo trật tự thời gian (Chronological Split): 70% tuần đầu Train, 10% tuần giữa Val, 20% tuần cuối Test.
+- **Dữ liệu Chuỗi Thời gian (Hướng 7):** Chia nghiêm ngặt theo trật tự thời gian (Chronological Split): 70% tuần đầu Train, 10% tuần giữa Val, 20% tuần cuối Test.
 
 ### 11.2. Ma trận So sánh Đối chuẩn Giữa 8 Hướng Nghiên cứu
 
@@ -247,10 +247,10 @@ Tuyệt đối không phân chia ngẫu nhiên (Random Split) ở mức frame:
 | **Hướng 2 (H2)** | 1 Frame | Prior mềm có độ bất định | $\sigma$ học được + Nền khác ngày | $M_\alpha, F, \hat{B}, \sigma$ | IEEE TIP / PR |
 | **Hướng 3 (H3)** | Frame + $\Delta$ | Ghép kênh / Tiêm đặc trưng | $\Delta$-Dropout 30% + Zero-init | Số lượng xe (Counting) | IEEE T-ITS / EAAI |
 | **Hướng 4 (H4)** | Chuỗi Frame + $\Delta$ | Đo $\rho_{\text{proxy}}$ trên Road Mask | Giới hạn strictly Road Mask | $\rho(t)$ & Mức LoS | TR-Part C / T-ITS |
-| **Hướng B** | Chuỗi Frame | Một trong 5 nguồn nhãn yếu | Cổng $r_i$ trong LF2 + Markov | Nhãn mềm $q(y)$ & End Model | Inf. Fusion / T-ITS |
-| **Hướng C** | Chuỗi Frame | Mẫu đối sánh phụ trong Bank | Gộp đặc trưng Median $W$ frames | Cảnh báo Sự cố / Lỗi Camera | TR-Part C / PR |
-| **Hướng D** | Đồ thị Camera | Không phụ thuộc | Missing Mask + Node Dropout | Dự báo 15', 30', 60' & Onset | TR-Part C / TKDE |
-| **Hướng E** | Frame + Background | Vector mô tả cảnh toàn cục $z$ | Trimmed Mean/Std + Bg-Dropout | Thích ứng Camera chưa thấy | Pattern Rec. / EAAI |
+| **Hướng 5 (H5)** | Chuỗi Frame | Một trong 5 nguồn nhãn yếu | Cổng $r_i$ trong LF2 + Markov | Nhãn mềm $q(y)$ & End Model | Inf. Fusion / T-ITS |
+| **Hướng 6 (H6)** | Chuỗi Frame | Mẫu đối sánh phụ trong Bank | Gộp đặc trưng Median $W$ frames | Cảnh báo Sự cố / Lỗi Camera | TR-Part C / PR |
+| **Hướng 7 (H7)** | Đồ thị Camera | Không phụ thuộc | Missing Mask + Node Dropout | Dự báo 15', 30', 60' & Onset | TR-Part C / TKDE |
+| **Hướng 8 (H8)** | Frame + Background | Vector mô tả cảnh toàn cục $z$ | Trimmed Mean/Std + Bg-Dropout | Thích ứng Camera chưa thấy | Pattern Rec. / EAAI |
 
 ---
 

@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng B: Weak Supervision — Evaluation & Benchmark Suite
+ Hướng 5: Weak Supervision — Evaluation & Benchmark Suite
  Đánh giá so sánh:
    1. Nhãn mềm của Label Model vs Majority Vote vs Dawid-Skene vs Context-Aware Markov
    2. Hiệu năng của End Model (DINOv3 + Causal GRU) trên tập Gold Standard
@@ -18,8 +18,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from directionB_weak_supervision.label_model import ContextAwareMarkovLabelModel
-from directionB_weak_supervision.end_model import WeakSupervisionEndModel
+from direction5_weak_supervision.label_model import ContextAwareMarkovLabelModel
+from direction5_weak_supervision.end_model import WeakSupervisionEndModel
 
 
 def majority_vote_predict(lf_matrix: np.ndarray, num_classes: int = 4) -> np.ndarray:

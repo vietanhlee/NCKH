@@ -1,7 +1,7 @@
 """
 =============================================================================
- Comprehensive Smoke Test & Verification Suite for DINO Traffic Suite (4 Directions)
- Kiểm thử toàn diện 4 hướng nghiên cứu trọng tâm và tầng Common Utilities
+ Comprehensive Smoke Test & Verification Suite for DINO Traffic Suite (8 Directions)
+ Kiểm thử toàn diện 8 hướng nghiên cứu trọng tâm và tầng Common Utilities
  Chạy trên dữ liệu mô phỏng (Synthetic Dummy Data) để xác thực 100% không lỗi runtime
 =============================================================================
 """
@@ -32,7 +32,7 @@ if dino_dir not in sys.path:
     sys.path.insert(0, dino_dir)
 
 print("=" * 80)
-print(" [*] STARTING COMPREHENSIVE VERIFICATION SUITE - 4 RESEARCH DIRECTIONS")
+print(" [*] STARTING COMPREHENSIVE VERIFICATION SUITE - 8 RESEARCH DIRECTIONS")
 print("=" * 80)
 
 # Tạo thư mục tạm chứa dữ liệu giả lập chuẩn
@@ -397,13 +397,13 @@ try:
     print("   ✅ [Common Advanced] Reliability, BDB & FCS pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 8. TEST DIRECTION B: CONTEXT-AWARE WEAK SUPERVISION
+    # 8. TEST DIRECTION 5: CONTEXT-AWARE WEAK SUPERVISION
     # -------------------------------------------------------------
-    print("\n--- [TEST 8] Direction B: Weak Supervision Label Model & End Model ---")
-    from directionB_weak_supervision.context import TrafficContextClassifier
-    from directionB_weak_supervision.label_model import ContextAwareMarkovLabelModel
-    from directionB_weak_supervision.end_model import WeakSupervisionEndModel, SoftCrossEntropyLoss
-    from directionB_weak_supervision.evaluate import majority_vote_predict, dawid_skene_predict
+    print("\n--- [TEST 8] Direction 5: Weak Supervision Label Model & End Model ---")
+    from direction5_weak_supervision.context import TrafficContextClassifier
+    from direction5_weak_supervision.label_model import ContextAwareMarkovLabelModel
+    from direction5_weak_supervision.end_model import WeakSupervisionEndModel, SoftCrossEntropyLoss
+    from direction5_weak_supervision.evaluate import majority_vote_predict, dawid_skene_predict
 
     ctx_classifier = TrafficContextClassifier()
     ctx_id = ctx_classifier.get_context_id(hour=8, is_night=False, is_rain=False, is_major_artery=True, reliability_score=0.85)
@@ -432,18 +432,18 @@ try:
     loss_b = soft_loss_fn(logits_b, target_soft_b)
     assert not torch.isnan(loss_b) and loss_b.item() >= 0
     print(f"   + End Model Logits: {logits_b[0].tolist()} | Soft CE Loss: {loss_b.item():.4f}")
-    print("   ✅ [Direction B] Weak Supervision pass hoàn hảo!")
+    print("   ✅ [Direction 5] Weak Supervision pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 9. TEST DIRECTION C: ANOMALY DETECTION
+    # 9. TEST DIRECTION 6: ANOMALY DETECTION
     # -------------------------------------------------------------
-    print("\n--- [TEST 9] Direction C: Anomaly Detection & Persistence Filtering ---")
-    from directionC_anomaly.features import DINOv3PatchFeatureExtractor
-    from directionC_anomaly.pooling import TemporalFeaturePooler
-    from directionC_anomaly.bank import NormalMemoryBank
-    from directionC_anomaly.score import AnomalyScorer
-    from directionC_anomaly.camera_fault import CameraFaultClassifier
-    from directionC_anomaly.events import PersistenceEventTracker
+    print("\n--- [TEST 9] Direction 6: Anomaly Detection & Persistence Filtering ---")
+    from direction6_anomaly_detection.features import DINOv3PatchFeatureExtractor
+    from direction6_anomaly_detection.pooling import TemporalFeaturePooler
+    from direction6_anomaly_detection.bank import NormalMemoryBank
+    from direction6_anomaly_detection.score import AnomalyScorer
+    from direction6_anomaly_detection.camera_fault import CameraFaultClassifier
+    from direction6_anomaly_detection.events import PersistenceEventTracker
 
     extractor_c = DINOv3PatchFeatureExtractor(backbone=MockPatchViT(embed_dim=64), feature_dim=64, proj_dim=32, patch_size=16)
     p_tokens, h_p, w_p = extractor_c.extract_patch_tokens(torch.randn(2, 3, 128, 128))
@@ -477,15 +477,15 @@ try:
     alert_2 = tracker_c.update(step_idx=1, score=0.95)
     assert alert_2 is not None and alert_2["status"] == "CONFIRMED"
     print("   + Persistence Tracker Triggered Alert: CONFIRMED")
-    print("   ✅ [Direction C] Anomaly Detection pass hoàn hảo!")
+    print("   ✅ [Direction 6] Anomaly Detection pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 10. TEST DIRECTION D: TRAFFIC FORECASTING ON CAMERA GRAPH
+    # 10. TEST DIRECTION 7: TRAFFIC FORECASTING ON CAMERA GRAPH
     # -------------------------------------------------------------
-    print("\n--- [TEST 10] Direction D: Spatio-Temporal Graph WaveNet Forecasting ---")
-    from directionD_forecasting.graph import compute_haversine_distance, build_gaussian_adjacency_matrix, AdaptiveAdjacencyLayer
-    from directionD_forecasting.models import CityScaleTrafficForecastingModel
-    from directionD_forecasting.losses import MultiTaskForecastingLoss
+    print("\n--- [TEST 10] Direction 7: Spatio-Temporal Graph WaveNet Forecasting ---")
+    from direction7_traffic_forecasting.graph import compute_haversine_distance, build_gaussian_adjacency_matrix, AdaptiveAdjacencyLayer
+    from direction7_traffic_forecasting.models import CityScaleTrafficForecastingModel
+    from direction7_traffic_forecasting.losses import MultiTaskForecastingLoss
 
     coords = np.array([[106.68, 10.76], [106.69, 10.77], [106.70, 10.78], [106.67, 10.75]])
     d_mat = compute_haversine_distance(coords)
@@ -515,14 +515,14 @@ try:
     loss_d_dict = crit_d(out_d, targets_d)
     assert not torch.isnan(loss_d_dict["loss"]) and loss_d_dict["loss"].item() > 0
     print(f"   + ST-GNN Loss: {loss_d_dict['loss'].item():.4f} (Reg: {loss_d_dict['loss_reg'].item():.4f}, Onset: {loss_d_dict['loss_onset'].item():.4f})")
-    print("   ✅ [Direction D] Traffic Forecasting pass hoàn hảo!")
+    print("   ✅ [Direction 7] Traffic Forecasting pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 11. TEST DIRECTION E: BACKGROUND CONDITIONING & ADAPTATION
+    # 11. TEST DIRECTION 8: BACKGROUND CONDITIONING & ADAPTATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 11] Direction E: Background Conditioning & Adaptation ---")
-    from directionE_bg_conditioning.descriptor import RobustSceneDescriptorExtractor
-    from directionE_bg_conditioning.models import BackgroundConditionedModel
+    print("\n--- [TEST 11] Direction 8: Background Conditioning & Adaptation ---")
+    from direction8_bg_conditioning.descriptor import RobustSceneDescriptorExtractor
+    from direction8_bg_conditioning.models import BackgroundConditionedModel
 
     extractor_e = RobustSceneDescriptorExtractor(backbone=MockPatchViT(embed_dim=64), feature_dim=64, trim_ratio=0.10, patch_size=16)
     z_desc = extractor_e.extract_scene_descriptor(torch.rand(1, 3, 128, 128), road_mask=torch.ones(128, 128))
@@ -538,10 +538,10 @@ try:
     assert out_e["count"].shape == (2, 1) and (out_e["count"] >= 0).all()
     assert out_e["logits"].shape == (2, 4)
     print(f"   + FiLM Conditioned Count: {out_e['count'].flatten().tolist()} | Congestion Logits Shape: {out_e['logits'].shape}")
-    print("   ✅ [Direction E] Background Conditioning pass hoàn hảo!")
+    print("   ✅ [Direction 8] Background Conditioning pass hoàn hảo!")
 
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU TRỌNG TÂM (H1-H4 & B, C, D, E) VÀ CÁC UTILITIES ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU TRỌNG TÂM (H1-H8) VÀ CÁC UTILITIES ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:

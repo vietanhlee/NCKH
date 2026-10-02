@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng C: Anomaly Detection — Evaluation & Benchmark Suite
+ Hướng 6: Anomaly Detection — Evaluation & Benchmark Suite
  Đánh giá định lượng toàn diện:
    - AUROC (Frame-level & Pixel-level)
    - Detection Delay (Độ trễ phát hiện tính bằng phút / frames)
@@ -20,13 +20,13 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from directionC_anomaly.features import DINOv3PatchFeatureExtractor
-from directionC_anomaly.pooling import TemporalFeaturePooler
-from directionC_anomaly.bank import NormalMemoryBank
-from directionC_anomaly.score import AnomalyScorer
-from directionC_anomaly.camera_fault import CameraFaultClassifier
-from directionC_anomaly.events import PersistenceEventTracker
-from directionC_anomaly.synth_events import SyntheticAnomalyGenerator
+from direction6_anomaly_detection.features import DINOv3PatchFeatureExtractor
+from direction6_anomaly_detection.pooling import TemporalFeaturePooler
+from direction6_anomaly_detection.bank import NormalMemoryBank
+from direction6_anomaly_detection.score import AnomalyScorer
+from direction6_anomaly_detection.camera_fault import CameraFaultClassifier
+from direction6_anomaly_detection.events import PersistenceEventTracker
+from direction6_anomaly_detection.synth_events import SyntheticAnomalyGenerator
 
 
 def evaluate_anomaly_detection_pipeline(

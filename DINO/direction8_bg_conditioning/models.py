@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng E: Background Conditioning — Model Architecture
+ Hướng 8: Background Conditioning — Model Architecture
  Mô hình Thích ứng Camera Mới có Điều kiện hóa Thống kê Toàn cục Background
  Hỗ trợ 3 cơ chế (FiLM / Prompt / Cross-Attn) và Kỹ thuật Huấn luyện Bền vững (Bg-Dropout)
 =============================================================================
@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from directionE_bg_conditioning.conditioning import (
+from direction8_bg_conditioning.conditioning import (
     FiLMConditioningLayer,
     PromptTokenConditioningLayer,
     CrossAttentionConditioningLayer,

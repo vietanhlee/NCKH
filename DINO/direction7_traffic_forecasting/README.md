@@ -1,4 +1,4 @@
-# Hướng D: Dự Báo Ùn Tắc Giao Thông Quy Mô Toàn Thành Phố Trên Đồ Thị Camera
+# Hướng 7: Dự Báo Ùn Tắc Giao Thông Quy Mô Toàn Thành Phố Trên Đồ Thị Camera
 
 > **Paper Title Candidate:** *City-Scale Congestion Forecasting from Surveillance Camera Networks in Motorbike-Dominant Traffic*  
 > **Target:** Transportation Research Part C: Emerging Technologies / IEEE Transactions on Intelligent Transportation Systems (T-ITS) / IEEE TKDE  
@@ -52,7 +52,7 @@ Phần lớn các nghiên cứu dự báo giao thông kinh điển thế giới 
 
 ## 3. Cấu trúc Thư mục
 ```
-directionD_forecasting/
+direction7_traffic_forecasting/
 ├── graph.py        # Xây dựng ma trận kề địa lý & Adaptive Adjacency Layer
 ├── dataset.py      # Lưới thời gian 5 phút, Missing mask, Chronological split
 ├── models.py       # ST-GraphWaveNet với Gated TCN & Multi-Task Heads
@@ -67,5 +67,5 @@ directionD_forecasting/
 
 ```bash
 # Chạy đánh giá mô phỏng
-python directionD_forecasting/evaluate.py
+python direction7_traffic_forecasting/evaluate.py
 ```
