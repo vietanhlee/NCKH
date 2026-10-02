@@ -1,12 +1,24 @@
 """
 =============================================================================
- Hướng 5: Temporal Contrastive Learning for Traffic Density Estimation
+ Hướng 4: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level Estimation
  Package Initialization
 =============================================================================
 """
 
 from .dataset import TemporalTrafficDataset
-from .models import TemporalTrafficEncoder
-from .losses import TemporalContrastiveLoss
+from .models import SpatioTemporalDensityNet, DeltaSpatialEncoder
+from .losses import SpatioTemporalDensityLoss
 
-__all__ = ["TemporalTrafficDataset", "TemporalTrafficEncoder", "TemporalContrastiveLoss"]
+# Aliases cho tương thích ngược
+TemporalTrafficEncoder = SpatioTemporalDensityNet
+TemporalContrastiveLoss = SpatioTemporalDensityLoss
+
+__all__ = [
+    "TemporalTrafficDataset",
+    "SpatioTemporalDensityNet",
+    "DeltaSpatialEncoder",
+    "SpatioTemporalDensityLoss",
+    "TemporalTrafficEncoder",
+    "TemporalContrastiveLoss",
+]

@@ -1,8 +1,9 @@
 """
 =============================================================================
- Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
-          and Congestion Level of Service (LoS) Estimation
- Module: Model (Mạng Không-Thời gian ước lượng độ chiếm dụng và cấp độ dịch vụ)
+ Hướng 4: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level Estimation
+ Module: Model (Mạng Không-Thời gian với 2 chế độ: Nowcasting & Causal Forecasting)
+ Chuẩn Q1: Tách rõ Nowcasting (BiGRU) và Cảnh báo sớm khởi phát kẹt xe (Causal 1-way GRU)
 =============================================================================
 """
 
@@ -18,13 +19,13 @@ class DeltaSpatialEncoder(nn.Module):
     def __init__(self, in_channels: int = 1, out_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=7, stride=4, padding=3),   # (B, 32, H/4, W/4)
+            nn.Conv2d(in_channels, 32, kernel_size=7, stride=4, padding=3),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),             # (B, 64, H/8, W/8)
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, out_dim, kernel_size=3, stride=2, padding=1),        # (B, out_dim, H/16, W/16)
+            nn.Conv2d(64, out_dim, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(out_dim),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1, 1)),
@@ -38,14 +39,17 @@ class DeltaSpatialEncoder(nn.Module):
 class SpatioTemporalDensityNet(nn.Module):
     """
     Mạng Không-Thời gian SpatioTemporalDensityNet:
-      1. ViT Backbone (DINOv3/DINOv2): Trích xuất biểu diễn ngữ nghĩa không gian của xe cộ và cảnh quan (CLS token).
+      1. ViT Backbone (DINOv3/DINOv2): Trích xuất biểu diễn ngữ nghĩa không gian của xe cộ (CLS token).
       2. DeltaSpatialEncoder: Trích xuất tín hiệu sai khác quang học vật lý chuyển động.
       3. Frame Fusion Layer: Hợp nhất tri thức không gian (RGB) và quang học chuyển động (Delta).
-      4. Temporal Bi-GRU: Học động học thay đổi mật độ phương tiện theo thời gian.
+      4. Temporal Recurrent Engine:
+         - Nowcasting Mode: Bi-directional GRU trên chuỗi quá khứ.
+         - Forecasting Mode (Causal): 1-way Causal GRU (không nhìn tương lai) để cảnh báo sớm.
       5. Multi-Task Heads:
          - occupancy_head: Ước lượng độ chiếm dụng mặt đường liên tục rho_hat in [0, 1].
          - los_head: Phân loại 4 mức độ dịch vụ ùn tắc (Free-Flow, Moderate, Slow, Gridlock).
-         - trend_head: Dự đoán xu hướng ùn tắc d(rho)/dt (Gia tăng hay Giải tỏa).
+         - trend_head: Dự đoán xu hướng ùn tắc d(rho)/dt.
+         - onset_head (Causal mode): Dự đoán xác suất khởi phát kẹt xe P(Gridlock).
     """
 
     def __init__(
@@ -55,12 +59,15 @@ class SpatioTemporalDensityNet(nn.Module):
         delta_dim: int = 128,
         temporal_dim: int = 256,
         num_los_classes: int = 4,
+        mode: str = "nowcasting",
         freeze_backbone: bool = True,
     ):
         super().__init__()
+        self.mode = mode.lower()
         self.backbone = backbone
         self.embed_dim = embed_dim
         self.temporal_dim = temporal_dim
+        self.is_causal = (self.mode in ["forecasting", "causal"])
 
         if freeze_backbone:
             for p in self.backbone.parameters():
@@ -68,7 +75,6 @@ class SpatioTemporalDensityNet(nn.Module):
 
         self.delta_encoder = DeltaSpatialEncoder(in_channels=1, out_dim=delta_dim)
 
-        # Tầng hợp nhất đặc trưng đơn khung hình
         self.frame_fusion = nn.Sequential(
             nn.Linear(embed_dim + delta_dim, temporal_dim),
             nn.LayerNorm(temporal_dim),
@@ -76,70 +82,67 @@ class SpatioTemporalDensityNet(nn.Module):
             nn.Dropout(0.1),
         )
 
-        # Mạng tuần hoàn thời gian 2 chiều (Bidirectional GRU)
-        self.temporal_gru = nn.GRU(
-            input_size=temporal_dim,
-            hidden_size=temporal_dim // 2,
-            num_layers=2,
-            batch_first=True,
-            bidirectional=True,
-        )
+        # Mạng tuần hoàn thời gian
+        if self.is_causal:
+            # 1-way Causal GRU (không nhìn thấy tương lai)
+            self.temporal_gru = nn.GRU(
+                input_size=temporal_dim,
+                hidden_size=temporal_dim,
+                num_layers=2,
+                batch_first=True,
+                bidirectional=False,
+            )
+            gru_out_dim = temporal_dim
+        else:
+            # BiGRU cho Nowcasting
+            self.temporal_gru = nn.GRU(
+                input_size=temporal_dim,
+                hidden_size=temporal_dim // 2,
+                num_layers=2,
+                batch_first=True,
+                bidirectional=True,
+            )
+            gru_out_dim = temporal_dim
 
         # Đầu ra 1: Ước lượng tỷ lệ chiếm dụng mặt đường liên tục rho in [0, 1]
         self.occupancy_head = nn.Sequential(
-            nn.Linear(temporal_dim, 64),
+            nn.Linear(gru_out_dim, 64),
             nn.ReLU(inplace=True),
             nn.Linear(64, 1),
-            nn.Sigmoid(),  # Đảm bảo rho nằm trọn trong khoảng [0, 1]
+            nn.Sigmoid(),
         )
 
         # Đầu ra 2: Phân loại cấp độ dịch vụ giao thông LoS (4 lớp)
         self.los_head = nn.Sequential(
-            nn.Linear(temporal_dim, 64),
+            nn.Linear(gru_out_dim, 64),
             nn.ReLU(inplace=True),
             nn.Linear(64, num_los_classes),
         )
 
-        # Đầu ra 3: Dự đoán xu hướng biến thiên d(rho)/dt in [-1, 1]
+        # Đầu ra 3: Dự đoán xu hướng d(rho)/dt
         self.trend_head = nn.Sequential(
-            nn.Linear(temporal_dim, 32),
+            nn.Linear(gru_out_dim, 64),
             nn.ReLU(inplace=True),
-            nn.Linear(32, 1),
-            nn.Tanh(),  # Âm: Giải tỏa ùn tắc; Dương: Ùn tắc đang gia tăng
+            nn.Linear(64, 1),
         )
 
-    def extract_frame_features(self, rgb_seq: torch.Tensor, delta_seq: torch.Tensor) -> torch.Tensor:
-        """
-        Trích xuất và hợp nhất đặc trưng không gian cho toàn bộ chuỗi K khung hình.
-        Args:
-            rgb_seq: (B, K, 3, H, W)
-            delta_seq: (B, K, 1, H, W)
-        Returns:
-            fused_seq: (B, K, temporal_dim)
-        """
-        B, K, C, H, W = rgb_seq.shape
-        rgb_flat = rgb_seq.view(B * K, C, H, W)
-        delta_flat = delta_seq.view(B * K, 1, H, W)
+        # Đầu ra 4: Cảnh báo sớm khởi phát kẹt xe P(Onset Jam) trong tương lai h bước
+        self.onset_head = nn.Sequential(
+            nn.Linear(gru_out_dim, 64),
+            nn.ReLU(inplace=True),
+            nn.Linear(64, 1),
+            nn.Sigmoid(),
+        )
 
-        # 1. Trích xuất CLS token từ ViT Backbone
-        with torch.set_grad_enabled(any(p.requires_grad for p in self.backbone.parameters())):
-            if hasattr(self.backbone, "get_intermediate_layers"):
-                out = self.backbone.get_intermediate_layers(rgb_flat, n=1, return_class_token=True)
-                cls_token = out[0][1] if isinstance(out[0], tuple) else out[0][:, 0]
-            elif hasattr(self.backbone, "forward_features"):
-                feat = self.backbone.forward_features(rgb_flat)
-                cls_token = feat["x_norm_clstoken"] if isinstance(feat, dict) else feat[:, 0]
-            else:
-                cls_token = self.backbone(rgb_flat)
-                if cls_token.dim() > 2:
-                    cls_token = cls_token.mean(dim=(2, 3))
-
-        # 2. Trích xuất đặc trưng chuyển động Delta
-        delta_feat = self.delta_encoder(delta_flat)  # (B*K, delta_dim)
-
-        # 3. Hợp nhất không gian
-        fused = self.frame_fusion(torch.cat([cls_token, delta_feat], dim=-1))  # (B*K, temporal_dim)
-        return fused.view(B, K, self.temporal_dim)
+    def extract_backbone_features(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.backbone(x)
+        if isinstance(out, dict):
+            cls_token = out.get("x_norm_clstoken", list(out.values())[0])
+        elif isinstance(out, torch.Tensor):
+            cls_token = out[:, 0] if out.dim() == 3 else out
+        else:
+            cls_token = out[0]
+        return cls_token
 
     def forward(
         self,
@@ -147,39 +150,43 @@ class SpatioTemporalDensityNet(nn.Module):
         delta_seq: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         """
-        Quy trình xử lý thuận:
-          - Trích xuất đặc trưng không gian đa khung hình.
-          - Mô hình hóa động học thời gian qua Bi-GRU.
-          - Dự đoán đồng thời tỷ lệ chiếm dụng, cấp độ phục vụ LoS và xu hướng biến thiên.
+        Forward chuỗi thời gian qua SpatioTemporalDensityNet.
+
+        Args:
+            rgb_seq: Tensor khung hình màu (B, K, 3, H, W).
+            delta_seq: Tensor bản đồ sai khác (B, K, 1, H, W).
         """
-        B, K, _, _, _ = rgb_seq.shape
+        B, K, C, H, W = rgb_seq.shape
 
-        fused_seq = self.extract_frame_features(rgb_seq, delta_seq)  # (B, K, temporal_dim)
+        # Trải phẳng không gian thời gian (B * K)
+        rgb_flat = rgb_seq.view(B * K, C, H, W)
+        delta_flat = delta_seq.view(B * K, 1, H, W)
 
-        # Bi-GRU thời gian
-        gru_out, _ = self.temporal_gru(fused_seq)  # (B, K, temporal_dim)
+        # 1. Trích xuất đặc trưng không gian
+        feat_rgb = self.extract_backbone_features(rgb_flat)   # (B * K, embed_dim)
+        feat_delta = self.delta_encoder(delta_flat)           # (B * K, delta_dim)
 
-        # Đặc trưng của khung hình hiện tại (khung hình cuối cùng trong cửa sổ thời gian)
-        current_feat = gru_out[:, -1, :]  # (B, temporal_dim)
+        # 2. Hợp nhất đặc trưng
+        fused = self.frame_fusion(torch.cat([feat_rgb, feat_delta], dim=-1)) # (B * K, temporal_dim)
+        fused_seq = fused.view(B, K, self.temporal_dim)                      # (B, K, temporal_dim)
 
-        # Dự đoán tỷ lệ chiếm dụng cho toàn bộ chuỗi K khung hình
-        pred_occupancy_seq = self.occupancy_head(gru_out).squeeze(-1)  # (B, K)
-        pred_current_occupancy = pred_occupancy_seq[:, -1]             # (B,)
+        # 3. Mô hình hóa chuỗi thời gian
+        gru_out, _ = self.temporal_gru(fused_seq)                            # (B, K, gru_out_dim)
 
-        # Dự đoán phân loại LoS hiện tại
-        logits_los = self.los_head(current_feat)                       # (B, 4)
+        # 4. Dự đoán chuỗi Occupancy cho từng bước thời gian k
+        pred_occ_seq = self.occupancy_head(gru_out).squeeze(-1)              # (B, K)
 
-        # Dự đoán xu hướng biến thiên
-        pred_trend = self.trend_head(current_feat).squeeze(-1)         # (B,)
+        # Dự đoán tại khung hình hiện tại (bước cuối cùng t = K - 1)
+        last_hidden = gru_out[:, -1, :]                                      # (B, gru_out_dim)
+        pred_current_occ = self.occupancy_head(last_hidden).squeeze(-1)      # (B,)
+        pred_los_logits = self.los_head(last_hidden)                         # (B, num_classes)
+        pred_trend = self.trend_head(last_hidden).squeeze(-1)                # (B,)
+        pred_onset = self.onset_head(last_hidden).squeeze(-1)                # (B,)
 
         return {
-            "pred_occupancy_seq": pred_occupancy_seq,
-            "pred_occupancy": pred_current_occupancy,
-            "logits_los": logits_los,
+            "pred_occupancy_seq": pred_occ_seq,
+            "pred_occupancy": pred_current_occ,
+            "logits_los": pred_los_logits,
             "pred_trend": pred_trend,
-            "temporal_feature": current_feat,
+            "pred_onset": pred_onset,
         }
-
-
-# Tương thích ngược với tên gọi cũ
-TemporalTrafficEncoder = SpatioTemporalDensityNet

@@ -271,6 +271,19 @@ class TrafficPairMatcher:
 
         return route_id, None, None
 
+    def list_origin_images(self) -> List[str]:
+        """Liệt kê toàn bộ các file ảnh origin hợp lệ được sắp xếp theo đường dẫn."""
+        if not self.origin_dir or not os.path.isdir(self.origin_dir):
+            return []
+        origin_files = []
+        for root, _, files in os.walk(self.origin_dir):
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in self.SUPPORTED_EXTS:
+                    origin_files.append(os.path.join(root, f))
+        origin_files.sort()
+        return origin_files
+
     def discover_pairs(self, max_pairs: Optional[int] = None) -> List[Dict[str, Union[str, int]]]:
         """
         Quét và sinh danh sách toàn bộ các cặp (Background, Origin) khớp nhau.
@@ -287,18 +300,7 @@ class TrafficPairMatcher:
         if not self.indexed:
             self.build_background_index()
 
-        if not self.origin_dir or not os.path.isdir(self.origin_dir):
-            return []
-
-        # Liệt kê tất cả file ảnh origin
-        origin_files = []
-        for root, _, files in os.walk(self.origin_dir):
-            for f in files:
-                ext = os.path.splitext(f)[1].lower()
-                if ext in self.SUPPORTED_EXTS:
-                    origin_files.append(os.path.join(root, f))
-
-        origin_files.sort()
+        origin_files = self.list_origin_images()
         pairs: List[Dict[str, Union[str, int]]] = []
 
         if self.match_strategy == "route_hourly":

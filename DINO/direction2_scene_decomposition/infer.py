@@ -98,16 +98,22 @@ def run_inference(args):
         # Chuyển đổi tensor về hình ảnh
         pred_bg = preds["pred_bg"].squeeze().cpu().permute(1, 2, 0).numpy()
         pred_fg = preds["pred_fg"].squeeze().cpu().permute(1, 2, 0).numpy()
-        pred_mask = preds["pred_mask"].squeeze().cpu().numpy()
+        pred_mask = preds.get("alpha_mask", preds.get("pred_mask")).squeeze().cpu().numpy()
 
         pred_bg_img = Image.fromarray((np.clip(pred_bg, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
         pred_fg_img = Image.fromarray((np.clip(pred_fg, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
         pred_mask_img = Image.fromarray((np.clip(pred_mask, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
 
-        # Lưu kết quả 3 lớp
+        # Lưu kết quả các lớp
         pred_bg_img.save(os.path.join(args.output_dir, f"{stem}_clean_road.jpg"))
         pred_fg_img.save(os.path.join(args.output_dir, f"{stem}_vehicles_only.jpg"))
         pred_mask_img.save(os.path.join(args.output_dir, f"{stem}_density_mask.png"))
+
+        # Bản đồ độ bất định sigma
+        if "sigma" in preds:
+            pred_sigma = preds["sigma"].squeeze().cpu().numpy()
+            pred_sigma_img = Image.fromarray((np.clip(pred_sigma / 0.50, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
+            pred_sigma_img.save(os.path.join(args.output_dir, f"{stem}_uncertainty_sigma.png"))
 
     print(f"\n✅ Đã xuất toàn bộ kết quả phân rã tại thư mục: {args.output_dir}")
 

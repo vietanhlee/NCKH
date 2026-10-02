@@ -1,15 +1,16 @@
 """
 =============================================================================
- Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
-          and Congestion Level of Service (LoS) Estimation
- Module: Dataset (Chuỗi thời gian khung hình và mỏ neo chiếm dụng mặt đường vật lý)
+ Hướng 4: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+          and Congestion Level Estimation
+ Module: Dataset (Chuỗi thời gian khung hình và mỏ neo chiếm dụng lòng đường)
+ Chuẩn Q1: rho_proxy tính strictly trên Road Mask |R|, tích hợp Cổng tin cậy r_i
 =============================================================================
 """
 
 import os
 import re
 import sys
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 import numpy as np
 import pandas as pd
 from PIL import Image
@@ -17,27 +18,27 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-# Nạp module common từ project root
 _dino_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _dino_dir not in sys.path:
     sys.path.insert(0, _dino_dir)
 
 from common.matcher import TrafficPairMatcher
 from common.subtraction import BackgroundSubtractor
+from common.reliability import estimate_background_reliability
 
 
 class TemporalTrafficDataset(Dataset):
     """
-    Dataset phục vụ bài toán ước lượng Độ chiếm dụng mặt đường (Road Space Occupancy Ratio)
-    và Cấp độ dịch vụ giao thông (Level of Service - LoS) theo chuỗi thời gian:
-      - Tận dụng trường sai khác quang học Delta = |I_origin - I_bg| để tính toán trực tiếp
-        tỷ lệ chiếm dụng mặt đường vật lý rho_phys(t) in [0.0, 1.0] làm mỏ neo tự thân (Self-Supervised Ground Truth).
-      - Tự động gán nhãn 4 mức độ ùn tắc theo chuẩn Highway Capacity Manual (HCM):
-          + LoS 0 (Free-Flow, Thông thoáng): rho <= 0.15
-          + LoS 1 (Moderate, Trung bình): 0.15 < rho <= 0.35
-          + LoS 2 (Slow, Đông đúc): 0.35 < rho <= 0.60
-          + LoS 3 (Gridlock, Ùn tắc nghiêm trọng): rho > 0.60
-      - Tổ chức dữ liệu theo từng cửa sổ trượt thời gian K khung hình liên tiếp.
+    Dataset phục vụ bài toán ước lượng Độ chiếm dụng mặt đường (Road Space Occupancy Ratio rho_proxy)
+    và Mức độ ùn tắc (Congestion Level) theo chuỗi thời gian:
+      - Tỷ lệ chiếm dụng mặt đường tính strictly trên Road Mask |R|:
+            rho_proxy(t) = (1 / |R|) * sum_{(u, v) in R} 1(Delta_t(u, v) > tau)
+      - Phân lớp mức ùn tắc (Congestion Levels 0..3):
+          + Level 0 (Free-Flow, Thông thoáng)
+          + Level 1 (Moderate, Trung bình)
+          + Level 2 (Slow, Đông đúc)
+          + Level 3 (Gridlock, Ùn tắc nghiêm trọng)
+      - Tổ chức dữ liệu theo cửa sổ trượt thời gian K khung hình liên tiếp.
     """
 
     def __init__(
@@ -48,24 +49,12 @@ class TemporalTrafficDataset(Dataset):
         img_size: int = 224,
         match_strategy: str = "route_hourly",
         csv_file: Optional[str] = None,
+        road_masks_dict: Optional[Dict[str, np.ndarray]] = None,
         is_train: bool = True,
         max_sequences: Optional[int] = None,
         delta_threshold: float = 0.15,
+        thresholds_los: Tuple[float, float, float] = (0.15, 0.35, 0.60),
     ):
-        """
-        Khởi tạo TemporalTrafficDataset.
-
-        Args:
-            bg_dir: Thư mục chứa ảnh nền tĩnh (traffic_backgrounds).
-            origin_dir: Thư mục chứa ảnh origin (output).
-            window_size: Số khung hình trong mỗi cửa sổ thời gian K (mặc định 4).
-            img_size: Độ phân giải không gian chuẩn hóa (224x224).
-            match_strategy: Chiến lược ghép cặp nền ("route_hourly").
-            csv_file: Đường dẫn CSV nhãn số lượng xe (nếu có để đối chiếu).
-            is_train: Chế độ huấn luyện hay kiểm thử.
-            max_sequences: Giới hạn số cửa sổ phục vụ kiểm thử nhanh.
-            delta_threshold: Ngưỡng cường độ Delta để coi một pixel là xe cộ.
-        """
         super().__init__()
         self.bg_dir = bg_dir
         self.origin_dir = origin_dir
@@ -73,6 +62,8 @@ class TemporalTrafficDataset(Dataset):
         self.img_size = img_size
         self.is_train = is_train
         self.delta_threshold = delta_threshold
+        self.thresholds_los = thresholds_los
+        self.road_masks_dict = road_masks_dict or {}
 
         self.matcher = TrafficPairMatcher(
             bg_dir=bg_dir,
@@ -81,7 +72,6 @@ class TemporalTrafficDataset(Dataset):
         )
         self.subtractor = BackgroundSubtractor(color_space="lab", blur_kernel=5)
 
-        # Pipeline chuẩn hóa ảnh cho ViT
         self.transform_rgb = transforms.Compose([
             transforms.Resize((img_size, img_size), interpolation=transforms.InterpolationMode.BICUBIC),
             transforms.ToTensor(),
@@ -94,109 +84,103 @@ class TemporalTrafficDataset(Dataset):
             transforms.Normalize(mean=[0.5], std=[0.5]),
         ])
 
-        # Đọc nhãn phụ trợ nếu có
         self.labels_dict: Dict[str, float] = {}
         if csv_file and os.path.exists(csv_file):
             try:
                 df = pd.read_csv(csv_file)
-                fname_col = next((c for c in df.columns if any(k in c.lower() for k in ["file", "image", "name"])), None)
-                cnt_col = next((c for c in df.columns if any(k in c.lower() for k in ["tong", "total", "count"])), None)
-                if fname_col and cnt_col:
-                    for _, row in df.iterrows():
-                        self.labels_dict[str(row[fname_col])] = float(row[cnt_col])
-            except Exception as e:
-                print(f"⚠️ [TemporalDataset Notice] {e}")
+                fcol = [c for c in df.columns if "file" in c.lower() or "image" in c.lower()]
+                tcol = [c for c in df.columns if "tong" in c.lower() or "total" in c.lower() or "count" in c.lower()]
+                if fcol and tcol:
+                    for _, r in df.iterrows():
+                        self.labels_dict[str(r[fcol[0]]).strip()] = float(r[tcol[0]])
+            except Exception:
+                pass
 
-        self.camera_sequences = self._group_and_sort_by_camera()
-        self.windows = self._build_temporal_windows()
+        self.windows = self._build_sliding_windows(max_sequences=max_sequences)
 
-        if max_sequences and len(self.windows) > max_sequences:
-            self.windows = self.windows[:max_sequences]
+    def _build_sliding_windows(self, max_sequences: Optional[int]) -> List[Dict[str, Any]]:
+        self.matcher.build_background_index()
+        origins = self.matcher.list_origin_images()
 
-        print(f"✅ [TemporalTrafficDataset] Khởi tạo thành công {len(self.windows)} cửa sổ thời gian (Window Size = {window_size}).")
-
-    def _group_and_sort_by_camera(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Gom nhóm ảnh theo camera_id và sắp xếp tăng dần theo timestamp."""
-        all_pairs = self.matcher.discover_pairs()
-        groups: Dict[str, List[Dict[str, Any]]] = {}
-
-        for p in all_pairs:
-            orig_name = p["origin_name"]
-            m = re.match(r"^(\d+)_(.+)\.(jpg|jpeg|png)$", orig_name, re.IGNORECASE)
-            if m:
-                cam_id = m.group(1)
-                try:
-                    ts = float(m.group(2))
-                except ValueError:
-                    ts = 0.0
-            else:
-                cam_id = "unknown"
-                ts = 0.0
-
-            item = {
-                "origin_name": orig_name,
-                "origin_path": p["origin_path"],
-                "bg_path": p["bg_path"],
-                "cam_id": cam_id,
-                "timestamp": ts,
-            }
-            groups.setdefault(cam_id, []).append(item)
-
-        for cid in groups:
-            groups[cid].sort(key=lambda x: x["timestamp"])
-
-        return groups
-
-    def _build_temporal_windows(self) -> List[Dict[str, Any]]:
-        """Chia chuỗi ảnh của từng camera thành các cửa sổ trượt kích thước K."""
-        windows = []
-        for cam_id, items in self.camera_sequences.items():
-            if len(items) < self.window_size:
-                if len(items) > 0:
-                    padded = (items * ((self.window_size // len(items)) + 1))[:self.window_size]
-                    windows.append({"cam_id": cam_id, "frames": padded})
+        camera_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for p in origins:
+            fname = os.path.basename(p)
+            route_id, ts, hour = self.matcher.parse_origin_filename(fname)
+            if route_id is None or ts is None:
                 continue
 
-            step = 1 if self.is_train else self.window_size
-            for i in range(0, len(items) - self.window_size + 1, step):
-                w_current = items[i : i + self.window_size]
-                windows.append({"cam_id": cam_id, "frames": w_current})
+            bg_cand = self.matcher.find_best_background(route_id, hour if hour is not None else 12)
+            if not bg_cand:
+                continue
 
+            if route_id not in camera_groups:
+                camera_groups[route_id] = []
+
+            camera_groups[route_id].append({
+                "origin_path": p,
+                "origin_name": fname,
+                "timestamp": ts,
+                "hour": hour,
+                "bg_path": bg_cand[0],
+            })
+
+        windows = []
+        for cam_id, frames in camera_groups.items():
+            frames.sort(key=lambda x: x["timestamp"])
+            if len(frames) < self.window_size:
+                if len(frames) >= 2:
+                    pad_frames = frames + [frames[-1]] * (self.window_size - len(frames))
+                    windows.append({"cam_id": cam_id, "frames": pad_frames})
+                continue
+
+            stride = 1 if self.is_train else max(1, self.window_size // 2)
+            for i in range(0, len(frames) - self.window_size + 1, stride):
+                win_frames = frames[i : i + self.window_size]
+                windows.append({"cam_id": cam_id, "frames": win_frames})
+
+        if max_sequences and len(windows) > max_sequences:
+            windows = windows[:max_sequences]
         return windows
 
-    @staticmethod
-    def map_occupancy_to_los(occupancy: float) -> int:
-        """
-        Quy đổi tỷ lệ chiếm dụng mặt đường sang Cấp độ dịch vụ (LoS) theo chuẩn HCM:
-          - 0: Free-flow (rho <= 0.15)
-          - 1: Moderate (0.15 < rho <= 0.35)
-          - 2: Slow (0.35 < rho <= 0.60)
-          - 3: Congested (rho > 0.60)
-        """
-        if occupancy <= 0.15:
-            return 0
-        elif occupancy <= 0.35:
-            return 1
-        elif occupancy <= 0.60:
-            return 2
+    def map_occupancy_to_los(self, occ: float) -> int:
+        th1, th2, th3 = self.thresholds_los
+        if occ <= th1:
+            return 0  # Free-flow
+        elif occ <= th2:
+            return 1  # Moderate
+        elif occ <= th3:
+            return 2  # Slow
         else:
-            return 3
+            return 3  # Gridlock
 
-    def _load_window_data(self, frames: List[Dict[str, Any]]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Nạp chuỗi K ảnh origin, K ảnh Delta, tính tỷ lệ chiếm dụng vật lý rho_phys và nhãn LoS.
-        Returns:
-            rgb_seq: (K, 3, H, W)
-            delta_seq: (K, 1, H, W)
-            occupancy_seq: (K,)
-            los_seq: (K,)
-        """
+    def _get_road_mask(self, cam_id: str, H: int, W: int) -> np.ndarray:
+        """Lấy road mask của camera hoặc dùng proxy 65% phía dưới lòng đường."""
+        if cam_id in self.road_masks_dict:
+            m = self.road_masks_dict[cam_id]
+            if m.shape != (H, W):
+                m_img = Image.fromarray(m.astype(np.uint8)).resize((W, H), Image.NEAREST)
+                return np.array(m_img) > 0
+            return m > 0
+        # Mặc định: loại bỏ 35% trên đỉnh (bầu trời, nhà)
+        mask = np.zeros((H, W), dtype=bool)
+        mask[int(H * 0.35):, :] = True
+        return mask
+
+    def _load_window_data(
+        self,
+        frames_info: List[Dict[str, Any]],
+        cam_id: str
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         rgb_list = []
         delta_list = []
         occ_list = []
         los_list = []
+        rel_list = []
 
-        for f_info in frames:
+        road_mask = self._get_road_mask(cam_id, self.img_size, self.img_size)
+        road_pixels = max(1, int(np.sum(road_mask)))
+
+        for f_info in frames_info:
             try:
                 orig_img = Image.open(f_info["origin_path"]).convert("RGB")
                 bg_img = Image.open(f_info["bg_path"]).convert("RGB")
@@ -204,15 +188,18 @@ class TemporalTrafficDataset(Dataset):
                 orig_img = Image.fromarray(np.zeros((self.img_size, self.img_size, 3), dtype=np.uint8))
                 bg_img = orig_img
 
+            # Đo độ tin cậy r_i từ vùng tĩnh
+            r_i, _ = estimate_background_reliability(orig_img, bg_img)
+
             orig_np = np.array(orig_img.resize((self.img_size, self.img_size)))
             bg_np = np.array(bg_img.resize((self.img_size, self.img_size)))
 
-            # Tính toán bản đồ sai khác quang học Delta
             delta_norm, _ = self.subtractor.compute_delta(orig_np, bg_np)
 
-            # Tính tỷ lệ chiếm dụng mặt đường vật lý rho_phys(t) = sum(Delta > threshold) / Total_Pixels
-            vehicle_mask = (delta_norm > self.delta_threshold).astype(np.float32)
-            occupancy = float(np.mean(vehicle_mask))
+            # Tính toán rho_proxy CHỈ TRÊN ROAD MASK |R|
+            vehicle_mask = (delta_norm > self.delta_threshold) & road_mask
+            occupancy = float(np.sum(vehicle_mask) / road_pixels)
+            occupancy = max(0.0, min(1.0, occupancy))
             los_class = self.map_occupancy_to_los(occupancy)
 
             delta_pil = Image.fromarray((np.clip(delta_norm, 0.0, 1.0) * 255.0).astype(np.uint8))
@@ -224,25 +211,24 @@ class TemporalTrafficDataset(Dataset):
             delta_list.append(delta_tensor)
             occ_list.append(occupancy)
             los_list.append(los_class)
+            rel_list.append(r_i)
 
         rgb_seq = torch.stack(rgb_list, dim=0)                             # (K, 3, H, W)
         delta_seq = torch.stack(delta_list, dim=0)                         # (K, 1, H, W)
         occupancy_seq = torch.tensor(occ_list, dtype=torch.float32)       # (K,)
         los_seq = torch.tensor(los_list, dtype=torch.long)                 # (K,)
+        rel_seq = torch.tensor(rel_list, dtype=torch.float32)              # (K,)
 
-        return rgb_seq, delta_seq, occupancy_seq, los_seq
+        return rgb_seq, delta_seq, occupancy_seq, los_seq, rel_seq
 
     def __len__(self) -> int:
         return len(self.windows)
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         win = self.windows[idx]
-        rgb_seq, delta_seq, occ_seq, los_seq = self._load_window_data(win["frames"])
+        rgb_seq, delta_seq, occ_seq, los_seq, rel_seq = self._load_window_data(win["frames"], win["cam_id"])
 
-        # Tính xu hướng biến thiên dòng xe qua cửa sổ thời gian d(rho)/dt
         delta_trend = occ_seq[-1] - occ_seq[0]
-
-        # Nhãn phụ trợ đếm xe nếu có trong CSV
         count_label = -1.0
         counts = [self.labels_dict.get(f["origin_name"], -1.0) for f in win["frames"]]
         valid_counts = [c for c in counts if c >= 0]
@@ -255,8 +241,9 @@ class TemporalTrafficDataset(Dataset):
             "delta_seq": delta_seq,                # (K, 1, H, W)
             "occupancy_seq": occ_seq,              # (K,)
             "los_seq": los_seq,                    # (K,)
-            "current_occupancy": occ_seq[-1],      # (scalar float)
-            "current_los": los_seq[-1],            # (scalar int: 0..3)
-            "trend": delta_trend.clone().detach().float() if isinstance(delta_trend, torch.Tensor) else torch.tensor(float(delta_trend), dtype=torch.float32),
+            "reliability_seq": rel_seq,            # (K,)
+            "current_occupancy": occ_seq[-1],      # scalar float
+            "current_los": los_seq[-1],            # scalar int: 0..3
+            "trend": float(delta_trend),
             "vehicle_count": torch.tensor(count_label, dtype=torch.float32),
         }

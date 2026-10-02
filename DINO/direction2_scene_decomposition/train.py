@@ -191,13 +191,18 @@ def train_decomposition(args):
         pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
         for batch in pbar:
-            origin = batch["origin"].to(device)
-            bg = batch["bg"].to(device)
+            if "origins" in batch:
+                origins = batch["origins"].to(device)
+                bgs = batch["prior_bgs"].to(device)
+                B, K, C, H, W = origins.shape
+                origin = origins.view(B * K, C, H, W)
+                bg = bgs.view(B * K, C, H, W)
+            else:
+                origin = batch["origin"].to(device)
+                bg = batch["bg"].to(device)
 
-            preds = model(origin)
-            targets = {"origin": origin, "bg": bg}
-
-            loss, loss_dict = loss_fn(preds, targets)
+            preds = model(origin, prior=bg)
+            loss, loss_dict = loss_fn(preds, origin, bg, epoch=epoch)
 
             optimizer.zero_grad()
             loss.backward()
@@ -207,8 +212,9 @@ def train_decomposition(args):
             total_loss += loss.item()
             pbar.set_postfix({
                 "loss": f"{loss.item():.4f}",
-                "recon": f"{loss_dict['loss_recon']:.4f}",
-                "bg": f"{loss_dict['loss_bg']:.4f}",
+                "rec": f"{loss_dict.get('loss_rec', 0.0):.4f}",
+                "prior": f"{loss_dict.get('loss_prior', 0.0):.4f}",
+                "sigma": f"{loss_dict.get('mean_sigma', 0.0):.3f}",
             })
 
         scheduler.step()
@@ -218,12 +224,13 @@ def train_decomposition(args):
         # Xuất ảnh trực quan kiểm tra
         with torch.no_grad():
             sample = next(iter(loader))
-            s_origin = sample["origin"][:1].to(device)
-            s_bg = sample["bg"][:1].to(device)
+            s_origin = sample["origin"][:1].to(device) if "origin" in sample else sample["origins"][:1, 0].to(device)
+            s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
             s_preds = model(s_origin)
+            s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
             save_visual_sample(
                 s_origin, s_bg,
-                s_preds["pred_bg"], s_preds["pred_fg"], s_preds["pred_mask"], s_preds["recon_origin"],
+                s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
                 save_path=os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png"),
                 epoch=epoch + 1,
             )

@@ -41,13 +41,11 @@ def evaluate_model(model, loader, device, mode="4channel"):
     with torch.no_grad():
         for batch in tqdm(loader, desc=f"Evaluating ({mode})"):
             targets = batch["counts"].to(device)
-            if mode == "4channel":
-                inputs = batch["input_4ch"].to(device)
-                preds = model(inputs)
-            else:
-                inputs = batch["rgb"].to(device)
-                delta = batch["delta"].to(device)
-                preds = model(inputs, delta=delta)
+            rgb = batch["rgb"].to(device)
+            delta = batch.get("delta")
+            if delta is not None:
+                delta = delta.to(device)
+            preds = model(rgb, delta=delta)
 
             all_preds.append(preds.cpu().numpy())
             all_targets.append(targets.cpu().numpy())

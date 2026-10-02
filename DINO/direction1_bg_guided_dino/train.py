@@ -231,15 +231,31 @@ def train_bg_guided_dino(args):
                 autocast_ctx = torch.cuda.amp.autocast(enabled=amp_enabled)
 
             with autocast_ctx:
+                masks_dev = masks.to(device, non_blocking=True)
                 # Teacher forward 2 global views song song trên toàn bộ GPU
                 with torch.no_grad():
-                    teacher_out = model(global_crops, mode="teacher")
+                    teacher_res = model(global_crops, mode="teacher")
+                    if isinstance(teacher_res, tuple):
+                        teacher_cls, teacher_patch = teacher_res
+                    else:
+                        teacher_cls, teacher_patch = teacher_res, None
 
-                # Student forward toàn bộ (2 global + N local) song song trên toàn bộ GPU
-                student_out = model(crops, mode="student")
+                # Student forward toàn bộ views và trích xuất thêm patch logits cho view bị che
+                student_res = model(crops, mask=masks_dev, mode="student")
+                if isinstance(student_res, tuple):
+                    student_cls, student_patch = student_res
+                else:
+                    student_cls, student_patch = student_res, None
 
-                # Tính DINO loss
-                loss = dino_loss_fn(student_out, teacher_out, epoch=epoch)
+                # Tính DINO CLS loss + iBOT Patch loss
+                loss = dino_loss_fn(
+                    student_cls=student_cls,
+                    teacher_cls=teacher_cls,
+                    student_patch=student_patch,
+                    teacher_patch=teacher_patch,
+                    mask=masks_dev,
+                    epoch=epoch,
+                )
 
             # Cập nhật Gradient
             optimizer.zero_grad()

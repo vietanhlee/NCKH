@@ -1,12 +1,13 @@
 """
 =============================================================================
- Hướng 1: BG-Guided DINO — Model Architecture & Projection Head
- Đóng gói Student-Teacher Framework với Dynamic Foreground Masking
+ Hướng 1: BG-Guided DINO — Model Architecture & Projection Heads
+ Đóng gói Student-Teacher Framework với Foreground-Aware Masking (FAM)
+ Bổ sung Patch-Level iBOT Self-Distillation Head theo chuẩn Q1
 =============================================================================
 """
 
 import copy
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -46,19 +47,11 @@ class DINOHead(nn.Module):
                 nn.init.trunc_normal_(m.weight, std=0.02)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
-        # Khởi tạo prototype weights
         nn.init.trunc_normal_(self.last_layer.weight, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: Vector biểu diễn đặc trưng (B, in_dim)
-        Returns:
-            Logits phân bố xác suất trên prototypes (B, out_dim)
-        """
         z = self.mlp(x)
         z = F.normalize(z, dim=-1, p=2)
-        # Chuẩn hóa prototype weights để tính cosine similarity
         w = F.normalize(self.last_layer.weight, dim=-1, p=2)
         logits = F.linear(z, w)
         return logits
@@ -66,9 +59,9 @@ class DINOHead(nn.Module):
 
 class BGGuidedDINOModel(nn.Module):
     """
-    Đóng gói cặp mạng Student và Teacher.
-    - Student: Nhận cả view đầy đủ lẫn view bị che theo Foreground-Aware Masking.
-    - Teacher: Cập nhật trọng số qua Exponential Moving Average (EMA), nhận global unmasked views.
+    Đóng gói cặp mạng Student và Teacher chuẩn Meta DINOv2/v3 + iBOT:
+    - Student: Nhận cả view toàn vẹn và view bị che theo FAM, dự đoán cả CLS và Patch tokens.
+    - Teacher: EMA Momentum Teacher cung cấp mục tiêu giám sát ngữ nghĩa toàn cục và cục bộ.
     """
 
     def __init__(
@@ -76,111 +69,134 @@ class BGGuidedDINOModel(nn.Module):
         student_backbone: nn.Module,
         embed_dim: int,
         out_dim: int = 4096,
+        patch_out_dim: int = 4096,
         bottleneck_dim: int = 256,
     ):
         super().__init__()
         self.student_backbone = student_backbone
+        self.embed_dim = embed_dim
+
+        # Head cho CLS token (DINO Loss)
         self.student_head = DINOHead(
             in_dim=embed_dim,
             out_dim=out_dim,
             bottleneck_dim=bottleneck_dim,
         )
+        # Head cho Patch tokens (iBOT Loss)
+        self.student_ibot_head = DINOHead(
+            in_dim=embed_dim,
+            out_dim=patch_out_dim,
+            bottleneck_dim=bottleneck_dim,
+        )
 
-        # Khởi tạo Teacher là bản sao hoàn hảo của Student
+        # Khởi tạo Teacher là bản sao độc lập của Student
         self.teacher_backbone = copy.deepcopy(student_backbone)
         self.teacher_head = copy.deepcopy(self.student_head)
+        self.teacher_ibot_head = copy.deepcopy(self.student_ibot_head)
 
-        # Đóng băng gradient hoàn toàn cho Teacher
         for p in self.teacher_backbone.parameters():
             p.requires_grad = False
         for p in self.teacher_head.parameters():
             p.requires_grad = False
+        for p in self.teacher_ibot_head.parameters():
+            p.requires_grad = False
 
     @torch.no_grad()
     def update_teacher(self, momentum: float):
-        """
-        Cập nhật trọng số Teacher theo quy tắc EMA:
-        $\\theta_t \\leftarrow m \\cdot \\theta_t + (1 - m) \\cdot \\theta_s$
-        """
-        for param_s, param_t in zip(self.student_backbone.parameters(), self.teacher_backbone.parameters()):
-            param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-        for param_s, param_t in zip(self.student_head.parameters(), self.teacher_head.parameters()):
-            param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
+        """Cập nhật trọng số Teacher theo EMA: theta_t <- m * theta_t + (1 - m) * theta_s"""
+        for ps, pt in zip(self.student_backbone.parameters(), self.teacher_backbone.parameters()):
+            pt.data.mul_(momentum).add_((1.0 - momentum) * ps.detach().data)
+        for ps, pt in zip(self.student_head.parameters(), self.teacher_head.parameters()):
+            pt.data.mul_(momentum).add_((1.0 - momentum) * ps.detach().data)
+        for ps, pt in zip(self.student_ibot_head.parameters(), self.teacher_ibot_head.parameters()):
+            pt.data.mul_(momentum).add_((1.0 - momentum) * ps.detach().data)
 
-    def forward_student(self, crops: List[torch.Tensor]) -> torch.Tensor:
+    def extract_features(self, backbone: nn.Module, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Chạy Student qua toàn bộ các crops (2 Global + N Local).
-        Tối ưu hóa: Gom các views có cùng kích thước để forward theo batch.
+        Trích xuất (cls_token, patch_tokens) từ backbone linh hoạt.
         """
-        # Phân nhóm theo resolution
+        out = backbone(x)
+        if isinstance(out, dict):
+            cls_tok = out.get("x_norm_clstoken", list(out.values())[0])
+            patch_toks = out.get("x_norm_patchtokens", None)
+            if patch_toks is None:
+                patch_toks = cls_tok.unsqueeze(1)
+        elif isinstance(out, torch.Tensor):
+            if out.dim() == 3:
+                cls_tok = out[:, 0]
+                patch_toks = out[:, 1:]
+            else:
+                cls_tok = out
+                patch_toks = out.unsqueeze(1)
+        else:
+            cls_tok = out[0]
+            patch_toks = out[1] if len(out) > 1 else cls_tok.unsqueeze(1)
+        return cls_tok, patch_toks
+
+    def forward_student(
+        self,
+        crops: List[torch.Tensor],
+        mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """
+        Chạy Student trên toàn bộ crops (2 Global + N Local).
+        Nếu có mask, trả về thêm patch logits của view bị che (Global View 1).
+        """
         sizes = [c.shape[-1] for c in crops]
         unique_sizes = list(set(sizes))
 
-        all_outputs = []
+        all_cls_outputs = []
+        masked_patch_logits = None
+
         for s in unique_sizes:
             indices = [i for i, sz in enumerate(sizes) if sz == s]
             batch_s = torch.cat([crops[i] for i in indices], dim=0)
 
-            # Phòng vệ chủ động: Tự động nội suy nếu kích thước không chia hết cho patch_size
-            p_size = getattr(self.student_backbone, "patch_size", None)
-            if p_size is None and hasattr(self.student_backbone, "patch_embed"):
-                p_size = getattr(self.student_backbone.patch_embed, "patch_size", None)
-            if isinstance(p_size, (tuple, list)):
-                p_size = p_size[0]
-            if p_size is not None and s % p_size != 0:
-                target_s = max(p_size, round(s / p_size) * p_size)
-                batch_s = F.interpolate(batch_s, size=(target_s, target_s), mode="bicubic", align_corners=False)
+            cls_tok, patch_toks = self.extract_features(self.student_backbone, batch_s)
+            cls_logits = self.student_head(cls_tok)
+            all_cls_outputs.append((indices, cls_logits))
 
-            feat = self.student_backbone(batch_s)
-            if hasattr(feat, "get") and isinstance(feat, dict):
-                feat = feat.get("x_norm_clstoken", list(feat.values())[0])
-            elif feat.dim() > 2:
-                feat = feat[:, 0]  # Lấy CLS token
-            out = self.student_head(feat)
-            all_outputs.append((indices, out))
+            # Nếu batch chứa Global View 1 (indices có 0) và có mask
+            if 0 in indices and mask is not None:
+                # Patch tokens tương ứng view 0
+                idx_in_batch = indices.index(0)
+                B = len(crops[0])
+                view0_patches = patch_toks[idx_in_batch * B : (idx_in_batch + 1) * B]  # (B, N_p, D)
+                masked_patch_logits = self.student_ibot_head(view0_patches)
 
-        # Khôi phục thứ tự ban đầu của crops
         ordered_outs = [None] * len(crops)
-        for indices, out in all_outputs:
-            batch_size = len(out) // len(indices)
+        for indices, out in all_cls_outputs:
             chunks = out.chunk(len(indices))
             for i, chunk in zip(indices, chunks):
                 ordered_outs[i] = chunk
 
-        return torch.cat(ordered_outs, dim=0)
+        total_cls_logits = torch.cat(ordered_outs, dim=0)
+        return total_cls_logits, masked_patch_logits
 
     @torch.no_grad()
-    def forward_teacher(self, global_crops: List[torch.Tensor]) -> torch.Tensor:
+    def forward_teacher(
+        self,
+        global_crops: List[torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Chạy Teacher trên 2 Global unmasked views.
+        Trả về (cls_logits, patch_logits của global view 1).
         """
         batch = torch.cat(global_crops, dim=0)
+        cls_tok, patch_toks = self.extract_features(self.teacher_backbone, batch)
+        cls_logits = self.teacher_head(cls_tok)
 
-        # Phòng vệ chủ động: Tự động nội suy nếu kích thước không chia hết cho patch_size
-        p_size = getattr(self.teacher_backbone, "patch_size", None)
-        if p_size is None and hasattr(self.teacher_backbone, "patch_embed"):
-            p_size = getattr(self.teacher_backbone.patch_embed, "patch_size", None)
-        if isinstance(p_size, (tuple, list)):
-            p_size = p_size[0]
-        if p_size is not None and batch.shape[-1] % p_size != 0:
-            target_s = max(p_size, round(batch.shape[-1] / p_size) * p_size)
-            batch = F.interpolate(batch, size=(target_s, target_s), mode="bicubic", align_corners=False)
+        B = len(global_crops[0])
+        view0_patches = patch_toks[:B]
+        patch_logits = self.teacher_ibot_head(view0_patches)
+        return cls_logits, patch_logits
 
-        feat = self.teacher_backbone(batch)
-        if hasattr(feat, "get") and isinstance(feat, dict):
-            feat = feat.get("x_norm_clstoken", list(feat.values())[0])
-        elif feat.dim() > 2:
-            feat = feat[:, 0]
-        out = self.teacher_head(feat)
-        return out
-
-    def forward(self, crops: List[torch.Tensor], mode: str = "student") -> torch.Tensor:
-        """
-        Phương thức forward chuẩn tương thích với PyTorch nn.DataParallel & DDP.
-        Args:
-            crops: List tensor các view ảnh.
-            mode: 'student' (toàn bộ crops) hoặc 'teacher' (2 global unmasked crops).
-        """
+    def forward(
+        self,
+        crops: List[torch.Tensor],
+        mask: Optional[torch.Tensor] = None,
+        mode: str = "student"
+    ):
         if mode == "teacher":
             return self.forward_teacher(crops)
-        return self.forward_student(crops)
+        return self.forward_student(crops, mask)
