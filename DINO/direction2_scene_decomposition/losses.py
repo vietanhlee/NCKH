@@ -6,6 +6,8 @@
 =============================================================================
 """
 
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import math
 from typing import Dict, Tuple, Optional, Union
 import torch
@@ -76,9 +78,15 @@ class NoiseAwareDecompositionLoss(nn.Module):
         lambda_bin: float = 0.05,
         tau_excl: float = 0.05,
         charbonnier_eps: float = 1e-3,
+        lambda_bg: Optional[float] = None,
+        **kwargs,
     ):
         super().__init__()
+        # Hỗ trợ cả lambda_bg (tên cũ/alias) và lambda_prior (chuẩn Q1 công thức A.9)
+        if lambda_bg is not None:
+            lambda_prior = lambda_bg
         self.lambda_prior = lambda_prior
+        self.lambda_bg = lambda_prior  # Giữ alias cho thuộc tính
         self.lambda_shared = lambda_shared
         self.lambda_excl = lambda_excl
         self.lambda_tv = lambda_tv

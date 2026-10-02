@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng 3: Scene Decomposition — Inference & Inpainting Script
+ Hướng 2: Scene Decomposition — Inference & Inpainting Script
  Tự động tách lớp phương tiện và khôi phục mặt đường sạch xe (Road Inpainting)
  từ ảnh giao thông đơn lẻ (không cần ảnh background khi chạy inference)
 =============================================================================

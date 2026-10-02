@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng 5: Spatio-Temporal DINO for Continuous Road Space Occupancy 
+ Hướng 4: Spatio-Temporal DINO for Continuous Road Space Occupancy 
           and Congestion Level of Service (LoS) Estimation
  Module: Train Pipeline (Quy trình huấn luyện và đánh giá chỉ số ùn tắc đô thị)
  Hỗ trợ Multi-GPU, Mixed Precision (AMP), Resume Training chuẩn Production

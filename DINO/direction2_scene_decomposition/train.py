@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng 3: Scene Decomposition — Training Script
+ Hướng 2: Scene Decomposition — Training Script
  Huấn luyện mạng nơ-ron phân rã cảnh giao thông tự giám sát (Traffic-Decompose)
 =============================================================================
 """
@@ -105,6 +105,7 @@ def train_decomposition(args):
         match_strategy=args.match_strategy,
         img_size=args.img_size,
         is_train=True,
+        group_by_camera_slot=getattr(args, "group_by_camera_slot", False),
         max_samples=args.max_samples,
     )
     print(f"✅ [Data] Đã nạp {len(dataset)} mẫu huấn luyện.")
@@ -141,9 +142,12 @@ def train_decomposition(args):
 
     # 3. Hàm mất mát & Optimizer
     loss_fn = DecompositionLoss(
-        lambda_bg=args.lambda_bg,
-        lambda_sparse=args.lambda_sparse,
+        lambda_prior=getattr(args, "lambda_prior", getattr(args, "lambda_bg", 1.0)),
+        lambda_shared=getattr(args, "lambda_shared", 1.0),
+        lambda_excl=getattr(args, "lambda_excl", 0.5),
         lambda_tv=args.lambda_tv,
+        lambda_sparse=args.lambda_sparse,
+        lambda_bin=getattr(args, "lambda_bin", 0.05),
     )
     raw_model = unwrap_model(model)
     optimizer = torch.optim.AdamW(
@@ -266,15 +270,21 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--lambda_bg", type=float, default=1.5, help="Trọng số giám sát nền")
-    parser.add_argument("--lambda_sparse", type=float, default=0.05, help="Trọng số mask sparsity")
-    parser.add_argument("--lambda_tv", type=float, default=0.1, help="Trọng số Total Variation")
+    parser.add_argument("--lambda_prior", "--lambda_bg", dest="lambda_prior", type=float, default=1.0, help="Trọng số giám sát nền prior (L_prior / lambda_bg)")
+    parser.add_argument("--lambda_shared", type=float, default=1.0, help="Trọng số ràng buộc nền dùng chung (L_shared)")
+    parser.add_argument("--lambda_excl", type=float, default=0.5, help="Trọng số loại trừ nền - tiền cảnh (L_excl)")
+    parser.add_argument("--lambda_sparse", type=float, default=0.01, help="Trọng số mask sparsity (L_sparse)")
+    parser.add_argument("--lambda_tv", type=float, default=0.01, help="Trọng số Total Variation (L_tv)")
+    parser.add_argument("--lambda_bin", type=float, default=0.05, help="Trọng số nhị phân hóa mặt nạ (L_bin)")
+    parser.add_argument("--group_by_camera_slot", action="store_true", default=False, help="Nhóm K-frame cùng trạm khác ngày để tính L_shared")
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
     parser.add_argument("--num_workers", type=int, default=0)
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    parsed.lambda_bg = parsed.lambda_prior  # Giữ alias cho thuộc tính
+    return parsed
 
 
 if __name__ == "__main__":

@@ -124,7 +124,7 @@ def evaluate_anomaly_detection_pipeline(
     else:
         delay = -1.0  # Không phát hiện được
 
-    print("📊 [Direction C: Anomaly Detection Performance]")
+    print("📊 [Direction 6: Anomaly Detection Performance]")
     print(f"   Frame-level AUROC:      {auroc:.4f}")
     print(f"   Calibrated Threshold:   {tracker.threshold:.4f}")
     print(f"   Detection Delay Steps:  {delay} steps")
@@ -139,7 +139,7 @@ def evaluate_anomaly_detection_pipeline(
 
 
 if __name__ == "__main__":
-    print("Testing Direction C Evaluation Pipeline...")
+    print("Testing Direction 6 Evaluation Pipeline...")
     # Demo mock backbone
     class DummyBackbone(torch.nn.Module):
         def forward(self, x):

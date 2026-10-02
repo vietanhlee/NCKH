@@ -141,7 +141,7 @@ def run_missing_camera_stress_test(
 
 
 if __name__ == "__main__":
-    print("Testing Direction D Evaluation Pipeline...")
+    print("Testing Direction 7 Evaluation Pipeline...")
     N = 20
     T_in = 12
     T_out = 12

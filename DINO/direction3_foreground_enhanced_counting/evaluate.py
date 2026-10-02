@@ -1,6 +1,6 @@
 """
 =============================================================================
- Hướng 4: Foreground-Enhanced Counting — Benchmark Evaluation Suite
+ Hướng 3: Foreground-Enhanced Counting — Benchmark Evaluation Suite
  Đánh giá so sánh trực diện giữa 3-Channel RGB Baseline và 4-Channel FG-Enhanced
  Tự động sinh bảng kết quả định dạng LaTeX và Markdown cho bài báo ISI/Scopus
 =============================================================================

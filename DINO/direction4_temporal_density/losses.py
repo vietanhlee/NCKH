@@ -97,3 +97,9 @@ class SpatioTemporalDensityLoss(nn.Module):
             "loss_smooth": loss_smooth,
             "loss_onset": loss_onset,
         }
+
+
+# Aliases tương thích ngược
+TemporalDensityLoss = SpatioTemporalDensityLoss
+TemporalDensityMultiTaskLoss = SpatioTemporalDensityLoss
+
