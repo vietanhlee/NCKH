@@ -4,6 +4,12 @@ temp/
 note.md
 nckh/
 
+# Environment files and credentials
+.env
+*.env
+.env.*
+!.env.example
+
 # Ignore large archives, weights, and embeddings
 *.zip
 *.tar.gz

@@ -31,6 +31,11 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 
+# Đảm bảo đường dẫn import luôn thông suốt dù chạy từ root hay thư mục DINO
+dino_dir = os.path.dirname(os.path.abspath(__file__))
+if dino_dir not in sys.path:
+    sys.path.insert(0, dino_dir)
+
 # Import unified model builder from train_ssl_dinov3
 from train_ssl_dinov3 import build_backbone
 

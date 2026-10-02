@@ -19,6 +19,66 @@ warnings.filterwarnings("ignore", message=".*xFormers is not available.*")
 warnings.filterwarnings("ignore", category=UserWarning, module=".*dinov2.*")
 
 
+def load_env_credentials(verbose: bool = False) -> Optional[str]:
+    """
+    Tự động tìm kiếm và nạp các biến môi trường từ file .env.
+    Đồng bộ hóa HF_TOKEN và đăng nhập tự động vào Hugging Face Hub nếu có token hợp lệ.
+
+    Returns:
+        token: Chuỗi Hugging Face token nếu tìm thấy, ngược lại None.
+    """
+    candidate_paths = [
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"),
+    ]
+
+    try:
+        import dotenv
+        for p in candidate_paths:
+            if os.path.isfile(p):
+                dotenv.load_dotenv(p, override=False)
+                if verbose:
+                    print(f"🔑 [Credentials] Đã nạp cấu hình môi trường từ: {p}")
+                break
+    except ImportError:
+        pass
+
+    # Fallback đọc thủ công nếu thiếu thư viện dotenv
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not token:
+        for p in candidate_paths:
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                k, v = line.split("=", 1)
+                                k, v = k.strip(), v.strip().strip("'\"")
+                                if k in ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"] and v:
+                                    token = v
+                                    os.environ[k] = v
+                except Exception:
+                    pass
+
+    if token:
+        os.environ["HF_TOKEN"] = token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+        try:
+            from huggingface_hub import login
+            login(token=token, add_to_git_credential=False)
+        except Exception:
+            pass
+
+    return token
+
+
+# Tự động nạp credentials ngay khi module được import
+load_env_credentials()
+
+
 def get_dino_backbone(
     model_name: str = "dinov3_vits16",
     pretrained: bool = True,
@@ -31,7 +91,7 @@ def get_dino_backbone(
     Args:
         model_name: Tên backbone ('dinov3_vits16', 'dinov3_vitb16', 'dinov2_vits14', 'dinov2_vitb14', ...).
         pretrained: Nạp trọng số tiền huấn luyện (True/False).
-        weights_path: Đường dẫn checkpoint local (.pth, .safetensors).
+        weights_path: Đường dẫn checkpoint local (.pth, .safetensors) hoặc HuggingFace repo/file.
         device: Thiết bị tính toán ('cuda', 'cpu').
 
     Returns:
@@ -41,6 +101,27 @@ def get_dino_backbone(
     """
     device = torch.device(device)
     patch_size = 16 if ("16" in model_name.lower() or "dinov3" in model_name.lower()) else 14
+
+    # 0. Nạp biến môi trường và token Hugging Face
+    hf_token = load_env_credentials()
+
+    # Hỗ trợ tải trực tiếp từ HuggingFace Hub nếu weights_path trỏ tới repo hoặc hf://
+    if weights_path and (weights_path.startswith("hf://") or ("/" in weights_path and not os.path.exists(weights_path))):
+        try:
+            from huggingface_hub import hf_hub_download
+            hf_spec = weights_path.replace("hf://", "")
+            if ":" in hf_spec:
+                repo_id, filename = hf_spec.split(":", 1)
+            else:
+                repo_id = hf_spec
+                filename = "model.safetensors"
+            print(f"📥 [HuggingFace Hub] Đang tải trọng số từ {repo_id}/{filename}...")
+            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, token=hf_token)
+            if downloaded and os.path.isfile(downloaded):
+                weights_path = downloaded
+                print(f"✅ [HuggingFace Hub] Tải thành công weights về cache: {weights_path}")
+        except Exception as e_hf_dl:
+            print(f"⚠️ [HuggingFace Hub] Tải weights từ HuggingFace notice: {e_hf_dl}")
 
     # 1. Thử tận dụng hàm build_backbone đã viết rất hoàn chỉnh trong train_ssl_dinov3
     dino_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

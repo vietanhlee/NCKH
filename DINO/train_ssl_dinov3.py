@@ -30,6 +30,18 @@ import time
 import warnings
 from typing import List, Tuple, Dict, Any
 
+# Cấu hình sys.path tự động giúp chạy từ root hoặc thư mục DINO không bị lỗi module
+_dino_dir = os.path.dirname(os.path.abspath(__file__))
+if _dino_dir not in sys.path:
+    sys.path.insert(0, _dino_dir)
+
+# Tự động nạp credentials (HF_TOKEN) từ file .env
+try:
+    from common.backbone_loader import load_env_credentials
+    load_env_credentials()
+except Exception:
+    pass
+
 # Note: If xformers is not installed, PyTorch uses native FlashAttention / SDPA.
 # To enable xformers acceleration, run: pip install xformers
 
@@ -370,7 +382,12 @@ def build_backbone(
                             break
 
                 # 1. Attempt HuggingFace Hub authenticated download if HF_TOKEN is present
-                hf_token = os.environ.get("HF_TOKEN", None)
+                try:
+                    from common.backbone_loader import load_env_credentials
+                    load_env_credentials()
+                except Exception:
+                    pass
+                hf_token = os.environ.get("HF_TOKEN", None) or os.environ.get("HUGGING_FACE_HUB_TOKEN", None)
                 if hf_token and (weights_path is None or not os.path.exists(weights_path)):
                     try:
                         from huggingface_hub import hf_hub_download
