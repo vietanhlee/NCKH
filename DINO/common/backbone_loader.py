@@ -14,6 +14,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Đảm bảo UTF-8 an toàn trên Windows
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Bỏ qua các cảnh báo phụ thuộc tùy chọn (xFormers) của DINOv2 khi chạy Native PyTorch
 warnings.filterwarnings("ignore", message=".*xFormers is not available.*")
 warnings.filterwarnings("ignore", category=UserWarning, module=".*dinov2.*")
@@ -38,9 +48,9 @@ def load_env_credentials(verbose: bool = False) -> Optional[str]:
         import dotenv
         for p in candidate_paths:
             if os.path.isfile(p):
-                dotenv.load_dotenv(p, override=False)
+                dotenv.load_dotenv(p, override=True)
                 if verbose:
-                    print(f"🔑 [Credentials] Đã nạp cấu hình môi trường từ: {p}")
+                    print(f"[*] [Credentials] Da nap cau hinh moi truong tu: {p}")
                 break
     except ImportError:
         pass
