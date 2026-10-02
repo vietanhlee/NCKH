@@ -287,67 +287,9 @@ try:
     print("   ✅ [Direction 5] Spatio-Temporal Density & LoS pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 6. TEST DIRECTION 6: CORRIDOR VEHICLE RE-IDENTIFICATION
+    # 6. TEST DIRECTION 8: ROAD SURFACE CONDITION ESTIMATION
     # -------------------------------------------------------------
-    print("\n--- [TEST 6] Direction 6: Corridor Vehicle Re-ID & Travel Time ---")
-    from direction6_vehicle_reid.roi_extractor import DeltaRoIExtractor
-    from direction6_vehicle_reid.models import VehicleReIDModel
-    from direction6_vehicle_reid.matcher import VehicleReIDMatcher
-
-    roi_ext = DeltaRoIExtractor(min_area=100, target_size=(128, 64))
-    rois = roi_ext.extract_rois(dummy_orig_1, dummy_bg_1_14)
-    assert len(rois) >= 1, "Kỳ vọng tìm thấy ít nhất 1 vùng xe mô phỏng"
-    print(f"   + DeltaRoIExtractor trích xuất được: {len(rois)} xe (BBox: {rois[0]['bbox']})")
-
-    reid_model = VehicleReIDModel(backbone=mock_vit, embed_dim=64, reid_dim=64, freeze_backbone=True)
-    dummy_crop_tensor = torch.randn(2, 3, 128, 64)
-    feat_unnorm, feat_norm = reid_model(dummy_crop_tensor)
-    assert feat_norm.shape == (2, 64)
-
-    # Test Spatio-Temporal Matcher & Speed estimation
-    gallery_feats = torch.randn(5, 64)
-    matcher6 = VehicleReIDMatcher(
-        gallery_embeddings=gallery_feats,
-        gallery_meta=[{"cam_id": "1", "name": f"v_{i}", "timestamp": 1755698800.0 + i * 30.0} for i in range(5)],
-    )
-    q_meta = {"cam_id": "2", "timestamp": 1755698920.0}
-    q_res = matcher6.query_with_spatio_temporal(feat_norm[0], query_meta=q_meta, top_k=3, filter_same_camera=False)
-    assert len(q_res) == 3
-    print(f"   + Re-ID Query Top-1 Final Score: {q_res[0]['final_score']:.4f} (Visual: {q_res[0]['visual_sim']:.4f}, ST-Weight: {q_res[0]['st_weight']:.4f})")
-    
-    speed_est = VehicleReIDMatcher.estimate_corridor_speed(q_res, distance_meters=1000.0, min_sim_threshold=0.0)
-    print(f"   + Corridor Travel Time: {speed_est['mean_travel_time_sec']:.1f}s | Speed: {speed_est['mean_speed_kmh']:.1f} km/h")
-    print("   ✅ [Direction 6] Corridor Vehicle Re-ID pass hoàn hảo!")
-
-    # -------------------------------------------------------------
-    # 8. TEST DIRECTION 7: OPEN-VOCABULARY TRAFFIC UNDERSTANDING
-    # -------------------------------------------------------------
-    print("\n--- [TEST 8] Direction 7: Open-Vocabulary Scene Understanding ---")
-    from direction7_open_vocabulary.proposal_engine import DeltaProposalEngine
-    from direction7_open_vocabulary.text_prompts import TrafficPromptVocabulary
-    from direction7_open_vocabulary.models import OpenVocabTrafficDetector
-
-    prop_engine = DeltaProposalEngine(min_area=100, target_crop_size=(128, 128))
-    proposals = prop_engine.generate_proposals(dummy_orig_1, dummy_bg_1_14)
-    assert len(proposals) >= 1, "Kỳ vọng sinh được proposals từ vùng xe trắng"
-    print(f"   + DeltaProposalEngine sinh được: {len(proposals)} proposals")
-
-    vocab = TrafficPromptVocabulary(classes=["xe máy", "ô tô con", "xe buýt"], text_dim=64)
-    text_embs = vocab.get_text_embeddings()
-    assert text_embs.shape == (3, 64)
-
-    ov_detector = OpenVocabTrafficDetector(backbone=mock_vit, embed_dim=64, clip_dim=64, freeze_backbone=True)
-    crop_tensors = torch.randn(len(proposals), 3, 128, 128)
-    ov_out = ov_detector(crop_tensors, text_embs)
-    assert ov_out["probabilities"].shape == (len(proposals), 3)
-    assert ov_out["predicted_class_ids"].shape == (len(proposals),)
-    print(f"   + Open-Vocab Probs: {ov_out['probabilities'][0].tolist()}")
-    print("   ✅ [Direction 7] Open-Vocabulary pass hoàn hảo!")
-
-    # -------------------------------------------------------------
-    # 9. TEST DIRECTION 8: ROAD SURFACE CONDITION ESTIMATION
-    # -------------------------------------------------------------
-    print("\n--- [TEST 9] Direction 8: Road Surface Condition Estimation ---")
+    print("\n--- [TEST 6] Direction 8: Road Surface Condition Estimation ---")
     from direction8_road_condition.dataset import RoadSurfaceDataset
     from direction8_road_condition.models import RoadConditionClassifier
     from direction8_road_condition.losses import SurfaceConsistencyLoss
@@ -377,9 +319,9 @@ try:
     print("   ✅ [Direction 8] Road Surface Condition pass hoàn hảo!")
 
     # -------------------------------------------------------------
-    # 10. TEST MULTI-GPU SMART SAVE & LOAD CHECKPOINTING
+    # 7. TEST MULTI-GPU SMART SAVE & LOAD CHECKPOINTING
     # -------------------------------------------------------------
-    print("\n--- [TEST 10] Multi-GPU Smart Checkpointing Interoperability ---")
+    print("\n--- [TEST 7] Multi-GPU Smart Checkpointing Interoperability ---")
     from common.gpu_utils import save_checkpoint, load_checkpoint, clean_state_dict, smart_load_state_dict
 
     class DummyNet(nn.Module):
@@ -445,7 +387,7 @@ try:
     print("   ✅ [Checkpointing] Multi-GPU Smart Save, Load & Full Resume pass hoàn hảo!")
 
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU, COMMON UTILITIES VÀ RESUME TRAINING ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ 5 HƯỚNG NGHIÊN CỨU TRỌNG TÂM, COMMON UTILITIES VÀ RESUME ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:

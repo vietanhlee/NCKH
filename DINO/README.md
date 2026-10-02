@@ -1,6 +1,6 @@
 # DINO Traffic Suite: Khai Thác Cặp Ảnh Background–Origin Cho Thị Giác Giao Thông
 
-Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM).
+Bộ công cụ nghiên cứu toàn diện khai thác tín hiệu tự giám sát vật lý từ cặp ảnh **Background (nền tĩnh)** và **Origin (có phương tiện)** từ hệ thống camera giám sát đô thị (IC4SD-Traffic-HCM). Hệ thống tập trung vào **5 hướng nghiên cứu trọng tâm** (H1, H2, H3, H5, H8).
 
 ```
 DINO/
@@ -39,39 +39,23 @@ DINO/
 │   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
 │   └── README.md
 │
-├── direction6_vehicle_reid/                # [HƯỚNG 6] Corridor-Based Vehicle Re-ID Across Cameras
-│   ├── roi_extractor.py                    # DeltaRoIExtractor tự động cắt xe không cần Object Detector
-│   ├── models.py                           # VehicleReIDModel với GeM Pooling và BNNeck (256-D L2)
-│   ├── losses.py                           # TrackletContrastiveLoss (học danh tính tự giám sát)
-│   ├── matcher.py                          # VehicleReIDMatcher ràng buộc không-thời gian [v_min, v_max], tính km/h
-│   ├── run_reid.py                         # Pipeline truy vấn phương tiện và đo thời gian hành trình
-│   └── README.md
-│
-├── direction7_open_vocabulary/             # [HƯỚNG 7] Open-Vocabulary Traffic Scene Understanding
-│   ├── proposal_engine.py                  # DeltaProposalEngine sinh đề xuất vùng đối tượng qua NMS
-│   ├── text_prompts.py                     # Quản lý từ vựng văn bản mở tiếng Việt / tiếng Anh
-│   ├── models.py                           # OpenVocabTrafficDetector chiếu DINO sang CLIP text space
-│   ├── pipeline.py                         # Pipeline nhận diện từ vựng mở & vẽ bounding boxes
-│   └── README.md
-│
 └── direction8_road_condition/              # [HƯỚNG 8] Self-Supervised Road Surface Condition Estimation
-    ├── dataset.py                          # RoadSurfaceDataset nạp chuỗi ảnh nền 24h & chỉ số quang học
-    ├── models.py                           # RoadConditionClassifier (Head: Wetness, Illumination, Degradation)
+    ├── dataset.py                          # RoadSurfaceDataset nạp chuỗi ảnh nền 24h & mỏ neo quang học
+    ├── models.py                           # RoadConditionClassifier (Tri-Head: Wetness, Illumination, Degradation)
     ├── losses.py                           # SurfaceConsistencyLoss với mỏ neo vật lý
-    ├── eval.py                             # Đánh giá, gom cụm PCA và xuất báo cáo hạ tầng đô thị
+    ├── train.py                            # Huấn luyện đa thuộc tính mặt đường với Multi-GPU & AMP
+    ├── eval.py                             # Đánh giá, gom cụm PCA 2D và xuất báo cáo hạ tầng đô thị
     └── README.md
 ```
 
-## Bảng So Sánh 7 Hướng Nghiên Cứu
+## Bảng So Sánh 5 Hướng Nghiên Cứu Trọng Tâm
 
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
 | **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, EAAI |
-| **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting) | CVPR, ECCV, NeurIPS |
+| **H2** | **Scene Decomposition Network** | `direction2_scene_decomposition/` | Alpha Compositing tự giám sát với mỏ neo nền thật (Road Inpainting xóa xe) | CVPR, ECCV, NeurIPS |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Warm-Start | EAAI Journal, ITSC |
 | **H5** | **Spatio-Temporal Density & HCM LoS** | `direction5_temporal_density/` | Hợp nhất DINO + $\Delta$-CNN + BiGRU với mỏ neo $\rho_{\text{phys}}$ dự đoán mật độ & LoS | IEEE T-ITS, CVPR |
-| **H6** | **Corridor-Based Vehicle Re-ID** | `direction6_vehicle_reid/` | $\Delta$-RoI không cần detector, GeM+BNNeck, Ràng buộc không-thời gian đo tốc độ $km/h$ | IEEE T-ITS, TRB |
-| **H7** | **Open-Vocabulary Scene Understanding** | `direction7_open_vocabulary/` | Delta proposals không phụ thuộc lớp kết hợp căn chỉnh DINO sang CLIP text | ECCV, WACV |
 | **H8** | **Road Surface Condition Estimation** | `direction8_road_condition/` | Đánh giá đa thuộc tính mặt đường (đọng nước, chiếu sáng, hư hại) từ ảnh nền 24h | IEEE T-ITS, TRB |
 
 ---
@@ -146,7 +130,7 @@ python DINO/direction3_foreground_enhanced_counting/evaluate.py \
     --device cuda
 ```
 
-### 5. Hướng 5: Spatio-Temporal Density & HCM LoS Estimation
+### 4. Hướng 5: Spatio-Temporal Density & HCM LoS Estimation
 ```bash
 python DINO/direction5_temporal_density/train.py \
     --bg_dir traffic_backgrounds \
@@ -158,31 +142,17 @@ python DINO/direction5_temporal_density/train.py \
     --device cuda
 ```
 
-### 6. Hướng 6: Corridor-Based Vehicle Re-ID & Travel Time Estimation
+### 5. Hướng 8: Self-Supervised Road Surface Condition Estimation
 ```bash
-python DINO/direction6_vehicle_reid/run_reid.py \
+# Huấn luyện đa thuộc tính mặt đường (ngập nước, chiếu sáng, nứt nẻ):
+python DINO/direction8_road_condition/train.py \
     --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --output_dir checkpoints/direction6_vehicle_reid \
-    --top_k 5 \
-    --min_speed 10.0 \
-    --max_speed 60.0 \
-    --min_area 500 \
+    --epochs 25 \
+    --batch_size 16 \
+    --save_dir checkpoints/direction8_road_condition \
     --device cuda
-```
 
-### 7. Hướng 7: Open-Vocabulary Traffic Scene Understanding
-```bash
-python DINO/direction7_open_vocabulary/pipeline.py \
-    --bg_dir traffic_backgrounds \
-    --origin_dir output \
-    --output_dir checkpoints/direction7_open_vocabulary \
-    --language vi \
-    --device cuda
-```
-
-### 8. Hướng 8: Self-Supervised Road Surface Condition Estimation
-```bash
+# Đánh giá, trực quan hóa PCA 2D và xuất báo cáo toàn đô thị:
 python DINO/direction8_road_condition/eval.py \
     --bg_dir traffic_backgrounds \
     --output_dir checkpoints/direction8_road_condition \
@@ -191,7 +161,7 @@ python DINO/direction8_road_condition/eval.py \
 
 ---
 
-## 🧪 Kiểm Thử Toàn Bộ 7 Hướng (Smoke Test Runner)
+## 🧪 Kiểm Thử Toàn Bộ 5 Hướng Trọng Tâm (Smoke Test Runner)
 Chạy script kiểm thử tự động toàn diện với dữ liệu mô phỏng trong vòng 10 giây:
 ```bash
 python DINO/test_all_directions.py
