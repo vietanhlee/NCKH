@@ -153,9 +153,39 @@ def train_decomposition(args):
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
-    # 4. Vòng lặp huấn luyện
+    # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp trọng số --weights
+    start_epoch = 0
+    if args.resume:
+        if not os.path.isfile(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        ckpt_data = load_checkpoint(
+            load_path=args.resume,
+            model=raw_model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            device=device,
+            strict=False,
+            verbose=True,
+        )
+        if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
+            start_epoch = int(ckpt_data["epoch"])
+            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            if args.epochs <= start_epoch:
+                target_epochs = start_epoch + args.epochs
+                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                args.epochs = target_epochs
+    elif args.weights:
+        if os.path.isfile(args.weights):
+            print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
+            load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
+
+    # 5. Vòng lặp huấn luyện
     best_loss = float("inf")
-    for epoch in range(args.epochs):
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
+
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         total_loss = 0.0
         pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
@@ -206,6 +236,7 @@ def train_decomposition(args):
                 save_path=ckpt_path,
                 model=raw_model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 epoch=epoch + 1,
                 metrics={"loss": avg_loss},
                 extra_dict={"num_gpus": num_gpus, "args": vars(args)},
@@ -222,6 +253,8 @@ def parse_args():
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction2_scene_decomp", help="Thư mục lưu")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
+    parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file trọng số khởi tạo ban đầu")
+    parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--img_size", type=int, default=256)
     parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--batch_size", type=int, default=8)

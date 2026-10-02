@@ -21,7 +21,7 @@ if _dino_dir not in sys.path:
     sys.path.insert(0, _dino_dir)
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_device, print_gpu_summary, wrap_model_distributed
+from common.gpu_utils import setup_device, print_gpu_summary, wrap_model_distributed, unwrap_model, save_checkpoint, load_checkpoint
 from dataset import TemporalTrafficDataset
 from models import TemporalTrafficEncoder
 from losses import TemporalContrastiveLoss
@@ -34,6 +34,8 @@ def parse_args():
     parser.add_argument("--csv_file", type=str, default=None, help="File CSV nhãn số lượng xe (nếu có)")
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction5_temporal_density", help="Thư mục lưu mô hình")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINO")
+    parser.add_argument("--weights", type=str, default=None, help="Đường dẫn trọng số backbone ban đầu")
+    parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--window_size", type=int, default=4, help="Số khung hình trong một cửa sổ thời gian")
     parser.add_argument("--img_size", type=int, default=224, help="Kích thước ảnh đầu vào")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size (số cửa sổ thời gian)")
@@ -187,13 +189,49 @@ def main():
     )
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
+    device_type = "cuda" if device.type == "cuda" else "cpu"
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        scaler = torch.amp.GradScaler(device_type, enabled=(device.type == "cuda"))
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
 
-    # 5. Huấn luyện
+    # 5. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp --weights
+    start_epoch = 0
+    raw_model = unwrap_model(model)
+
+    if args.resume:
+        if not os.path.isfile(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        ckpt_data = load_checkpoint(
+            load_path=args.resume,
+            model=raw_model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            device=device,
+            strict=False,
+            verbose=True,
+        )
+        if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
+            start_epoch = int(ckpt_data["epoch"])
+            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            if args.epochs <= start_epoch:
+                target_epochs = start_epoch + args.epochs
+                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                args.epochs = target_epochs
+    elif args.weights:
+        if os.path.isfile(args.weights):
+            print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
+            load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
+
+    # 6. Huấn luyện
     best_loss = float("inf")
     start_time = time.time()
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         metrics = train_one_epoch(
             model=model,
             dataloader=dataloader,
@@ -213,19 +251,21 @@ def main():
             f"LR: {scheduler.get_last_lr()[0]:.2e}"
         )
 
-        # Lưu checkpoint tốt nhất
-        if metrics["loss_total"] < best_loss:
-            best_loss = metrics["loss_total"]
+        # Lưu checkpoint tốt nhất và checkpoint định kỳ
+        if metrics["loss_total"] < best_loss or (epoch + 1) == args.epochs:
+            best_loss = min(best_loss, metrics["loss_total"])
             ckpt_path = os.path.join(args.save_dir, "best_temporal_model.pth")
-            raw_model = model.module if hasattr(model, "module") else model
-            torch.save({
-                "epoch": epoch,
-                "model_state": raw_model.state_dict(),
-                "optimizer_state": optimizer.state_dict(),
-                "best_loss": best_loss,
-                "args": vars(args),
-            }, ckpt_path)
-            print(f"   💾 Đã lưu checkpoint tốt nhất tại: {ckpt_path}")
+            save_checkpoint(
+                save_path=ckpt_path,
+                model=raw_model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                scaler=scaler,
+                epoch=epoch + 1,
+                metrics=metrics,
+                extra_dict={"best_loss": best_loss, "args": vars(args)},
+                verbose=True,
+            )
 
     elapsed = time.time() - start_time
     print(f"\n🎉 Hoàn tất huấn luyện Direction 5 sau {elapsed/60:.2f} phút! Best Loss: {best_loss:.4f}")

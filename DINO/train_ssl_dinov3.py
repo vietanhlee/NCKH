@@ -814,12 +814,74 @@ def train_ssl_dinov3(args):
     # History tracker for publication-grade training curves
     history = {"loss": [], "lr_head": [], "lr_backbone": [], "teacher_temp": []}
 
-    # 6. Training Loop
+    # 6. Khôi phục từ checkpoint nếu có cờ --resume
+    start_epoch = 0
+    if args.resume:
+        if not os.path.isfile(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        try:
+            ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        except TypeError:
+            ckpt = torch.load(args.resume, map_location="cpu")
+
+        raw_student = student.module if hasattr(student, "module") else student
+        raw_teacher = teacher.module if hasattr(teacher, "module") else teacher
+
+        # 1. Nạp Student
+        if "student" in ckpt:
+            raw_student.load_state_dict(ckpt["student"])
+            print("   ✅ [Student] Khôi phục thành công Student Model.")
+        elif "model_state" in ckpt:
+            raw_student[0].load_state_dict(ckpt["model_state"], strict=False)
+            print("   ✅ [Student Backbone] Khôi phục từ model_state.")
+
+        # 2. Nạp Teacher
+        if "teacher" in ckpt:
+            raw_teacher.load_state_dict(ckpt["teacher"])
+            print("   ✅ [Teacher] Khôi phục thành công Teacher EMA Model.")
+        elif "teacher_state" in ckpt:
+            raw_teacher[0].load_state_dict(ckpt["teacher_state"], strict=False)
+            print("   ✅ [Teacher Backbone] Khôi phục từ teacher_state.")
+        else:
+            raw_teacher.load_state_dict(raw_student.state_dict())
+
+        # 3. Nạp Optimizer
+        if "optimizer" in ckpt:
+            try:
+                optimizer.load_state_dict(ckpt["optimizer"])
+                dest_device = torch.device(device)
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(dest_device)
+                print("   ✅ [Optimizer] Khôi phục toàn bộ trạng thái Optimizer.")
+            except Exception as e_opt:
+                print(f"   ⚠️ [Optimizer Notice] {e_opt}")
+
+        # 4. Nạp History
+        if "history" in ckpt and isinstance(ckpt["history"], dict):
+            history = ckpt["history"]
+
+        # 5. Khôi phục Epoch và điều chỉnh Lịch trình
+        if "epoch" in ckpt and ckpt["epoch"] is not None:
+            start_epoch = int(ckpt["epoch"])
+            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            if args.epochs <= start_epoch:
+                target_epochs = start_epoch + args.epochs
+                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                args.epochs = target_epochs
+                lr_schedule = get_cosine_schedule(args.lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(args.warmup_epochs, args.epochs // 5 + 1))
+                momentum_schedule = get_cosine_schedule(0.996, 1.0, args.epochs, n_iter_per_epoch, warmup_epochs=0)
+
+    # 7. Training Loop
     best_loss = float("inf")
     collapse_streak = 0
     start_time = time.time()
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         student.train()
         total_epoch_loss = 0.0
         total_t_ent, total_t_marg = 0.0, 0.0
@@ -1170,6 +1232,7 @@ def main():
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Backbone model (e.g. dinov3_vits16, dinov2_vits14, dinov3_vitb16, dinov3_convnext_tiny)")
     parser.add_argument("--pretrained_init", action="store_true", default=True, help="Initialize with Meta LVD Foundation weights before SSL fine-tuning")
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Optional path to local .pth checkpoint for offline loading")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint (.pth) to resume full SSL training state (student, teacher EMA, optimizer, schedules, epoch)")
     parser.add_argument("--epochs", type=int, default=30, help="Number of SSL fine-tuning epochs")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size per GPU")
     parser.add_argument("--lr", type=float, default=0.0002, help="Peak learning rate for DINO projection head (official DINO: 5e-4*bs/256)")

@@ -213,6 +213,8 @@ def save_checkpoint(
     save_path: str,
     model: nn.Module,
     optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[Any] = None,
+    scaler: Optional[Any] = None,
     epoch: Optional[int] = None,
     metrics: Optional[Dict[str, Any]] = None,
     extra_dict: Optional[Dict[str, Any]] = None,
@@ -222,6 +224,7 @@ def save_checkpoint(
     Lưu Checkpoint an toàn tuyệt đối chuẩn Production:
       - Tự động unwrap model để gỡ bỏ lớp bọc Multi-GPU (`DataParallel`).
       - Dọn sạch 100% tiền tố `module.` khỏi `state_dict`.
+      - Hỗ trợ lưu đầy đủ toàn bộ trạng thái huấn luyện: Model, Optimizer, LR Scheduler, GradScaler, Epoch, Metrics.
       - Đảm bảo file `.pth` sinh ra có thể được load ở MỌI MÔI TRƯỜNG (Multi-GPU, Single-GPU, CPU).
     """
     os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
@@ -253,6 +256,12 @@ def save_checkpoint(
     if optimizer is not None:
         checkpoint["optimizer"] = optimizer.state_dict()
 
+    if scheduler is not None and hasattr(scheduler, "state_dict"):
+        checkpoint["scheduler"] = scheduler.state_dict()
+
+    if scaler is not None and hasattr(scaler, "state_dict"):
+        checkpoint["scaler"] = scaler.state_dict()
+
     if extra_dict is not None:
         checkpoint.update(extra_dict)
 
@@ -266,6 +275,8 @@ def load_checkpoint(
     load_path: str,
     model: nn.Module,
     optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[Any] = None,
+    scaler: Optional[Any] = None,
     device: Union[str, torch.device] = "cpu",
     strict: bool = True,
     verbose: bool = True,
@@ -276,7 +287,8 @@ def load_checkpoint(
       - Tự động nhận diện các định dạng lưu trữ phổ biến:
           + Dict chứa key 'model_state', 'state_dict', 'student_state'...
           + Hay là state_dict thuần túy.
-      - Tự động đồng bộ optimizer state sang thiết bị đích nếu có yêu cầu.
+      - Tự động đồng bộ optimizer state, scheduler state, scaler state sang thiết bị đích nếu có yêu cầu.
+      - Trả về dictionary checkpoint gốc để khôi phục 'epoch', 'metrics', 'extra_dict'.
     """
     if not os.path.isfile(load_path):
         raise FileNotFoundError(f"Không tìm thấy file checkpoint tại: {load_path}")
@@ -308,20 +320,46 @@ def load_checkpoint(
     smart_load_state_dict(model=model, state_dict=state_to_load, strict=strict, verbose=verbose)
 
     # 3. Nạp optimizer nếu có và chuyển state sang device
-    if optimizer is not None and isinstance(raw_data, dict) and "optimizer" in raw_data:
-        try:
-            optimizer.load_state_dict(raw_data["optimizer"])
-            # Chuyển các tensor trạng thái của optimizer sang device
-            dest_device = torch.device(device)
-            for state in optimizer.state.values():
-                for k, v in state.items():
-                    if isinstance(v, torch.Tensor):
-                        state[k] = v.to(dest_device)
-            if verbose:
-                print("   ✅ [Optimizer] Khôi phục thành công trạng thái optimizer.")
-        except Exception as e_opt:
-            if verbose:
-                print(f"   ⚠️ [Optimizer Notice] Không thể khôi phục optimizer state: {e_opt}")
+    if optimizer is not None and isinstance(raw_data, dict):
+        opt_key = next((k for k in ["optimizer", "optimizer_state", "opt_state"] if k in raw_data), None)
+        if opt_key:
+            try:
+                optimizer.load_state_dict(raw_data[opt_key])
+                # Chuyển các tensor trạng thái của optimizer sang device
+                dest_device = torch.device(device)
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(dest_device)
+                if verbose:
+                    print("   ✅ [Optimizer] Khôi phục thành công toàn bộ trạng thái optimizer.")
+            except Exception as e_opt:
+                if verbose:
+                    print(f"   ⚠️ [Optimizer Notice] Không thể khôi phục optimizer state: {e_opt}")
+
+    # 4. Nạp scheduler nếu có
+    if scheduler is not None and isinstance(raw_data, dict):
+        sch_key = next((k for k in ["scheduler", "scheduler_state", "sched_state"] if k in raw_data), None)
+        if sch_key:
+            try:
+                scheduler.load_state_dict(raw_data[sch_key])
+                if verbose:
+                    print("   ✅ [Scheduler] Khôi phục thành công trạng thái LR scheduler.")
+            except Exception as e_sch:
+                if verbose:
+                    print(f"   ⚠️ [Scheduler Notice] Không thể khôi phục scheduler: {e_sch}")
+
+    # 5. Nạp scaler nếu có
+    if scaler is not None and isinstance(raw_data, dict):
+        scaler_key = next((k for k in ["scaler", "scaler_state"] if k in raw_data), None)
+        if scaler_key and hasattr(scaler, "load_state_dict"):
+            try:
+                scaler.load_state_dict(raw_data[scaler_key])
+                if verbose:
+                    print("   ✅ [AMP Scaler] Khôi phục thành công trạng thái GradScaler.")
+            except Exception as e_sc:
+                if verbose:
+                    print(f"   ⚠️ [Scaler Notice] Không thể khôi phục GradScaler: {e_sc}")
 
     # Đưa model về đúng device
     model.to(device)

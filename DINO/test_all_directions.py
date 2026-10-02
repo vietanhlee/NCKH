@@ -412,10 +412,23 @@ try:
             return self.module(x)
 
     mock_dp_model = MockDataParallelWrapper(dummy_model)
+    opt_dummy = torch.optim.AdamW(mock_dp_model.parameters(), lr=1e-3)
+    sch_dummy = torch.optim.lr_scheduler.CosineAnnealingLR(opt_dummy, T_max=20)
+    
+    # Giả lập 5 bước cập nhật
+    for _ in range(5):
+        loss_dum = mock_dp_model(torch.randn(4, 10)).sum()
+        opt_dummy.zero_grad()
+        loss_dum.backward()
+        opt_dummy.step()
+        sch_dummy.step()
+
     save_checkpoint(
         save_path=ckpt_save_test,
         model=mock_dp_model,
-        epoch=1,
+        optimizer=opt_dummy,
+        scheduler=sch_dummy,
+        epoch=5,
         metrics={"test_metric": 0.99},
         verbose=False,
     )
@@ -427,11 +440,24 @@ try:
     print("   + Checkpoint dọn sạch 100% tiền tố 'module.' -> PASSED!")
 
     target_clean_model = DummyNet()
-    load_checkpoint(ckpt_save_test, model=target_clean_model, device="cpu", verbose=False)
-    print("   ✅ [Checkpointing] Multi-GPU Smart Save & Load pass hoàn hảo!")
+    target_opt = torch.optim.AdamW(target_clean_model.parameters(), lr=1e-3)
+    target_sch = torch.optim.lr_scheduler.CosineAnnealingLR(target_opt, T_max=20)
+
+    loaded_ckpt = load_checkpoint(
+        ckpt_save_test,
+        model=target_clean_model,
+        optimizer=target_opt,
+        scheduler=target_sch,
+        device="cpu",
+        verbose=False,
+    )
+    assert loaded_ckpt["epoch"] == 5, f"Kỳ vọng epoch=5, thực tế: {loaded_ckpt.get('epoch')}"
+    assert target_sch.last_epoch == 5, f"Kỳ vọng scheduler last_epoch=5, thực tế: {target_sch.last_epoch}"
+    print("   + Khôi phục trọn vẹn Model, Optimizer, Scheduler và Epoch=5 -> PASSED!")
+    print("   ✅ [Checkpointing] Multi-GPU Smart Save, Load & Full Resume pass hoàn hảo!")
 
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU VÀ TẦNG COMMON UTILITIES ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU, COMMON UTILITIES VÀ RESUME TRAINING ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:

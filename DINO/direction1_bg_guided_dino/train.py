@@ -159,10 +159,6 @@ def train_bg_guided_dino(args):
         weight_decay=0.04,
     )
 
-    total_iters = len(loader) * args.epochs
-    lr_schedule = get_cosine_schedule(effective_lr, 1e-6, total_iters, warmup_iters=len(loader) * 2)
-    momentum_schedule = get_cosine_schedule(0.996, 1.0, total_iters)
-
     # Mixed precision scaler (Sử dụng torch.amp chuẩn PyTorch 2.x+ thay thế API cũ đã deprecated)
     device_type = "cuda" if device.type == "cuda" else "cpu"
     amp_enabled = (device.type == "cuda" and args.use_amp)
@@ -171,17 +167,57 @@ def train_bg_guided_dino(args):
     else:
         scaler = torch.cuda.amp.GradScaler(enabled=amp_enabled)
 
-    # 5. Training Loop
-    global_step = 0
-    print(f"\n🏁 [Train] Bắt đầu quá trình tối ưu hóa trên {max(1, num_gpus)} thiết bị...")
+    # 5. Khôi phục trạng thái từ Checkpoint nếu có cờ --resume
+    start_epoch = 0
+    if args.resume:
+        if not os.path.isfile(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        print(f"\n🔄 [Resume] Đang khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        ckpt_data = load_checkpoint(
+            load_path=args.resume,
+            model=raw_model.student_backbone,
+            optimizer=optimizer,
+            scaler=scaler,
+            device=device,
+            strict=False,
+            verbose=True,
+        )
 
-    for epoch in range(args.epochs):
+        if "teacher_state" in ckpt_data:
+            smart_load_state_dict(raw_model.teacher_backbone, ckpt_data["teacher_state"], strict=False, verbose=False)
+            print("   ✅ [Teacher] Đã khôi phục thành công trạng thái Teacher EMA.")
+        else:
+            raw_model.teacher_backbone.load_state_dict(raw_model.student_backbone.state_dict())
+
+        if "head_state" in ckpt_data:
+            smart_load_state_dict(raw_model.student_head, ckpt_data["head_state"], strict=False, verbose=False)
+            raw_model.teacher_head.load_state_dict(raw_model.student_head.state_dict())
+            print("   ✅ [Projection Head] Đã khôi phục thành công Student & Teacher DINO Head.")
+
+        if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
+            start_epoch = int(ckpt_data["epoch"])
+            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            if args.epochs <= start_epoch:
+                target_epochs = start_epoch + args.epochs
+                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                args.epochs = target_epochs
+
+    total_iters = len(loader) * args.epochs
+    lr_schedule = get_cosine_schedule(effective_lr, 1e-6, total_iters, warmup_iters=len(loader) * 2)
+    momentum_schedule = get_cosine_schedule(0.996, 1.0, total_iters)
+    global_step = start_epoch * len(loader)
+
+    # 6. Training Loop
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}] trên {max(1, num_gpus)} thiết bị...")
+
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         epoch_loss = 0.0
         pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
         for crops, masks in pbar:
-            cur_lr = lr_schedule[global_step]
+            cur_lr = lr_schedule[min(global_step, total_iters - 1)]
             for pg in optimizer.param_groups:
                 pg["lr"] = cur_lr
 
@@ -219,7 +255,7 @@ def train_bg_guided_dino(args):
                 optimizer.step()
 
             # Cập nhật Teacher EMA đồng bộ
-            cur_momentum = momentum_schedule[global_step]
+            cur_momentum = momentum_schedule[min(global_step, total_iters - 1)]
             raw_model.update_teacher(cur_momentum)
 
             epoch_loss += loss.item()
@@ -241,6 +277,7 @@ def train_bg_guided_dino(args):
                 save_path=ckpt_path,
                 model=raw_model.student_backbone,
                 optimizer=optimizer,
+                scaler=scaler,
                 epoch=epoch + 1,
                 metrics={"loss": avg_loss, "entropy": dino_loss_fn.last_entropy},
                 extra_dict={
@@ -323,7 +360,8 @@ def parse_args():
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction1_bg_dino", help="Thư mục lưu checkpoint")
     parser.add_argument("--match_strategy", type=str, default="route_hourly", choices=["route_hourly", "same_name", "camera_id"])
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone (dinov3_vits16 / dinov2_vits14)")
-    parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu")
+    parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (chỉ nạp backbone)")
+    parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để khôi phục toàn bộ trạng thái (epoch, optimizer, teacher, head, scaler) và tiếp tục huấn luyện")
     parser.add_argument("--epochs", type=int, default=10, help="Số epochs huấn luyện")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size mỗi step")
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate cực đại")

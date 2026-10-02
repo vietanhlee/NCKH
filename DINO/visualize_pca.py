@@ -303,7 +303,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Trực quan hóa Emergent PCA Feature Map của DINO")
     parser.add_argument("--img_dir", type=str, default="output", help="Thư mục chứa ảnh giao thông, đường dẫn 1 ảnh, hoặc mẫu wildcard (ví dụ: 'output/123_*.jpg')")
     parser.add_argument("--bg_dir", type=str, default=None, help="Thư mục chứa ảnh background tĩnh (để xuất đủ 4 cột đối chiếu [Background | Origin | Delta Map Δ | DINO PCA Map])")
-    parser.add_argument("--cam_id", "--camera_id", dest="cam_id", type=str, default=None, help="Chỉ định ID camera cụ thể (ví dụ: '123' hoặc danh sách '123,566,101,249')")
+    parser.add_argument("--cam_id", "--camera_id", "--routes", "--route", "--route_id", dest="cam_id", type=str, default=None, help="Chỉ định ID camera / tuyến đường cụ thể (ví dụ: '1' hoặc danh sách '1,2,3')")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file checkpoint đã huấn luyện (.pth)")
     parser.add_argument("--backbone", type=str, default="dinov2_vits14", help="Tên backbone (dinov2_vits14 / dinov3_vits16)")
     parser.add_argument("--save_path", type=str, default="emergent_pca_feature_maps.png", help="Đường dẫn lưu file ảnh kết quả")
