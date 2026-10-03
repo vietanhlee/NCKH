@@ -98,9 +98,16 @@ def train_decomposition(args):
     print(f" Device                : {device}")
     print("=" * 78)
 
-    # 1. Khởi tạo Dataset
+    # 1. Khởi tạo Dataset (Tự động phát hiện pseudo_bgs nếu chưa có bg_dir)
+    bg_dir_to_use = args.bg_dir
+    if not os.path.exists(bg_dir_to_use):
+        pseudo_candidate = os.path.join("checkpoints", "direction2_scene_fit", "pseudo_bgs")
+        if os.path.exists(pseudo_candidate):
+            print(f"💡 [Data] Tự động phát hiện và liên kết ảnh nền pseudo-background từ: {pseudo_candidate}")
+            bg_dir_to_use = pseudo_candidate
+
     dataset = DecompositionDataset(
-        bg_dir=args.bg_dir,
+        bg_dir=bg_dir_to_use,
         origin_dir=args.origin_dir,
         match_strategy=args.match_strategy,
         img_size=args.img_size,

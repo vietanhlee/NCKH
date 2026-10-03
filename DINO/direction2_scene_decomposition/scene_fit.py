@@ -385,12 +385,20 @@ def main():
 
     # 1. Thu thập hoặc khởi tạo chuỗi frames
     frames = None
+    frames_loaded_paths = []
     if args.frames_dir and os.path.isdir(args.frames_dir):
-        patterns = [os.path.join(args.frames_dir, "*.jpg"), os.path.join(args.frames_dir, "*.png")]
+        patterns = [
+            os.path.join(args.frames_dir, "**", "*.jpg"),
+            os.path.join(args.frames_dir, "**", "*.jpeg"),
+            os.path.join(args.frames_dir, "**", "*.png"),
+            os.path.join(args.frames_dir, "*.jpg"),
+            os.path.join(args.frames_dir, "*.jpeg"),
+            os.path.join(args.frames_dir, "*.png"),
+        ]
         img_paths = []
         for pat in patterns:
-            img_paths.extend(glob.glob(pat))
-        img_paths.sort()
+            img_paths.extend(glob.glob(pat, recursive=True))
+        img_paths = sorted(list(set(img_paths)))
         if len(img_paths) >= 4:
             print(f"📂 [Dữ Liệu] Tìm thấy {len(img_paths)} ảnh trong thư mục: {args.frames_dir}")
             sel_paths = img_paths[:args.num_frames]
@@ -400,6 +408,7 @@ def main():
                     im = Image.open(p).convert("RGB").resize((448, 256))
                     arr = torch.from_numpy(np.array(im)).permute(2, 0, 1).float() / 255.0
                     loaded.append(arr)
+                    frames_loaded_paths.append(p)
                 except Exception:
                     pass
             if len(loaded) >= 4:
@@ -444,7 +453,20 @@ def main():
         max_display=min(4, frames.shape[0]),
     )
 
-    # 5. Lưu mô hình SceneBasis
+    # 5. Lưu ảnh nền pseudo-backgrounds phục vụ giai đoạn huấn luyện downstream
+    pseudo_bg_dir = os.path.join(args.save_dir, "pseudo_bgs")
+    os.makedirs(pseudo_bg_dir, exist_ok=True)
+    num_to_export = frames.shape[0]
+    for idx in range(num_to_export):
+        bg_np = (B_all[idx].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1) * 255.0).astype(np.uint8)
+        if frames_loaded_paths and idx < len(frames_loaded_paths):
+            fname = os.path.basename(frames_loaded_paths[idx])
+        else:
+            fname = f"bg_{idx:04d}.png"
+        Image.fromarray(bg_np).save(os.path.join(pseudo_bg_dir, fname))
+    print(f"🖼️ [Pseudo-Backgrounds] Đã xuất {num_to_export} ảnh nền tách được tại: {pseudo_bg_dir}")
+
+    # 6. Lưu mô hình SceneBasis
     ckpt_path = os.path.join(args.save_dir, "scene_basis.pth")
     torch.save({
         "state_dict": basis.state_dict(),

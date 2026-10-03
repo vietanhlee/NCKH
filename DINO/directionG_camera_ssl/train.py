@@ -9,8 +9,14 @@
 import argparse
 import copy
 import os
+import random
 import sys
 import time
+from collections import defaultdict
+from typing import Dict, List, Optional, Tuple, Union
+
+import numpy as np
+from PIL import Image
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 if sys.platform == "win32":
@@ -95,6 +101,79 @@ class DINOHead(nn.Module):
                 return self.last_layer(feat)
 
 
+class TrafficCameraDataset(Dataset):
+    """
+    Dataset nạp ảnh giao thông thực tế từ thư mục (ví dụ: 'output').
+    Tự động nhóm các frame theo camera để phục vụ cơ chế ghép vùng tĩnh SRS (Static Region Swap).
+    """
+    def __init__(self, data_dir: str, img_size: Tuple[int, int] = (256, 448)):
+        super().__init__()
+        self.data_dir = data_dir
+        self.H, self.W = img_size
+
+        # 1. Tìm tất cả ảnh hợp lệ
+        valid_exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+        all_files = []
+        for root, _, files in os.walk(data_dir):
+            for f in files:
+                if f.lower().endswith(valid_exts):
+                    all_files.append(os.path.join(root, f))
+        all_files.sort()
+
+        if not all_files:
+            raise ValueError(f"Không tìm thấy ảnh hợp lệ (.jpg, .png) trong thư mục '{data_dir}'!")
+
+        # 2. Phân nhóm theo camera (dựa trên tên thư mục con hoặc tiền tố tên file)
+        self.cam_to_files = defaultdict(list)
+        for path in all_files:
+            rel = os.path.relpath(path, data_dir)
+            parts = rel.split(os.sep)
+            if len(parts) > 1:
+                cam_key = parts[0]
+            else:
+                fname = os.path.splitext(parts[0])[0]
+                tokens = fname.split("_")
+                cam_key = tokens[0] if len(tokens) > 1 else "cam_0"
+            self.cam_to_files[cam_key].append(path)
+
+        self.cam_keys = sorted(list(self.cam_to_files.keys()))
+        self.cam_to_id = {k: i for i, k in enumerate(self.cam_keys)}
+        self.num_cams = len(self.cam_keys)
+
+        # Danh sách phẳng các mẫu
+        self.samples = []
+        for cam_key, files in self.cam_to_files.items():
+            cid = self.cam_to_id[cam_key]
+            for f in files:
+                self.samples.append((f, cid, cam_key))
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def _load_img(self, path: str) -> torch.Tensor:
+        with Image.open(path) as img:
+            img = img.convert("RGB")
+            if img.size != (self.W, self.H):
+                img = img.resize((self.W, self.H), Image.BILINEAR)
+            arr = np.array(img, dtype=np.float32) / 255.0
+            return torch.from_numpy(arr).permute(2, 0, 1)
+
+    def __getitem__(self, idx: int) -> Dict[str, Union[torch.Tensor, int]]:
+        path1, cid, cam_key = self.samples[idx]
+        x1 = self._load_img(path1)
+
+        # Chọn frame x2 cùng camera (khác thời điểm) để phục vụ SRS
+        cam_files = self.cam_to_files[cam_key]
+        if len(cam_files) > 1:
+            candidates = [p for p in cam_files if p != path1]
+            path2 = random.choice(candidates) if candidates else path1
+        else:
+            path2 = path1
+
+        x2 = self._load_img(path2)
+        return {"x1": x1, "x2": x2, "cid": cid}
+
+
 class SyntheticTrafficDataset(Dataset):
     """Dataset giả lập phục vụ chạy demo hoặc khi chưa liên kết dataset thực tế."""
     def __init__(self, num_samples: int = 200, num_cams: int = 4):
@@ -115,6 +194,7 @@ class SyntheticTrafficDataset(Dataset):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Tự Giám Sát DINOv3 Hướng G (TAM + AGM + SRS)")
+    parser.add_argument("--data_dir", "--origin_dir", dest="data_dir", type=str, default=None, help="Thư mục ảnh giao thông thực tế (ví dụ: output)")
     parser.add_argument("--model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
     parser.add_argument("--batch_size", type=int, default=4, help="Kích thước batch")
     parser.add_argument("--epochs", type=int, default=5, help="Số epochs huấn luyện")
@@ -194,9 +274,21 @@ def train_direction_g():
     )
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
 
-    # 5. Dataloader giả lập mẫu
-    dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
+    # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
+    if args.data_dir and os.path.isdir(args.data_dir):
+        try:
+            dataset = TrafficCameraDataset(data_dir=args.data_dir, img_size=(256, 448))
+            print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
+            if dataset.num_cams > pos_stats.num_cams:
+                pos_stats.ensure_cam_capacity(dataset.num_cams)
+        except Exception as e_data:
+            print(f"⚠️ [Data] Không thể nạp ảnh từ '{args.data_dir}': {e_data}. Chuyển sang SyntheticTrafficDataset...")
+            dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
+    else:
+        print("💡 [Data] Chưa truyền --data_dir -> Sử dụng SyntheticTrafficDataset mô phỏng...")
+        dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
+
+    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=False)
 
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
     step = 0
