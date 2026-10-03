@@ -8,6 +8,7 @@
 
 import argparse
 import copy
+import json
 import os
 import random
 import sys
@@ -15,6 +16,9 @@ import time
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple, Union
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
@@ -174,6 +178,99 @@ class TrafficCameraDataset(Dataset):
         return {"x1": x1, "x2": x2, "cid": cid}
 
 
+def save_direction_g_visuals(
+    x_orig: torch.Tensor,
+    pi: torch.Tensor,
+    mask: torch.Tensor,
+    x_srs: torch.Tensor,
+    patch_features: Optional[torch.Tensor],
+    save_path: str,
+    epoch: int = 1,
+):
+    """
+    Xuất biểu đồ 5 cột trực quan hóa quá trình học Tự Giám Sát Hướng G:
+      Cột 1: Ảnh gốc frame x1
+      Cột 2: Bản đồ tiền cảnh bất thường TAM pi (Heatmap)
+      Cột 3: Mặt nạ che phân tầng AGM (Mask)
+      Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS
+      Cột 5: Bản đồ đặc trưng DINOv3 PCA Feature Map (RGB)
+    """
+    B = min(4, x_orig.shape[0])
+    fig, axes = plt.subplots(B, 5, figsize=(18, 3.2 * B), dpi=150)
+    if B == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    for b in range(B):
+        # 1. Ảnh gốc
+        img_np = x_orig[b].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
+        axes[b, 0].imshow(img_np)
+        axes[b, 0].set_title(f"Mẫu #{b+1} — Ảnh Gốc $x_1$", fontsize=10, fontweight="bold")
+        axes[b, 0].axis("off")
+
+        # 2. TAM Heatmap (16, 28) nội suy lên kích thước ảnh
+        pi_np = pi[b].detach().cpu().numpy()
+        axes[b, 1].imshow(img_np)
+        axes[b, 1].imshow(pi_np, cmap="jet", alpha=0.6, extent=[0, img_np.shape[1], img_np.shape[0], 0])
+        axes[b, 1].set_title("Bản Đồ Tiền Cảnh TAM $\\pi$", fontsize=10, fontweight="bold")
+        axes[b, 1].axis("off")
+
+        # 3. AGM Mask (448 patches -> 16x28)
+        mask_np = mask[b].view(16, 28).detach().cpu().numpy().astype(float)
+        axes[b, 2].imshow(mask_np, cmap="gray", vmin=0, vmax=1)
+        axes[b, 2].set_title("Mặt Nạ Che Phân Tầng AGM", fontsize=10, fontweight="bold")
+        axes[b, 2].axis("off")
+
+        # 4. SRS Swapped Image
+        srs_np = x_srs[b].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
+        axes[b, 3].imshow(srs_np)
+        axes[b, 3].set_title("Ảnh Ghép Nền Tĩnh SRS", fontsize=10, fontweight="bold")
+        axes[b, 3].axis("off")
+
+        # 5. DINOv3 PCA Feature Map
+        if patch_features is not None:
+            feats = patch_features[b].detach().cpu().numpy()  # (448, D)
+            feats_norm = feats - feats.mean(axis=0)
+            u, s, vt = np.linalg.svd(feats_norm, full_matrices=False)
+            pca3 = u[:, :3]  # (448, 3)
+            pca3 = (pca3 - pca3.min(axis=0)) / (pca3.max(axis=0) - pca3.min(axis=0) + 1e-6)
+            pca_img = pca3.reshape(16, 28, 3)
+            axes[b, 4].imshow(pca_img)
+            axes[b, 4].set_title("DINOv3 PCA Representation", fontsize=10, fontweight="bold")
+        else:
+            axes[b, 4].axis("off")
+        axes[b, 4].axis("off")
+
+    plt.suptitle(f"Tiến Trình Huấn Luyện SSL Hướng G — Epoch {epoch}", fontsize=14, fontweight="bold", y=1.01)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path, dpi=180, bbox_inches="tight")
+    plt.close()
+    print(f"🖼️ [Trực Quan Hóa] Đã xuất biểu đồ học biểu diễn tại: {save_path}")
+
+
+def save_loss_curves(history: Dict[str, List[float]], save_path: str):
+    """Vẽ và lưu biểu đồ đường cong hàm mất mát theo từng epoch."""
+    if not history["total"]:
+        return
+    epochs = list(range(1, len(history["total"]) + 1))
+    plt.figure(figsize=(10, 5), dpi=150)
+    plt.plot(epochs, history["total"], "b-o", linewidth=2, label="Total Loss")
+    plt.plot(epochs, history["dino"], "g--s", linewidth=1.5, label="DINO CLS Loss")
+    plt.plot(epochs, history["ibot"], "m-.^", linewidth=1.5, label="iBOT Patch Loss")
+    plt.plot(epochs, history["koleo"], "r:x", linewidth=1.5, label="KoLeo Entropy Loss")
+
+    plt.title("Diễn Biến Hàm Mất Mát Huấn Luyện SSL DINOv3 (Hướng G)", fontsize=13, fontweight="bold")
+    plt.xlabel("Epoch", fontsize=11)
+    plt.ylabel("Loss Value", fontsize=11)
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path, dpi=180, bbox_inches="tight")
+    plt.close()
+    print(f"📊 [Đồ Thị] Đã lưu đường cong tổn thất tại: {save_path}")
+
+
 class SyntheticTrafficDataset(Dataset):
     """Dataset giả lập phục vụ chạy demo hoặc khi chưa liên kết dataset thực tế."""
     def __init__(self, num_samples: int = 200, num_cams: int = 4):
@@ -293,105 +390,172 @@ def train_direction_g():
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
     step = 0
     start_time = time.time()
+    history = {"total": [], "dino": [], "ibot": [], "koleo": []}
+    last_visual_data = None
 
-    for epoch in range(args.epochs):
-        student_backbone.train()
-        student_dino_head.train()
-        student_ibot_head.train()
+    try:
+        for epoch in range(args.epochs):
+            student_backbone.train()
+            student_dino_head.train()
+            student_ibot_head.train()
 
-        for batch in loader:
-            x1 = batch["x1"].to(device)
-            x2 = batch["x2"].to(device)
-            cids = batch["cid"].to(device)
-            B = x1.shape[0]
+            epoch_losses = []
+            epoch_dino_losses = []
+            epoch_ibot_losses = []
+            epoch_koleo_losses = []
 
-            # Bước A: Trích xuất đặc trưng đóng băng cho TAM
-            with torch.no_grad():
-                u1 = frozen_extractor(x1)  # (B, 448, 64)
-                u2 = frozen_extractor(x2)  # (B, 448, 64)
-                pos_stats.update(cids, u1)
-                a1, valid1 = pos_stats.atypicality(cids, u1)
-                a2, valid2 = pos_stats.atypicality(cids, u2)
+            for batch in loader:
+                x1 = batch["x1"].to(device)
+                x2 = batch["x2"].to(device)
+                cids = batch["cid"].to(device)
+                B = x1.shape[0]
 
-                calibrator.push(a1, valid1)
-                if step % 20 == 0:
-                    calibrator.refit()
-                pi1 = calibrator.posterior(a1).view(B, 16, 28)
-                pi2 = calibrator.posterior(a2).view(B, 16, 28)
+                # Bước A: Trích xuất đặc trưng đóng băng cho TAM
+                with torch.no_grad():
+                    u1 = frozen_extractor(x1)  # (B, 448, 64)
+                    u2 = frozen_extractor(x2)  # (B, 448, 64)
+                    pos_stats.update(cids, u1)
+                    a1, valid1 = pos_stats.atypicality(cids, u1)
+                    a2, valid2 = pos_stats.atypicality(cids, u2)
 
-            # Bước B: Áp dụng SRS với xác suất p_srs
-            x_student = x1.clone()
-            for b in range(B):
-                if torch.rand(1).item() < args.p_srs:
-                    x_swapped, _ = static_region_swap(
-                        x1[b], x2[b], pi1[b], pi2[b],
-                        ratio=0.6, feather=4,
+                    calibrator.push(a1, valid1)
+                    if step % 20 == 0:
+                        calibrator.refit()
+                    pi1 = calibrator.posterior(a1).view(B, 16, 28)
+                    pi2 = calibrator.posterior(a2).view(B, 16, 28)
+
+                # Bước B: Áp dụng SRS với xác suất p_srs
+                x_student = x1.clone()
+                for b in range(B):
+                    if torch.rand(1).item() < args.p_srs:
+                        x_swapped, _ = static_region_swap(
+                            x1[b], x2[b], pi1[b], pi2[b],
+                            ratio=0.6, feather=4,
+                        )
+                        x_student[b] = x_swapped
+
+                # Bước C: Áp dụng AGM sinh mask che phân tầng
+                masks = []
+                for b in range(B):
+                    m_b = agm_sample(
+                        pi=pi1[b].view(-1),
+                        ratio=0.35,
+                        phi=args.phi,
+                        q_max=args.q_max,
                     )
-                    x_student[b] = x_swapped
+                    masks.append(m_b)
+                mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
 
-            # Bước C: Áp dụng AGM sinh mask che phân tầng
-            masks = []
-            for b in range(B):
-                m_b = agm_sample(
-                    pi=pi1[b].view(-1),
-                    ratio=0.35,
-                    phi=args.phi,
-                    q_max=args.q_max,
+                # Bước D: Forward Student & Teacher
+                target_H = 16 * patch_size
+                target_W = 28 * patch_size
+                if x1.shape[-2] != target_H or x1.shape[-1] != target_W:
+                    x1_vit = F.interpolate(x1, size=(target_H, target_W), mode="bilinear", align_corners=False)
+                    x_student_vit = F.interpolate(x_student, size=(target_H, target_W), mode="bilinear", align_corners=False)
+                else:
+                    x1_vit = x1
+                    x_student_vit = x_student
+
+                # Teacher nhận ảnh gốc x1_vit không che
+                with torch.no_grad():
+                    t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
+                    t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
+                    t_dino_logits = teacher_dino_head(t_cls)
+                    t_ibot_logits = teacher_ibot_head(t_patches)
+
+                # Student nhận ảnh x_student_vit (đã qua SRS)
+                s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
+                s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
+                s_dino_logits = student_dino_head(s_cls)
+                s_ibot_logits = student_ibot_head(s_patches)
+
+                # Bước E: Tính tổn thất Loss
+                loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
+                loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
+                loss_koleo = koleo_loss_fn(s_cls)
+                total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
+
+                # Bước F: Tối ưu Gradient
+                optimizer.zero_grad()
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
+                optimizer.step()
+
+                # Bước G: Cập nhật EMA Teacher (momentum 0.996)
+                momentum = 0.996
+                with torch.no_grad():
+                    for param_s, param_t in zip(student_backbone.parameters(), teacher_backbone.parameters()):
+                        param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
+                    for param_s, param_t in zip(student_dino_head.parameters(), teacher_dino_head.parameters()):
+                        param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
+                    for param_s, param_t in zip(student_ibot_head.parameters(), teacher_ibot_head.parameters()):
+                        param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
+
+                epoch_losses.append(total_loss.item())
+                epoch_dino_losses.append(loss_dino.item())
+                epoch_ibot_losses.append(loss_ibot.item())
+                epoch_koleo_losses.append(loss_koleo.item())
+
+                # Lưu mẫu dữ liệu visual của batch cuối
+                last_visual_data = {
+                    "x_orig": x1.detach().cpu(),
+                    "pi": pi1.detach().cpu(),
+                    "mask": mask_batch.detach().cpu(),
+                    "x_srs": x_student.detach().cpu(),
+                    "patch_features": s_patches.detach().cpu(),
+                }
+
+                step += 1
+                if step % 2 == 0 or step == 1:
+                    print(f"   [Epoch {epoch+1}/{args.epochs} | Step {step}] Loss: {total_loss.item():.4f} "
+                          f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f})")
+
+            # Kết thúc epoch: Tính giá trị loss trung bình
+            avg_tot = float(np.mean(epoch_losses)) if epoch_losses else 0.0
+            avg_dino = float(np.mean(epoch_dino_losses)) if epoch_dino_losses else 0.0
+            avg_ibot = float(np.mean(epoch_ibot_losses)) if epoch_ibot_losses else 0.0
+            avg_koleo = float(np.mean(epoch_koleo_losses)) if epoch_koleo_losses else 0.0
+
+            history["total"].append(avg_tot)
+            history["dino"].append(avg_dino)
+            history["ibot"].append(avg_ibot)
+            history["koleo"].append(avg_koleo)
+
+            print(f"🌟 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] Loss TB: {avg_tot:.4f} "
+                  f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f})")
+
+            # Cập nhật hình ảnh trực quan hóa và đồ thị sau mỗi epoch (hoặc epoch cuối)
+            if last_visual_data is not None:
+                vis_save_path = os.path.join(args.output_dir, "directionG_progress.png")
+                save_direction_g_visuals(
+                    x_orig=last_visual_data["x_orig"],
+                    pi=last_visual_data["pi"],
+                    mask=last_visual_data["mask"],
+                    x_srs=last_visual_data["x_srs"],
+                    patch_features=last_visual_data["patch_features"],
+                    save_path=vis_save_path,
+                    epoch=epoch + 1,
                 )
-                masks.append(m_b)
-            mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
 
-            # Bước D: Forward Student & Teacher
-            target_H = 16 * patch_size
-            target_W = 28 * patch_size
-            if x1.shape[-2] != target_H or x1.shape[-1] != target_W:
-                x1_vit = F.interpolate(x1, size=(target_H, target_W), mode="bilinear", align_corners=False)
-                x_student_vit = F.interpolate(x_student, size=(target_H, target_W), mode="bilinear", align_corners=False)
-            else:
-                x1_vit = x1
-                x_student_vit = x_student
+    except KeyboardInterrupt:
+        print("\n⚠️ [Dừng Sớm] Nhận tín hiệu ngắt (Ctrl+C). Đang tiến hành lưu khẩn cấp trạng thái và hình ảnh...")
 
-            # Teacher nhận ảnh gốc x1_vit không che
-            with torch.no_grad():
-                t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
-                t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
-                t_dino_logits = teacher_dino_head(t_cls)
-                t_ibot_logits = teacher_ibot_head(t_patches)
+    # 6. Xuất đồ thị hàm mất mát Loss Curve
+    loss_curve_path = os.path.join(args.output_dir, "loss_curve.png")
+    save_loss_curves(history, loss_curve_path)
 
-            # Student nhận ảnh x_student_vit (đã qua SRS)
-            s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
-            s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
-            s_dino_logits = student_dino_head(s_cls)
-            s_ibot_logits = student_ibot_head(s_patches)
+    # 7. Xuất file tóm tắt chỉ số Metrics JSON
+    metrics_path = os.path.join(args.output_dir, "training_metrics.json")
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "history": history,
+            "final_epoch": len(history["total"]),
+            "args": vars(args),
+            "total_time_seconds": time.time() - start_time,
+        }, f, indent=2, ensure_ascii=False)
+    print(f"📈 [Metrics] Đã lưu thông số chi tiết tại: {metrics_path}")
 
-            # Bước E: Tính tổn thất Loss
-            loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
-            loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
-            loss_koleo = koleo_loss_fn(s_cls)
-            total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
-
-            # Bước F: Tối ưu Gradient
-            optimizer.zero_grad()
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
-            optimizer.step()
-
-            # Bước G: Cập nhật EMA Teacher (momentum 0.996)
-            momentum = 0.996
-            with torch.no_grad():
-                for param_s, param_t in zip(student_backbone.parameters(), teacher_backbone.parameters()):
-                    param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-                for param_s, param_t in zip(student_dino_head.parameters(), teacher_dino_head.parameters()):
-                    param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-                for param_s, param_t in zip(student_ibot_head.parameters(), teacher_ibot_head.parameters()):
-                    param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-
-            step += 1
-            if step % 2 == 0 or step == 1:
-                print(f"   [Epoch {epoch+1}/{args.epochs} | Step {step}] Loss: {total_loss.item():.4f} "
-                      f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f})")
-
-    # 6. Lưu checkpoint toàn diện
+    # 8. Lưu checkpoint toàn diện
     save_path = os.path.join(args.output_dir, "dinov3_directionG_latest.pth")
     torch.save({
         "student_backbone": student_backbone.state_dict(),
@@ -399,10 +563,23 @@ def train_direction_g():
         "student_dino_head": student_dino_head.state_dict(),
         "student_ibot_head": student_ibot_head.state_dict(),
         "pos_stats": pos_stats.state_dict(),
+        "history": history,
         "args": vars(args),
     }, save_path)
-    print(f"💾 [Direction G] Đã lưu thành công checkpoint tại: {save_path}")
-    print(f"⏱️ Tổng thời gian chạy: {time.time() - start_time:.2f}s")
+
+    elapsed_time = time.time() - start_time
+    vis_path = os.path.join(args.output_dir, "directionG_progress.png")
+
+    print("\n" + "=" * 80)
+    print(" 🎉 [HOÀN TẤT HUẤN LUYỆN TỰ GIÁM SÁT HƯỚNG G]")
+    print("=" * 80)
+    print(f" 💾 Checkpoint Weights        : {save_path}")
+    print(f" 🖼️ Ảnh Trực Quan Hóa (Visual): {vis_path}")
+    print(f" 📊 Đồ Thị Hàm Mất Mát (Loss) : {loss_curve_path}")
+    print(f" 📈 Nhật Ký Huấn Luyện (JSON) : {metrics_path}")
+    print(f" ⏱️ Tổng Thời Gian Thực Thi   : {elapsed_time:.2f}s")
+    print("=" * 80 + "\n")
+
     return save_path
 
 
