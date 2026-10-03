@@ -1,4 +1,4 @@
-# BÁO CÁO KHOA HỌC: HỆ SINH THÁI 8 HƯỚNG NGHIÊN CỨU TRỌNG TÂM KHAI THÁC CẶP ẢNH NỀN VÀ CHUỖI ẢNH CAMERA GIAO THÔNG TP.HCM
+# BÁO CÁO KHOA HỌC: HỆ SINH THÁI CÁC HƯỚNG NGHIÊN CỨU DINO TRAFFIC SUITE CHO CAMERA GIAO THÔNG TP.HCM
 
 > **Dự án:** Nghiên cứu và Phát triển Hệ sinh thái Thị giác Máy tính Tự giám sát cho Giám sát Giao thông Đô thị Thông minh  
 > **Địa bàn thực nghiệm:** Mạng lưới camera giao thông TP.HCM (>600 camera CCTV, mật độ xe máy chiếm ưu thế)  
@@ -12,10 +12,10 @@
 1. [Bối cảnh Khoa học và Triết lý Nền tảng](#1-bối-cảnh-khoa-học-và-triết-lý-nền-tảng)
 2. [Tầng Tiện ích Dùng chung (Common Utilities)](#2-tầng-tiện-ích-dùng-chung-common-utilities)
 3. [Bài báo 1 (Hướng 1): BG-Guided DINO — Continual SSL Pre-training](#3-bài-báo-1-hướng-1-bg-guided-dino--continual-ssl-pre-training)
-4. [Bài báo 2 (Hướng 2 / II.A): Noise-Aware Traffic Scene Decomposition](#4-bài-báo-2-hướng-2--iia-noise-aware-traffic-scene-decomposition)
+4. [Bài báo 2 (Hướng 2): Noise-Aware Traffic Scene Decomposition](#4-bài-báo-2-hướng-2--iia-noise-aware-traffic-scene-decomposition)
 5. [Bài báo 3 (Hướng 3): Foreground-Enhanced Vehicle Counting](#5-bài-báo-3-hướng-3-foreground-enhanced-vehicle-counting)
 6. [Bài báo 4 (Hướng 4): Spatio-Temporal Road Space Occupancy Estimation](#6-bài-báo-4-hướng-4-spatio-temporal-road-space-occupancy-estimation)
-7. [Bài báo 5 (Hướng 5): Context-Aware Weak Supervision Label Aggregation](#7-bài-báo-5-hướng-5-context-aware-weak-supervision-label-aggregation)
+7. [Bài báo Hướng G: Vehicle-Centric SSL Pre-training Không Cần Nền](#7-bài-báo-hướng-g-vehicle-centric-ssl-pre-training-không-cần-nền)
 8. [Bài báo 6 (Hướng 6): Persistence-Aware Anomaly & Camera Fault Detection](#8-bài-báo-6-hướng-6-persistence-aware-anomaly--camera-fault-detection)
 9. [Bài báo 7 (Hướng 7): City-Scale Congestion Forecasting on Camera Graph](#9-bài-báo-7-hướng-7-city-scale-congestion-forecasting-on-camera-graph)
 10. [Bài báo 8 (Hướng 8): Background-Conditioned Generalization to Unseen Cameras](#10-bài-báo-8-hướng-8-background-conditioned-generalization-to-unseen-cameras)
@@ -58,12 +58,12 @@ Mọi mô hình phải:
 |   +---------------------------------------------------------------------------------------+   |
 |                                              |                                                |
 |       +--------------------------------------+---------------------------------------+        |
-|       |                                                                              |        |
-|   [CORE DIRECTIONS (H1 - H4)]                                    [EXPANDED CITY-SCALE DIRECTIONS (H5 - H8)]
-|   1. H1: BG-Guided DINO (DINO + iBOT SSL)                        5. H5: Context-Aware Weak Supervision   
-|   2. H2: Noise-Aware Scene Decomposition                         6. H6: Persistence Anomaly Detection    
-|   3. H3: Foreground-Enhanced Counting                            7. H7: Spatio-Temporal Graph WaveNet    
-|   4. H4: Road-Space Occupancy & LoS                              8. H8: Background-Conditioned Adaptation
+|   [NHÓM SSL & DECOMPOSITION (H1, HG, H2)]                        [NHÓM QUY MÔ THÀNH PHỐ & DOWNSTREAM (H3, H4, H6..)]
+|   1. H1: BG-Guided DINO (DINO + iBOT SSL)                        4. H3: Foreground-Enhanced Counting     
+|   2. HG: Vehicle-Centric SSL (TAM + AGM + SRS)                   5. H4: Road-Space Occupancy & LoS       
+|   3. H2: Scene Decomposition (Robust IRLS Basis)                 6. H6: Persistence Anomaly Detection    
+|                                                                  7. H7: Spatio-Temporal Graph WaveNet    
+|                                                                  8. H8: Background-Conditioned Adaptation
 |                                                                                               |
 +-----------------------------------------------------------------------------------------------+
 ```
@@ -163,22 +163,22 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 7. BÀI BÁO 5 (HƯỚNG 5): CONTEXT-AWARE WEAK SUPERVISION LABEL AGGREGATION
+## 7. BÀI BÁO HƯỚNG G: VEHICLE-CENTRIC SSL PRE-TRAINING KHÔNG CẦN ẢNH NỀN
 
-> **Tên bài báo:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*  
-> **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / Information Fusion / EAAI  
-> **Mã nguồn:** `direction5_weak_supervision/`
+> **Tên bài báo:** *Vehicle-Centric Self-Supervised Learning from Sparse Traffic Surveillance Cameras without Background Ground-Truth*  
+> **Target:** IEEE Transactions on Pattern Analysis and Machine Intelligence (T-PAMI) / CVPR / ECCV  
+> **Mã nguồn:** `directionG_camera_ssl/`
 
 ### 7.1. Đóng góp Khoa học
-1. **Không gian Ngữ cảnh 54 tổ hợp (`context.py`):** Phân chia chi tiết theo Ánh sáng (Ngày / Đêm IR), Khung giờ (Cao điểm / Thấp điểm / Đêm), Loại đường, và Tình trạng Camera.
-2. **Context-Aware Markov Label Model (`label_model.py`):**
-   Gộp 5 nguồn nhãn yếu (Detector Box, Background Difference, Temporal Differencing, Historical Peak, Multimodal VLM) có tính đến:
-   - Động lực liên tục của trạng thái ùn tắc qua ma trận chuyển trạng thái Markov $\mathbf{A} \in \mathbb{R}^{4 \times 4}$.
-   - Ma trận nhầm lẫn phát xạ phụ thuộc ngữ cảnh $\pi_j^{(c)}(\lambda_j \mid y)$.
-   - Cơ chế Abstain ($\lambda = -1$) khi nguồn không chắc chắn.
-   - Thuật toán **Expectation-Maximization (EM) với Forward-Backward trong không gian Log-Sum-Exp** chống tràn số.
-3. **End Model DINOv3 + Causal GRU (`end_model.py`):**
-   Huấn luyện bằng Soft Cross-Entropy trên nhãn mềm đã gộp. Lúc triển khai thực tế, mô hình **tự chủ 100% từ ảnh camera mà không cần bất kỳ LF hay background nào**.
+1. **Bản đồ Khác thường Không-Thời gian TAM (Temporal Atypicality Map):**
+   - Đóng băng DINOv3 ViT kết hợp chiếu PCA 64 chiều, xây dựng lớp `PositionStats` lưu $K=4$ cụm trạng thái tĩnh trực tuyến cho từng patch.
+   - Dùng GMM Calibrator ước lượng xác suất tiền cảnh $\pi_t(p) \in [0, 1]$ từ chuỗi ảnh thưa rời rạc mà không cần video liên tục hay ảnh nền có sẵn.
+2. **Che phân tầng AGM (Atypicality-Guided Masking):**
+   - Tập trung 50% ngân sách che ($\phi = 0.5$) vào các patch có $\pi_t$ cao để ép Student ViT học suy luận ngữ cảnh xe cộ, khống chế trần $q_{\max} = 0.6$ tránh mất hoàn toàn đặc trưng nhận dạng.
+3. **Hoán đổi vùng tĩnh SRS (Static Region Swap):**
+   - Lấy mẫu 2 frame khác ngày cùng camera; hoán đổi các khối nền tĩnh ($\pi < 0.2$) giữa 2 khung hình để phá vỡ tương quan giả tạo giữa góc nền và xe cộ (triệt tiêu hiện tượng Background Shortcut).
+4. **Hàm mất mát chưng cất tự thân:**
+   - Kết hợp DINO [CLS] Distillation + iBOT Patch MIM có trọng số $\pi$ + KoLeo Regularizer chống sụp đổ biểu diễn.
 
 ---
 
@@ -247,7 +247,7 @@ Tuyệt đối không phân chia ngẫu nhiên (Random Split) ở mức frame:
 | **Hướng 2 (H2)** | 1 Frame | Prior mềm có độ bất định | $\sigma$ học được + Nền khác ngày | $M_\alpha, F, \hat{B}, \sigma$ | IEEE TIP / PR |
 | **Hướng 3 (H3)** | Frame + $\Delta$ | Ghép kênh / Tiêm đặc trưng | $\Delta$-Dropout 30% + Zero-init | Số lượng xe (Counting) | IEEE T-ITS / EAAI |
 | **Hướng 4 (H4)** | Chuỗi Frame + $\Delta$ | Đo $\rho_{\text{proxy}}$ trên Road Mask | Giới hạn strictly Road Mask | $\rho(t)$ & Mức LoS | TR-Part C / T-ITS |
-| **Hướng 5 (H5)** | Chuỗi Frame | Một trong 5 nguồn nhãn yếu | Cổng $r_i$ trong LF2 + Markov | Nhãn mềm $q(y)$ & End Model | Inf. Fusion / T-ITS |
+| **Hướng G (HG)** | 1 Frame | Không cần nền; dùng TAM + AGM + SRS | Khớp GMM online + Hoán đổi SRS đa ngày | Biểu diễn ViT hướng xe cộ | IEEE T-PAMI / CVPR |
 | **Hướng 6 (H6)** | Chuỗi Frame | Mẫu đối sánh phụ trong Bank | Gộp đặc trưng Median $W$ frames | Cảnh báo Sự cố / Lỗi Camera | TR-Part C / PR |
 | **Hướng 7 (H7)** | Đồ thị Camera | Không phụ thuộc | Missing Mask + Node Dropout | Dự báo 15', 30', 60' & Onset | TR-Part C / TKDE |
 | **Hướng 8 (H8)** | Frame + Background | Vector mô tả cảnh toàn cục $z$ | Trimmed Mean/Std + Bg-Dropout | Thích ứng Camera chưa thấy | Pattern Rec. / EAAI |

@@ -873,68 +873,6 @@ Dùng chung tập đánh giá với A.14 (audit-test, bán tổng hợp, frame t
 
 **Gộp paper:** đề xuất **một paper Hướng 2** với A2 là phương pháp chính (không cần ảnh nền) và II.A là biến thể "khi có prior" — câu chuyện liền mạch: từ prior nhiễu đến không cần prior, kèm phân tích điểm gãy. **Venue:** IEEE TIP, Pattern Recognition, IEEE TCSVT; IEEE T-ITS nếu nhấn mạnh ứng dụng giao thông.
 
-## II.B. Gộp nhãn yếu đa nguồn cho mức độ ùn tắc
-
-Tên gợi ý: *Context-Aware Weak Supervision for Congestion Recognition in Motorbike-Dominant Traffic*. Đây là hướng an toàn nhất: background chỉ là một nguồn nhãn yếu, mô hình tự học khi nào nên tin nó.
-
-### Bối cảnh
-
-Gán nhãn mức ùn tắc cho 608 camera theo thời gian là quá tốn công. Các nguồn tự động đều có điểm mù riêng: detector COCO bỏ sót xe máy chồng lấn khi đông; background proxy sai ở giờ kẹt và ban đêm; VLM zero-shot không ổn định và hay "đoán bừa"; tín hiệu thay đổi theo thời gian không phân biệt được đường vắng với đường kẹt cứng (cả hai đều ít thay đổi). Điểm mấu chốt: **các nguồn sai ở các điều kiện khác nhau**, nên gộp lại có thể tốt hơn từng nguồn.
-
-### Vấn đề
-
-Gộp nhiều nguồn nhãn mà độ tin cậy của mỗi nguồn không biết trước và **thay đổi theo điều kiện** (ngày/đêm, mưa, mật độ). Các mô hình gộp nhãn kinh điển (Dawid–Skene 1979, Snorkel — Ratner et al., VLDB 2017) giả định độ tin cậy cố định.
-
-### Mục tiêu và câu hỏi nghiên cứu
-
-1. RQ1: Mô hình gộp nhãn có điều kiện ngữ cảnh và ràng buộc thời gian có tốt hơn bỏ phiếu đa số và Dawid–Skene thường không?
-2. RQ2: Mô hình cuối huấn luyện bằng nhãn gộp có vượt mọi nguồn riêng lẻ và tiến gần mô hình học có giám sát bằng gold set không?
-3. RQ3: Độ tin cậy học được của từng nguồn theo điều kiện có giải thích được không (ví dụ nguồn background bị giảm trọng số ban đêm)?
-
-### Phương pháp
-
-**Các nguồn nhãn (labeling functions — LF).** Mỗi LF trả về 1 trong 4 mức (thông thoáng / trung bình / chậm / kẹt) hoặc "bỏ qua" (abstain).
-
-| LF | Cách tính | Khi nào bỏ qua |
-| --- | --- | --- |
-| LF1 Detector | YOLOv8/RT-DETR (COCO) đếm car/motorcycle/bus/truck trong road mask, chia diện tích → chia mức theo ngưỡng chỉnh trên dev set | Độ tin cậy trung bình của box thấp |
-| LF2 Background | ρ\_proxy (mục I.5) → chia mức | Độ tin cậy vùng tĩnh r\_i thấp (mục I.2) |
-| LF3 VLM | Qwen2-VL hoặc InternVL 2–8B, prompt mô tả 4 mức + lựa chọn "không xác định" | VLM chọn "không xác định" hoặc 2 prompt khác nhau cho kết quả khác nhau |
-| LF4 Thời gian | Độ tương đồng giữa frame liên tiếp trên road mask (cosine feature DINO) kết hợp mức có xe: tĩnh + nhiều xe → kẹt | Khoảng cách giữa 2 frame quá lớn |
-| LF5 Lịch sử | Mức phổ biến nhất của cùng camera, cùng slot ở các ngày khác | Ít dữ liệu lịch sử |
-
-**Biến ngữ cảnh c\_t:** ngày/đêm (từ giờ và độ sáng), mưa (VLM hoặc độ mờ ảnh), loại đường, mức mật độ thô.
-
-**Mô hình gộp nhãn có ngữ cảnh và thời gian.** Mức ùn tắc thật y\_t là biến ẩn, thay đổi chậm theo thời gian (chuỗi Markov). Mỗi LF j có ma trận nhầm lẫn phụ thuộc ngữ cảnh π\_j^(c):
-
-```latex
-P(y_{1:T}, \lambda_{1:T}) = P(y_1)\prod_{t=2}^{T} A(y_t \mid y_{t-1}) \prod_{t=1}^{T}\prod_{j} \pi_j^{(c_t)}\big(\lambda_{j,t} \mid y_t\big)
-```
-
-Ước lượng bằng EM (forward–backward cho phần thời gian). Để tránh quá nhiều tham số, π\_j^(c) có thể tham số hóa bằng hồi quy logistic theo c thay vì một ma trận cho mỗi tổ hợp ngữ cảnh. Đầu ra: phân phối mềm P(y\_t | tất cả LF).
-
-**Mô hình cuối.** DINOv3 + đầu thời gian nhân quả (GRU một chiều), huấn luyện bằng nhãn mềm (cross-entropy với nhãn kỳ vọng). Mô hình cuối không cần LF lúc suy luận và có thể vượt LF ở những frame mà mọi LF bỏ qua.
-
-### Thí nghiệm
-
-**Gold set:** dùng chung với H4 (800–1000 frame, 2–3 người gán, báo cáo κ). Chia 200 frame làm dev (chỉnh ngưỡng LF1, LF2), phần còn lại làm test; chia theo cụm camera (IV.3).
-
-**Baseline:** từng LF riêng lẻ; bỏ phiếu đa số; Dawid–Skene không ngữ cảnh; Snorkel label model; học có giám sát trên gold set (cross-validation, cận trên); VLM lớn hơn dùng một mình.
-
-**Metric:** macro-F1, quadratic weighted kappa (vì nhãn có thứ tự), báo cáo theo từng điều kiện (ngày/đêm, mưa, mật độ).
-
-**Ablation:** bỏ từng LF (leave-one-out); bỏ ngữ cảnh; bỏ chuỗi Markov; kích thước VLM.
-
-**Hình phân tích chính:** độ chính xác học được của từng LF theo điều kiện. Nếu LF2 (background) bị giảm mạnh ban đêm và giờ kẹt, đó chính là bằng chứng định lượng về độ tin cậy của background — đúng điều bạn đang thiếu.
-
-### Rủi ro và cách giảm
-
-- Chi phí VLM: lấy mẫu con khoảng 50–100k frame, chạy model 2–8B tại chỗ.
-- LF1 và LF2 cùng sai khi đông (tương quan) → thêm tham số phụ thuộc giữa 2 LF hoặc nêu rõ giới hạn.
-- LF4 phụ thuộc tần suất lấy mẫu → kiểm tra khoảng cách frame thực tế trước.
-
-**Venue:** Information Fusion, EAAI, Expert Systems with Applications, IEEE T-ITS. **Công sức:** 3–4 tháng; phần lớn thời gian là gán gold set và chạy VLM.
-
 ## II.C. Phát hiện sự cố bất thường kéo dài (ngập nước, xe chết máy, vật cản)
 
 Tên gợi ý: *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*. Không cần background chính xác vì so sánh ở không gian feature và theo phân phối nhiều ngày.
@@ -1556,7 +1494,7 @@ DINO/
 ├── direction2_scene_decomposition/  # Hướng A (H2 nâng cấp)
 ├── direction3_foreground_enhanced_counting/  # H3
 ├── direction4_temporal_density/  # H4
-├── directionB_weak_supervision/
+├── directionG_camera_ssl/           # Hướng G (SSL không cần nền)
 ├── directionC_anomaly/
 ├── directionD_forecasting/
 ├── directionE_bg_conditioning/
@@ -1989,53 +1927,6 @@ Thiết kế khoa học nằm ở A.6–A.14; mục này chỉ nêu những gì 
 3. **Ghost cài sẵn trên train:** sau 1 epoch pha 2, AUROC của σ với ghost cài sẵn trên chính camera train phải > 0.6; nếu không, kiểm tra lại pipeline trước khi tiêu thêm compute.
 
 **Nghiệm thu:** (1) `build_groups` không bao giờ đưa 2 frame cùng ngày vào một mẫu; (2) mọi frame trong nhóm cùng mode và cam\_epoch; (3) `refine.py` chỉ đọc audit-val để quyết định dừng — assert đường dẫn; (4) `synth.py` chỉ dùng crop xe từ camera train và nền từ camera test, lưu kèm seed.
-
-### IV.9. Spec Hướng B — gộp nhãn yếu đa nguồn
-
-**File trong `directionB_weak_supervision/`:** `lfs/lf_detector.py`, `lfs/lf_background.py`, `lfs/lf_vlm.py`, `lfs/lf_temporal.py`, `lfs/lf_history.py`, `context.py`, `label_model.py`, `end_model.py`, `evaluate.py`, `baselines.py`.
-
-**Định dạng đầu ra chung của LF:** `data/lf/{lf_name}.parquet` với cột `frame_id`, `label` (−1 = bỏ qua, 0–3), `raw` (giá trị thô, ví dụ số xe). Ngưỡng của mọi LF chỉnh trên **gold-dev** (200 frame thuộc cụm train), không chạm gold-test.
-
-**Đặc tả từng LF:**
-
-| LF | Cài đặt | Bỏ qua khi |
-| --- | --- | --- |
-| LF1 detector | YOLOv8x hoặc RT-DETR-L (COCO), lớp car, motorcycle, bus, truck, bicycle; conf ≥ 0.25; ảnh vào 1280 px (xe máy xa rất nhỏ). raw = số box có tâm trong road mask / (diện tích road / 10⁴ px). Ngưỡng 3 mức bằng `fit_los_thresholds` (IV.7) | Conf trung bình < 0.35; hoặc ảnh IR và 0 box |
-| LF2 background | raw = ρ\_proxy (IV.7), cùng τ | r\_i < 0.5; thiếu background; `align_ok = False` |
-| LF3 VLM | Qwen2-VL-7B-Instruct (thử thêm bản 2B), chạy bằng vLLM, temperature 0, 2 prompt khác nhau (prompt B đảo thứ tự mô tả các mức) | Trả "unknown"; 2 prompt không khớp; JSON lỗi |
-| LF4 thời gian | Cần frame trước trong 1.5 × median khoảng lấy mẫu. s = cosine trung bình giữa token patch DINO (cache) của hai frame, chỉ trên patch thuộc road mask. Mức 3 nếu s ≥ θ\_still và raw(LF1) ≥ median; mức 0 nếu raw(LF1) ≤ phân vị 20 | Các trường hợp còn lại; không có frame trước |
-| LF5 lịch sử | Đa số phiếu của LF1–LF4 cho cùng camera, cùng slot, cùng loại ngày (thường/cuối tuần) ở các ngày **khác** thuộc giai đoạn train | Ít hơn 5 ngày có dữ liệu |
-
-LF4 dùng raw của LF1, nên hai LF này phụ thuộc nhau — ghi rõ trong paper và thử biến thể LF4 không dùng LF1 (chỉ dùng s) trong ablation.
-
-**Prompt LF3** (tiếng Anh vì VLM ổn định hơn; nội dung bám đúng hướng dẫn gán nhãn IV.5):
-
-```text
-You are a traffic analyst. Look at this CCTV image of an urban road in Vietnam,
-where most vehicles are motorbikes. Classify the congestion on the ROAD SURFACE:
-0 = free flow: large gaps between vehicles
-1 = moderate: dense but clear gaps, vehicles moving
-2 = slow: vehicles close together, small gaps
-3 = jammed: road almost fully covered, vehicles not moving
-If the image is too dark, blurry or blocked to judge, answer "unknown".
-Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
-```
-
-**Ngữ cảnh c\_t (`context.py`):** biến phân loại ghép từ: `is_ir` (2), nhóm giờ (đêm / thấp điểm / cao điểm: 3), `road_type` (3), mức đông thô theo phân vị của raw(LF1) (3) → tối đa 54 tổ hợp. Mưa: thêm nếu có nguồn đáng tin (câu hỏi VLM riêng "is the road wet?"), nếu không thì bỏ.
-
-**Mô hình gộp nhãn (`label_model.py`):**
-
-- Biến ẩn y\_t ∈ {0,1,2,3}, chuỗi theo (camera, ngày), cắt chuỗi khi khoảng trống > 1.5 × median.
-- P(λ\_j = l | y, c) = softmax\_l(W\_j\[y, l\] + U\_j\[y, l, :\] · onehot(c)); LF bỏ qua thì không đóng góp vào likelihood.
-- Khởi tạo: P(y) đều; ma trận chuyển A có đường chéo 0.9; W\_j sao cho độ chính xác 0.7; U\_j = 0. Đặt nhãn khởi tạo bằng bỏ phiếu đa số để cố định hoán vị nhãn.
-- EM: bước E bằng forward–backward; bước M cập nhật A từ kỳ vọng chuyển trạng thái, W và U bằng logistic regression có trọng số (L-BFGS, phạt L2 = 1e-2). Dừng khi log-likelihood tăng < 1e-4 hoặc sau 100 vòng.
-- Đầu ra: `data/weak/labels.parquet` với `frame_id`, `q0..q3`.
-
-**Baseline gộp nhãn:** bỏ phiếu đa số; Dawid–Skene (thư viện `crowd-kit`); Snorkel `LabelModel`; mô hình của ta bỏ ngữ cảnh; bỏ chuỗi Markov.
-
-**Mô hình cuối (`end_model.py`):** cùng kiến trúc H4 bước 4 (embedding cache → GRU một chiều), loss cross-entropy mềm −Σ q(y) log p(y). Tùy chọn (config): bỏ frame có max q < 0.4.
-
-**Nghiệm thu:** (1) **test mô phỏng** — sinh dữ liệu có chuỗi Markov thật, 5 LF với độ chính xác biết trước thay đổi theo ngữ cảnh (ví dụ LF2 đúng 0.85 ban ngày, 0.4 ban đêm); mô hình gộp phải ước lượng lại độ chính xác trong ±0.05 và có accuracy cao hơn bỏ phiếu đa số; (2) không LF nào đọc gold-test; (3) chạy lại cùng seed cho ra đúng cùng nhãn mềm.
 
 ### IV.10. Spec Hướng C — phát hiện sự cố
 

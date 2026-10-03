@@ -42,13 +42,12 @@ DINO/
 │   ├── train.py                            # Huấn luyện đa nhiệm không-thời gian với AMP & Multi-GPU
 │   ├── eval.py                             # Đánh giá độc lập mô hình, trích xuất MAE và ma trận LoS
 │   └── README.md
-│
-├── direction5_weak_supervision/            # [HƯỚNG 5] Context-Aware Markov Weak Supervision Label Aggregation
-│   ├── lfs/                                # 5 nguồn nhãn yếu (Detector Box, Background Diff, Temporal, History, VLM)
-│   ├── context.py                          # Bộ trích xuất 54 tổ hợp ngữ cảnh giao thông
-│   ├── label_model.py                      # Context-Aware Markov Label Model (Forward-Backward Log-Sum-Exp EM)
-│   ├── end_model.py                        # DINOv3 + Causal GRU End Model (Tự chủ 100% không cần background)
-│   ├── evaluate.py                         # So sánh với Majority Vote, Dawid-Skene trên Gold Set
+├── directionG_camera_ssl/                  # [HƯỚNG G] Vehicle-Centric SSL Pretraining (TAM + AGM + SRS)
+│   ├── tam.py                              # Temporal Atypicality Map & PositionStats (K=4)
+│   ├── masking.py                          # Atypicality-Guided Masking (AGM)
+│   ├── srs.py                              # Static Region Swap giữa 2 frame khác ngày
+│   ├── losses.py                           # DINO [CLS] + iBOT [Patch] + KoLeo Loss
+│   ├── train.py                            # Huấn luyện SSL tự giám sát không cần ảnh nền
 │   └── README.md
 │
 ├── direction6_anomaly_detection/           # [HƯỚNG 6] Persistence-Aware Anomaly & Camera Fault Disentanglement
@@ -85,10 +84,10 @@ DINO/
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
 | **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, CVPR |
-| **H2** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh tự giám sát với Laplace $\sigma$ Prior + Nền dùng chung đa ngày | IEEE TIP, Pattern Recognition |
+| **HG** | **Camera-Invariant SSL (Không Cần Nền)** | `directionG_camera_ssl/` | TAM (Temporal Atypicality Map) + AGM Masking + Hoán đổi vùng tĩnh SRS đa ngày | IEEE T-PAMI, CVPR |
+| **H2** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh tự giám sát 2 giai đoạn (Robust IRLS Scene Basis + TrafficDecompositionNet) | IEEE TIP, Pattern Recognition |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Zero-init & $\Delta$-Dropout | IEEE T-ITS, EAAI |
 | **H4** | **Road-Space Occupancy & Causal Onset** | `direction4_temporal_density/` | Định lượng chiếm dụng strictly trên Road Mask + Causal GRU cảnh báo sớm kẹt xe | TR-Part C, IEEE T-ITS |
-| **H5** | **Context-Aware Weak Supervision** | `direction5_weak_supervision/` | Gộp nhãn yếu đa nguồn (5 LFs, 54 ngữ cảnh, Markov EM) & End Model độc lập | IEEE T-ITS, Information Fusion |
 | **H6** | **Persistence Anomaly Detection** | `direction6_anomaly_detection/` | Temporal Feature Median Pooling + Phân tách lỗi camera vs sự cố đường | TR-Part C, Pattern Recognition |
 | **H7** | **City-Scale Traffic Forecasting** | `direction7_traffic_forecasting/` | Mạng nơ-ron đồ thị ST-GraphWaveNet thích ứng với mất tín hiệu camera (Node Dropout) | TR-Part C, IEEE TKDE |
 | **H8** | **Background Conditioning & Adaptation**| `direction8_bg_conditioning/` | Thích ứng camera chưa thấy qua Trimmed Descriptor $z$ và Zero-init FiLM Modulation | Pattern Recognition, EAAI |
