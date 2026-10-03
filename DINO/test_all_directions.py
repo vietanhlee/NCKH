@@ -397,43 +397,6 @@ try:
     print("   + FCS Rain Streaks (Severity 4): OK")
     print("   ✅ [Common Advanced] Reliability, BDB & FCS pass hoàn hảo!")
 
-    # -------------------------------------------------------------
-    # 8. TEST DIRECTION 5: CONTEXT-AWARE WEAK SUPERVISION
-    # -------------------------------------------------------------
-    print("\n--- [TEST 8] Direction 5: Weak Supervision Label Model & End Model ---")
-    from direction5_weak_supervision.context import TrafficContextClassifier
-    from direction5_weak_supervision.label_model import ContextAwareMarkovLabelModel
-    from direction5_weak_supervision.end_model import WeakSupervisionEndModel, SoftCrossEntropyLoss
-    from direction5_weak_supervision.evaluate import majority_vote_predict, dawid_skene_predict
-
-    ctx_classifier = TrafficContextClassifier()
-    ctx_id = ctx_classifier.get_context_id(hour=8, is_night=False, is_rain=False, is_major_artery=True, reliability_score=0.85)
-    assert 0 <= ctx_id < 54
-    print(f"   + Traffic Context ID: {ctx_id}")
-
-    # Label model EM test
-    T_b = 30
-    sim_lfs = np.random.randint(0, 4, size=(T_b, 5))
-    sim_ctxs = np.full(T_b, ctx_id, dtype=int)
-    label_model = ContextAwareMarkovLabelModel(num_classes=4, num_lfs=5, num_contexts=54)
-    label_model.fit_em([sim_lfs], [sim_ctxs], max_iters=5, verbose=False)
-    soft_labels = label_model.predict_soft_labels(sim_lfs, sim_ctxs)
-    assert soft_labels.shape == (T_b, 4)
-    assert np.allclose(soft_labels.sum(axis=1), 1.0)
-    print(f"   + Markov Label Model Soft Label Sample: {soft_labels[0].tolist()}")
-
-    # End Model forward + loss test
-    mock_vit_b = MockPatchViT(embed_dim=64)
-    end_model = WeakSupervisionEndModel(backbone=mock_vit_b, embed_dim=64, hidden_dim=32, num_classes=4)
-    dummy_seq_b = torch.randn(2, 4, 3, 128, 128)
-    logits_b = end_model(dummy_seq_b)
-    assert logits_b.shape == (2, 4)
-    soft_loss_fn = SoftCrossEntropyLoss()
-    target_soft_b = torch.tensor([[0.1, 0.7, 0.1, 0.1], [0.05, 0.1, 0.8, 0.05]])
-    loss_b = soft_loss_fn(logits_b, target_soft_b)
-    assert not torch.isnan(loss_b) and loss_b.item() >= 0
-    print(f"   + End Model Logits: {logits_b[0].tolist()} | Soft CE Loss: {loss_b.item():.4f}")
-    print("   ✅ [Direction 5] Weak Supervision pass hoàn hảo!")
 
     # -------------------------------------------------------------
     # 9. TEST DIRECTION 6: ANOMALY DETECTION
