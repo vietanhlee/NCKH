@@ -35,6 +35,10 @@ class FrozenExtractor(nn.Module):
         pca_dim: int = 64,
         weights_path: Optional[str] = None,
         device: Union[str, torch.device] = "cpu",
+        hf_token: Optional[str] = None,
+        backbone: Optional[nn.Module] = None,
+        embed_dim: Optional[int] = None,
+        patch_size: Optional[int] = None,
     ):
         super().__init__()
         self.pca_dim = pca_dim
@@ -42,12 +46,18 @@ class FrozenExtractor(nn.Module):
         self.model_name = model_name
 
         # 1. Nạp backbone DINOv3 và đóng băng hoàn toàn tham số
-        self.backbone, self.embed_dim, self.patch_size = get_dino_backbone(
-            model_name=model_name,
-            pretrained=True,
-            weights_path=weights_path,
-            device=self.device,
-        )
+        if backbone is not None:
+            self.backbone = backbone
+            self.embed_dim = embed_dim or getattr(backbone, "embed_dim", 384)
+            self.patch_size = patch_size or (16 if ("16" in model_name.lower() or "dinov3" in model_name.lower()) else 14)
+        else:
+            self.backbone, self.embed_dim, self.patch_size = get_dino_backbone(
+                model_name=model_name,
+                pretrained=True,
+                weights_path=weights_path,
+                device=self.device,
+                hf_token=hf_token,
+            )
         self.backbone.eval()
         for p in self.backbone.parameters():
             p.requires_grad = False
@@ -86,10 +96,12 @@ class FrozenExtractor(nn.Module):
             u: (B, P, pca_dim) đã chuẩn hóa L2, P = (H/patch_size) * (W/patch_size).
         """
         B, C, H, W = x.shape
-        # Chuẩn hóa kích thước nếu khác 256x448
-        if H != 256 or W != 448:
-            x = F.interpolate(x, size=(256, 448), mode="bilinear", align_corners=False)
-            H, W = 256, 448
+        # Chuẩn hóa kích thước lưới patch mục tiêu 16 x 28 = 448 patches
+        target_H = 16 * self.patch_size
+        target_W = 28 * self.patch_size
+        if H != target_H or W != target_W:
+            x = F.interpolate(x, size=(target_H, target_W), mode="bilinear", align_corners=False)
+            H, W = target_H, target_W
 
         x = x.to(self.device)
         cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)

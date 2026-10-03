@@ -133,6 +133,7 @@ def train_fg_counting(args):
         pretrained=True,
         weights_path=args.weights,
         device=args.device,
+        hf_token=args.hf_token,
     )
     base_model = DINOv3FGCountingModel(
         backbone=backbone,

@@ -77,11 +77,11 @@ class DINOHead(nn.Module):
         shape = x.shape
         if len(shape) == 3:  # (B, N, D)
             B, N, D = shape
-            x = x.view(B * N, D)
+            x = x.reshape(B * N, D)
             feat = self.mlp(x)
             feat = F.normalize(feat, dim=-1, p=2)
             out = self.last_layer(feat)
-            return out.view(B, N, -1)
+            return out.reshape(B, N, -1)
         else:  # (B, D)
             feat = self.mlp(x)
             feat = F.normalize(feat, dim=-1, p=2)
@@ -118,8 +118,13 @@ def parse_args():
     parser.add_argument("--p_srs", type=float, default=0.5, help="Xác suất áp dụng SRS")
     parser.add_argument("--out_dim", type=int, default=4096, help="Số prototype DINO/iBOT head")
     parser.add_argument("--output_dir", type=str, default="checkpoints/directionG", help="Thư mục lưu weights")
+    parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (.pth / .safetensors)")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
-    return parser.parse_args()
+    parsed = parser.parse_args()
+    if parsed.hf_token:
+        os.environ["HF_TOKEN"] = parsed.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
+    return parsed
 
 
 def train_direction_g():
@@ -133,6 +138,7 @@ def train_direction_g():
     student_backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.model_name,
         pretrained=True,
+        weights_path=args.weights,
         device=device,
         hf_token=args.hf_token,
     )
@@ -144,18 +150,28 @@ def train_direction_g():
 
     # 2. Đầu chiếu DINO và iBOT Heads
     student_dino_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_dino_head = copy.deepcopy(student_dino_head)
+    teacher_dino_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
+    teacher_dino_head.load_state_dict(student_dino_head.state_dict())
     for p in teacher_dino_head.parameters():
         p.requires_grad = False
 
     student_ibot_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_ibot_head = copy.deepcopy(student_ibot_head)
+    teacher_ibot_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
+    teacher_ibot_head.load_state_dict(student_ibot_head.state_dict())
     for p in teacher_ibot_head.parameters():
         p.requires_grad = False
 
     # 3. Module FrozenExtractor & PositionStats cho TAM
     print("🔍 [TAM] Khởi tạo FrozenExtractor & PositionStats...")
-    frozen_extractor = FrozenExtractor(model_name=args.model_name, pca_dim=64, device=device)
+    frozen_extractor = FrozenExtractor(
+        model_name=args.model_name,
+        pca_dim=64,
+        device=device,
+        hf_token=args.hf_token,
+        backbone=student_backbone,
+        embed_dim=embed_dim,
+        patch_size=patch_size,
+    )
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
     calibrator = GMMCalibrator()
 
@@ -227,22 +243,31 @@ def train_direction_g():
             mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
 
             # Bước D: Forward Student & Teacher
-            # Teacher nhận ảnh gốc x1 không che
+            target_H = 16 * patch_size
+            target_W = 28 * patch_size
+            if x1.shape[-2] != target_H or x1.shape[-1] != target_W:
+                x1_vit = F.interpolate(x1, size=(target_H, target_W), mode="bilinear", align_corners=False)
+                x_student_vit = F.interpolate(x_student, size=(target_H, target_W), mode="bilinear", align_corners=False)
+            else:
+                x1_vit = x1
+                x_student_vit = x_student
+
+            # Teacher nhận ảnh gốc x1_vit không che
             with torch.no_grad():
-                t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1, patch_size=patch_size)
-                t_patches = t_patches_spatial.view(B, 448, embed_dim)
+                t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
+                t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
                 t_dino_logits = teacher_dino_head(t_cls)
                 t_ibot_logits = teacher_ibot_head(t_patches)
 
-            # Student nhận ảnh x_student (đã qua SRS)
-            s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student, patch_size=patch_size)
-            s_patches = s_patches_spatial.view(B, 448, embed_dim)
+            # Student nhận ảnh x_student_vit (đã qua SRS)
+            s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
+            s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
             s_dino_logits = student_dino_head(s_cls)
             s_ibot_logits = student_ibot_head(s_patches)
 
             # Bước E: Tính tổn thất Loss
             loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
-            loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.view(B, 448))
+            loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
             loss_koleo = koleo_loss_fn(s_cls)
             total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
 

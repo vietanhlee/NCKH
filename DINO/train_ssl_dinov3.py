@@ -28,7 +28,7 @@ import random
 import sys
 import time
 import warnings
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional, Union
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -332,7 +332,9 @@ def _load_backbone_state(model: nn.Module, state: Dict[str, torch.Tensor], sourc
 def build_backbone(
     model_name: str = "dinov3_vits16",
     pretrained: bool = True,
-    weights_path: str = None
+    weights_path: str = None,
+    hf_token: Optional[str] = None,
+    **kwargs,
 ) -> Tuple[nn.Module, int]:
     """
     Initializes Vision Backbone with support for Meta's DINOv3 & DINOv2.
@@ -374,8 +376,8 @@ def build_backbone(
                 if weights_path is None or not os.path.exists(weights_path):
                     try:
                         from common.backbone_loader import resolve_dino_weights, load_env_credentials
-                        hf_token = load_env_credentials()
-                        resolved = resolve_dino_weights(model_name=hub_name, weights_path=weights_path, hf_token=hf_token)
+                        token_to_use = hf_token or load_env_credentials() or os.environ.get("HF_TOKEN") or ""
+                        resolved = resolve_dino_weights(model_name=hub_name, weights_path=weights_path, hf_token=token_to_use)
                         if resolved and os.path.exists(resolved):
                             weights_path = resolved
                     except Exception:

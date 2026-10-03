@@ -115,6 +115,8 @@ def train_decomposition(args):
         model_name=args.backbone,
         pretrained=True,
         device=args.device,
+        weights_path=args.weights,
+        hf_token=args.hf_token,
     )
     base_model = TrafficDecompositionNet(
         backbone=backbone,

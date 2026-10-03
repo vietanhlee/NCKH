@@ -219,6 +219,8 @@ def get_dino_backbone(
     pretrained: bool = True,
     weights_path: Optional[str] = None,
     device: Union[str, torch.device] = "cpu",
+    hf_token: Optional[str] = None,
+    **kwargs,
 ) -> Tuple[nn.Module, int, int]:
     """
     Tải Foundation Vision Backbone chuẩn Meta AI với cơ chế nạp trọng số linh hoạt.
@@ -228,19 +230,35 @@ def get_dino_backbone(
         pretrained: Nạp trọng số tiền huấn luyện (True/False).
         weights_path: Đường dẫn checkpoint local (.pth, .safetensors) hoặc HuggingFace repo/file.
         device: Thiết bị tính toán ('cuda', 'cpu').
+        hf_token: HuggingFace access token (nếu repo cần xác thực).
+        **kwargs: Tham số mở rộng (backbone_name, token, ...).
 
     Returns:
         backbone: Mô hình PyTorch nn.Module.
         embed_dim: Số chiều đặc trưng embedding (ví dụ 384 cho ViT-S, 768 cho ViT-B).
         patch_size: Kích thước patch (16 cho DINOv3, 14 cho DINOv2).
     """
+    # Xử lý các alias tương thích ngược
+    if "backbone_name" in kwargs and kwargs["backbone_name"] is not None:
+        model_name = kwargs["backbone_name"]
+    if "token" in kwargs and kwargs["token"] is not None and not hf_token:
+        hf_token = kwargs["token"]
+
     device = torch.device(device)
     patch_size = 16 if ("16" in model_name.lower() or "dinov3" in model_name.lower()) else 14
 
     # 0. Nạp biến môi trường và giải quyết trọng số qua resolve_dino_weights
-    hf_token = load_env_credentials()
+    token_to_use = hf_token or load_env_credentials() or os.environ.get("HF_TOKEN") or ""
+    if token_to_use:
+        os.environ["HF_TOKEN"] = token_to_use
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = token_to_use
+
     if pretrained and (weights_path is None or not os.path.exists(weights_path)):
-        resolved_weights = resolve_dino_weights(model_name=model_name, weights_path=weights_path, hf_token=hf_token)
+        resolved_weights = resolve_dino_weights(
+            model_name=model_name,
+            weights_path=weights_path,
+            hf_token=token_to_use,
+        )
         if resolved_weights and os.path.isfile(resolved_weights):
             weights_path = resolved_weights
 
@@ -255,6 +273,8 @@ def get_dino_backbone(
             model_name=model_name,
             pretrained=pretrained,
             weights_path=weights_path,
+            hf_token=token_to_use,
+            **kwargs,
         )
         backbone = backbone.to(device)
         return backbone, embed_dim, patch_size
@@ -319,6 +339,12 @@ def extract_tokens(
         patch_tokens: (B, H_patches, W_patches, embed_dim)
     """
     B, C, H, W = x.shape
+    if H % patch_size != 0 or W % patch_size != 0:
+        target_h = max(patch_size, (H // patch_size) * patch_size)
+        target_w = max(patch_size, (W // patch_size) * patch_size)
+        x = F.interpolate(x, size=(target_h, target_w), mode="bilinear", align_corners=False)
+        H, W = target_h, target_w
+
     h_patches = H // patch_size
     w_patches = W // patch_size
 

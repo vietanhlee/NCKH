@@ -80,6 +80,7 @@ def train_bg_guided_dino(args):
         pretrained=True,
         weights_path=args.weights,
         device=args.device,
+        hf_token=args.hf_token,
     )
 
     base_model = BGGuidedDINOModel(

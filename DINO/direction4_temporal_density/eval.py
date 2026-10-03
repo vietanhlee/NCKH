@@ -86,7 +86,7 @@ def evaluate_temporal_model(args):
     )
 
     # 2. Khởi tạo mô hình & nạp checkpoint
-    backbone_vit = get_dino_backbone(backbone_name=args.backbone, pretrained=False)
+    backbone_vit, _, _ = get_dino_backbone(model_name=args.backbone, pretrained=False, device=device)
     model = SpatioTemporalDensityNet(backbone=backbone_vit, freeze_backbone=True)
     model.to(device)
 
