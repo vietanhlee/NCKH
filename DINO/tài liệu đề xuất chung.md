@@ -109,7 +109,7 @@ Loại "chèn ghost" là quan trọng nhất vì nó mô phỏng đúng lỗi h�
 
 ## I.2. Cải thiện Hướng 1 — BG-Guided DINO
 
-Ý tưởng FAM dùng background ở dạng mềm (xác suất che) nên hợp với nguyên tắc ở mục 0. Tuy nhiên có 4 lỗi kỹ thuật cần sửa trước khi viết paper.
+Cập nhật: H1 đã được thay thế bởi Hướng G (II.G), không cần ảnh nền; FAM-Δ dưới đây chỉ còn là baseline B3 của G. Ý tưởng FAM dùng background ở dạng mềm (xác suất che) nên hợp với nguyên tắc ở mục 0. Tuy nhiên có 4 lỗi kỹ thuật cần sửa trước khi viết paper.
 
 ### Lỗi 1: Công thức P\_mask không phải phân phối xác suất
 
@@ -233,7 +233,7 @@ Phạt bình phương ‖ρ̂\_{t+1} − ρ̂\_t‖² làm mờ các thay đổi
 
 ρ\_proxy trực tiếp; chiếm dụng tính từ box của detector (YOLO/RT-DETR) giao road mask; mô hình đếm mật độ kiểu CSRNet; VLM zero-shot cho mức ùn tắc; DINOv3 + head không có Δ-CNN.
 
-## II. Hướng 2 (II.A) nâng cấp — Phân rã cảnh giao thông từ background prior không hoàn hảo
+## II.A. Hướng 2 nâng cấp — Phân rã cảnh giao thông từ background prior không hoàn hảo
 
 Tên gợi ý: *Noise-Aware Traffic Scene Decomposition with Imperfect Background Priors*. Mục này thay thế hoàn toàn H2 gốc. Ý chính: background median không còn là "đáp án" mà mô hình phải chép theo, mà chỉ là **một gợi ý có thể sai**. Mô hình tự học chỗ nào gợi ý sai, rồi dùng chính dữ liệu nhiều ngày để tạo ra background tốt hơn.
 
@@ -555,7 +555,325 @@ Nếu baseline hai giai đoạn (detector + LaMa) thắng về chất lượng m
 
 **Venue:** IEEE TIP, Pattern Recognition, IEEE TCSVT, IEEE T-ITS.
 
-## II. Hướng 5 (II.B): Gộp nhãn yếu đa nguồn cho mức độ ùn tắc
+## II.A2. Hướng 2 phiên bản không cần ảnh nền — phân rã cảnh tự học từ chuỗi ảnh
+
+Tên gợi ý: *Background-Free Traffic Scene Decomposition from Sparse Fixed-Camera Image Streams*. II.A vẫn cần ảnh nền median (dù chỉ làm prior mềm). II.A2 bỏ hẳn: nền của mỗi camera được **học ra** từ chính chuỗi ảnh nhiều ngày, coi phương tiện là phần "ngoại lai" không lặp lại. Nếu A2 thắng A ở cổng quyết định (A2.9), A2 trở thành phương pháp chính của paper Hướng 2, còn A là biến thể dùng khi có sẵn prior.
+
+### A2.1. Bối cảnh và rà soát code hiện tại
+
+**Vì sao bỏ được ảnh nền.** Với camera cố định, nền của frame t là cùng một cảnh tĩnh, chỉ khác ánh sáng, bóng đổ, độ ướt. Các biến đổi này có **ít bậc tự do** — có thể mô tả bằng vài hệ số cho mỗi frame. Phương tiện thì khác nhau ở mọi frame. Vì vậy nếu buộc nền phải nằm trong một không gian ít chiều dành riêng cho camera, xe sẽ không thể "chui" vào nền. Đây chính là giả định nền tảng của background subtraction dạng tái tạo: các frame nền nằm trên một đa tạp ít chiều — và cũng là cách NeRF-W xử lý ảnh du lịch, với embedding ngoại hình cho ánh sáng và embedding riêng cho vật tạm thời.
+
+**Rà soát README `direction2_scene_decomposition/` hiện tại:**
+
+| # | Điểm trong README | Vấn đề | Sửa trong A2 |
+| --- | --- | --- | --- |
+| 1 | "Dùng ảnh background thật làm **ground-truth** giám sát nhánh nền" (λ\_bg = 1.5) | Median sai đúng ở giờ kẹt; mô hình học luôn cả ghost. Gọi là "ground-truth" sẽ bị reviewer bác | Bỏ hẳn L\_bg; nền học từ chuỗi ảnh (A2.5) |
+| 2 | Gọi là "Unsupervised Road Inpainting" | Đang giám sát bằng ảnh nền tính sẵn → đúng ra là giám sát yếu bằng nhãn giả nhiễu | A2 mới đúng nghĩa không giám sát |
+| 3 | `--img_size 256` (ảnh vuông) | Frame 16:9 bị méo; xe máy ở xa vốn đã nhỏ | 448 × 256, giữ tỷ lệ |
+| 4 | `--freeze_backbone True` | Nhánh nền phải "đoán" mặt đường dưới xe — cần biểu diễn tốt hơn; đóng băng toàn bộ hạn chế điều này | Fine-tune 4 block cuối hoặc LoRA (ablation) |
+| 5 | `--match_strategy route_hourly` ghép 1 frame với 1 ảnh nền | Không khai thác chuỗi nhiều ngày | Sampler theo nhóm: cùng camera, nhiều ngày (A2.7) |
+| 6 | DataParallel, "best model" theo loss huấn luyện | DataParallel chậm; chọn checkpoint theo loss không phản ánh chất lượng tách | DDP; chọn checkpoint theo IoU trên audit-val |
+| 7 | `density_mask.png` | Đây là mask alpha, không phải mật độ | Đổi tên `alpha_mask.png` |
+| 8 | Độ mới ⭐⭐⭐⭐⭐, nhắm CVPR/ECCV/NeurIPS | Đó là hội nghị, không phải tạp chí Q1; đã có Omnimatte, AE-NE và các phương pháp robust PCA học sâu | Định vị lại (A2.2) |
+
+### A2.2. Công trình liên quan và khoảng trống
+
+Tra cứu tháng 10/2026; mục có link đã xác nhận qua trang bài báo hoặc trang chính thức.
+
+| Nhánh | Công trình | Ý chính | Ta học gì / khác gì |
+| --- | --- | --- | --- |
+| Cảnh tĩnh + vật tạm thời + ánh sáng | NeRF-W (Martin-Brualla et al., CVPR 2021) — mô tả qua [khảo sát NeRF](https://arxiv.org/pdf/2501.13104) | Embedding ngoại hình theo từng ảnh cho ánh sáng; embedding riêng cho vật tạm thời | Mượn ý "mã ánh sáng theo frame" — nhưng camera cố định nên không cần 3D |
+|  | [RobustNeRF (Sabour et al., CVPR 2023)](https://arxiv.org/pdf/2302.00833) | Coi vật tạm thời là ngoại lai; huấn luyện như IRLS với trimmed least squares và giả định ngoại lai liền khối trong không gian | Dùng trực tiếp làm loss giai đoạn 1; chính tác giả nêu giới hạn kém hiệu quả thống kê trên dữ liệu sạch |
+|  | [NeRF On-the-go (Ren et al., CVPR 2024)](https://openaccess.thecvf.com/content/CVPR2024/papers/Ren_NeRF_On-the-go_Exploiting_Uncertainty_for_Distractor-free_NeRFs_in_the_Wild_CVPR_2024_paper.pdf) | Dự đoán độ bất định theo pixel để lọc vật tạm thời; ghi nhận NeRF-W, RobustNeRF giảm mạnh khi tỷ lệ che khuất cao | Đúng tình huống giờ kẹt — lý do cần thêm TAM và lấy mẫu nhiều ngày |
+| Nền tái tạo, không giám sát | [AE-NE (WACV 2023)](https://openaccess.thecvf.com/content/WACV2023/papers/Sauvalle_Autoencoder-Based_Background_Reconstruction_and_Foreground_Segmentation_With_Background_Noise_Estimation_WACV_2023_paper.pdf) | Autoencoder học nền như đa tạp ít chiều cho **từng video**; ước lượng nhiễu nền; trọng số bootstrapping | Baseline chính; ta học **một mô hình cho cả thành phố** + chế độ một frame |
+| Robust PCA học sâu | [Deep-unfolded RPCA (Luong et al., EUSIPCO 2020)](https://arxiv.org/pdf/2010.00929); [masked RPCA unfolding (Joukovsky et al.)](https://www.weizmann.ac.il/math/yonina/sites/math.yonina/files/Interpretable_Neural_Networks_for_Video_Separation_Deep_Unfolding_RPCA_With_Foreground_Masking.pdf); CORONA | Mở vòng lặp RPCA thành mạng; bản masked RPCA nhân mask thưa với thành phần hạng thấp thay vì cộng | Cùng giả định hạng thấp + thưa; chủ yếu thử trên video ngắn, dữ liệu tổng hợp |
+| Phân rã lớp từ tập ảnh | [DTI-Sprites (Monnier et al., ICCV 2021)](https://openaccess.thecvf.com/content/ICCV2021/papers/Monnier_Unsupervised_Layered_Image_Decomposition_Into_Object_Prototypes_ICCV_2021_paper.pdf) | Học nguyên mẫu đối tượng và nền như ảnh học được, ghép lớp có che khuất | Ý "nền là tham số học được" — ta học nền riêng cho mỗi camera |
+| Phân rã video thành lớp | Omnimatte (CVPR 2021); [Generative Omnimatte (CVPR 2025)](https://cvpr.thecvf.com/virtual/2025/poster/34367); OmnimatteZero (SIGGRAPH Asia 2025) | Phân rã video thành lớp RGBA; bản 2025 dùng video diffusion và **cần mask đối tượng đầu vào** | Cần video liên tục và mask — không hợp dữ liệu thưa, không nhãn |
+| Phát hiện rồi học | [CutLER (CVPR 2023)](https://openaccess.thecvf.com/content/CVPR2023/papers/Wang_Cut_and_Learn_for_Unsupervised_Object_Detection_and_Instance_Segmentation_CVPR_2023_paper.pdf) | Tạo mask thô không giám sát rồi huấn luyện detector với loss bỏ qua vùng bị sót, tự huấn luyện nhiều vòng | Mượn khuôn "khớp rồi chưng cất" và DropLoss cho giai đoạn 2 |
+
+**Khoảng trống:** chưa thấy công trình nào (trong phạm vi tra cứu) phân rã cảnh giao thông **không cần ảnh nền, không cần video liên tục, không cần mask**, học từ **ảnh chụp thưa nhiều ngày** của hàng trăm camera cố định, đồng thời cho ra mô hình **một frame** dùng được cho camera mới. Tình huống che khuất nặng (giờ kẹt) — điểm yếu đã được ghi nhận của các phương pháp robust — là trọng tâm đánh giá.
+
+### A2.3. Mô hình hóa bài toán và điều kiện định danh
+
+**Mô hình tạo ảnh.** Frame t của camera c:
+
+```latex
+I_t = M_t \odot F_t + (1 - M_t) \odot B_t, \qquad
+B_t = \operatorname{clip}_{[0,1]}\Big( E_{c,0} + \sum_{j=1}^{J} \ell_{t,j}\, E_{c,j} \Big)
+```
+
+- E\_{c,0}: "cảnh tĩnh trung bình" của camera c — một ảnh học được, độ phân giải đầy đủ 256 × 448.
+- E\_{c,1..J}: J ảnh cơ sở mô tả biến đổi của nền (nắng/râm, ướt/khô, bóng cây) — học được, độ phân giải một nửa (128 × 224) rồi nội suy lên, ràng buộc trơn.
+- ℓ\_t ∈ ℝ^J: **mã ánh sáng** của frame t, vài con số (mặc định J = 4).
+- M\_t, F\_t: mask và lớp phương tiện.
+
+Ví dụ: camera 125 có E\_0 là mặt đường lúc trưa nắng; E\_1 làm mọi thứ tối đi (chiều tà); E\_2 làm mặt đường sẫm và bóng (ướt mưa); E\_3 là vệt bóng cây di chuyển theo giờ. Frame 17:20 ngày mưa ≈ E\_0 + 0.6·E\_1 + 0.8·E\_2 + 0.3·E\_3. Một chiếc xe máy đỏ ở góc trái **không thể** biểu diễn bằng tổ hợp này, vì nếu E\_j chứa chiếc xe đó thì mọi frame khác dùng E\_j cũng bị "dính" xe.
+
+Dung lượng tham số mỗi (camera, chế độ ngày/IR): khoảng 0.69 triệu số thực (2.8 MB fp32) với J = 4 → toàn hệ thống khoảng 3.3 GB, lưu trên đĩa, nạp theo lô camera.
+
+**Điều kiện để bài toán định danh được** — mỗi điều kiện có một thí nghiệm kiểm chứng:
+
+| # | Điều kiện | Ý nghĩa | Kiểm chứng |
+| --- | --- | --- | --- |
+| C1 | Nền có hạng thấp: J nhỏ, các ảnh cơ sở trơn | Xe (chi tiết cao tần, vị trí thay đổi) không biểu diễn được bằng nền | A2-AB1: quét J ∈ {0, 1, 2, 4, 8}, đo tỷ lệ "xe dính vào nền" |
+| C2 | Tỷ lệ chiếm dụng mỗi pixel o\_c(p) — phần frame mà pixel p bị xe che — nhỏ hơn **điểm gãy** κ của bộ ước lượng robust | Giống median: nếu pixel bị che hơn một nửa thời gian thì median hỏng | A2-M2: đường cong sai số nền theo o\_c(p) trên dữ liệu bán tổng hợp |
+| C3 | Mã ánh sáng ℓ\_t không mang thông tin xe | Nếu ℓ\_t tự do, nó có thể "vẽ" một chiếc xe buýt to vào nền | Ở giai đoạn 2, ℓ\_t tính chỉ từ feature của vùng tĩnh; A2-AB4 kiểm tra rò rỉ |
+| C4 | Camera không dịch chuyển trong một cam\_epoch | Cùng vị trí ảnh = cùng điểm cảnh | Căn chỉnh IV.3; A2-R1 bỏ căn chỉnh |
+
+**Điều kiện C2 là giới hạn cơ bản — phải nói thẳng trong paper.** Ta không chữa được nó, nhưng làm giảm o\_c(p) và đo được nó:
+
+- Lấy mẫu frame trên **mọi giờ của nhiều ngày** (kể cả đêm, sáng sớm) thay vì một slot giờ như median theo slot → o\_c(p) giảm mạnh ở hầu hết pixel.
+- Ước lượng o\_c(p) bằng bản đồ hoạt động A\_c(p) của TAM (G.4) → sinh **bản đồ định danh** cho mỗi camera: pixel có A\_c(p) > κ được đánh dấu "không định danh được", báo cáo riêng, không đưa vào tuyên bố chính.
+- TAM bổ sung cho phần dư màu: một chiếc ô tô **xám** trên mặt đường xám có phần dư pixel nhỏ nên loss robust không loại được, nhưng feature DINO vẫn khác mặt đường → TAM bắt được. Đây là lý do kết hợp hai tín hiệu.
+
+**Hai chế độ sử dụng:**
+
+| Chế độ | Cần gì | Dùng khi |
+| --- | --- | --- |
+| T — khớp theo camera | Lịch sử ảnh **không nhãn** của camera (vài ngày) | Camera đã lắp — đúng thực tế vận hành, vì camera cố định luôn có lịch sử |
+| S — một frame | Chỉ một frame | Camera mới, chưa có lịch sử; hoặc cần chạy nhanh |
+
+### A2.4. Kiến trúc
+
+&#91;embedded content: Quy trình hai giai đoạn của A2 · khớp theo camera rồi chưng cất\]
+
+**Giai đoạn 1 — khớp nền theo camera (không phải mạng nơ-ron sâu).** Tham số của mỗi camera là E\_{c,0..J} và mã ánh sáng ℓ\_t tự do cho từng frame huấn luyện (kiểu GLO, như embedding ngoại hình của NeRF-W). Tối ưu bằng Adam trên GPU, nhiều camera cùng lúc (mỗi camera độc lập, gom thành tensor theo lô). Mask giai đoạn 1 không do mạng dự đoán mà sinh ra từ trọng số robust (A2.5).
+
+**Giai đoạn 2 — mạng một frame** (nâng cấp `TrafficDecompositionNet` hiện có):
+
+| Thành phần | Cấu hình |
+| --- | --- |
+| Encoder | DINOv3 ViT-S/16 hoặc ViT-B/16 (hoặc backbone G nếu đã qua cổng), fine-tune 4 block cuối |
+| Decoder | DPT đa tỉ lệ như A.8, đầu vào 448 × 256 |
+| Đầu M | 1 kênh, sigmoid |
+| Đầu F | 3 kênh, sigmoid |
+| Đầu B̂ | 3 kênh, sigmoid — nền đầy đủ kể cả dưới xe |
+| Đầu σ | 1 kênh — độ bất định của B̂ (đặc biệt vùng bị xe che) |
+| Đầu ℓ̂ | Vector J chiều, tính từ **trung bình token patch tĩnh** (π < 0.2 theo TAM) qua MLP 2 tầng — không nhìn vùng xe, để thỏa C3 |
+
+**Suy luận chế độ T** (camera đã có E\_c): với frame mới, giải ℓ\_t bằng bình phương tối thiểu có trọng số trên pixel tĩnh (J = 4 ẩn, 3–5 vòng IRLS, dưới 5 ms), dựng B\_t, rồi mask = hợp nhất của phần dư robust và đầu M của mạng. **Suy luận chế độ S:** chỉ chạy mạng.
+
+### A2.5. Hàm loss — không có ảnh nền ở bất kỳ đâu
+
+#### Giai đoạn 1: khớp nền robust theo camera
+
+Phần dư theo pixel r\_t(p) = trung bình 3 kênh của |I\_t(p) − B\_t(p)|. Trọng số **inlier** cập nhật lại mỗi bước (IRLS), không qua gradient, theo kiểu RobustNeRF — cắt bỏ phần dư lớn nhất và giả định ngoại lai liền khối:
+
+```latex
+\bar{r}_t = \operatorname{AvgPool}_{8\times 8}(r_t), \qquad
+w^{\text{res}}_t(p) = \operatorname{sigmoid}\!\Big(\frac{Q_t(1-\kappa_t) - \bar{r}_t(p)}{s}\Big), \qquad
+w_t(p) = w^{\text{res}}_t(p)\,\big(1 - \pi_t(p)\big)^{\gamma}
+```
+
+- Q\_t(1 − κ\_t): phân vị của r̄\_t trong frame t. **Tỷ lệ cắt κ\_t thích ứng theo frame**: κ\_t = clip(trung bình π\_t + 0.05, 0.05, 0.6) — frame kẹt xe cắt nhiều hơn frame vắng. RobustNeRF dùng phân vị cố định; thích ứng theo TAM là một điểm mới cần ablation (A2-AB2).
+- π\_t: xác suất tiền cảnh từ TAM (G.4); γ = 1. TAM bắt được xe **cùng màu nền** mà phần dư bỏ sót.
+- s = 0.02 (độ mềm).
+
+```latex
+\mathcal{L}_1 = \frac{\sum_{t,p} w_t(p)\, \rho\big(I_t(p) - B_t(p)\big)}{\sum_{t,p} w_t(p)} + \lambda_{TV}\sum_{j\ge 1}\operatorname{TV}(E_{c,j}) + \lambda_{\ell}\sum_t \lVert \ell_t \rVert^2 + \lambda_{\perp}\sum_{1\le i<j}\cos^2(E_{c,i}, E_{c,j})
+```
+
+ρ là Charbonnier. Mặc định λ\_TV = 0.01, λ\_ℓ = 1e-3, λ\_⊥ = 0.1.
+
+**Khởi tạo không dùng thuật toán trích nền:** E\_{c,0} = trung bình có trọng số (1 − π\_t) của các frame (TAM-weighted mean), E\_{c,j≥1} = nhiễu nhỏ, ℓ\_t = 0. Ablation A2-AB3 so với khởi tạo bằng median và khởi tạo ngẫu nhiên để chứng minh kết quả không phụ thuộc khởi tạo.
+
+**Đầu ra giai đoạn 1** cho mỗi frame huấn luyện: nền B\_t^(1) (đầy đủ cả dưới xe, vì nền là tổ hợp của các ảnh cơ sở), mask M\_t^(1) = 1 − w\_t, độ tin cậy c\_t(p) = |w\_t^res(p) − 0.5| × 2 (gần 0 khi mơ hồ), và bản đồ định danh U\_c(p) = 1 nếu A\_c(p) > 0.5.
+
+#### Giai đoạn 2: chưng cất sang mạng một frame
+
+Î = M ⊙ F + (1 − M) ⊙ B̂.
+
+| Loss | Công thức / cách tính | Vai trò | Trọng số |
+| --- | --- | --- | --- |
+| L\_rec | 0.85·(1 − SSIM)/2 + 0.15·L1 giữa Î và I | Ghép lại đúng ảnh gốc | 1.0 |
+| L\_bgPL | NLL Laplace giữa B̂ và B^(1) với σ học được, chỉ trên pixel có U\_c = 0 | Học nền đầy đủ, kể cả "đoán" mặt đường dưới xe; σ lớn ở chỗ nhãn giả không chắc | 1.0 |
+| L\_maskPL | BCE giữa M và M^(1), nhân c\_t; **DropLoss**: bỏ phạt ở pixel mạng dự đoán là xe trong khi M^(1) = 0 nhưng π\_t > 0.5 | Học mask; cho phép mạng tìm ra xe mà giai đoạn 1 bỏ sót (mượn ý CutLER) | 0.5 |
+| L\_ℓ | ‖ℓ̂ − ℓ\_t‖² | Chưng cất mã ánh sáng | 0.1 |
+| L\_excl, L\_tv, L\_bin | Như A.9 | Mask sạch, không suy biến | 0.5 / 0.01 / 0 → 0.05 |
+
+Không còn L\_shared riêng như ở A: tính nhất quán giữa các ngày đã nằm sẵn trong B^(1), vì mọi frame của camera dùng chung E\_c.
+
+#### Vòng tự cải thiện
+
+Sau giai đoạn 2, thay (1 − π\_t)^γ trong trọng số giai đoạn 1 bằng (1 − M̂\_t) do mạng dự đoán, khớp lại E\_c, sinh nhãn giả mới, huấn luyện tiếp giai đoạn 2. Mặc định 2 vòng; dừng khi IoU trên audit-val tăng dưới 0.5 điểm.
+
+### A2.6. Quy trình hai giai đoạn
+
+```python
+# ---------- Giai đoạn 1: khớp nền theo camera (song song nhiều camera trên GPU) ----------
+for batch_of_cams in chunk(train_and_eval_cameras, size=32):       # mỗi camera độc lập
+    for c in batch_of_cams:
+        frames[c] = sample_frames(c, n=600, hours='all', min_days=10, mode=m)
+        pi[c]     = tam.posterior(c, frames[c])                         # G.4, không gradient
+        E[c]      = init_E(frames[c], pi[c])                           # trung bình có trọng số (1 - pi)
+        ell[c]    = zeros(len(frames[c]), J)
+    for it in range(2000):                                             # Adam, lr 1e-2
+        B = clip(E0 + einsum('tj,jchw->tchw', ell, Ej_up))             # dựng nền mọi frame
+        w = robust_weights(frames, B, pi, kappa_from_pi, pool=8).detach()
+        loss = weighted_charbonnier(frames, B, w) + reg_TV(Ej) + reg_ell(ell) + reg_orth(Ej)
+        loss.backward(); step()
+    save_stage1(c, E[c], ell[c], B, M1=1-w, conf, U=activity_prior(c) > 0.5)
+
+# ---------- Giai đoạn 2: chưng cất sang mạng một frame ----------
+net = DecompNetA2(backbone='dinov3_vitb16', heads=['M','F','B','sigma','ell'])
+for step in range(60_000):
+    x, pl = next(loader)                     # frame + nhãn giả giai đoạn 1 (chỉ camera train)
+    out = net(x)
+    loss = L_rec(out, x) + L_bgPL(out, pl) + 0.5*L_maskPL_dropLoss(out, pl) + 0.1*L_ell(out, pl) + L_mask_regs(out)
+    ...
+
+# ---------- Vòng tự cải thiện (R = 2) ----------
+for r in range(R):
+    M_hat = net.predict_masks(frames)        # thay prior TAM trong trọng số giai đoạn 1
+    rerun_stage1(prior=M_hat); retrain_stage2(warm_start=True)
+    if delta_iou(audit_val) < 0.005: break
+```
+
+**Chi tiết quan trọng:**
+
+| Mục | Quy định | Lý do |
+| --- | --- | --- |
+| Camera nào được khớp giai đoạn 1 | **Mọi camera**, kể cả val/test — vì giai đoạn 1 không dùng nhãn | Chế độ T đánh giá trên camera test là hợp lệ: chỉ dùng ảnh không nhãn của chính camera đó, giống vận hành thực tế |
+| Camera nào dùng nhãn giả để train giai đoạn 2 | **Chỉ camera train** | Chế độ S phải được đánh giá trên camera chưa thấy |
+| Lấy mẫu frame giai đoạn 1 | 600 frame mỗi (camera, mode), rải đều mọi giờ của mode, ít nhất 10 ngày | Giảm tỷ lệ chiếm dụng o\_c(p) (điều kiện C2) |
+| Ngày IR | Khớp riêng (mode `ir`), E riêng | Ảnh hồng ngoại khác hẳn về màu |
+| Camera đổi góc (cam\_epoch mới) | Khớp lại từ đầu cho epoch mới | Điều kiện C4 |
+| Tham số giai đoạn 2 | Như A.11 (AdamW, lr 1e-4 decoder / 2e-5 encoder, bf16, 448 × 256) | Thống nhất với II.A |
+
+**Chi phí ước tính (cần đo, G-E1 tương tự):** giai đoạn 1 khoảng vài phút GPU cho mỗi (camera, mode) với 600 frame × 2.000 vòng ở 256 × 448; khoảng 1.200 cặp (camera, mode) → khoảng vài chục giờ GPU cho toàn hệ thống, chạy một lần mỗi vòng. Giai đoạn 2 tương đương huấn luyện II.A.
+
+### A2.7. Spec cho agent — thay đổi so với code hiện tại
+
+**Sửa các file đang có trong `direction2_scene_decomposition/`:**
+
+| File | Hiện tại | Sửa thành |
+| --- | --- | --- |
+| `dataset.py` | `DecompositionDataset` ghép origin với background theo `route_hourly` | `FrameDataset` đọc `frames.parquet` (IV.2), trả frame 448 × 256 đã căn chỉnh, `cid` (camera, mode, epoch), và nhãn giả giai đoạn 1 nếu có. Giữ class cũ làm baseline H2 gốc, gọi bằng cờ `--legacy_bg` |
+| `models.py` | `TrafficDecompositionNet`: DINOv3 đóng băng, 3 nhánh | Thêm decoder DPT, đầu `sigma` và đầu `ell` (gộp token patch tĩnh); tùy chọn `--unfreeze_last 4` |
+| `losses.py` | Recon + λ\_bg·L1(nền, ảnh nền) + sparsity + TV | Bỏ hạng λ\_bg; thêm `L_bgPL` (Laplace NLL), `L_maskPL` có DropLoss, `L_ell`, `L_excl`, `L_bin`; recon dùng SSIM + L1 |
+| `train.py` | DataParallel, chọn "best" theo loss | DDP (`torchrun`); chọn checkpoint theo IoU trên audit-val; giữ ảnh tiến trình mỗi epoch |
+| `infer.py` | Xuất `clean_road`, `vehicles_only`, `density_mask` | Thêm `--mode S` hoặc `--mode T --stage1_dir`; đổi tên `density_mask` → `alpha_mask`; thêm `uncertainty.png` |
+
+**File mới:**
+
+| File | Nội dung |
+| --- | --- |
+| `scene_fit.py` | Giai đoạn 1: class `SceneBasis`, hàm `robust_weights`, CLI khớp theo lô camera |
+| `stage1_store.py` | Lưu/đọc E\_c (npz) và nhãn giả từng frame (fp16, định dạng zarr hoặc npz theo camera) |
+| `solve_ell.py` | Suy luận chế độ T: giải ℓ\_t bằng bình phương tối thiểu có trọng số trên pixel tĩnh |
+| `selftrain.py` | Điều phối vòng tự cải thiện |
+| `synth_occupancy.py` | Dữ liệu bán tổng hợp với **tỷ lệ chiếm dụng kiểm soát được** cho A2-M2 |
+| `eval_a2.py` | Mọi metric của A2.8 |
+
+**Giao diện chính:**
+
+```python
+class SceneBasis(nn.Module):
+    """Tham số nền cho một lô camera.
+    E0:  (C, 3, 256, 448)        Ej: (C, J, 3, 128, 224)      ell: (C, N, J)"""
+    def forward(self, cam_idx: LongTensor, frame_idx: LongTensor) -> Tensor:   # (n, 3, 256, 448)
+        Ej_up = F.interpolate(self.Ej[cam_idx].flatten(1, 2), size=(256, 448), mode='bilinear')
+        B = self.E0[cam_idx] + einsum('nj,njchw->nchw', self.ell[cam_idx, frame_idx], Ej_up.view(...))
+        return B.clamp(0, 1)
+
+def robust_weights(I, B, pi, pool=8, s=0.02, gamma=1.0) -> Tensor:
+    """r = |I - B| trung bình kênh; r_bar = avg_pool(r, pool, stride=1, padding='same');
+    kappa_t = clamp(pi.mean((1,2)) + 0.05, 0.05, 0.6); q = quantile(r_bar, 1 - kappa_t) theo frame;
+    w = sigmoid((q - r_bar) / s) * (1 - pi) ** gamma. Trả về w (n, H, W), đã detach."""
+
+def solve_ell(I, E0, Ej, w_static, iters=5) -> Tensor:
+    """Chế độ T: min_ell sum_p w(p) |I - E0 - sum_j ell_j Ej|^2, IRLS cập nhật w. Trả về (J,)."""
+```
+
+**Lệnh chạy:**
+
+```bash
+# Giai đoạn 1 cho mọi camera (không nhãn, không ảnh nền)
+python DINO/direction2_scene_decomposition/scene_fit.py \
+    --cameras all --frames_per_cam 600 --J 4 --iters 2000 \
+    --tam_ckpt checkpoints/G/tam_stats.pt --out data/stage1/r0
+
+# Giai đoạn 2 — chỉ dùng nhãn giả của camera train
+torchrun --nproc_per_node=2 DINO/direction2_scene_decomposition/train.py \
+    --config configs/exp/a2_stage2.yaml --stage1_dir data/stage1/r0
+
+# Suy luận
+python DINO/direction2_scene_decomposition/infer.py --mode S --weights ... --input_path output/
+python DINO/direction2_scene_decomposition/infer.py --mode T --stage1_dir data/stage1/r0 --weights ... --input_path output/
+```
+
+**Nghiệm thu (dùng dữ liệu đồ chơi của G.8, thêm nền biết trước):**
+
+1. Nền kết cấu cố định × 3 yếu tố ánh sáng biết trước + hình chữ nhật phủ 20%: giai đoạn 1 khôi phục nền **dưới các hình chữ nhật** với PSNR > 35 dB và mask IoU > 0.9.
+2. Một vị trí bị hình chữ nhật (màu ngẫu nhiên) che trong x% frame, x = 10 → 80: sai số nền thấp khi x nhỏ, tăng vọt quanh x ≈ κ — xác nhận điểm gãy như phân tích C2.
+3. Hình chữ nhật cùng màu nền (lệch ±2%): chỉ dùng phần dư thì bỏ sót; thêm prior TAM thì bắt được.
+4. `solve_ell` khôi phục ℓ biết trước với sai số < 1e-3.
+5. Đầu `ell` không đổi khi thay đổi các patch có π > 0.5 (kiểm tra C3 bằng test).
+6. Dataloader giai đoạn 2 không đọc nhãn giả của camera val/test — assert theo `splits.json`.
+
+### A2.8. Kế hoạch thực nghiệm
+
+Dùng chung tập đánh giá với A.14 (audit-test, bán tổng hợp, frame trống thật, gold chiếm dụng) và quy tắc thống kê IV.5.
+
+**Baseline:** Δ trên median theo slot; Δ trên median mọi giờ; MOG2, KNN (OpenCV); SuBSENSE, PAWCS (BGSLibrary); AE-NE (khớp riêng mỗi camera test); RobustNeRF-style (= giai đoạn 1 với κ cố định, không TAM); detector VN + LaMa; H2 gốc (L1 với ảnh nền, cờ `--legacy_bg`); A (prior median có σ, II.A); deep-unfolded RPCA nếu có code công khai (P2).
+
+| ID | Loại | Câu hỏi | Thiết lập | Metric | Ưu tiên |
+| --- | --- | --- | --- | --- | --- |
+| A2-M1 | M | Tách xe và xóa xe tốt đến đâu? | Mọi baseline; A2 chế độ T và S | IoU, F1, boundary F; PSNR/LPIPS vùng che; KID; tách theo cao điểm, đêm, mưa, mật độ | P0 |
+| A2-M2 | M | Điểm gãy khi pixel bị che nhiều | `synth_occupancy.py`: một vùng bị xe (màu, loại ngẫu nhiên) che trong x% frame, x = 10, 20, … 80 | Sai số nền tại vùng đó theo x, cho: median theo slot, median mọi giờ, AE-NE, giai đoạn 1 không TAM, giai đoạn 1 đầy đủ — **hình chính** | P0 |
+| A2-M3 | M | Chế độ T cần bao nhiêu lịch sử? | Số ngày 1 / 3 / 7 / 14 / 30; số frame 100 / 300 / 600 / 1.200 | IoU, PSNR nền; thời gian khớp | P0 |
+| A2-M4 | M | Một frame có bằng khớp theo camera? | Chế độ S trên camera chưa thấy vs chế độ T trên cùng camera | IoU, PSNR, tốc độ | P0 |
+| A2-M5 | M | Có ích cho ứng dụng? | Chiếm dụng từ M (trong road mask) | MAE so với gold (H4) | P1 |
+| A2-X1 | X | Benchmark chuẩn | CDnet 2014, chế độ T **theo từng video** — cùng thiết lập theo video như AE-NE nên so sánh công bằng hơn A-X1; TAM tính từ DINOv3 đóng băng trên chính video | F-measure theo hạng mục, đặt cạnh số công bố của AE-NE | P0 nếu nhắm TIP/PR, P1 nếu nhắm T-ITS |
+| A2-AB1 | AB | Số ảnh cơ sở | J ∈ {0, 1, 2, 4, 8}; độ phân giải E\_j: đầy đủ / nửa / một phần tư | PSNR nền, tỷ lệ "xe dính vào nền" (phần diện tích xe audit mà B^(1) giống frame hơn giống mặt đường) | P0 |
+| A2-AB2 | AB | Trọng số robust | Charbonnier thuần / κ cố định (RobustNeRF) / κ\_t theo TAM / + hệ số (1 − π) / kích thước pool 1, 4, 8, 16 | IoU, A2-M2 | P0 |
+| A2-AB3 | AB | Khởi tạo | Trung bình có trọng số TAM / median mọi giờ / ngẫu nhiên | IoU, số vòng hội tụ | P1 |
+| A2-AB4 | AB | Rò rỉ xe vào mã ánh sáng | Đầu ℓ̂ gộp từ patch tĩnh / từ mọi patch | Tỷ lệ "xe dính vào nền" trong B̂ | P1 |
+| A2-AB5 | AB | Loss giai đoạn 2 | Bỏ DropLoss / bỏ trọng số tin cậy / bỏ L\_bgPL / bỏ σ | IoU, PSNR | P0 (DropLoss, tin cậy) |
+| A2-AB6 | AB | Vòng tự cải thiện | R = 0, 1, 2, 3 | IoU theo vòng | P1 |
+| A2-AB7 | AB | Cách lấy mẫu giai đoạn 1 | Một slot giờ (như median theo slot) / mọi giờ một ngày / mọi giờ nhiều ngày | IoU, A2-M2 trên dữ liệu thật (sai số theo A\_c(p)) | P0 |
+| A2-AB8 | AB | Backbone giai đoạn 2 | Đóng băng / mở 4 block / LoRA; ViT-S / ViT-B / backbone G | IoU | P1 |
+| A2-AB9 | AB | Kích thước đầu vào | 256 × 256 (README cũ) / 448 × 256 | IoU, IoU riêng xe máy | P1 |
+| A2-R1 | R | Không căn chỉnh camera | Bỏ IV.3 | IoU, PSNR | P1 |
+| A2-R2 | R | Cảnh thay đổi lâu dài | Bán tổng hợp: một vật cố định (rào chắn) xuất hiện từ ngày k; khớp với cửa sổ trượt 7 / 14 ngày | Thời gian để nền cập nhật | P2 |
+| A2-R3 | R | Frame xấu | FCS lên chế độ S | Suy giảm tương đối | P1 |
+| A2-E1 | E | Chi phí | Phút GPU khớp mỗi camera; dung lượng E\_c; ms suy luận chế độ T và S; so với thời gian AE-NE phải huấn luyện mỗi camera | — | P0 |
+| A2-Q1 | Q | Ảnh cơ sở học được là gì? | Hiển thị E\_0 … E\_4 của vài camera — kỳ vọng thấy ánh sáng, mặt đường ướt, bóng cây | Hình — dễ thuyết phục reviewer về tính diễn giải | P0 |
+| A2-Q2 | Q | Kết quả phân rã | Lưới: frame, B̂, M, F ở cao điểm, đêm, mưa; so với median và AE-NE | Hình | P0 |
+| A2-Q3 | Q | Bản đồ định danh và lỗi | U\_c(p) cạnh các trường hợp thất bại (làn luôn kẹt, xe đậu cố định) | Hình | P0 |
+
+**Bảng/hình cho paper:** Bảng 1 = A2-M1; Bảng 2 = A2-X1; Bảng 3 = A2-AB1, AB2, AB5, AB7; Hình chính = đường cong điểm gãy A2-M2; Hình = ảnh cơ sở A2-Q1; Hình = A2-M3 (lịch sử cần thiết).
+
+### A2.9. Rủi ro, cổng quyết định, lịch và venue
+
+**Phụ thuộc:** A2 chỉ cần **thành phần TAM** của Hướng G (G.4, dùng DINOv3 đóng băng) — không cần chờ G huấn luyện xong. TAM qua Cổng 1 của G là đủ để bắt đầu A2.
+
+**Hai cổng quyết định:**
+
+1. **Cổng 1 (khoảng 3 tuần: dữ liệu đồ chơi + 20 camera thật):** giai đoạn 1 trên camera của audit-val phải (a) cho mask IoU ở lát cao điểm không thấp hơn II.A (prior median có σ), và (b) có điểm gãy trong A2-M2 cao hơn median theo slot. Nếu trượt: giữ II.A làm phương pháp chính, và dùng B^(1) của giai đoạn 1 làm **prior tốt hơn** cho II.A thay median — công sức không mất.
+2. **Cổng 2 (sau giai đoạn 2):** chế độ S trên camera chưa thấy kém chế độ T không quá 0.05 IoU. Nếu kém hơn nhiều: paper nhấn mạnh chế độ T (vẫn thực tế vì camera cố định luôn có lịch sử), chế độ S đưa vào phần thảo luận.
+
+**Rủi ro:**
+
+| Rủi ro | Dấu hiệu | Cách giảm |
+| --- | --- | --- |
+| Ánh sáng không "ít chiều": đèn pha ban đêm, bóng tòa nhà quét qua theo giờ | Mask dương giả theo vệt bóng | Khớp E riêng cho các nhóm giờ (ví dụ 4 nhóm); tăng J; ablation A2-AB1 |
+| Pixel bị che quá nhiều (vi phạm C2) | U\_c(p) = 1 trên diện rộng ở vài camera | Báo cáo riêng, không giấu; lấy mẫu thêm giờ đêm |
+| Tự huấn luyện khuếch đại lỗi nhãn giả | IoU trên audit-val giảm qua vòng | Giới hạn R ≤ 3; dừng sớm theo audit-val; giữ DropLoss |
+| Xe cùng màu mặt đường | Mask thiếu xe xám/đen trên nhựa | Hệ số TAM trong trọng số; A2-AB2 chứng minh |
+| Chi phí giai đoạn 1 cho 1.200 cặp (camera, mode) | Vài chục giờ GPU mỗi vòng | Khớp theo lô 32 camera; giảm frame còn 300 nếu A2-M3 cho thấy đủ |
+
+**Lịch khoảng 5 tháng:**
+
+1. **Tháng 1:** `scene_fit.py`, `robust_weights`, `synth_occupancy.py`; nghiệm thu đồ chơi; chạy 20 camera → **Cổng 1**.
+2. **Tháng 2:** giai đoạn 1 cho mọi camera; sửa `dataset.py`, `models.py`, `losses.py`, `train.py` theo A2.7; huấn luyện giai đoạn 2.
+3. **Tháng 3:** A2-M1–M4, **Cổng 2**; baseline (AE-NE theo camera, SuBSENSE, PAWCS, detector VN + LaMa).
+4. **Tháng 4:** ablation P0, CDnet 2014 (A2-X1), vòng tự cải thiện.
+5. **Tháng 5:** hình, bảng, viết.
+
+**Gộp paper:** đề xuất **một paper Hướng 2** với A2 là phương pháp chính (không cần ảnh nền) và II.A là biến thể "khi có prior" — câu chuyện liền mạch: từ prior nhiễu đến không cần prior, kèm phân tích điểm gãy. **Venue:** IEEE TIP, Pattern Recognition, IEEE TCSVT; IEEE T-ITS nếu nhấn mạnh ứng dụng giao thông.
+
+## II.B. Gộp nhãn yếu đa nguồn cho mức độ ùn tắc
 
 Tên gợi ý: *Context-Aware Weak Supervision for Congestion Recognition in Motorbike-Dominant Traffic*. Đây là hướng an toàn nhất: background chỉ là một nguồn nhãn yếu, mô hình tự học khi nào nên tin nó.
 
@@ -617,7 +935,7 @@ P(y_{1:T}, \lambda_{1:T}) = P(y_1)\prod_{t=2}^{T} A(y_t \mid y_{t-1}) \prod_{t=1
 
 **Venue:** Information Fusion, EAAI, Expert Systems with Applications, IEEE T-ITS. **Công sức:** 3–4 tháng; phần lớn thời gian là gán gold set và chạy VLM.
 
-## II. Hướng 6 (II.C): Phát hiện sự cố bất thường kéo dài (ngập nước, xe chết máy, vật cản)
+## II.C. Phát hiện sự cố bất thường kéo dài (ngập nước, xe chết máy, vật cản)
 
 Tên gợi ý: *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*. Không cần background chính xác vì so sánh ở không gian feature và theo phân phối nhiều ngày.
 
@@ -668,7 +986,7 @@ Phân biệt **thay đổi bất thường kéo dài** (ngập, vật cản, xe 
 
 **Venue:** IEEE T-ITS, Transportation Research Part C, EAAI, Expert Systems with Applications. **Công sức:** 4–5 tháng, chủ yếu là xây tập đánh giá; phần mô hình nhẹ, không cần huấn luyện backbone.
 
-## II. Hướng 7 (II.D): Dự báo ùn tắc trên đồ thị mạng camera
+## II.D. Dự báo ùn tắc trên đồ thị mạng camera
 
 Tên gợi ý: *City-Scale Congestion Forecasting from Surveillance Camera Networks in Motorbike-Dominant Traffic*. Background gần như không cần dùng.
 
@@ -724,7 +1042,7 @@ Benchmark dự báo dựa trên camera quy mô thành phố trong giao thông xe
 
 **Venue:** Transportation Research Part C, IEEE T-ITS, IEEE TKDE. **Công sức:** 4–6 tháng; nên làm sau Hướng B vì dùng mô hình của B để tạo chỉ số.
 
-## II. Hướng 8 (II.E): Thích ứng camera mới bằng thống kê toàn cục của background
+## II.E. Thích ứng camera mới bằng thống kê toàn cục của background
 
 Tên gợi ý: *Background-Conditioned Generalization to Unseen Traffic Cameras with Unreliable Scene Priors*. Đây là hướng nhanh nhất và tận dụng code H3 có sẵn.
 
@@ -819,6 +1137,382 @@ Nếu không được phép công bố ảnh gốc, phương án thay thế yế
 
 **Venue:** Scientific Data; hoặc bài dataset kèm benchmark gửi IEEE T-ITS. Lưu ý Data in Brief không phải Q1. **Công sức:** thêm 1–2 tháng nếu đã có nhãn từ các hướng khác.
 
+## II.G. Hướng G — Học biểu diễn hướng phương tiện từ chuỗi ảnh thưa của camera cố định (H1 phiên bản 2)
+
+Tên gợi ý: *Learning Vehicle-Centric Representations from Sparse Fixed-Camera Image Streams without Background Images*. Hướng G **thay thế H1**: bỏ hoàn toàn ảnh background median, thay bằng thống kê feature theo từng vị trí học từ chính chuỗi ảnh. FAM-Δ của H1 trở thành một baseline.
+
+### G.1. Bối cảnh, vấn đề và ý tưởng
+
+**Bối cảnh.** Camera giao thông cố định cho ra chuỗi ảnh nhìn cùng một cảnh suốt nhiều tháng. Với một vị trí (i, j) trên ảnh, phần lớn thời gian nó là mặt đường, cột điện hay tòa nhà; thỉnh thoảng có xe đi qua. Cấu trúc này là "giám sát miễn phí" về chỗ nào là phương tiện, nhưng hiện chưa được khai thác đúng cách:
+
+- Các phương pháp tự học hiện đại (DINOv2/v3, iBOT, MAE) coi mỗi ảnh độc lập, che ngẫu nhiên — phần lớn công sức học rơi vào mặt đường.
+- Các phương pháp che theo chuyển động (MGMAE, MGM, V-JEPA4A) cần video liên tục để tính optical flow hoặc hiệu frame liền kề. Dữ liệu của ta là ảnh chụp cách nhau vài phút — không dùng được.
+- H1 dùng Δ với ảnh nền median — chịu toàn bộ lỗi của median (ghost ở giờ kẹt, ánh sáng, lệch camera).
+- Khi tự học trên dữ liệu có nền dùng chung, mạng dễ "đi đường tắt": học nhận ra nền thay vì đối tượng.
+
+**Vấn đề.** Làm sao, chỉ từ chuỗi ảnh thưa của camera cố định, không có nhãn và không có ảnh nền, để mô hình (1) biết vùng nào nhiều khả năng là phương tiện, (2) dồn năng lực học vào đó một cách hợp lý, và (3) không dựa vào nền để giải bài toán tự học?
+
+**Ý tưởng cốt lõi — 3 thành phần:**
+
+1. **Bản đồ độ khác thường theo vị trí (TAM — Temporal Atypicality Map).** Với mỗi camera và mỗi vị trí patch, duy trì vài "trạng thái tĩnh" phổ biến trong không gian feature DINO (ví dụ mặt đường khô, mặt đường ướt, có bóng cây). Patch hiện tại càng xa mọi trạng thái tĩnh thì càng có khả năng là xe. Mặt đường lặp lại nên tạo cụm chặt và thường xuyên; xe thì đa dạng về màu, loại, vị trí nên không tạo được cụm như vậy.
+2. **Che phân tầng theo TAM (AGM — Atypicality-Guided Masking).** Kiểm soát rõ ràng hai đại lượng: tỷ lệ ngân sách che dành cho vùng xe, và tỷ lệ tối đa vùng xe bị che (để xe còn lại làm ngữ cảnh). Câu hỏi "che nhiều hay ít vùng xe" trở thành một thí nghiệm, không phải giả định.
+3. **Hoán đổi vùng tĩnh giữa các ngày (SRS — Static-Region Swap).** Thay các patch tĩnh của frame ngày d bằng patch cùng vị trí từ frame ngày d' của cùng camera. Hai ảnh có cùng phương tiện nhưng khác "nền" (ánh sáng, độ ướt, bóng) → buộc biểu diễn bất biến với nền và tập trung vào xe.
+
+**Điểm mạnh so với H1:** không cần ảnh nền; không cần frame liền kề (lấy mẫu thưa đến đâu cũng dùng được, chỉ cần nhiều ngày); TAM tự cải thiện khi feature tốt hơn; mọi thành phần đều đo kiểm được trên tập audit.
+
+### Câu hỏi nghiên cứu
+
+1. **RQ1:** TAM có định vị phương tiện tốt hơn Δ pixel với ảnh nền median và tốt hơn các phương pháp phát hiện đối tượng không giám sát trên từng ảnh (MaskCut), đặc biệt ở cao điểm và ban đêm không?
+2. **RQ2:** Che theo TAM có cho biểu diễn tốt hơn che ngẫu nhiên, che theo attention và che theo Δ với cùng compute không? Và nên che nhiều hơn hay ít hơn vùng xe?
+3. **RQ3:** SRS có làm giảm mức dựa vào nền và tăng tổng quát hóa sang camera, vùng, điều kiện chưa thấy không?
+4. **RQ4:** Biểu diễn có thật sự "hiểu phương tiện" hơn không — đo bằng probe dày (phân đoạn xe), probe nhận dạng camera, và các phép thử can thiệp (hoán đổi nền, xóa xe)?
+
+### Đóng góp dự kiến
+
+1. TAM: thống kê feature đa trạng thái theo vị trí cho camera cố định, không cần ảnh nền và không cần chuyển động.
+2. AGM: chiến lược che phân tầng với hai tham số diễn giải được, kèm bằng chứng thực nghiệm về hướng che tối ưu.
+3. SRS: phép tăng cường dựa trên cấu trúc cùng camera để chống đường tắt nền.
+4. Bộ chẩn đoán đường tắt nền cho tự học trên camera cố định: probe camera ID, độ nhất quán khi hoán đổi nền, độ nhạy khi xóa xe.
+
+### G.2. Công trình liên quan và khoảng trống
+
+Đã tra cứu tháng 10/2026. Các mục có link là đã xác nhận qua trang chính thức hoặc trang bài báo.
+
+| Nhóm | Công trình | Làm gì | Khác ta ở đâu |
+| --- | --- | --- | --- |
+| Che theo chuyển động | [MGMAE (Huang et al., ICCV 2023)](https://openaccess.thecvf.com/content/ICCV2023/html/Huang_MGMAE_Motion_Guided_Masking_for_Video_Masked_Autoencoding_ICCV_2023_paper.html) | Dùng optical flow trực tuyến để tạo khối che nhất quán theo thời gian cho video MAE | Cần video liên tục |
+| Che theo chuyển động | [MGM (Fan et al., ICCV 2023)](https://openaccess.thecvf.com/content/ICCV2023/html/Fan_Motion-Guided_Masking_for_Spatiotemporal_Representation_Learning_ICCV_2023_paper.html) | Lấy motion vector từ video nén để dẫn vị trí che | Cần video nén liên tục |
+| Che theo vùng quan trọng, giao thông | [V-JEPA4A — Mask What Matters (Lang, Braun, Valada, arXiv 08/2026)](https://www.alphaxiv.org/abs/2608.17178) | Che theo độ quan trọng ngữ nghĩa và thời gian cho video lái xe (camera gắn trên xe) | Camera di chuyển, video liên tục; xem ghi chú bên dưới |
+| Che học được | [ADIOS (Shi et al., ICML 2022)](https://proceedings.mlr.press/v162/shi22d.html) | Học hàm che bằng mục tiêu đối kháng; cho thấy che theo mask đối tượng thật tốt hơn hẳn các cách che khác | Không dùng cấu trúc camera cố định; là baseline tham khảo |
+| Che theo attention | AttMask (Kakogeorgiou et al., ECCV 2022) — chưa kiểm chứng link | Che theo attention của teacher | Chỉ dùng thông tin trong một ảnh |
+| Đường tắt nền | [Background Erasing (Wang et al., CVPR 2021)](https://openaccess.thecvf.com/content/CVPR2021/html/Wang_Removing_the_Background_by_Adding_the_Background_Towards_Background_Robust_CVPR_2021_paper.html) | Trộn một frame tĩnh vào mọi frame của video và buộc feature không đổi → chống dựa vào nền | Trộn toàn ảnh ở mức pixel; SRS hoán đổi chọn lọc theo vị trí tĩnh |
+| Đường tắt nền | [Jenni & Favaro (arXiv 2010.06218)](https://arxiv.org/pdf/2010.06218) | Ghi nhận nền dùng chung của camera cố định tạo đường tắt; xử lý bằng trừ nền median | Vẫn cần ảnh nền median |
+| Ngữ cảnh camera cố định | [Focus on the Positives (Pantazis et al., ICCV 2021)](https://openaccess.thecvf.com/content/ICCV2021/html/Pantazis_Focus_on_the_Positives_Self-Supervised_Learning_for_Biodiversity_Monitoring_ICCV_2021_paper.html) | Camera bẫy ảnh: dùng ngữ cảnh không gian–thời gian để chọn cặp **dương** | Ta dùng cùng camera để tạo cặp dương có nền khác (SRS) và, trong ablation, cặp **âm** |
+| Ảnh cùng vị trí, khác thời điểm | [MoCo với temporal positives cho ảnh vệ tinh (arXiv 2210.11815)](https://arxiv.org/pdf/2210.11815) | Ảnh cùng vị trí khác thời điểm làm cặp dương → học đặc trưng cảnh bền vững | Học cái **tĩnh**; ta muốn học cái **động** |
+| Tự học dày theo thời gian | [TimeT (Salehi et al., ICCV 2023)](https://openaccess.thecvf.com/content/ICCV2023/html/Salehi_Time_Does_Tell_Self-Supervised_Time-Tuning_of_Dense_Image_Representations_ICCV_2023_paper.html) | Fine-tune ViT bằng loss phân cụm căn chỉnh theo thời gian trên video | Cần căn chỉnh qua frame liền kề; camera cố định cho căn chỉnh vị trí miễn phí |
+| Phát hiện đối tượng không giám sát | [CutLER/MaskCut (Wang et al., CVPR 2023)](https://openaccess.thecvf.com/content/CVPR2023/papers/Wang_Cut_and_Learn_for_Unsupervised_Object_Detection_and_Instance_Segmentation_CVPR_2023_paper.pdf); TokenCut; LOST | Cắt đồ thị trên feature DINO để tìm đối tượng trong từng ảnh | Chỉ dùng một ảnh; khó với hàng trăm xe máy nhỏ chồng nhau — là baseline cho RQ1 |
+
+**Ghi chú quan trọng từ V-JEPA4A:** theo phần tóm tắt trên trang alphaXiv, nhóm tác giả thấy xác suất che vùng tiền cảnh nên **thấp hơn** vùng nền (che vùng xe quá nhiều làm student mất ngữ cảnh). Điều này ngược với giả định "che nhiều vùng xe" của H1 — cần đọc toàn văn để xác nhận. Vì vậy AGM không cố định hướng che mà tham số hóa nó, và thí nghiệm G-AB4 trả lời trực tiếp câu hỏi này trên dữ liệu camera cố định.
+
+**Khoảng trống của Hướng G** (trong phạm vi đợt tra cứu này, chưa thấy công trình làm đủ các điểm sau): tự học biểu diễn từ **ảnh chụp thưa** của **camera cố định**, dùng **thống kê feature dài hạn theo vị trí** thay cho ảnh nền và cho chuyển động, để vừa dẫn hướng che vừa chống đường tắt nền. Trước khi nộp phải tra lại theo giao thức IV.13, đặc biệt các từ khóa "static camera self-supervised", "surveillance pretraining", "background bias masked image modeling".
+
+### G.3. Tổng quan phương pháp
+
+&#91;embedded content: Phương pháp G · TAM dẫn hướng cả việc che (AGM) lẫn việc hoán đổi nền (SRS)\]
+
+Mỗi bước huấn luyện: (1) một mô hình DINOv3 đóng băng chạy trên khung hình đầy đủ để cập nhật thống kê theo vị trí và tính TAM; (2) SRS ghép patch tĩnh từ một frame ngày khác vào ảnh của student; (3) AGM chọn patch để che theo TAM; (4) teacher nhận ảnh gốc, student nhận ảnh đã biến đổi, loss DINO + iBOT như DINOv2. Kết quả cuối cùng chỉ là một backbone ViT, dùng cho mọi hướng khác (H3, H4, A, B, C, E) thay cho DINOv3 gốc.
+
+### G.4. Thành phần 1 — Bản đồ độ khác thường theo vị trí (TAM)
+
+**Feature đầu vào.** Frame đã căn chỉnh (IV.3), resize về 448 × 256 → DINOv3 ViT-B/16 **đóng băng** → 16 × 28 = 448 token patch, 768 chiều → chuẩn hóa L2 → PCA về d = 64 (fit một lần trên 200k token ngẫu nhiên của camera train) → chuẩn hóa L2 lần nữa, ký hiệu u\_t(p). Dùng mô hình đóng băng để TAM ổn định và không phụ thuộc vào quá trình huấn luyện; biến thể dùng teacher EMA là một ablation.
+
+**Thống kê theo vị trí.** Với mỗi camera c, chế độ m (ngày / IR) và vị trí p, lưu K = 4 "trạng thái": tâm μ\_k (vector đơn vị d chiều), tần suất w\_k (tổng bằng 1) và độ phân tán s\_k (khoảng cách cosine trung bình của các mẫu thuộc trạng thái đó). Bộ nhớ: 608 camera × 2 chế độ × 448 vị trí × 4 trạng thái × 64 chiều × fp16 ≈ 280 MB, đặt thẳng trên GPU.
+
+**Vì sao phân biệt được mặt đường và xe.** Ví dụ vị trí (5, 12) trên lòng đường: 70% thời gian là nhựa xám khô, 15% là nhựa ướt, 15% là các loại xe khác nhau. Hai trạng thái mặt đường tạo cụm **chặt** và **thường xuyên** (w lớn, s nhỏ). Xe đỏ, xe đen, xe buýt, người đi bộ phân tán khắp không gian feature, không gom được thành một trạng thái có w lớn. Vì vậy chỉ coi trạng thái là "tĩnh" khi vừa thường xuyên vừa chặt.
+
+**Cập nhật trực tuyến** (mỗi frame trong batch, không qua gradient):
+
+```latex
+k^* = \arg\max_k \cos\big(u_t(p), \mu_k\big), \quad
+\mu_{k^*} \leftarrow \frac{(1-\eta)\,\mu_{k^*} + \eta\, u_t(p)}{\lVert \cdot \rVert}, \quad
+w_k \leftarrow (1-\eta_w)\, w_k + \eta_w\, \mathbb{1}[k = k^*], \quad
+s_{k^*} \leftarrow (1-\eta)\, s_{k^*} + \eta \big(1 - \cos(u_t(p), \mu_{k^*})\big)
+```
+
+Với η = 0.02, η\_w = 0.005 (tần suất phản ánh khoảng 200 lần quan sát gần nhất). Nếu cos(u, μ\_{k\*}) < 0.6 và có trạng thái với w < 0.02 thì khởi tạo lại trạng thái đó bằng u (w = 0.05) — cho phép xuất hiện trạng thái mới như mặt đường ướt.
+
+**Khởi tạo.** Chạy một lượt offline: mỗi (camera, chế độ) lấy 300 frame rải trên ít nhất 10 ngày, chạy k-means cosine K = 4 cho từng vị trí → μ, w = tỷ lệ cụm, s.
+
+**Tập trạng thái tĩnh và độ khác thường:**
+
+```latex
+\mathcal{S}(c,m,p) = \{\, k : w_k \ge w_{\min},\; s_k \le s_{\max} \,\}, \qquad
+a_t(p) = \min_{k \in \mathcal{S}} \frac{1 - \cos\big(u_t(p), \mu_k\big)}{s_k + \epsilon}
+```
+
+Với w\_min = 0.15, s\_max = 1.5 × median của mọi s\_k trong camera, ε = 0.01. Chia cho s\_k giống chuẩn hóa kiểu Mahalanobis: trạng thái "lỏng" (ví dụ bóng cây lay động) được phép lệch nhiều hơn. Nếu 𝒮 rỗng — vị trí gần như lúc nào cũng có xe hoặc không ổn định — gán a\_t(p) = không xác định, và AGM xử lý vị trí đó như che ngẫu nhiên. **Báo cáo tỷ lệ vị trí rỗng** theo camera: đây là giới hạn thật của phương pháp và phải nêu trong paper.
+
+**Từ điểm sang tập tiền cảnh (cho AGM và SRS).** Với mỗi (camera, chế độ), fit Gaussian Mixture 2 thành phần trên log a\_t(p) của 50.000 giá trị gần nhất (cập nhật mỗi 1.000 bước) → xác suất tiền cảnh π\_t(p) = hậu nghiệm của thành phần có trung bình lớn hơn. Tập tiền cảnh F\_t = {p : π\_t(p) > 0.5}. Không dùng nhãn. Ngưỡng này được **kiểm tra** (không chỉnh) trên audit-val.
+
+**Sản phẩm phụ — bản đồ hoạt động của camera:** A\_c(p) = 1 − Σ\_{k∈𝒮} w\_k, tức tỷ lệ thời gian vị trí p không ở trạng thái tĩnh. Đây là bản đồ "làn xe hay có xe", không cần road mask — dùng được cho Hướng E (bản mô tả camera) và để kiểm tra chéo road mask người vẽ.
+
+**Giới hạn cần nêu:**
+
+- Vị trí bị chiếm hơn 85% thời gian bởi vật trông giống nhau (hàng xe máy đậu cố định ở mép đường) sẽ bị coi là tĩnh — về mặt ngữ nghĩa có thể chấp nhận.
+- Thay đổi ánh sáng nhanh trong ngày tạo nhiều trạng thái; K = 4 có thể thiếu — ablation K.
+- Camera bị rung: vị trí patch lệch → mọi thứ thành khác thường. Dựa vào căn chỉnh IV.3, và phát hiện bằng tỷ lệ patch khác thường trên vùng tĩnh (nếu > 50% thì bỏ frame).
+
+### G.5. Thành phần 2 — Che phân tầng theo TAM (AGM)
+
+**Vấn đề với FAM của H1:** chỉ có một núm α, trộn giữa "che theo Δ" và "che đều", nên không trả lời được câu hỏi cốt lõi: nên dành bao nhiêu ngân sách che cho vùng xe, và có nên để lại một phần xe làm ngữ cảnh không. V-JEPA4A gợi ý rằng che vùng tiền cảnh quá nhiều có hại. AGM tách thành hai tham số diễn giải được:
+
+| Tham số | Ý nghĩa | Ví dụ |
+| --- | --- | --- |
+| φ (phi) | Tỷ lệ số patch bị che thuộc vùng xe F | Ảnh có xe chiếm 20% diện tích. Che ngẫu nhiên → φ ≈ 0.2. Đặt φ = 0.5 → một nửa số patch bị che là xe |
+| q\_max | Tỷ lệ tối đa patch xe được phép che | q\_max = 0.6 → luôn còn ít nhất 40% patch xe hiển thị làm ngữ cảnh |
+
+**Thuật toán cho một global crop:**
+
+```python
+def agm_sample(pi, valid, ratio, phi, q_max, gen):
+    """pi: (N,) xác suất tiền cảnh đã ánh xạ theo crop; valid: (N,) bool (TAM xác định).
+    ratio ~ U[0.1, 0.5] (như iBOT/DINOv2). Trả về mask bool (N,)."""
+    N = pi.numel()
+    n_mask = round(ratio * N)
+    F = (pi > 0.5) & valid                  # vùng xe
+    B = ~F                                  # còn lại, gồm cả vị trí không xác định
+    k_fg = min(round(phi * n_mask), int(q_max * F.sum()))
+    k_bg = min(n_mask - k_fg, int(B.sum()))
+    fg_idx = sample_without_replacement(F, k_fg, weights=pi, gen=gen)   # ưu tiên patch chắc là xe
+    bg_idx = sample_without_replacement(B, k_bg, weights=None, gen=gen) # đều
+    mask = zeros(N, bool); mask[fg_idx] = True; mask[bg_idx] = True
+    return mask
+```
+
+Lấy mẫu không hoàn lại có trọng số bằng Gumbel top-k (như IV.6). Nếu ảnh không có xe (F rỗng) thì AGM trở về che ngẫu nhiên — đúng hành vi mong muốn cho ảnh đêm vắng.
+
+**Ánh xạ theo crop.** π được tính trên khung hình đầy đủ (lưới 16 × 28). Với mỗi global crop, áp cùng tham số RandomResizedCrop và lật lên bản đồ π (nội suy bilinear) rồi average-pool về lưới 14 × 14 — cùng cách đã đặc tả cho Δ ở IV.6.
+
+**Bốn chính sách so sánh trong G-AB4** (cùng tỷ lệ che tổng):
+
+| Chính sách | φ | q\_max | Giả thuyết |
+| --- | --- | --- | --- |
+| Ngẫu nhiên | tỷ lệ diện tích xe tự nhiên | 1.0 | Mốc so sánh |
+| Che nhiều xe (kiểu H1) | 0.7 | 1.0 | Dồn công học vào xe |
+| Phân tầng cân bằng (mặc định) | 0.5 | 0.6 | Học xe nhiều hơn nhưng giữ ngữ cảnh xe |
+| Giữ xe (kiểu V-JEPA4A) | 0.5 × tỷ lệ tự nhiên | 1.0 | Xe làm ngữ cảnh, che chủ yếu nền |
+
+Thêm lưới quét φ ∈ {0.2, 0.35, 0.5, 0.7} × q\_max ∈ {0.4, 0.6, 0.8, 1.0} trên một seed để vẽ bề mặt hiệu năng — đây là một hình đáng đưa vào paper vì nó trả lời câu hỏi "che bao nhiêu xe" một cách có hệ thống.
+
+**Lịch φ (tùy chọn).** Tăng φ tuyến tính từ tỷ lệ tự nhiên lên giá trị đích trong 30% đầu quá trình huấn luyện, vì TAM và biểu diễn ban đầu chưa ổn định.
+
+**Loss iBOT có trọng số (ablation).** Nhân loss patch bị che với (1 + β·π), β ∈ {0, 1, 2} — kiểm tra xem tăng trọng số loss có tương đương với tăng tỷ lệ che vùng xe không.
+
+### G.6. Thành phần 3 — Hoán đổi vùng tĩnh (SRS) và phần mở rộng tương phản cùng camera
+
+**Ý tưởng SRS.** Lấy frame x\_t (camera c, ngày d, 17:20) và frame x' cùng camera nhưng ngày d' khác (17:05). Ở những vị trí mà **cả hai** frame đều là tĩnh, thay patch của x\_t bằng patch của x'. Kết quả x̃\_t có đúng các xe của x\_t, nhưng mặt đường, bóng đổ, độ ướt, ánh sáng lấy từ ngày khác. Teacher nhìn x\_t, student nhìn x̃\_t, loss DINO buộc hai biểu diễn giống nhau → mô hình phải **bỏ qua** khác biệt ở vùng tĩnh và dựa vào xe.
+
+So với Background Erasing (CVPR 2021) — trộn mờ một frame tĩnh lên toàn bộ video — SRS không tạo "xe ma" bán trong suốt, vì chỉ hoán đổi đúng những vị trí tĩnh ở cả hai frame. Đây là thứ chỉ làm được nhờ camera cố định: cùng vị trí trên ảnh là cùng một điểm trong cảnh.
+
+**Thuật toán:**
+
+1. **Chọn cặp:** x' cùng camera, cùng chế độ (ngày/IR), khác ngày, slot trong khoảng ±2 giờ (ablation: cùng slot / bất kỳ slot trong chế độ). Cả hai frame đã căn chỉnh (IV.3) và `align_ok`.
+2. **Tập hoán đổi:** P\_swap = {p : π\_t(p) < 0.2 và π'(p) < 0.2 và cả hai xác định}, sau khi **loại thêm các patch kề** vùng tiền cảnh của cả hai frame (giãn F\_t ∪ F' một patch) để không chép nửa chiếc xe.
+3. **Chọn tỷ lệ:** lấy ngẫu nhiên tập con của P\_swap với tỷ lệ ρ \~ U\[0.3, 1.0\].
+4. **Ghép ở mức pixel** trên khung 448 × 256, theo khối 16 × 16; làm mềm biên mỗi khối bằng trộn tuyến tính 4 px để không tạo đường nối sắc — tránh mô hình học dấu vết đường nối.
+5. Áp SRS với xác suất p\_srs = 0.5 cho mỗi mẫu, **trước** khi cắt crop và trước AGM. Teacher luôn nhận frame gốc.
+
+**Nghiệm thu nhanh:** trên mọi patch thuộc F\_t, x̃\_t phải trùng từng pixel với x\_t (trừ dải làm mềm 4 px ở biên các khối đã hoán đổi kề bên).
+
+**Phần mở rộng (chỉ giữ nếu thắng trong ablation):**
+
+| Mã | Cơ chế | Cách làm | Rủi ro |
+| --- | --- | --- | --- |
+| RIC | Tương phản vùng xe trong cùng camera | Batch gồm 8 camera × 8 frame (khác ngày, slot ±2 giờ). Gộp token patch của student theo trọng số π → vector vùng xe z\_i; cặp dương là z của hai view cùng frame; cặp âm là z của frame khác **cùng camera**. InfoNCE, nhiệt độ 0.2, λ = 0.1 | Âm tính giả: hai frame có cảnh xe tương tự. Giảm nhẹ bằng trọng số âm mềm w\_ij = 1 − cos(ẑ\_i, ẑ\_j) tính từ teacher |
+| GRL | Đối kháng nhận dạng camera | Một bộ phân loại camera ID trên \[CLS\] qua lớp đảo gradient (kiểu DANN), λ = 0.05 | Có thể xóa luôn thông tin phối cảnh hữu ích cho đếm xe |
+
+**Baseline đối nghịch cần có:** chọn cặp **dương** là frame cùng camera, gần thời điểm (kiểu Focus on the Positives). Giả thuyết của ta là cách này tăng phụ thuộc vào nền và **giảm** chất lượng cho bài toán xe — nếu đúng, đây là một kết quả có giá trị riêng.
+
+### G.7. Loss tổng, siêu tham số và lịch huấn luyện
+
+```latex
+\mathcal{L} = \mathcal{L}_{\text{DINO}}^{[CLS]} + \lambda_{\text{iBOT}} \sum_{p \in \mathcal{M}_{\text{AGM}}} \big(1 + \beta\, \pi(p)\big)\, \ell_{\text{iBOT}}(p) + \lambda_{\text{KoLeo}} \mathcal{L}_{\text{KoLeo}} \;\big[+\, \lambda_{\text{RIC}} \mathcal{L}_{\text{RIC}}\big]
+```
+
+Với 𝓜\_AGM là tập patch bị che do AGM chọn (G.5); student nhận ảnh đã qua SRS (G.6); mặc định β = 0, λ\_iBOT = 1.0, λ\_KoLeo = 0.1, RIC tắt.
+
+**Siêu tham số khởi điểm** (theo cấu hình kiểu DINOv2, điều chỉnh cho huấn luyện tiếp trên dữ liệu miền — cần kiểm tra lại với repo DINOv3 chính thức):
+
+| Nhóm | Tham số | Giá trị |
+| --- | --- | --- |
+| Mô hình | Backbone | ViT-B/16 khởi tạo DINOv3 (ablation và thử nhanh: ViT-S/16) |
+|  | Đầu DINO, đầu iBOT | Riêng biệt, mỗi đầu 16.384 prototype, khởi tạo mới |
+| Crop | Global | 2 crop 224, tỷ lệ diện tích \[0.32, 1.0\] |
+|  | Local | 8 crop 96, tỷ lệ \[0.05, 0.32\] (giảm còn 4 nếu thiếu compute) |
+| Che | Tỷ lệ | U\[0.1, 0.5\] mỗi ảnh, che 50% số ảnh, chỉ global view của student |
+|  | AGM | φ = 0.5, q\_max = 0.6 (mặc định) |
+| SRS | Xác suất, cặp | p\_srs = 0.5; cùng camera, khác ngày, slot ±2 giờ |
+| TAM | Thống kê | K = 4, d = 64, η = 0.02, η\_w = 0.005, w\_min = 0.15 |
+| Tối ưu | AdamW | lr đỉnh 5e-5 (batch 256), layer-wise decay 0.9, weight decay 0.04 → 0.2 (cosine), warmup 5% số bước, grad clip 3.0, drop path 0.1, bf16 |
+| Teacher | EMA, nhiệt độ | momentum 0.994 → 1.0 (cosine); nhiệt độ teacher 0.04 → 0.07 trong 10% đầu; student 0.1 |
+| Batch | Cấu trúc | 256 = 32 camera × 8 frame (lấy mẫu theo nhóm camera để có cặp SRS và RIC) |
+| Độ dài | Số bước | ViT-B: 60.000 bước; ViT-S cho ablation: 20.000 bước — mọi biến thể trong cùng bảng **đúng cùng số bước** |
+
+**Lịch:**
+
+1. **Trước khi train:** khởi tạo TAM offline (G.4); fit PCA; fit GMM ban đầu.
+2. **0–10% số bước:** p\_srs tăng tuyến tính 0 → 0.5; φ tăng từ tỷ lệ tự nhiên lên 0.5.
+3. **Toàn bộ quá trình:** thống kê TAM cập nhật trực tuyến từ feature đóng băng của mọi frame trong batch; GMM cập nhật mỗi 1.000 bước.
+
+**Chi phí phụ.** Mỗi bước thêm một lượt forward không gradient của DINOv3 ViT-B trên khung 448 × 256 cho mọi frame (và cho frame cặp SRS). Ước tính tăng khoảng 25–40% thời gian mỗi bước — phải đo và báo cáo (G-E1). Phương án giảm: dùng ViT-S đóng băng cho TAM (ablation G-AB2), hoặc cache feature PCA-64 của các frame huấn luyện xuống đĩa (khoảng 57 KB/frame ở fp16).
+
+### G.8. Spec cho agent
+
+**Thư mục `directionG_camera_ssl/`** — dùng lại `common/` (IV.2–IV.5) và phần DINO/iBOT của H1.
+
+| File | Nội dung chính |
+| --- | --- |
+| `features.py` | `FrozenExtractor`: DINOv3 ViT-B đóng băng, khung 448 × 256 → token (B, 448, 768) → PCA → (B, 448, 64) chuẩn hóa L2; `fit_pca.py` fit và lưu PCA |
+| `tam.py` | `PositionStats`, `GMMCalibrator`, `activity_prior()` |
+| `init_tam.py` | Khởi tạo offline bằng k-means theo vị trí |
+| `sampler.py` | `CameraGroupedSampler`: mỗi batch 32 camera × 8 frame; `find_srs_partner()` |
+| `srs.py` | `static_region_swap()` |
+| `masking.py` | `agm_sample()`, `map_to_crop()` |
+| `augment.py` | Multi-crop trả về cả tham số crop (để ánh xạ π) |
+| `losses.py` | DINO, iBOT, KoLeo (dùng lại H1), `ric_loss()` |
+| `train.py` | Vòng huấn luyện; log các đại lượng theo dõi |
+| `eval_tam.py` | Đánh giá TAM với mask xe (G-M1) |
+| `eval_frozen.py` | Probe như IV.6 + probe dày |
+| `probes.py` | Probe camera ID, độ nhất quán khi đổi nền, độ nhạy khi xóa xe |
+| `toy.py` | Sinh dữ liệu đồ chơi để test |
+
+**`tam.py` — giao diện:**
+
+```python
+class PositionStats:
+    """Thống kê trạng thái theo vị trí cho mọi (camera, mode).
+    mu:  (C, P, K, d) float16, chuẩn hóa L2      C = số cặp (camera, mode), P = 448
+    w:   (C, P, K)    float32, tổng theo K = 1
+    s:   (C, P, K)    float32
+    """
+    def init_kmeans(self, cid: int, U: Tensor):          # U: (n_frames, P, d)
+    @torch.no_grad()
+    def update(self, cids: LongTensor, U: Tensor):       # cids: (B,), U: (B, P, d)
+    @torch.no_grad()
+    def atypicality(self, cids, U) -> tuple[Tensor, Tensor]:
+        """Trả về a (B, P) và valid (B, P) bool (False khi tập trạng thái tĩnh rỗng)."""
+    def static_set(self, cid) -> Tensor:                 # (P, K) bool
+    def activity_prior(self, cid) -> Tensor:             # (P,)
+    def state_dict(self) / load_state_dict(self, sd)     # lưu cùng checkpoint
+
+class GMMCalibrator:
+    """GMM 2 thành phần trên log(a) theo từng cid, buffer 50.000 giá trị gần nhất."""
+    def push(self, cids, a, valid)
+    def refit(self)                                      # gọi mỗi 1.000 bước
+    def posterior(self, cids, a) -> Tensor               # pi (B, P) trong [0, 1]
+```
+
+Cài `update` theo dạng vector hóa: gom mọi (cid, p) của batch, dùng `scatter_add` cho cập nhật tâm và tần suất; không vòng lặp Python theo vị trí.
+
+**`srs.py`:**
+
+```python
+def static_region_swap(x, x2, pi, pi2, valid, valid2, ratio, gen, thr=0.2, feather=4):
+    """x, x2: (3, 256, 448) cùng camera, đã căn chỉnh. pi, pi2: (16, 28).
+    Trả về x_tilde và swap_mask (16, 28) bool.
+    1) static = (pi < thr) & (pi2 < thr) & valid & valid2
+    2) loại các ô kề tiền cảnh: static &= ~dilate((pi >= 0.5) | (pi2 >= 0.5), 1)
+    3) chọn ngẫu nhiên tỷ lệ `ratio` của static
+    4) ghép khối 16x16 từ x2 vào x, trộn tuyến tính `feather` px ở biên khối"""
+```
+
+**Config mẫu** `configs/exp/g_full.yaml`:
+
+```yaml
+model: {arch: vit_base_patch16, init: dinov3_vitb16, drop_path: 0.1}
+tam: {backbone: dinov3_vitb16, d: 64, K: 4, eta: 0.02, eta_w: 0.005, w_min: 0.15,
+      s_max_mult: 1.5, gmm_refit_every: 1000, source: frozen}   # source: frozen | ema_teacher
+agm: {policy: stratified, phi: 0.5, q_max: 0.6, ratio: [0.1, 0.5], masked_img_frac: 0.5,
+      phi_warmup_frac: 0.1}
+srs: {p: 0.5, p_warmup_frac: 0.1, slot_window_h: 2, thr: 0.2, ratio: [0.3, 1.0], feather_px: 4}
+ric: {enabled: false, weight: 0.1, temperature: 0.2, soft_negatives: true}
+loss: {ibot: 1.0, koleo: 0.1, ibot_fg_beta: 0.0}
+optim: {lr: 5.0e-5, layer_decay: 0.9, wd: [0.04, 0.2], warmup_frac: 0.05, clip: 3.0}
+teacher: {momentum: [0.994, 1.0], temp: [0.04, 0.07], temp_warmup_frac: 0.1}
+data: {batch_cameras: 32, frames_per_camera: 8, steps: 60000, split: cluster}
+```
+
+**Dữ liệu đồ chơi (`toy.py`) để test trước khi chạy thật:** nền là ảnh có kết cấu cố định với 2 chế độ sáng (sáng/tối, mỗi frame chọn ngẫu nhiên); "xe" là hình chữ nhật màu ngẫu nhiên, kích thước ngẫu nhiên, phủ trung bình 20% diện tích ở vùng "đường"; sinh 50 "ngày" × 40 frame.
+
+**Nghiệm thu:**
+
+1. Trên dữ liệu đồ chơi, AUROC của a\_t với mask hình chữ nhật ≥ 0.95 ở cả hai chế độ sáng.
+2. Thêm một hình chữ nhật **cùng màu** ở **cùng vị trí** trong 90% frame → vị trí đó bị coi là tĩnh (đúng giới hạn đã nêu); test xác nhận hành vi này.
+3. `PositionStats.update` vector hóa cho kết quả trùng (sai số < 1e-4) với cài đặt vòng lặp tham chiếu trên 1.000 mẫu.
+4. `agm_sample`: số patch che đúng bằng `n_mask`; số patch xe bị che ≤ q\_max·|F|; khi F rỗng, phân phối vị trí che không khác che đều (kiểm định chi-bình-phương trên 10.000 lần lấy mẫu).
+5. `static_region_swap`: pixel trong F\_t (trừ dải làm mềm) trùng 100% với x; không ô nào thuộc F\_t ∪ F' (đã giãn) bị hoán đổi.
+6. `map_to_crop`: với ảnh đồ chơi có một ô sáng, sau crop và lật, vị trí π lớn nhất trùng vị trí ô sáng.
+7. Huấn luyện thử 2.000 bước trên dữ liệu đồ chơi với ViT-S: loss giảm, không NaN, IoU attention với hình chữ nhật tăng so với bước 0.
+
+### G.9. Kế hoạch thực nghiệm
+
+**Baseline tiền huấn luyện** — tất cả ViT-B, cùng dữ liệu, cùng số bước, cùng crop (trừ B0):
+
+| Mã | Baseline | Kiểm tra điều gì |
+| --- | --- | --- |
+| B0 | DINOv3 gốc, không huấn luyện thêm | Mức sàn |
+| B1 | Huấn luyện tiếp DINO + iBOT, che ngẫu nhiên | Lợi ích chỉ do dữ liệu miền |
+| B2 | + AttMask | Che theo attention trong một ảnh |
+| B3 | + FAM-Δ (H1, ảnh nền median) | Phiên bản dựa trên ảnh nền |
+| B4 | + che theo MaskCut | Phát hiện đối tượng không giám sát trên từng ảnh |
+| B5 | + Background Erasing (trộn 30% một frame khác cùng camera) | Chống đường tắt nền kiểu trộn toàn ảnh |
+| B6 | + cặp dương cùng camera, gần thời điểm (kiểu Focus on the Positives) | Giả thuyết ngược: học cái tĩnh |
+| B7 | ADIOS (nếu đủ compute) | Che học được |
+
+**Thí nghiệm** (ablation chạy ViT-S, 20.000 bước, trừ khi ghi khác; kết quả chính ViT-B, 3 seed):
+
+| ID | Loại | Câu hỏi | Thiết lập | Metric | Ưu tiên |
+| --- | --- | --- | --- | --- | --- |
+| G-M1 | M | TAM định vị xe tốt đến đâu? (RQ1) | TAM vs Δ pixel (median r0), Δ với nền đã làm sạch r2 (Hướng A), MaskCut, attention \[CLS\] của DINOv3, khoảng cách tới feature trung bình (một trạng thái), khoảng cách láng giềng gần nhất kiểu PatchCore | AUROC, AP mức patch (nhãn = patch có ≥ 30% diện tích là xe, từ mask audit-test); tách theo cao điểm, đêm, mưa | P0 |
+| G-M2 | M | Biểu diễn tốt hơn? (RQ2) | B0–B7 vs G đầy đủ; feature đóng băng | Mức ùn tắc (linear, kNN): macro-F1, QWK; đếm few-shot (ridge): MAE; **probe dày**: phân loại tuyến tính từng token patch xe / không xe, train trên audit-train, IoU trên audit-test | P0 |
+| G-M3 | M | Lợi ích có chuyển sang bài toán khác? | Thay DINOv3 bằng backbone G trong H3 (đếm), B (mô hình cuối), E | Metric của từng hướng | P1 |
+| G-M4 | M | Hội tụ nhanh hơn? | Đánh giá kNN mỗi 10% quá trình cho B1, B2, B3, G | Metric theo giờ GPU | P1 |
+| G-D1 | Chẩn đoán | Còn dựa vào nền? (RQ3) | Logistic regression đoán camera ID từ \[CLS\], trên frame ngày khác của camera train | Độ chính xác (thấp hơn = ít dựa nền), vẽ cùng metric G-M2 trên một biểu đồ phân tán | P0 |
+| G-D2 | Chẩn đoán | Bất biến với nền? | Biến đổi **không dùng lúc train**: hoán đổi vùng tĩnh từ slot lệch ±6 giờ; đổi gamma riêng vùng tĩnh | Cosine \[CLS\] trước/sau; tỷ lệ giữ nguyên dự đoán mức ùn tắc | P0 |
+| G-D3 | Chẩn đoán | Có thật sự nhìn xe? (RQ4) | Xóa xe theo **mask người gán** (audit-test): thay pixel xe bằng pixel cùng vị trí của frame vắng nhất cùng camera, cùng chế độ | Mức giảm của số xe dự đoán và mức ùn tắc dự đoán (càng giảm mạnh càng tốt) | P0 |
+| G-D4 | Chẩn đoán | Attention dồn vào đâu? | Tỷ lệ khối lượng attention \[CLS\] rơi vào mask xe | % | P1 |
+| G-AB1 | AB | Thành phần nào đóng góp? | B1 / + AGM / + SRS / + AGM + SRS / + RIC / + GRL | G-M2 và G-D1–D3 | P0 |
+| G-AB2 | AB | Thiết kế TAM | K ∈ {1, 2, 4, 8}; tiêu chí tĩnh: chỉ tần suất / tần suất + độ chặt; khoảng cách: tới trạng thái tĩnh gần nhất / láng giềng gần nhất / trung bình; d ∈ {32, 64, 128, 768}; nguồn feature: ViT-S đóng băng / ViT-B đóng băng / teacher EMA; thống kê theo chế độ / theo nhóm giờ | G-M1, G-M2 | P0 (K, khoảng cách, nguồn) — P1 (còn lại) |
+| G-AB3 | AB | Ngưỡng tiền cảnh | GMM / cố định top 20% / ngưỡng tối ưu trên audit-val (tham chiếu) | G-M1 F1; G-M2 | P1 |
+| G-AB4 | AB | Nên che bao nhiêu xe? | 4 chính sách G.5 + lưới φ × q\_max (1 seed) | G-M2; **bề mặt hiệu năng** | P0 |
+| G-AB5 | AB | Thiết kế SRS | Tắt / trộn toàn ảnh (B5) / hoán đổi patch **ngẫu nhiên** không theo TAM (control) / hoán đổi vùng tĩnh; cửa sổ cặp: cùng slot / ±2 giờ / bất kỳ; làm mềm biên 0 / 4 px | G-M2, G-D2 | P0 (3 mục đầu) |
+| G-AB6 | AB | Trọng số loss iBOT theo π | β ∈ {0, 1, 2} | G-M2 | P2 |
+| G-R1 | R | Cần bao nhiêu ngày dữ liệu? | Số ngày dùng cho khởi tạo và cập nhật TAM: 1 / 3 / 7 / 14 / tất cả; RS-3 (thưa mẫu) | G-M1, G-M2 | P0 |
+| G-R2 | R | Tổng quát? | Probe với G-region, G-day2night | G-M2 | P1 |
+| G-R3 | R | Frame xấu | FCS lên probe đóng băng | Suy giảm tương đối | P1 |
+| G-R4 | R | Không căn chỉnh camera | Bỏ bước căn chỉnh IV.3 | G-M1, G-M2 | P1 |
+| G-R5 | R | Camera hay kẹt | Báo cáo riêng nhóm camera có tỷ lệ vị trí "không có trạng thái tĩnh" cao nhất (top 10%) | G-M1, G-M2 | P0 |
+| G-S1 | S | Quy mô | 10 / 25 / 50 / 100% camera train; ViT-S vs ViT-B | G-M2 | P1 |
+| G-E1 | E | Chi phí | Thời gian/bước, giờ GPU tổng, bộ nhớ thống kê; suy luận như ViT thường | — | P0 |
+| G-Q1 | Q | TAM trông thế nào? | TAM, Δ, MaskCut trên cùng frame: cao điểm, đêm, mưa; ví dụ SRS | Hình | P0 |
+| G-Q2 | Q | Attention | B1, B3, G cạnh nhau | Hình | P0 |
+| G-Q3 | Q | Lỗi | Làn luôn kẹt, xe đậu cố định, camera rung | Hình + phân tích | P0 |
+
+**Lưu ý công bằng cho G-D2:** G được train với SRS nên sẽ "có lợi" nếu đánh giá bằng đúng phép SRS. Vì vậy G-D2 chỉ dùng biến đổi không có lúc train. TAM dùng để tạo biến đổi trong G-D2 lấy từ DINOv3 đóng băng — giống nhau cho mọi mô hình được so.
+
+**Bảng/hình cho paper G:** Bảng 1 = G-M1; Bảng 2 = G-M2 (mọi baseline); Bảng 3 = G-D1–D3; Bảng 4 = G-AB1; Bảng 5 = G-AB2; Hình = bề mặt φ × q\_max (G-AB4), biểu đồ phân tán camera ID vs metric xe (G-D1), G-Q1, G-Q2.
+
+### G.10. Rủi ro, cổng quyết định, lịch và venue
+
+**Ba cổng quyết định** — không qua cổng thì không tiêu thêm compute cho bước sau:
+
+1. **Cổng 1 (trước mọi lần pretrain, khoảng tuần 3–4):** chạy G-M1 trên audit-val. Điều kiện: AUROC của TAM không thấp hơn Δ pixel ở tổng thể, và cao hơn ít nhất 0.05 ở lát cao điểm hoặc đêm. Nếu trượt: thử các biến thể G-AB2; vẫn trượt thì dùng nguồn tiền cảnh khác (Δ với nền r2 của Hướng A, hoặc MaskCut) và giữ SRS.
+2. **Cổng 2 (ViT-S, 20.000 bước):** G (AGM + SRS) phải vượt B1 và B2 trên kNN mức ùn tắc và probe dày, với mức chênh lớn hơn độ lệch chuẩn giữa 2 seed của B1. Nếu trượt: kết quả bề mặt φ × q\_max và các chẩn đoán vẫn có giá trị — gộp thành phân tích trong paper A hoặc paper P-1, không viết paper G riêng.
+3. **Cổng 3 (sau kết quả ViT-B):** G-D1–D3 phải cho thấy giảm phụ thuộc nền. Nếu G thắng trên bài toán nhưng chẩn đoán không đổi, câu chuyện "chống đường tắt nền" không đứng — viết lại luận điểm thành "che có hướng dẫn từ chuỗi ảnh".
+
+**Rủi ro:**
+
+| Rủi ro | Dấu hiệu | Cách giảm |
+| --- | --- | --- |
+| TAM hỏng ở làn luôn kẹt | Tỷ lệ vị trí không có trạng thái tĩnh cao | Báo cáo riêng (G-R5); AGM tự lùi về che ngẫu nhiên ở đó |
+| Mô hình học dấu vết đường nối của SRS | G-D2 tốt nhưng G-M2 không tăng | Làm mềm biên; ablation làm mềm 0 / 4 px; control hoán đổi ngẫu nhiên |
+| Lợi ích chỉ do huấn luyện thêm trên dữ liệu miền | G ≈ B1 | B1 đã kiểm soát yếu tố này — nếu G ≈ B1 thì đó là kết luận trung thực |
+| Chi phí forward thêm cho TAM | Thời gian/bước tăng > 40% | TAM bằng ViT-S, hoặc cache feature PCA-64 |
+| Giấy phép DINOv3 | Muốn công bố trọng số đã huấn luyện tiếp | Đọc điều khoản DINOv3 trước; nếu không được phép công bố trọng số, công bố code và cách tái tạo |
+| Chỉ một thành phố | Reviewer hỏi tổng quát | Probe đếm xe trên dữ liệu Đà Nẵng bằng feature của backbone (không cần TAM lúc suy luận) |
+
+**Lịch khoảng 5 tháng** (sau khi nền móng IV.2–IV.5 đã có):
+
+1. **Tháng 1:** `toy.py`, `tam.py`, `init_tam.py`, `eval_tam.py`; chạy G-M1 → **Cổng 1**. Cần mask xe của tập audit.
+2. **Tháng 2:** `masking.py`, `srs.py`, `sampler.py`; ablation ViT-S: G-AB1, G-AB2, G-AB4, G-AB5 → **Cổng 2**.
+3. **Tháng 3:** ViT-B, cấu hình chốt, 3 seed; baseline B0–B6 cùng compute.
+4. **Tháng 4:** chẩn đoán G-D1–D4 (**Cổng 3**), robustness G-R1–R5, chuyển giao G-M3.
+5. **Tháng 5:** hình, bảng, viết paper.
+
+**Quan hệ với các hướng khác:** nếu G qua Cổng 2, backbone G thay DINOv3 gốc trong H3, B, E và encoder của Hướng A — mỗi paper khác có thêm một dòng "backbone G" trong bảng ablation. H1 dừng phát triển; FAM-Δ chỉ còn là baseline B3.
+
+**Venue:** Pattern Recognition, IEEE TIP, CVIU (nếu nhấn mạnh phương pháp tự học); IEEE T-ITS, EAAI (nếu nhấn mạnh ứng dụng giao thông).
+
 ## IV. Đặc tả kỹ thuật cho coding agent
 
 Phần này viết để giao thẳng cho agent. Mỗi mục nêu đầu vào, đầu ra, hàm cần có, tham số mặc định và **tiêu chí nghiệm thu** (test phải qua). Agent làm theo thứ tự IV.2 → IV.5 trước (nền móng dùng chung), sau đó mới đến từng hướng. Khi phần IV mâu thuẫn với các phần trước, **phần IV được ưu tiên**.
@@ -862,10 +1556,10 @@ DINO/
 ├── direction2_scene_decomposition/  # Hướng A (H2 nâng cấp)
 ├── direction3_foreground_enhanced_counting/  # H3
 ├── direction4_temporal_density/  # H4
-├── direction5_weak_supervision/   # Hướng B (H5)
-├── direction6_anomaly_detection/  # Hướng C (H6)
-├── direction7_traffic_forecasting/ # Hướng D (H7)
-├── direction8_bg_conditioning/    # Hướng E (H8)
+├── directionB_weak_supervision/
+├── directionC_anomaly/
+├── directionD_forecasting/
+├── directionE_bg_conditioning/
 ├── scripts/                      # chạy pipeline, sinh bảng LaTeX, vẽ hình
 ├── tests/                        # pytest cho common/ và từng hướng
 └── outputs/{exp_name}/{run_id}/  # checkpoint, log, metric json
@@ -1296,9 +1990,9 @@ Thiết kế khoa học nằm ở A.6–A.14; mục này chỉ nêu những gì 
 
 **Nghiệm thu:** (1) `build_groups` không bao giờ đưa 2 frame cùng ngày vào một mẫu; (2) mọi frame trong nhóm cùng mode và cam\_epoch; (3) `refine.py` chỉ đọc audit-val để quyết định dừng — assert đường dẫn; (4) `synth.py` chỉ dùng crop xe từ camera train và nền từ camera test, lưu kèm seed.
 
-### IV.9. Spec Hướng B (H5) — gộp nhãn yếu đa nguồn
+### IV.9. Spec Hướng B — gộp nhãn yếu đa nguồn
 
-**File trong `direction5_weak_supervision/`:** `lfs/lf_detector.py`, `lfs/lf_background.py`, `lfs/lf_vlm.py`, `lfs/lf_temporal.py`, `lfs/lf_history.py`, `context.py`, `label_model.py`, `end_model.py`, `evaluate.py`, `baselines.py`.
+**File trong `directionB_weak_supervision/`:** `lfs/lf_detector.py`, `lfs/lf_background.py`, `lfs/lf_vlm.py`, `lfs/lf_temporal.py`, `lfs/lf_history.py`, `context.py`, `label_model.py`, `end_model.py`, `evaluate.py`, `baselines.py`.
 
 **Định dạng đầu ra chung của LF:** `data/lf/{lf_name}.parquet` với cột `frame_id`, `label` (−1 = bỏ qua, 0–3), `raw` (giá trị thô, ví dụ số xe). Ngưỡng của mọi LF chỉnh trên **gold-dev** (200 frame thuộc cụm train), không chạm gold-test.
 
@@ -1343,11 +2037,11 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) **test mô phỏng** — sinh dữ liệu có chuỗi Markov thật, 5 LF với độ chính xác biết trước thay đổi theo ngữ cảnh (ví dụ LF2 đúng 0.85 ban ngày, 0.4 ban đêm); mô hình gộp phải ước lượng lại độ chính xác trong ±0.05 và có accuracy cao hơn bỏ phiếu đa số; (2) không LF nào đọc gold-test; (3) chạy lại cùng seed cho ra đúng cùng nhãn mềm.
 
-### IV.10. Spec Hướng C (H6) — phát hiện sự cố
+### IV.10. Spec Hướng C — phát hiện sự cố
 
 **Chia dữ liệu theo thời gian, không theo cụm camera.** Mô hình "bình thường" xây riêng cho từng camera, nên cái cần tách là thời gian: giai đoạn P1 (xây ngân hàng), P2 (hiệu chỉnh ngưỡng, khoảng 2 tuần), P3 (đánh giá, nên chứa mùa mưa). Ba giai đoạn liên tiếp, không chồng lấn; ghi ranh giới trong `configs/exp/c_*.yaml`.
 
-**File trong `direction6_anomaly_detection/`:** `features.py`, `pooling.py`, `bank.py`, `score.py`, `events.py`, `camera_fault.py`, `synth_events.py`, `mine_candidates.py`, `review_ui.py`, `evaluate.py`, `baselines/`.
+**File trong `directionC_anomaly/`:** `features.py`, `pooling.py`, `bank.py`, `score.py`, `events.py`, `camera_fault.py`, `synth_events.py`, `mine_candidates.py`, `review_ui.py`, `evaluate.py`, `baselines/`.
 
 **Pipeline:**
 
@@ -1372,11 +2066,11 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) vật cản tổng hợp kéo dài ≥ 5 frame được phát hiện trong ≤ N + 2 cửa sổ ở ≥ 90% trường hợp trên dữ liệu P2; (2) vật thoáng qua 1 frame tạo sự kiện ở ≤ 1% trường hợp; (3) tỷ lệ cửa sổ vượt ngưỡng trên chính P2 nằm trong 0.5% ± 0.1%; (4) không file nào của P3 được đọc trong lúc xây ngân hàng hay chọn ngưỡng.
 
-### IV.11. Spec Hướng D (H7) — dự báo trên đồ thị camera
+### IV.11. Spec Hướng D — dự báo trên đồ thị camera
 
-**Điều kiện bắt đầu:** đã có mô hình cuối của Hướng B (hoặc H4) và cache embedding (IV.7). Kiểm tra trước: median khoảng lấy mẫu ≤ 5 phút ở ít nhất 70% camera; nếu không, nâng bước lưới lên 10–15 phút và ghi rõ. Mô hình B (hoặc H4) dùng để tạo đích phải được huấn luyện **chỉ trên giai đoạn train của D**, để không dự đoán nào trong giai đoạn test đến từ một mô hình đã thấy chính các frame đó.
+**Điều kiện bắt đầu:** đã có mô hình cuối của Hướng B (hoặc H4) và cache embedding (IV.7). Kiểm tra trước: median khoảng lấy mẫu ≤ 5 phút ở ít nhất 70% camera; nếu không, nâng bước lưới lên 10–15 phút và ghi rõ. Mô hình B (hoặc H4) dùng để tạo đích phải được huấn luyện \*\*chỉ trên giai đoạn train của D\*\*, để không dự đoán nào trong giai đoạn test đến từ một mô hình đã thấy chính các frame đó.
 
-**File trong `direction7_traffic_forecasting/`:** `build_series.py`, `graph.py`, `dataset.py`, `models/`, `train.py`, `evaluate.py`, `gold_eval.py`.
+**File trong `directionD_forecasting/`:** `build_series.py`, `graph.py`, `dataset.py`, `models/`, `train.py`, `evaluate.py`, `gold_eval.py`.
 
 **1. Chuỗi thời gian (`build_series.py`):** lưới đều Δt = 5 phút theo giờ Việt Nam. Với mỗi (camera, ô thời gian): trung bình các dự đoán mức frame trong ô → `q0..q3`, `level_exp` = Σ y·q\_y, `rho_hat` (nếu dùng H4), embedding PCA 32 chiều (PCA fit trên giai đoạn train); `mask` = 1 nếu ô có ít nhất 1 frame. Lưu tensor `X[T, N, F]`, `M[T, N]` và danh sách camera, mốc thời gian.
 
@@ -1406,9 +2100,9 @@ Reply ONLY with JSON: {"level": 0|1|2|3|"unknown"}
 
 **Nghiệm thu:** (1) không cửa sổ nào vượt qua ranh giới train/val/test; (2) bộ chuẩn hóa chỉ thấy dữ liệu train (assert theo mốc thời gian); (3) thay đổi giá trị đích tương lai không làm đổi tensor đầu vào; (4) dự báo của baseline "giá trị gần nhất" tính tay khớp với code trên 10 ví dụ.
 
-### IV.12. Spec Hướng E (H8) — điều kiện hóa bằng thống kê background
+### IV.12. Spec Hướng E — điều kiện hóa bằng thống kê background
 
-**File trong `direction8_bg_conditioning/`:** `descriptor.py`, `conditioning.py`, `dataset.py` (dùng lại dataset H3 và gold của B), `train.py`, `evaluate.py`, `analysis.py`.
+**File trong `directionE_bg_conditioning/`:** `descriptor.py`, `conditioning.py`, `dataset.py` (dùng lại dataset H3 và gold của B), `train.py`, `evaluate.py`, `analysis.py`.
 
 **1. Bản mô tả cảnh (`descriptor.py`)** — cache theo (camera, slot, mode, bg\_version):
 

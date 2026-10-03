@@ -107,7 +107,8 @@ def run_inference(args):
         # Lưu kết quả các lớp
         pred_bg_img.save(os.path.join(args.output_dir, f"{stem}_clean_road.jpg"))
         pred_fg_img.save(os.path.join(args.output_dir, f"{stem}_vehicles_only.jpg"))
-        pred_mask_img.save(os.path.join(args.output_dir, f"{stem}_density_mask.png"))
+        # Chuẩn hóa tên file thành alpha_mask.png (chuẩn Q1 mục 2 trong tài liệu)
+        pred_mask_img.save(os.path.join(args.output_dir, f"{stem}_alpha_mask.png"))
 
         # Bản đồ độ bất định sigma
         if "sigma" in preds:
@@ -119,12 +120,13 @@ def run_inference(args):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Inference Traffic Scene Decomposition")
+    parser = argparse.ArgumentParser(description="Inference Traffic Scene Decomposition (Chế độ S & Chế độ T)")
     parser.add_argument("--weights", type=str, required=True, help="Đường dẫn file .pth checkpoint")
     parser.add_argument("--input_path", type=str, required=True, help="File ảnh đơn lẻ hoặc thư mục ảnh cần phân rã")
     parser.add_argument("--output_dir", type=str, default="checkpoints/direction2_scene_decomp/inferred", help="Thư mục lưu")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16")
-    parser.add_argument("--img_size", type=int, default=256)
+    parser.add_argument("--mode", type=str, default="S", choices=["S", "T"], help="Chế độ suy luận: S (1 frame) hoặc T (theo SceneBasis)")
+    parser.add_argument("--img_size", type=int, default=256, help="Kích thước xử lý ngắn (chiều cao)")
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()
 

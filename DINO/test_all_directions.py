@@ -25,6 +25,7 @@ import numpy as np
 from PIL import Image
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # Thêm path
 dino_dir = os.path.dirname(os.path.abspath(__file__))
@@ -540,8 +541,73 @@ try:
     print(f"   + FiLM Conditioned Count: {out_e['count'].flatten().tolist()} | Congestion Logits Shape: {out_e['logits'].shape}")
     print("   ✅ [Direction 8] Background Conditioning pass hoàn hảo!")
 
+    # -------------------------------------------------------------
+    # 12. TEST DIRECTION G: VEHICLE-CENTRIC SSL FROM STATIC CAMERAS
+    # -------------------------------------------------------------
+    print("\n--- [TEST 12] Direction G: Vehicle-Centric SSL Pretraining (TAM + AGM + SRS) ---")
+    from directionG_camera_ssl.tam import PositionStats, GMMCalibrator
+    from directionG_camera_ssl.masking import agm_sample
+    from directionG_camera_ssl.srs import static_region_swap
+
+    pos_stats_g = PositionStats(num_cams=2, num_patches=64, num_states=4, feat_dim=32)
+    cids_g = torch.tensor([0, 1])
+    u_dummy = F.normalize(torch.randn(2, 64, 32), p=2, dim=-1)
+    pos_stats_g.update(cids_g, u_dummy)
+    a_g, valid_g = pos_stats_g.atypicality(cids_g, u_dummy)
+    assert a_g.shape == (2, 64)
+
+    calib_g = GMMCalibrator()
+    calib_g.push(a_g, valid_g)
+    pi_g = calib_g.posterior(a_g)
+    assert pi_g.shape == (2, 64)
+
+    agm_mask_g = agm_sample(pi_g[0], valid_g[0], ratio=0.35, phi=0.5, q_max=0.6)
+    assert agm_mask_g.shape == (64,)
+
+    x1_g = torch.zeros(3, 128, 128)
+    x2_g = torch.ones(3, 128, 128)
+    pi1_g = torch.zeros(8, 8)
+    pi2_g = torch.zeros(8, 8)
+    x_srs_g, _ = static_region_swap(x1_g, x2_g, pi1_g, pi2_g, ratio=0.5, feather=2)
+    assert x_srs_g.shape == (3, 128, 128)
+    print("   ✅ [Direction G] TAM, AGM, SRS và SSL Pipeline pass hoàn hảo!")
+
+    # -------------------------------------------------------------
+    # 13. TEST DIRECTION 2 NEW: SCENE DECOMPOSITION WITHOUT BACKGROUND
+    # -------------------------------------------------------------
+    print("\n--- [TEST 13] Direction 2 New: Scene Decomposition Không Cần Ảnh Nền ---")
+    from direction2_scene_decomposition.scene_fit import SceneBasis, robust_weights
+    from direction2_scene_decomposition.solve_ell import solve_ell
+    from direction2_scene_decomposition.losses import SceneDecompositionLossV2
+
+    basis_new = SceneBasis(num_cams=1, num_frames_per_cam=2, J=4)
+    dummy_f2 = torch.rand(2, 3, 256, 448)
+    basis_new.init_from_frames(cam_idx=0, frames=dummy_f2)
+    b_new = basis_new.get_background(cam_idx=0, frame_indices=torch.tensor([0, 1]))
+    assert b_new.shape == (2, 3, 256, 448)
+
+    w_rob, _ = robust_weights(dummy_f2, b_new)
+    assert w_rob.shape == (2, 1, 256, 448)
+
+    ell_solved = solve_ell(dummy_f2[0], basis_new.E0[0], basis_new.Ej[0], iters=3)
+    assert ell_solved.shape == (4,)
+
+    loss_v2_fn = SceneDecompositionLossV2()
+    preds_mock = {
+        "recon_origin": dummy_f2,
+        "pred_bg": b_new,
+        "pred_fg": dummy_f2,
+        "alpha_mask": torch.full((2, 1, 256, 448), 0.2),
+        "sigma": torch.full((2, 1, 256, 448), 0.1),
+        "log_sigma": torch.full((2, 1, 256, 448), -2.3),
+        "pred_ell": torch.zeros(2, 4),
+    }
+    loss_v2_val, _ = loss_v2_fn(preds_mock, origin=dummy_f2, bg_pseudo=b_new, mask_pseudo=1.0 - w_rob)
+    assert not torch.isnan(loss_v2_val)
+    print("   ✅ [Direction 2 New] SceneBasis, solve_ell và Loss V2 pass hoàn hảo!")
+
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ 8 HƯỚNG NGHIÊN CỨU TRỌNG TÂM (H1-H8) VÀ CÁC UTILITIES ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ CÁC HƯỚNG NGHIÊN CỨU (H1-H8, HƯỚNG G VÀ HƯỚNG 2 MỚI) ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:

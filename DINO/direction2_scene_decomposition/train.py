@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint
+from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
 from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss

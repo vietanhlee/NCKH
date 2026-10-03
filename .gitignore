@@ -5,6 +5,7 @@ note.md
 nckh/
 .env
 *.env
+test.py
 
 # Ignore large archives, weights, and embeddings
 *.zip

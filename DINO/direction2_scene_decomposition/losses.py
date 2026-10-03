@@ -8,7 +8,6 @@
 
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-import math
 from typing import Dict, Tuple, Optional, Union
 import torch
 import torch.nn as nn
@@ -186,5 +185,131 @@ class NoiseAwareDecompositionLoss(nn.Module):
         return total_loss, loss_dict
 
 
+class SceneDecompositionLossV2(nn.Module):
+    """
+    Hàm mất mát Giai đoạn 2 của Hướng 2 Mới (Chưng cất sang mạng một frame):
+    KHÔNG DÙNG ẢNH NỀN MEDIAN Ở BẤT KỲ ĐÂU.
+    Học hoàn toàn từ Nhãn giả Giai đoạn 1 (B_pseudo, M_pseudo, conf, ell_gt).
+      L = L_rec + L_bgPL (Laplace NLL) + 0.5 * L_maskPL (DropLoss) + 0.1 * L_ell
+          + 0.5 * L_excl + L_tv + L_bin
+    """
+    def __init__(
+        self,
+        lambda_rec: float = 1.0,
+        lambda_bg_pl: float = 1.0,
+        lambda_mask_pl: float = 0.5,
+        lambda_ell: float = 0.1,
+        lambda_excl: float = 0.5,
+        lambda_tv: float = 0.01,
+        lambda_bin: float = 0.05,
+        tau_excl: float = 0.05,
+        warmup_bin_epoch: int = 10,
+    ):
+        super().__init__()
+        self.lambda_rec = lambda_rec
+        self.lambda_bg_pl = lambda_bg_pl
+        self.lambda_mask_pl = lambda_mask_pl
+        self.lambda_ell = lambda_ell
+        self.lambda_excl = lambda_excl
+        self.lambda_tv = lambda_tv
+        self.lambda_bin = lambda_bin
+        self.tau_excl = tau_excl
+        self.warmup_bin_epoch = warmup_bin_epoch
+
+    def forward(
+        self,
+        preds: Dict[str, torch.Tensor],
+        origin: torch.Tensor,
+        bg_pseudo: Optional[torch.Tensor] = None,
+        mask_pseudo: Optional[torch.Tensor] = None,
+        conf: Optional[torch.Tensor] = None,
+        ell_gt: Optional[torch.Tensor] = None,
+        pi: Optional[torch.Tensor] = None,
+        epoch: int = 0,
+    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+        I_recon = preds["recon_origin"]
+        B_hat = preds["pred_bg"]
+        M_alpha = preds["alpha_mask"]
+        sigma = preds["sigma"]
+        log_sigma = preds["log_sigma"]
+        pred_ell = preds.get("pred_ell", None)
+
+        # 1. Tái tạo ảnh gốc L_rec: 0.85 * (1 - SSIM)/2 + 0.15 * L1
+        ssim_val = ssim_loss(I_recon, origin)
+        l_ssim = (1.0 - ssim_val) / 2.0
+        l_l1 = F.l1_loss(I_recon, origin)
+        l_rec = 0.85 * l_ssim + 0.15 * l_l1
+
+        # 2. L_bgPL (Laplace NLL) với B_pseudo
+        if bg_pseudo is not None:
+            l1_diff = torch.abs(B_hat - bg_pseudo).mean(dim=1, keepdim=True)
+            l_bg_pl = torch.mean(l1_diff / (sigma + 1e-6) + log_sigma)
+        else:
+            l_bg_pl = torch.tensor(0.0, device=origin.device)
+
+        # 3. L_maskPL với DropLoss
+        if mask_pseudo is not None:
+            bce = F.binary_cross_entropy(M_alpha, mask_pseudo, reduction="none")
+            if conf is not None:
+                bce = bce * conf
+
+            # DropLoss: Bỏ phạt nếu mạng dự đoán là xe (M > 0.5) trong khi nhãn giả M_pl == 0
+            # nhưng TAM chỉ ra pi > 0.5 (phát hiện ra xe mà giai đoạn 1 bỏ sót)
+            if pi is not None:
+                pi_4d = pi.unsqueeze(1).float() if pi.dim() == 3 else pi.float()
+                if pi_4d.shape[-2:] != M_alpha.shape[-2:]:
+                    pi_up = F.interpolate(pi_4d, size=M_alpha.shape[-2:], mode="bilinear", align_corners=False)
+                else:
+                    pi_up = pi_4d
+                drop_mask = (M_alpha > 0.5) & (mask_pseudo < 0.2) & (pi_up > 0.5)
+                bce = bce.masked_fill(drop_mask, 0.0)
+
+            l_mask_pl = bce.mean()
+        else:
+            l_mask_pl = torch.tensor(0.0, device=origin.device)
+
+        # 4. L_ell: Chưng cất mã ánh sáng
+        if pred_ell is not None and ell_gt is not None:
+            l_ell = F.mse_loss(pred_ell, ell_gt)
+        else:
+            l_ell = torch.tensor(0.0, device=origin.device)
+
+        # 5. L_excl: Loại trừ lẫn nhau
+        diff_bg = torch.abs(origin - B_hat.detach()).mean(dim=1, keepdim=True)
+        excl_weight = torch.exp(-diff_bg / self.tau_excl)
+        l_excl = torch.mean(M_alpha * excl_weight)
+
+        # 6. Ràng buộc hình học
+        l_tv = total_variation_loss(M_alpha)
+        if epoch >= self.warmup_bin_epoch:
+            l_bin = torch.mean(M_alpha * (1.0 - M_alpha))
+        else:
+            l_bin = torch.tensor(0.0, device=origin.device)
+
+        total_loss = (
+            self.lambda_rec * l_rec
+            + self.lambda_bg_pl * l_bg_pl
+            + self.lambda_mask_pl * l_mask_pl
+            + self.lambda_ell * l_ell
+            + self.lambda_excl * l_excl
+            + self.lambda_tv * l_tv
+            + (self.lambda_bin * l_bin if epoch >= self.warmup_bin_epoch else 0.0)
+        )
+
+        loss_dict = {
+            "loss_total": float(total_loss.item()),
+            "loss_rec": float(l_rec.item()),
+            "loss_bg_pl": float(l_bg_pl.item()),
+            "loss_mask_pl": float(l_mask_pl.item()),
+            "loss_ell": float(l_ell.item()),
+            "loss_excl": float(l_excl.item()),
+            "loss_tv": float(l_tv.item()),
+            "mean_sigma": float(sigma.mean().item()),
+            "mean_alpha": float(M_alpha.mean().item()),
+        }
+        return total_loss, loss_dict
+
+
 # Alias tương thích ngược
 DecompositionLoss = NoiseAwareDecompositionLoss
+

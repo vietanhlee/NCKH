@@ -20,7 +20,7 @@ dino_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if dino_root not in sys.path:
     sys.path.insert(0, dino_root)
 from common.matcher import TrafficPairMatcher
-from common.reliability import check_camera_alignment_phase_correlation, estimate_background_reliability
+from common.reliability import estimate_background_reliability
 
 
 class DecompositionDataset(Dataset):

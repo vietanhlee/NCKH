@@ -8,7 +8,7 @@
 """
 
 import math
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -84,17 +84,29 @@ class TrafficDecompositionNet(nn.Module):
         embed_dim: int = 384,
         patch_size: int = 16,
         freeze_backbone: bool = False,
+        unfreeze_last_blocks: int = 0,
         prior_dropout: float = 0.50,
+        num_light_codes: int = 4,
     ):
         super().__init__()
         self.backbone = backbone
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.prior_dropout = prior_dropout
+        self.num_light_codes = num_light_codes
 
         if freeze_backbone:
             for p in self.backbone.parameters():
                 p.requires_grad = False
+        elif unfreeze_last_blocks > 0:
+            # Đóng băng toàn bộ, chỉ mở unfreeze_last_blocks blocks cuối
+            for p in self.backbone.parameters():
+                p.requires_grad = False
+            if hasattr(self.backbone, "blocks"):
+                blocks = self.backbone.blocks
+                for b in blocks[-unfreeze_last_blocks:]:
+                    for p in b.parameters():
+                        p.requires_grad = True
 
         # Nhánh mã hóa prior (phục vụ Chế độ b)
         self.prior_encoder = nn.Sequential(
@@ -109,7 +121,7 @@ class TrafficDecompositionNet(nn.Module):
         # Decoder chính dùng chung
         self.decoder = MultiScaleDecompDecoder(in_dim=embed_dim, hidden_dim=256)
 
-        # 4 Heads
+        # 5 Heads chuyên biệt (Hướng 2 Mới)
         self.head_alpha = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
             nn.Sigmoid(),
@@ -125,6 +137,12 @@ class TrafficDecompositionNet(nn.Module):
         # Đầu sigma: dự đoán s = log(sigma), kẹp trong [log 0.01, log 0.5]
         self.head_log_sigma = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
+        )
+        # Đầu mã ánh sáng ell in R^J: trích từ trung bình token patch tĩnh (pi < 0.2)
+        self.head_ell = nn.Sequential(
+            nn.Linear(embed_dim, 128),
+            nn.GELU(),
+            nn.Linear(128, num_light_codes),
         )
 
     def extract_patch_feature_map(self, x: torch.Tensor) -> torch.Tensor:
@@ -166,21 +184,22 @@ class TrafficDecompositionNet(nn.Module):
         self,
         x: torch.Tensor,
         prior: Optional[torch.Tensor] = None,
-        use_prior: bool = True
+        use_prior: bool = True,
+        pi: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Forward phân rã cảnh.
         Args:
             x: Ảnh frame gốc (B, 3, H, W).
-            prior: Ảnh background median (B, 3, H, W). Tùy chọn.
+            prior: Ảnh background median (B, 3, H, W). Tùy chọn (chế độ cũ).
             use_prior: Nếu True và có prior, kích hoạt Chế độ (b).
+            pi: Bản đồ xác suất tiền cảnh TAM (B, 1, H, W) hoặc (B, Hp, Wp). Tùy chọn.
         """
         B, C, H, W = x.shape
-        feat_map = self.extract_patch_feature_map(x)
+        feat_map = self.extract_patch_feature_map(x)  # (B, embed_dim, Hp, Wp)
 
-        # Chế độ (b) Frame + Prior: hợp nhất đặc trưng prior nếu có và không bị dropout
+        # Chế độ cũ (b) Frame + Prior: hợp nhất đặc trưng prior nếu có và không bị dropout
         if prior is not None and use_prior:
-            # Prior-dropout trong quá trình train để mô hình không phụ thuộc cứng vào prior
             p_keep = (1.0 - self.prior_dropout) if self.training else 1.0
             if torch.rand(1).item() < p_keep:
                 prior_feat = self.prior_encoder(prior)
@@ -188,10 +207,27 @@ class TrafficDecompositionNet(nn.Module):
                     prior_feat = F.interpolate(prior_feat, size=feat_map.shape[-2:], mode="bilinear", align_corners=False)
                 feat_map = feat_map + 0.3 * prior_feat
 
+        # Tính đầu mã ánh sáng ell: gộp trung bình các token patch tĩnh (pi < 0.2)
+        # feat_map: (B, D, Hp, Wp) -> (B, D, P) -> (B, P, D)
+        B_cur, D_cur, Hp, Wp = feat_map.shape
+        patch_tokens = feat_map.flatten(2).transpose(1, 2)  # (B, P, D)
+        if pi is not None:
+            if pi.shape[-2:] != (Hp, Wp):
+                pi_down = F.interpolate(pi.float(), size=(Hp, Wp), mode="bilinear", align_corners=False)
+            else:
+                pi_down = pi.float()
+            # Trọng số tĩnh w_static = (1 - pi) hoặc lọc pi < 0.2
+            w_static = (1.0 - pi_down).view(B_cur, -1, 1).clamp(min=1e-3)
+            static_token_avg = (patch_tokens * w_static).sum(dim=1) / w_static.sum(dim=1).clamp(min=1e-4)
+        else:
+            static_token_avg = patch_tokens.mean(dim=1)  # (B, D)
+
+        pred_ell = self.head_ell(static_token_avg)  # (B, num_light_codes)
+
         # Giải mã đa tỉ lệ
         dec_feat = self.decoder(feat_map, target_hw=(H, W))
 
-        # 4 đầu ra
+        # 4 đầu ra không gian
         alpha_mask = self.head_alpha(dec_feat)
         pred_fg = self.head_fg(dec_feat)
         pred_bg = self.head_bg(dec_feat)
@@ -211,5 +247,6 @@ class TrafficDecompositionNet(nn.Module):
             "pred_bg": pred_bg,             # B_hat: [0, 1] (B, 3, H, W)
             "sigma": sigma,                 # Độ bất định sigma: (B, 1, H, W)
             "log_sigma": log_sigma_clamped, # Phục vụ Laplace NLL
+            "pred_ell": pred_ell,           # Mã ánh sáng dự đoán: (B, J)
             "recon_origin": recon_origin,   # I_recon: (B, 3, H, W)
         }
