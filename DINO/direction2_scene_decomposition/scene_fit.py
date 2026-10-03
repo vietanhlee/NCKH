@@ -8,9 +8,17 @@
 =============================================================================
 """
 
+import argparse
+import glob
 import os
 import sys
+import time
 from typing import Optional, Tuple
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -241,3 +249,216 @@ def fit_single_camera_scene_basis(
         conf_all = torch.abs(w_res_all - 0.5) * 2.0  # Độ tin cậy [0, 1]
 
     return basis, B_all, M_all, conf_all
+
+
+def generate_synthetic_traffic_sequence(
+    num_frames: int = 16,
+    H: int = 256,
+    W: int = 448,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Tự động sinh chuỗi ảnh giao thông thời gian thực phục vụ demo thuật toán.
+    Gồm:
+      - Nền tĩnh B_true (mặt đường, vỉa hè, vạch kẻ đường ngắt quãng)
+      - Biến đổi ánh sáng qua thời gian (mặt trời thay đổi cường độ)
+      - Các phương tiện (xe ô tô/xe máy với màu sắc tương phản) di chuyển trên các làn đường.
+    Returns:
+        frames: (N, 3, H, W) trong [0, 1]
+        gt_masks: (N, 1, H, W) ground truth mask vị trí xe
+    """
+    frames = []
+    masks = []
+
+    # Tạo nền cơ sở
+    base_bg = torch.full((3, H, W), 0.35)  # Mặt đường nhựa xám
+    # Vỉa hè trên
+    base_bg[:, :int(H * 0.25), :] = 0.55
+    # Dải phân cách / cây xanh
+    base_bg[1, :int(H * 0.12), :] = 0.65
+    base_bg[0, :int(H * 0.12), :] = 0.30
+    base_bg[2, :int(H * 0.12), :] = 0.20
+    # Vạch kẻ đường giữa làn
+    dash_w = 24
+    for w in range(0, W, dash_w * 2):
+        base_bg[:, int(H * 0.58):int(H * 0.60), w:w+dash_w] = 0.95
+
+    for t in range(num_frames):
+        # Biến đổi ánh sáng theo thời gian (chu kỳ sáng / tối nhẹ)
+        light_factor = 0.85 + 0.25 * np.sin(2 * np.pi * t / max(num_frames, 1))
+        frame = (base_bg * light_factor).clamp(0.0, 1.0).clone()
+        mask = torch.zeros((1, H, W))
+
+        # Thêm 2-4 xe ngẫu nhiên trên các làn đường
+        num_cars = np.random.randint(2, 5)
+        for _ in range(num_cars):
+            car_h = np.random.randint(20, 36)
+            car_w = np.random.randint(40, 70)
+            top = np.random.randint(int(H * 0.28), int(H * 0.85 - car_h))
+            left = np.random.randint(10, W - car_w - 10)
+
+            # Màu xe ngẫu nhiên nổi bật (đỏ, vàng, trắng, xanh)
+            car_color = torch.tensor([
+                np.random.uniform(0.6, 1.0),
+                np.random.uniform(0.1, 0.4),
+                np.random.uniform(0.1, 0.4),
+            ]).view(3, 1, 1)
+            frame[:, top:top+car_h, left:left+car_w] = car_color
+            mask[:, top:top+car_h, left:left+car_w] = 1.0
+
+        frames.append(frame)
+        masks.append(mask)
+
+    return torch.stack(frames), torch.stack(masks)
+
+
+def visualize_and_save_results(
+    frames: torch.Tensor,
+    B_all: torch.Tensor,
+    M_all: torch.Tensor,
+    basis: SceneBasis,
+    save_path: str,
+    max_display: int = 4,
+):
+    """Vẽ và lưu kết quả trực quan hóa phân tách nền không cần ảnh nền."""
+    num_samples = min(max_display, frames.shape[0])
+    J = basis.J
+    fig, axes = plt.subplots(num_samples, 3 + J, figsize=(3.8 * (3 + J), 2.8 * num_samples))
+    if num_samples == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    for i in range(num_samples):
+        # 1. Ảnh gốc I_t
+        img_np = frames[i].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
+        axes[i, 0].imshow(img_np)
+        axes[i, 0].set_title(f"Frame #{i+1} Gốc $I_t$", fontsize=10)
+        axes[i, 0].axis("off")
+
+        # 2. Nền tái tạo B_t từ Scene Basis
+        bg_np = B_all[i].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
+        axes[i, 1].imshow(bg_np)
+        axes[i, 1].set_title(f"Nền Tái Tạo $B_t$", fontsize=10)
+        axes[i, 1].axis("off")
+
+        # 3. Mask xe tách được M_t = 1 - w_t
+        mask_np = M_all[i, 0].detach().cpu().numpy().clip(0, 1)
+        axes[i, 2].imshow(mask_np, cmap="hot", vmin=0, vmax=1)
+        axes[i, 2].set_title(f"Mask Xe $M_t = 1 - w_t$", fontsize=10)
+        axes[i, 2].axis("off")
+
+        # 4. Các mode cơ sở ánh sáng Ej
+        for j in range(J):
+            ej_cur = basis.Ej[0, j].permute(1, 2, 0).detach().cpu().numpy()
+            ej_norm = (ej_cur - ej_cur.min()) / (ej_cur.max() - ej_cur.min() + 1e-6)
+            axes[i, 3 + j].imshow(ej_norm)
+            axes[i, 3 + j].set_title(f"Mode Cơ Sở $E_{j+1}$", fontsize=9)
+            axes[i, 3 + j].axis("off")
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close()
+    print(f"📊 [Trực Quan Hóa] Đã lưu biểu đồ phân rã nền tại: {save_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Khớp Nền Đa Tạp Ít Chiều (Scene Basis Fitting) — Hướng 2 Mới")
+    parser.add_argument("--frames_dir", type=str, default=None, help="Thư mục chứa chuỗi ảnh frame giao thông")
+    parser.add_argument("--num_frames", type=int, default=16, help="Số lượng frame huấn luyện")
+    parser.add_argument("--iters", type=int, default=200, help="Số vòng lặp tối ưu hóa IRLS")
+    parser.add_argument("--J", type=int, default=4, help="Số chiều không gian ảnh cơ sở ánh sáng Ej")
+    parser.add_argument("--lr", type=float, default=1e-2, help="Tốc độ học")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction2_scene_fit", help="Thư mục lưu kết quả")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán")
+    args = parser.parse_args()
+
+    os.makedirs(args.save_dir, exist_ok=True)
+    device = torch.device(args.device)
+
+    print("\n" + "=" * 80)
+    print(" 🏙️ [HƯỚNG 2 MỚI] GIAI ĐOẠN 1: KHỚP NỀN ĐA TẠP ÍT CHIỀU (SCENE BASIS FITTING)")
+    print("    Phân rã cảnh giao thông hoàn toàn KHÔNG CẦN ẢNH NỀN MEDIAN")
+    print("=" * 80)
+    print(f" Thiết bị tính toán  : {device}")
+    print(f" Số chiều cơ sở (J)  : {args.J}")
+    print(f" Số vòng lặp (iters) : {args.iters}")
+    print(f" Thư mục lưu kết quả : {args.save_dir}")
+    print("-" * 80)
+
+    # 1. Thu thập hoặc khởi tạo chuỗi frames
+    frames = None
+    if args.frames_dir and os.path.isdir(args.frames_dir):
+        patterns = [os.path.join(args.frames_dir, "*.jpg"), os.path.join(args.frames_dir, "*.png")]
+        img_paths = []
+        for pat in patterns:
+            img_paths.extend(glob.glob(pat))
+        img_paths.sort()
+        if len(img_paths) >= 4:
+            print(f"📂 [Dữ Liệu] Tìm thấy {len(img_paths)} ảnh trong thư mục: {args.frames_dir}")
+            sel_paths = img_paths[:args.num_frames]
+            loaded = []
+            for p in sel_paths:
+                try:
+                    im = Image.open(p).convert("RGB").resize((448, 256))
+                    arr = torch.from_numpy(np.array(im)).permute(2, 0, 1).float() / 255.0
+                    loaded.append(arr)
+                except Exception:
+                    pass
+            if len(loaded) >= 4:
+                frames = torch.stack(loaded)
+
+    if frames is None:
+        print("💡 [Dữ Liệu] Chưa chỉ định thư mục ảnh hoặc thư mục trống -> Tự động sinh chuỗi giao thông mô phỏng...")
+        frames, gt_masks = generate_synthetic_traffic_sequence(num_frames=args.num_frames, H=256, W=448)
+
+    frames = frames.to(device)
+    print(f"✅ [Dữ Liệu] Đã chuẩn bị {frames.shape[0]} frame độ phân giải {frames.shape[2]}x{frames.shape[3]}.")
+
+    # 2. Thực hiện tối ưu hóa Scene Basis bằng IRLS
+    start_time = time.time()
+    print("\n🚀 [Tối Ưu Hóa] Bắt đầu quá trình khớp Scene Basis với Robust IRLS...")
+    basis, B_all, M_all, conf_all = fit_single_camera_scene_basis(
+        frames=frames,
+        pi=None,
+        J=args.J,
+        iters=args.iters,
+        lr=args.lr,
+        device=device,
+    )
+    elapsed = time.time() - start_time
+    print(f"⏱️ [Hoàn Tất] Quá trình khớp hoàn tất sau {elapsed:.2f} giây.")
+
+    # 3. Đánh giá nhanh kết quả tách nền
+    mean_fg_sparsity = (M_all > 0.5).float().mean().item()
+    mean_conf = conf_all.mean().item()
+    print(f"\n📈 [Chỉ Số Đánh Giá]:")
+    print(f"   - Tỷ lệ diện tích phương tiện tách được (Mask Sparsity): {mean_fg_sparsity * 100:.2f}%")
+    print(f"   - Độ tin cậy trung bình của nhãn giả (Mean Confidence) : {mean_conf:.4f}")
+
+    # 4. Lưu ảnh trực quan hóa
+    vis_path = os.path.join(args.save_dir, "scene_basis_visualization.png")
+    visualize_and_save_results(
+        frames=frames,
+        B_all=B_all,
+        M_all=M_all,
+        basis=basis,
+        save_path=vis_path,
+        max_display=min(4, frames.shape[0]),
+    )
+
+    # 5. Lưu mô hình SceneBasis
+    ckpt_path = os.path.join(args.save_dir, "scene_basis.pth")
+    torch.save({
+        "state_dict": basis.state_dict(),
+        "J": args.J,
+        "num_frames": frames.shape[0],
+        "metrics": {
+            "fg_sparsity": mean_fg_sparsity,
+            "mean_conf": mean_conf,
+        },
+        "args": vars(args),
+    }, ckpt_path)
+    print(f"💾 [Lưu Trữ] Đã lưu checkpoint SceneBasis tại: {ckpt_path}")
+    print("\n🎉 [SUCCESS] Chạy thực nghiệm Giai đoạn 1 Hướng 2 Mới thành công rực rỡ!\n")
+
+
+if __name__ == "__main__":
+    main()

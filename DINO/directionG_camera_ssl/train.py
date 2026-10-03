@@ -68,10 +68,9 @@ class DINOHead(nn.Module):
             layers.append(nn.Linear(hidden_dim, bottleneck_dim))
             self.mlp = nn.Sequential(*layers)
 
-        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
-        self.last_layer.weight_g.data.fill_(1)
-        if norm_last_layer:
-            self.last_layer.weight_g.requires_grad = False
+        self.last_layer = nn.Linear(bottleneck_dim, out_dim, bias=False)
+        nn.init.trunc_normal_(self.last_layer.weight, std=0.02)
+        self.norm_last_layer = norm_last_layer
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = x.shape
@@ -80,12 +79,20 @@ class DINOHead(nn.Module):
             x = x.reshape(B * N, D)
             feat = self.mlp(x)
             feat = F.normalize(feat, dim=-1, p=2)
-            out = self.last_layer(feat)
+            if self.norm_last_layer:
+                w = F.normalize(self.last_layer.weight, dim=-1, p=2)
+                out = F.linear(feat, w)
+            else:
+                out = self.last_layer(feat)
             return out.reshape(B, N, -1)
         else:  # (B, D)
             feat = self.mlp(x)
             feat = F.normalize(feat, dim=-1, p=2)
-            return self.last_layer(feat)
+            if self.norm_last_layer:
+                w = F.normalize(self.last_layer.weight, dim=-1, p=2)
+                return F.linear(feat, w)
+            else:
+                return self.last_layer(feat)
 
 
 class SyntheticTrafficDataset(Dataset):
