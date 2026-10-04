@@ -480,10 +480,10 @@ def train_bg_guided_dino(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện BG-Guided DINO SSL")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục ảnh background")
-    parser.add_argument("--origin_dir", type=str, default="output", help="Thư mục ảnh origin")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction1_bg_dino", help="Thư mục lưu checkpoint")
+    parser.add_argument("--origin_dir", "--data_dir", dest="origin_dir", type=str, default="output", help="Thư mục ảnh origin")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction1_bg_dino", help="Thư mục lưu checkpoint")
     parser.add_argument("--match_strategy", type=str, default="route_hourly", choices=["route_hourly", "same_name", "camera_id"])
-    parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone (dinov3_vits16 / dinov2_vits14)")
+    parser.add_argument("--backbone", "--model_name", dest="backbone", type=str, default="dinov3_vits16", help="Tên backbone (dinov3_vits16 / dinov2_vits14)")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (chỉ nạp backbone)")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để khôi phục toàn bộ trạng thái (epoch, optimizer, teacher, head, scaler) và tiếp tục huấn luyện")
     parser.add_argument("--epochs", type=int, default=10, help="Số epochs huấn luyện")
@@ -502,7 +502,9 @@ def parse_args():
     parser.add_argument("--max_samples", type=int, default=None, help="Giới hạn số mẫu thử nghiệm nhanh")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
-    parsed = parser.parse_args()
+    parsed, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
     if parsed.hf_token:
         os.environ["HF_TOKEN"] = parsed.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token

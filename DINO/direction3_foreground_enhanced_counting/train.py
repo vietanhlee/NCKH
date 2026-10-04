@@ -383,11 +383,11 @@ def train_fg_counting(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Foreground-Enhanced Vehicle Counting")
     parser.add_argument("--csv_file", type=str, default="stage1_perception/counting_labels_5012.csv")
-    parser.add_argument("--origin_dir", type=str, default="output")
+    parser.add_argument("--origin_dir", "--data_dir", dest="origin_dir", type=str, default="output")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction3_fg_counting")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction3_fg_counting")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
-    parser.add_argument("--backbone", type=str, default="dinov3_vits16")
+    parser.add_argument("--backbone", "--model_name", dest="backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn trọng số khởi tạo backbone ban đầu")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--mode", type=str, default="4channel", choices=["4channel", "spatial_attention"])
@@ -400,7 +400,9 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
-    parsed = parser.parse_args()
+    parsed, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
     if parsed.hf_token:
         os.environ["HF_TOKEN"] = parsed.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token

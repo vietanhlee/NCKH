@@ -82,7 +82,11 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
 
 def train_decomposition(args):
     torch.manual_seed(args.seed)
-    device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
+    if "cuda" in args.device.lower() and not torch.cuda.is_available():
+        print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
+        device = torch.device("cpu")
+    else:
+        device = torch.device(args.device)
     os.makedirs(args.save_dir, exist_ok=True)
     vis_dir = os.path.join(args.save_dir, "visual_progress")
     os.makedirs(vis_dir, exist_ok=True)
@@ -338,10 +342,10 @@ def train_decomposition(args):
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Traffic Scene Decomposition")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
-    parser.add_argument("--origin_dir", type=str, default="output", help="Thư mục origin")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction2_scene_decomp", help="Thư mục lưu")
+    parser.add_argument("--origin_dir", "--data_dir", dest="origin_dir", type=str, default="output", help="Thư mục origin")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_scene_decomp", help="Thư mục lưu")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
-    parser.add_argument("--backbone", type=str, default="dinov3_vits16")
+    parser.add_argument("--backbone", "--model_name", dest="backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file trọng số khởi tạo ban đầu")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--img_size", type=int, default=256)
@@ -361,7 +365,9 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
-    parsed = parser.parse_args()
+    parsed, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
     if parsed.hf_token:
         os.environ["HF_TOKEN"] = parsed.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token

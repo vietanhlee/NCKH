@@ -361,17 +361,25 @@ def visualize_and_save_results(
 
 def main():
     parser = argparse.ArgumentParser(description="Khớp Nền Đa Tạp Ít Chiều (Scene Basis Fitting) — Hướng 2 Mới")
-    parser.add_argument("--frames_dir", type=str, default=None, help="Thư mục chứa chuỗi ảnh frame giao thông")
+    parser.add_argument("--frames_dir", "--data_dir", "--origin_dir", dest="frames_dir", type=str, default=None, help="Thư mục chứa chuỗi ảnh frame giao thông")
     parser.add_argument("--num_frames", type=int, default=16, help="Số lượng frame huấn luyện")
     parser.add_argument("--iters", type=int, default=200, help="Số vòng lặp tối ưu hóa IRLS")
     parser.add_argument("--J", type=int, default=4, help="Số chiều không gian ảnh cơ sở ánh sáng Ej")
     parser.add_argument("--lr", type=float, default=1e-2, help="Tốc độ học")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction2_scene_fit", help="Thư mục lưu kết quả")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_scene_fit", help="Thư mục lưu kết quả")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán")
-    args = parser.parse_args()
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parsed, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
+    args = parsed
 
     os.makedirs(args.save_dir, exist_ok=True)
-    device = torch.device(args.device)
+    if "cuda" in args.device.lower() and not torch.cuda.is_available():
+        print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
+        device = torch.device("cpu")
+    else:
+        device = torch.device(args.device)
 
     print("\n" + "=" * 80)
     print(" 🏙️ [HƯỚNG 2 MỚI] GIAI ĐOẠN 1: KHỚP NỀN ĐA TẠP ÍT CHIỀU (SCENE BASIS FITTING)")

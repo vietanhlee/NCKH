@@ -292,7 +292,7 @@ class SyntheticTrafficDataset(Dataset):
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Tự Giám Sát DINOv3 Hướng G (TAM + AGM + SRS)")
     parser.add_argument("--data_dir", "--origin_dir", dest="data_dir", type=str, default=None, help="Thư mục ảnh giao thông thực tế (ví dụ: output)")
-    parser.add_argument("--model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
+    parser.add_argument("--model_name", "--backbone", dest="model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
     parser.add_argument("--batch_size", type=int, default=4, help="Kích thước batch")
     parser.add_argument("--epochs", type=int, default=5, help="Số epochs huấn luyện")
     parser.add_argument("--lr", type=float, default=5e-5, help="Tốc độ học")
@@ -301,10 +301,18 @@ def parse_args():
     parser.add_argument("--q_max", type=float, default=0.6, help="Tỷ lệ tối đa patch xe bị che AGM")
     parser.add_argument("--p_srs", type=float, default=0.5, help="Xác suất áp dụng SRS")
     parser.add_argument("--out_dim", type=int, default=4096, help="Số prototype DINO/iBOT head")
-    parser.add_argument("--output_dir", type=str, default="checkpoints/directionG", help="Thư mục lưu weights")
+    parser.add_argument("--output_dir", "--save_dir", dest="output_dir", type=str, default="checkpoints/directionG", help="Thư mục lưu weights")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (.pth / .safetensors)")
+    parser.add_argument("--device", type=str, default="cuda", help="Thiết bị tính toán ('cuda', 'cuda:0', hoặc 'cpu')")
+    parser.add_argument("--num_workers", type=int, default=0, help="Số luồng nạp dữ liệu DataLoader")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--use_amp", action="store_true", default=True, help="Sử dụng Mixed Precision (AMP) để tối ưu VRAM và tăng tốc độ")
+    parser.add_argument("--no_amp", dest="use_amp", action="store_false", help="Tắt Mixed Precision")
+    parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
-    parsed = parser.parse_args()
+    parsed, unknown = parser.parse_known_args()
+    if unknown:
+        print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
     if parsed.hf_token:
         os.environ["HF_TOKEN"] = parsed.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
@@ -313,9 +321,28 @@ def parse_args():
 
 def train_direction_g():
     args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    # Khởi tạo thiết bị tính toán an toàn
+    if "cuda" in args.device.lower() and not torch.cuda.is_available():
+        print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
+        device = torch.device("cpu")
+    else:
+        device = torch.device(args.device)
+
     print(f"🚀 [Direction G] Khởi chạy huấn luyện SSL trên thiết bị: {device}")
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Khởi tạo Mixed Precision Scaler
+    device_type = "cuda" if device.type == "cuda" else "cpu"
+    use_amp = args.use_amp and (device.type == "cuda")
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        scaler = torch.amp.GradScaler(device_type, enabled=use_amp)
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # 1. Khởi tạo Student & Teacher backbone
     print(f"📦 [Backbone] Nạp mô hình Student DINOv3 '{args.model_name}'...")
@@ -371,6 +398,39 @@ def train_direction_g():
     )
     optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
 
+    # Khôi phục trạng thái từ file resume nếu có
+    start_epoch = 0
+    best_loss = float("inf")
+    if args.resume and os.path.isfile(args.resume):
+        print(f"🔄 [Resume] Đang nạp checkpoint từ: {args.resume}")
+        try:
+            ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+        except TypeError:
+            ckpt = torch.load(args.resume, map_location=device)
+        if "student_backbone" in ckpt:
+            student_backbone.load_state_dict(ckpt["student_backbone"])
+        if "teacher_backbone" in ckpt:
+            teacher_backbone.load_state_dict(ckpt["teacher_backbone"])
+        if "student_dino_head" in ckpt:
+            student_dino_head.load_state_dict(ckpt["student_dino_head"])
+        if "student_ibot_head" in ckpt:
+            student_ibot_head.load_state_dict(ckpt["student_ibot_head"])
+        if "pos_stats" in ckpt:
+            pos_stats.load_state_dict(ckpt["pos_stats"])
+        if "optimizer" in ckpt:
+            optimizer.load_state_dict(ckpt["optimizer"])
+        if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
+            try:
+                scaler.load_state_dict(ckpt["scaler"])
+            except Exception:
+                pass
+        if "epoch" in ckpt:
+            start_epoch = int(ckpt["epoch"]) + 1
+            print(f"   ⏱️ Tiếp tục huấn luyện từ epoch {start_epoch + 1}")
+        if "best_loss" in ckpt:
+            best_loss = float(ckpt["best_loss"])
+        print("✅ [Resume] Đã khôi phục thành công trạng thái mô hình!")
+
     # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
     if args.data_dir and os.path.isdir(args.data_dir):
         try:
@@ -385,7 +445,14 @@ def train_direction_g():
         print("💡 [Data] Chưa truyền --data_dir -> Sử dụng SyntheticTrafficDataset mô phỏng...")
         dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
 
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=False)
+    loader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=(device.type == "cuda"),
+        drop_last=False,
+    )
 
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
     step = 0
@@ -393,8 +460,12 @@ def train_direction_g():
     history = {"total": [], "dino": [], "ibot": [], "koleo": []}
     last_visual_data = None
 
+    best_checkpoint_path = os.path.join(args.output_dir, "best_checkpoint.pth")
+    last_checkpoint_path = os.path.join(args.output_dir, "last_checkpoint.pth")
+    latest_checkpoint_path = os.path.join(args.output_dir, "dinov3_directionG_latest.pth")
+
     try:
-        for epoch in range(args.epochs):
+        for epoch in range(start_epoch, args.epochs):
             student_backbone.train()
             student_dino_head.train()
             student_ibot_head.train()
@@ -405,18 +476,21 @@ def train_direction_g():
             epoch_koleo_losses = []
 
             for batch in loader:
-                x1 = batch["x1"].to(device)
-                x2 = batch["x2"].to(device)
-                cids = batch["cid"].to(device)
+                x1 = batch["x1"].to(device, non_blocking=(device.type == "cuda"))
+                x2 = batch["x2"].to(device, non_blocking=(device.type == "cuda"))
+                cids = batch["cid"].to(device, non_blocking=(device.type == "cuda"))
                 B = x1.shape[0]
 
                 # Bước A: Trích xuất đặc trưng đóng băng cho TAM
                 with torch.no_grad():
-                    u1 = frozen_extractor(x1)  # (B, 448, 64)
-                    u2 = frozen_extractor(x2)  # (B, 448, 64)
-                    pos_stats.update(cids, u1)
-                    a1, valid1 = pos_stats.atypicality(cids, u1)
-                    a2, valid2 = pos_stats.atypicality(cids, u2)
+                    with torch.amp.autocast(device_type=device_type, enabled=use_amp):
+                        u1 = frozen_extractor(x1)  # (B, 448, 64)
+                        u2 = frozen_extractor(x2)  # (B, 448, 64)
+                    u1_f = u1.float()
+                    u2_f = u2.float()
+                    pos_stats.update(cids, u1_f)
+                    a1, valid1 = pos_stats.atypicality(cids, u1_f)
+                    a2, valid2 = pos_stats.atypicality(cids, u2_f)
 
                     calibrator.push(a1, valid1)
                     if step % 20 == 0:
@@ -446,7 +520,7 @@ def train_direction_g():
                     masks.append(m_b)
                 mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
 
-                # Bước D: Forward Student & Teacher
+                # Bước D: Forward Student & Teacher trong AMP autocast
                 target_H = 16 * patch_size
                 target_W = 28 * patch_size
                 if x1.shape[-2] != target_H or x1.shape[-1] != target_W:
@@ -456,30 +530,33 @@ def train_direction_g():
                     x1_vit = x1
                     x_student_vit = x_student
 
-                # Teacher nhận ảnh gốc x1_vit không che
-                with torch.no_grad():
-                    t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
-                    t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
-                    t_dino_logits = teacher_dino_head(t_cls)
-                    t_ibot_logits = teacher_ibot_head(t_patches)
+                with torch.amp.autocast(device_type=device_type, enabled=use_amp):
+                    # Teacher nhận ảnh gốc x1_vit không che
+                    with torch.no_grad():
+                        t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
+                        t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
+                        t_dino_logits = teacher_dino_head(t_cls)
+                        t_ibot_logits = teacher_ibot_head(t_patches)
 
-                # Student nhận ảnh x_student_vit (đã qua SRS)
-                s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
-                s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
-                s_dino_logits = student_dino_head(s_cls)
-                s_ibot_logits = student_ibot_head(s_patches)
+                    # Student nhận ảnh x_student_vit (đã qua SRS)
+                    s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
+                    s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
+                    s_dino_logits = student_dino_head(s_cls)
+                    s_ibot_logits = student_ibot_head(s_patches)
 
-                # Bước E: Tính tổn thất Loss
-                loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
-                loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
-                loss_koleo = koleo_loss_fn(s_cls)
-                total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
+                    # Bước E: Tính tổn thất Loss
+                    loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
+                    loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
+                    loss_koleo = koleo_loss_fn(s_cls)
+                    total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
 
-                # Bước F: Tối ưu Gradient
+                # Bước F: Tối ưu Gradient qua GradScaler
                 optimizer.zero_grad()
-                total_loss.backward()
+                scaler.scale(total_loss).backward()
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
 
                 # Bước G: Cập nhật EMA Teacher (momentum 0.996)
                 momentum = 0.996
@@ -502,7 +579,7 @@ def train_direction_g():
                     "pi": pi1.detach().cpu(),
                     "mask": mask_batch.detach().cpu(),
                     "x_srs": x_student.detach().cpu(),
-                    "patch_features": s_patches.detach().cpu(),
+                    "patch_features": s_patches.detach().cpu().float(),
                 }
 
                 step += 1
@@ -524,7 +601,7 @@ def train_direction_g():
             print(f"🌟 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] Loss TB: {avg_tot:.4f} "
                   f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f})")
 
-            # Cập nhật hình ảnh trực quan hóa và đồ thị sau mỗi epoch (hoặc epoch cuối)
+            # Cập nhật hình ảnh trực quan hóa và đồ thị sau mỗi epoch
             if last_visual_data is not None:
                 vis_save_path = os.path.join(args.output_dir, "directionG_progress.png")
                 save_direction_g_visuals(
@@ -536,6 +613,29 @@ def train_direction_g():
                     save_path=vis_save_path,
                     epoch=epoch + 1,
                 )
+
+            # Lưu checkpoint từng epoch: last_checkpoint và best_checkpoint nếu loss thấp nhất
+            epoch_state = {
+                "epoch": epoch,
+                "student_backbone": student_backbone.state_dict(),
+                "teacher_backbone": teacher_backbone.state_dict(),
+                "student_dino_head": student_dino_head.state_dict(),
+                "student_ibot_head": student_ibot_head.state_dict(),
+                "pos_stats": pos_stats.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scaler": scaler.state_dict() if use_amp else None,
+                "history": history,
+                "best_loss": best_loss,
+                "args": vars(args),
+            }
+            torch.save(epoch_state, last_checkpoint_path)
+            torch.save(epoch_state, latest_checkpoint_path)
+
+            if avg_tot < best_loss:
+                best_loss = avg_tot
+                epoch_state["best_loss"] = best_loss
+                torch.save(epoch_state, best_checkpoint_path)
+                print(f"🏆 [Checkpoint] Đã lưu mô hình tốt nhất mới (Best Loss: {best_loss:.4f}) tại: {best_checkpoint_path}")
 
     except KeyboardInterrupt:
         print("\n⚠️ [Dừng Sớm] Nhận tín hiệu ngắt (Ctrl+C). Đang tiến hành lưu khẩn cấp trạng thái và hình ảnh...")
@@ -550,22 +650,26 @@ def train_direction_g():
         json.dump({
             "history": history,
             "final_epoch": len(history["total"]),
+            "best_loss": best_loss,
             "args": vars(args),
             "total_time_seconds": time.time() - start_time,
         }, f, indent=2, ensure_ascii=False)
     print(f"📈 [Metrics] Đã lưu thông số chi tiết tại: {metrics_path}")
 
     # 8. Lưu checkpoint toàn diện
-    save_path = os.path.join(args.output_dir, "dinov3_directionG_latest.pth")
     torch.save({
+        "epoch": len(history["total"]) - 1,
         "student_backbone": student_backbone.state_dict(),
         "teacher_backbone": teacher_backbone.state_dict(),
         "student_dino_head": student_dino_head.state_dict(),
         "student_ibot_head": student_ibot_head.state_dict(),
         "pos_stats": pos_stats.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scaler": scaler.state_dict() if use_amp else None,
         "history": history,
+        "best_loss": best_loss,
         "args": vars(args),
-    }, save_path)
+    }, latest_checkpoint_path)
 
     elapsed_time = time.time() - start_time
     vis_path = os.path.join(args.output_dir, "directionG_progress.png")
@@ -573,14 +677,15 @@ def train_direction_g():
     print("\n" + "=" * 80)
     print(" 🎉 [HOÀN TẤT HUẤN LUYỆN TỰ GIÁM SÁT HƯỚNG G]")
     print("=" * 80)
-    print(f" 💾 Checkpoint Weights        : {save_path}")
-    print(f" 🖼️ Ảnh Trực Quan Hóa (Visual): {vis_path}")
-    print(f" 📊 Đồ Thị Hàm Mất Mát (Loss) : {loss_curve_path}")
-    print(f" 📈 Nhật Ký Huấn Luyện (JSON) : {metrics_path}")
-    print(f" ⏱️ Tổng Thời Gian Thực Thi   : {elapsed_time:.2f}s")
+    print(f" 💾 Checkpoint Weights (Latest): {latest_checkpoint_path}")
+    print(f" 💾 Checkpoint Weights (Best)  : {best_checkpoint_path}")
+    print(f" 🖼️ Ảnh Trực Quan Hóa (Visual) : {vis_path}")
+    print(f" 📊 Đồ Thị Hàm Mất Mát (Loss)  : {loss_curve_path}")
+    print(f" 📈 Nhật Ký Huấn Luyện (JSON)  : {metrics_path}")
+    print(f" ⏱️ Tổng Thời Gian Thực Thi    : {elapsed_time:.2f}s")
     print("=" * 80 + "\n")
 
-    return save_path
+    return latest_checkpoint_path
 
 
 if __name__ == "__main__":
