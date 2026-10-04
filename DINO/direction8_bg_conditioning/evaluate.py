@@ -257,20 +257,31 @@ def run_full_conditioning_evaluation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Direction 8 Background Conditioning Evaluation")
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction8_bg_conditioning", help="Thư mục lưu báo cáo")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
     cli_args, _ = parser.parse_known_args()
 
-    print("🚀 Đang khởi chạy kiểm thử Direction 8 Background Conditioning Evaluation...")
+    try:
+        from common.gpu_utils import get_available_devices
+        primary_dev, num_gpus, gpu_names = get_available_devices()
+    except Exception:
+        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        primary_dev = torch.device("cuda:0" if num_gpus > 0 else "cpu")
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+
+    device = primary_dev if "cuda" in cli_args.device.lower() and num_gpus > 0 else torch.device("cpu")
+    print(f"🚀 Đang khởi chạy kiểm thử Direction 8 Background Conditioning Evaluation trên {device} (Số GPU: {num_gpus})...")
+
     class DummyBackbone(nn.Module):
         def forward(self, x):
             B, C, H, W = x.shape
             N = (H // 16) * (W // 16)
-            return torch.randn(B, N, 384)
+            return torch.randn(B, N, 384, device=x.device)
 
-    backbone = DummyBackbone()
+    backbone = DummyBackbone().to(device)
     extractor = RobustSceneDescriptorExtractor(backbone, feature_dim=384)
 
-    model_film = BackgroundConditionedModel(backbone, feature_dim=384, descriptor_dim=1152, conditioning_mode="film")
-    model_none = BackgroundConditionedModel(backbone, feature_dim=384, descriptor_dim=1152, conditioning_mode="none")
+    model_film = BackgroundConditionedModel(backbone, feature_dim=384, descriptor_dim=1152, conditioning_mode="film").to(device)
+    model_none = BackgroundConditionedModel(backbone, feature_dim=384, descriptor_dim=1152, conditioning_mode="none").to(device)
 
     models = {"FiLM": model_film, "No-Conditioning": model_none}
 
@@ -284,10 +295,9 @@ if __name__ == "__main__":
         })
 
     loader = torch.utils.data.DataLoader(dataset, batch_size=2)
-    device = torch.device("cpu")
 
-    sample_f = torch.rand(1, 3, 256, 448)
-    sample_b = torch.rand(3, 256, 448)
+    sample_f = torch.rand(1, 3, 256, 448, device=device)
+    sample_b = torch.rand(3, 256, 448, device=device)
 
     run_full_conditioning_evaluation(
         models=models,

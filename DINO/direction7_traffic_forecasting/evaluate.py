@@ -258,14 +258,25 @@ def run_full_forecasting_evaluation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Direction 7 Traffic Forecasting Evaluation")
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction7_traffic_forecasting", help="Thư mục lưu báo cáo")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
     cli_args, _ = parser.parse_known_args()
 
-    print("🚀 Đang khởi chạy kiểm thử Direction 7 Traffic Forecasting Suite...")
+    try:
+        from common.gpu_utils import get_available_devices
+        primary_dev, num_gpus, gpu_names = get_available_devices()
+    except Exception:
+        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        primary_dev = torch.device("cuda:0" if num_gpus > 0 else "cpu")
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+
+    device = primary_dev if "cuda" in cli_args.device.lower() and num_gpus > 0 else torch.device("cpu")
+    print(f"🚀 Đang khởi chạy kiểm thử Direction 7 Traffic Forecasting Suite trên {device} (Số GPU: {num_gpus})...")
+
     N = 20
     T_in = 12
     T_out = 12
-    model = CityScaleTrafficForecastingModel(num_nodes=N, in_channels=5, hidden_channels=16, out_steps=T_out)
-    phys_adj = torch.eye(N)
+    model = CityScaleTrafficForecastingModel(num_nodes=N, in_channels=5, hidden_channels=16, out_steps=T_out).to(device)
+    phys_adj = torch.eye(N, device=device)
 
     B = 4
     dummy_x = torch.randn(B, 5, N, T_in)
@@ -274,7 +285,6 @@ if __name__ == "__main__":
 
     dataset = [{"x_input": dummy_x[i], "y_target": dummy_y[i], "m_target": dummy_m[i]} for i in range(B)]
     loader = torch.utils.data.DataLoader(dataset, batch_size=2)
-    device = torch.device("cpu")
 
     run_full_forecasting_evaluation(model, loader, phys_adj, device, save_dir=cli_args.save_dir)
     print("✅ Hoàn tất kiểm thử Direction 7!")

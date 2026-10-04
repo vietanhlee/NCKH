@@ -231,16 +231,27 @@ def evaluate_anomaly_detection_pipeline(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Direction 6 Anomaly Detection Evaluation")
     parser.add_argument("--save_dir", type=str, default="checkpoints/direction6_anomaly_detection", help="Thư mục lưu báo cáo")
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
     cli_args, _ = parser.parse_known_args()
 
-    print("🚀 Đang chạy kiểm thử Direction 6 Anomaly Detection Evaluation Pipeline...")
+    try:
+        from common.gpu_utils import get_available_devices
+        primary_dev, num_gpus, gpu_names = get_available_devices()
+    except Exception:
+        num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        primary_dev = torch.device("cuda:0" if num_gpus > 0 else "cpu")
+        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
+
+    device = primary_dev if "cuda" in cli_args.device.lower() and num_gpus > 0 else torch.device("cpu")
+    print(f"🚀 Đang chạy kiểm thử Direction 6 Anomaly Detection Evaluation Pipeline trên {device} (Số GPU: {num_gpus})...")
+
     class DummyBackbone(torch.nn.Module):
         def forward(self, x):
             B, C, H, W = x.shape
             N = (H // 16) * (W // 16)
-            return torch.randn(B, N, 384)
+            return torch.randn(B, N, 384, device=x.device)
 
-    backbone = DummyBackbone()
+    backbone = DummyBackbone().to(device)
     extractor = DINOv3PatchFeatureExtractor(backbone, feature_dim=384, proj_dim=128)
 
     bank = NormalMemoryBank("cam_01", "morning_peak", feature_dim=128)
@@ -248,8 +259,8 @@ if __name__ == "__main__":
     bank.fit_coreset(sim_normal_feats, subsampling_ratio=0.2)
 
     T = 25
-    test_seq = torch.randn(T, 3, 256, 448)
-    road_mask = torch.ones(256, 448)
+    test_seq = torch.randn(T, 3, 256, 448, device=device)
+    road_mask = torch.ones(256, 448, device=device)
     test_seq, _ = SyntheticAnomalyGenerator.inject_static_obstacle(test_seq, road_mask, start_t=10, duration=8)
     gt_labels = np.zeros(T, dtype=int)
     gt_labels[10:18] = 1
