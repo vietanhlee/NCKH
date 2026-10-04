@@ -64,10 +64,11 @@ class FrozenExtractor(nn.Module):
 
         # 2. Khởi tạo ma trận chiếu PCA (buffer không gradient)
         # Khởi tạo mặc định bằng phân rã trực giao để dùng được ngay trước khi fit PCA
-        q, _ = torch.linalg.qr(torch.randn(self.embed_dim, pca_dim))
+        q, _ = torch.linalg.qr(torch.randn(self.embed_dim, pca_dim, device=self.device))
         self.register_buffer("pca_components", q)  # (embed_dim, pca_dim)
-        self.register_buffer("pca_mean", torch.zeros(self.embed_dim))
-        self.register_buffer("is_pca_fitted", torch.tensor(False))
+        self.register_buffer("pca_mean", torch.zeros(self.embed_dim, device=self.device))
+        self.register_buffer("is_pca_fitted", torch.tensor(False, device=self.device))
+        self.to(self.device)
 
     @torch.no_grad()
     def fit_pca(self, sample_tokens: torch.Tensor):
@@ -75,7 +76,7 @@ class FrozenExtractor(nn.Module):
         Fit ma trận PCA từ tập mẫu tokens thu thập từ các frame.
         sample_tokens: Tensor (N, embed_dim)
         """
-        sample_tokens = sample_tokens.to(self.device).float()
+        sample_tokens = sample_tokens.to(self.pca_mean.device).float()
         # Chuẩn hóa L2 trước khi PCA
         sample_tokens = F.normalize(sample_tokens, p=2, dim=-1)
         mean = sample_tokens.mean(dim=0)
@@ -84,7 +85,7 @@ class FrozenExtractor(nn.Module):
         _, _, V = torch.pca_lowrank(centered, q=self.pca_dim, center=False)
         self.pca_mean.copy_(mean)
         self.pca_components.copy_(V[:, :self.pca_dim])
-        self.is_pca_fitted.copy_(torch.tensor(True))
+        self.is_pca_fitted.copy_(torch.tensor(True, device=self.is_pca_fitted.device))
         print(f"✅ [FrozenExtractor] Đã fit thành công ma trận chiếu PCA: {self.embed_dim} -> {self.pca_dim}")
 
     @torch.no_grad()
@@ -103,7 +104,6 @@ class FrozenExtractor(nn.Module):
             x = F.interpolate(x, size=(target_H, target_W), mode="bilinear", align_corners=False)
             H, W = target_H, target_W
 
-        x = x.to(self.device)
         cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
         # patch_spatial: (B, H_patches, W_patches, embed_dim)
         B_cur, Hp, Wp, D = patch_spatial.shape
@@ -113,8 +113,10 @@ class FrozenExtractor(nn.Module):
         patch_norm = F.normalize(patch_flat, p=2, dim=-1)
 
         # 2. Chiếu PCA
-        patch_centered = patch_norm - self.pca_mean.view(1, 1, -1)
-        patch_pca = torch.matmul(patch_centered, self.pca_components)  # (B, 448, pca_dim)
+        pca_mean = self.pca_mean.to(patch_norm.device)
+        pca_components = self.pca_components.to(patch_norm.device)
+        patch_centered = patch_norm - pca_mean.view(1, 1, -1)
+        patch_pca = torch.matmul(patch_centered, pca_components)  # (B, 448, pca_dim)
 
         # 3. Chuẩn hóa L2 trong không gian PCA
         u = F.normalize(patch_pca, p=2, dim=-1)

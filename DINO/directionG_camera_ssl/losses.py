@@ -97,7 +97,7 @@ class DINOLoss(nn.Module):
     @torch.no_grad()
     def update_center(self, teacher_output: torch.Tensor):
         batch_center = torch.mean(teacher_output, dim=0, keepdim=True)
-        self.center = self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum)
+        self.center.copy_(self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum))
 
 
 class iBOTPatchLoss(nn.Module):
@@ -159,7 +159,7 @@ class iBOTPatchLoss(nn.Module):
     def update_center(self, teacher_patches: torch.Tensor):
         if teacher_patches.shape[0] > 0:
             batch_center = torch.mean(teacher_patches, dim=0, keepdim=True)
-            self.center = self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum)
+            self.center.copy_(self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum))
 
 
 class RICLoss(nn.Module):

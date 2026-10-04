@@ -76,19 +76,19 @@ class PositionStats(nn.Module):
 
         new_mu = F.normalize(torch.randn(new_cams, self.num_patches, self.num_states, self.feat_dim, device=device, dtype=dtype), p=2, dim=-1)
         new_mu[:self.num_cams] = self.mu
-        self.mu = new_mu
+        self.register_buffer("mu", new_mu)
 
         new_w = torch.full((new_cams, self.num_patches, self.num_states), 1.0 / self.num_states, device=device)
         new_w[:self.num_cams] = self.w
-        self.w = new_w
+        self.register_buffer("w", new_w)
 
         new_s = torch.full((new_cams, self.num_patches, self.num_states), 0.2, device=device)
         new_s[:self.num_cams] = self.s
-        self.s = new_s
+        self.register_buffer("s", new_s)
 
         new_init = torch.zeros(new_cams, dtype=torch.bool, device=device)
         new_init[:self.num_cams] = self.is_initialized
-        self.is_initialized = new_init
+        self.register_buffer("is_initialized", new_init)
         self.num_cams = new_cams
 
     @torch.no_grad()

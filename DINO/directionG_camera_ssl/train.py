@@ -457,15 +457,29 @@ def train_direction_g():
 
     # 3. Module FrozenExtractor & PositionStats cho TAM
     print("🔍 [TAM] Khởi tạo FrozenExtractor & PositionStats...")
+    # Tạo bản sao độc lập của teacher_backbone để đảm bảo:
+    # 1. FrozenExtractor đóng băng tuyệt đối, không can thiệp vào requires_grad của Student
+    # 2. Không cần tải lại trọng số từ HuggingFace Hub lần 2
+    # 3. Toàn bộ tham số và buffers nằm chuẩn trên primary device (cuda:0)
+    frozen_backbone = copy.deepcopy(raw_t.backbone)
+    for p in frozen_backbone.parameters():
+        p.requires_grad = False
+
     frozen_extractor = FrozenExtractor(
         model_name=args.model_name,
         pca_dim=64,
         device=device,
         hf_token=args.hf_token,
-        backbone=raw_s.backbone,
+        backbone=frozen_backbone,
         embed_dim=embed_dim,
         patch_size=patch_size,
-    )
+    ).to(device)
+
+    for b in frozen_extractor.buffers():
+        b.data = b.data.to(device)
+    for p in frozen_extractor.parameters():
+        p.data = p.data.to(device)
+
     if num_gpus > 1:
         frozen_extractor = nn.DataParallel(frozen_extractor)
 
