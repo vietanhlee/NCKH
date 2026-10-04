@@ -291,7 +291,7 @@ def train_bg_guided_dino(args):
         avg_loss = epoch_loss / len(loader)
         print(f"📊 Epoch [{epoch+1}/{args.epochs}] Hoàn tất — Loss TB: {avg_loss:.4f} | Teacher Entropy: {dino_loss_fn.last_entropy:.3f}")
 
-        # Lưu Checkpoint (chuẩn hóa không dính tiền tố 'module.')
+        # Lưu Periodic Checkpoint
         if (epoch + 1) % args.save_every == 0 or (epoch + 1) == args.epochs:
             ckpt_path = os.path.join(args.save_dir, f"bg_dino_{args.backbone}_ep{epoch+1}.pth")
             save_checkpoint(
@@ -310,25 +310,25 @@ def train_bg_guided_dino(args):
                 verbose=True,
             )
 
-            # Lưu Best Checkpoint
-            if avg_loss < best_loss:
-                best_loss = avg_loss
-                best_ckpt_path = os.path.join(args.save_dir, "best_checkpoint.pth")
-                save_checkpoint(
-                    save_path=best_ckpt_path,
-                    model=raw_model.student_backbone,
-                    optimizer=optimizer,
-                    scaler=scaler,
-                    epoch=epoch + 1,
-                    metrics={"loss": avg_loss, "entropy": dino_loss_fn.last_entropy},
-                    extra_dict={
-                        "teacher_state": clean_state_dict(raw_model.teacher_backbone.state_dict()),
-                        "head_state": clean_state_dict(raw_model.student_head.state_dict()),
-                        "num_gpus": num_gpus,
-                        "args": vars(args),
-                    },
-                    verbose=False,
-                )
+        # Lưu Best Checkpoint (luôn cập nhật ngay khi loss tốt hơn)
+        if avg_loss < best_loss or epoch == start_epoch:
+            best_loss = avg_loss
+            best_ckpt_path = os.path.join(args.save_dir, "best_checkpoint.pth")
+            save_checkpoint(
+                save_path=best_ckpt_path,
+                model=raw_model.student_backbone,
+                optimizer=optimizer,
+                scaler=scaler,
+                epoch=epoch + 1,
+                metrics={"loss": avg_loss, "entropy": dino_loss_fn.last_entropy},
+                extra_dict={
+                    "teacher_state": clean_state_dict(raw_model.teacher_backbone.state_dict()),
+                    "head_state": clean_state_dict(raw_model.student_head.state_dict()),
+                    "num_gpus": num_gpus,
+                    "args": vars(args),
+                },
+                verbose=False,
+            )
 
         # Lưu Last Checkpoint
         last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")

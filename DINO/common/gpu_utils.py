@@ -271,6 +271,10 @@ def save_checkpoint(
         print(f"💾 [Checkpoint] Đã lưu mô hình chuẩn sạch (Zero 'module.' prefix) tại: {save_path}")
 
 
+# Bí danh tương thích ngược
+save_clean_checkpoint = save_checkpoint
+
+
 def load_checkpoint(
     load_path: str,
     model: nn.Module,

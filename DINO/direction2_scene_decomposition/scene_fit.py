@@ -33,6 +33,26 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# Thêm đường dẫn để nạp tiện ích chung Multi-GPU
+_CURR_DIR = os.path.dirname(os.path.abspath(__file__))
+_PARENT_DIR = os.path.dirname(_CURR_DIR)
+if _PARENT_DIR not in sys.path:
+    sys.path.insert(0, _PARENT_DIR)
+
+try:
+    from common.gpu_utils import get_available_devices, clean_state_dict
+except ImportError:
+    try:
+        from DINO.common.gpu_utils import get_available_devices, clean_state_dict
+    except ImportError:
+        def get_available_devices():
+            if torch.cuda.is_available():
+                return torch.device("cuda:0"), torch.cuda.device_count(), [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+            return torch.device("cpu"), 0, []
+        def clean_state_dict(sd):
+            return {k.replace("module.", ""): v for k, v in sd.items()}
+
+
 
 class SceneBasis(nn.Module):
     """
@@ -375,17 +395,20 @@ def main():
     args = parsed
 
     os.makedirs(args.save_dir, exist_ok=True)
-    if "cuda" in args.device.lower() and not torch.cuda.is_available():
-        print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
+    primary_dev, num_gpus, gpu_names = get_available_devices()
+    if args.device.lower() == "cpu" or num_gpus == 0:
         device = torch.device("cpu")
+        print("🖥️ [Hardware] Sử dụng CPU.")
     else:
-        device = torch.device(args.device)
+        device = primary_dev
+        print(f"⚡ [Hardware] Tự động kích hoạt GPU: {gpu_names[0]} (Tổng số GPU khả dụng: {num_gpus})")
 
     print("\n" + "=" * 80)
     print(" 🏙️ [HƯỚNG 2 MỚI] GIAI ĐOẠN 1: KHỚP NỀN ĐA TẠP ÍT CHIỀU (SCENE BASIS FITTING)")
     print("    Phân rã cảnh giao thông hoàn toàn KHÔNG CẦN ẢNH NỀN MEDIAN")
     print("=" * 80)
     print(f" Thiết bị tính toán  : {device}")
+    print(f" Số GPU khả dụng     : {num_gpus}")
     print(f" Số chiều cơ sở (J)  : {args.J}")
     print(f" Số vòng lặp (iters) : {args.iters}")
     print(f" Thư mục lưu kết quả : {args.save_dir}")
@@ -474,10 +497,9 @@ def main():
         Image.fromarray(bg_np).save(os.path.join(pseudo_bg_dir, fname))
     print(f"🖼️ [Pseudo-Backgrounds] Đã xuất {num_to_export} ảnh nền tách được tại: {pseudo_bg_dir}")
 
-    # 6. Lưu mô hình SceneBasis
-    ckpt_path = os.path.join(args.save_dir, "scene_basis.pth")
-    torch.save({
-        "state_dict": basis.state_dict(),
+    # 6. Lưu mô hình SceneBasis (Bao gồm scene_basis.pth, best_checkpoint.pth và last_checkpoint.pth)
+    ckpt_dict = {
+        "state_dict": clean_state_dict(basis.state_dict()),
         "J": args.J,
         "num_frames": frames.shape[0],
         "metrics": {
@@ -485,8 +507,16 @@ def main():
             "mean_conf": mean_conf,
         },
         "args": vars(args),
-    }, ckpt_path)
-    print(f"💾 [Lưu Trữ] Đã lưu checkpoint SceneBasis tại: {ckpt_path}")
+    }
+    ckpt_path = os.path.join(args.save_dir, "scene_basis.pth")
+    best_ckpt_path = os.path.join(args.save_dir, "best_checkpoint.pth")
+    last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+    torch.save(ckpt_dict, ckpt_path)
+    torch.save(ckpt_dict, best_ckpt_path)
+    torch.save(ckpt_dict, last_ckpt_path)
+    print(f"💾 [Lưu Trữ] Đã lưu checkpoint SceneBasis tại   : {ckpt_path}")
+    print(f"🏆 [Lưu Trữ] Đã lưu checkpoint tốt nhất tại    : {best_ckpt_path}")
+    print(f"📦 [Lưu Trữ] Đã lưu checkpoint cuối cùng tại   : {last_ckpt_path}")
     print("\n🎉 [SUCCESS] Chạy thực nghiệm Giai đoạn 1 Hướng 2 Mới thành công rực rỡ!\n")
 
 

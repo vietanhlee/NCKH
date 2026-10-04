@@ -44,6 +44,39 @@ try:
 except Exception:
     pass
 
+# Import Multi-GPU and safe checkpoint utilities
+try:
+    from common.gpu_utils import (
+        get_available_devices,
+        setup_multi_gpu,
+        unwrap_model,
+        clean_state_dict,
+        smart_load_state_dict,
+        save_clean_checkpoint,
+    )
+except ImportError:
+    try:
+        from DINO.common.gpu_utils import (
+            get_available_devices,
+            setup_multi_gpu,
+            unwrap_model,
+            clean_state_dict,
+            smart_load_state_dict,
+            save_clean_checkpoint,
+        )
+    except ImportError:
+        def get_available_devices():
+            if torch.cuda.is_available():
+                return torch.device("cuda:0"), torch.cuda.device_count(), [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+            return torch.device("cpu"), 0, []
+        def unwrap_model(m):
+            return m.module if hasattr(m, "module") else m
+        def clean_state_dict(sd):
+            return {k.replace("module.", ""): v for k, v in sd.items()}
+        def smart_load_state_dict(m, sd, strict=False):
+            return m.load_state_dict(clean_state_dict(sd), strict=strict)
+
+
 # Note: If xformers is not installed, PyTorch uses native FlashAttention / SDPA.
 # To enable xformers acceleration, run: pip install xformers
 
@@ -652,7 +685,32 @@ def train_ssl_dinov3(args):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
 
-    device = torch.device(args.device if torch.cuda.is_available() and args.device == "cuda" else "cpu")
+    primary_device, num_gpus, gpu_names = get_available_devices()
+    if args.device.lower() == "cpu" or num_gpus == 0:
+        device = torch.device("cpu")
+        num_gpus = 0
+        effective_batch_size = args.batch_size
+        effective_lr = args.lr
+        print("🖥️ [Hardware] Chạy trên CPU (Không phát hiện GPU hoặc được chỉ định thủ công).")
+    else:
+        device = primary_device
+        if num_gpus > 1:
+            effective_batch_size = args.batch_size * num_gpus
+            effective_lr = args.lr * num_gpus
+            print("\n" + "=" * 70)
+            print(f" 🔥 TỰ ĐỘNG PHÁT HIỆN HỆ THỐNG ĐA GPU (MULTI-GPU: {num_gpus} GPUs)")
+            print("=" * 70)
+            for i, name in enumerate(gpu_names):
+                mem_gb = torch.cuda.get_device_properties(i).total_memory / (1024 ** 3)
+                print(f"   ⚡ GPU [{i}]: {name} | VRAM: {mem_gb:.2f} GB")
+            print(f"   ⚙️ Batch size mỗi GPU : {args.batch_size} -> TỔNG BATCH SIZE: {effective_batch_size}")
+            print(f"   ⚙️ Learning rate gốc  : {args.lr:.2e} -> EFFECTIVE LR: {effective_lr:.2e}")
+            print("=" * 70 + "\n")
+        else:
+            effective_batch_size = args.batch_size
+            effective_lr = args.lr
+            print(f"⚡ [Hardware] Sử dụng GPU: {gpu_names[0]}")
+
     os.makedirs(args.save_dir, exist_ok=True)
 
     # Auto-adjust patch-aligned crop resolutions (DINOv3 uses Patch-16, DINOv2 uses Patch-14)
@@ -668,10 +726,11 @@ def train_ssl_dinov3(args):
     print("=" * 70)
     print(f" Pretrained Backbone : {args.backbone} (Meta Foundation Model)")
     print(f" Compute Device      : {device}")
-    print(f" Batch Size          : {args.batch_size}")
+    print(f" GPU Count           : {num_gpus}")
+    print(f" Effective Batch Size: {effective_batch_size} ({args.batch_size} per GPU)")
     print(f" Epochs              : {args.epochs}")
-    print(f" Peak LR (Head)      : {args.lr}")
-    print(f" Backbone LR Scale   : {args.backbone_lr_scale} (Peak Backbone LR: {args.lr * args.backbone_lr_scale})")
+    print(f" Effective Peak LR   : {effective_lr:.2e}")
+    print(f" Backbone LR Scale   : {args.backbone_lr_scale} (Peak Backbone LR: {effective_lr * args.backbone_lr_scale:.2e})")
     print(f" Freeze Last Layer   : {args.freeze_last_layer_epochs} epoch(s) [anti-collapse]")
     print(f" Center Momentum     : {args.center_momentum}")
     print(f" Global Crop Size    : {size_global}x{size_global} (Patch {patch_size} Divisible)")
@@ -708,10 +767,10 @@ def train_ssl_dinov3(args):
     dataset = TrafficImageDataset(image_paths, transform=transform)
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=effective_batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=True,
+        pin_memory=True if device.type == "cuda" else False,
         drop_last=True,
     )
 
@@ -759,26 +818,23 @@ def train_ssl_dinov3(args):
             else:
                 head_no_decay.append(param)
 
-    backbone_lr_init = args.lr * args.backbone_lr_scale
+    backbone_lr_init = effective_lr * args.backbone_lr_scale
     params_groups = [
         {"params": backbone_decay, "lr": backbone_lr_init, "weight_decay": 0.04, "is_backbone": True},
         {"params": backbone_no_decay, "lr": backbone_lr_init, "weight_decay": 0.0, "is_backbone": True},
-        {"params": head_decay, "lr": args.lr, "weight_decay": 0.04, "is_backbone": False},
-        {"params": head_no_decay, "lr": args.lr, "weight_decay": 0.0, "is_backbone": False},
+        {"params": head_decay, "lr": effective_lr, "weight_decay": 0.04, "is_backbone": False},
+        {"params": head_no_decay, "lr": effective_lr, "weight_decay": 0.0, "is_backbone": False},
     ]
     optimizer = torch.optim.AdamW(params_groups)
 
     # 5. Multi-GPU DataParallel Setup
-    num_gpus = torch.cuda.device_count() if device.type == "cuda" else 0
     if num_gpus > 1:
-        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
-        print(f"\n⚡ [Multi-GPU] Detected {num_gpus} GPUs: {gpu_names}")
-        print(f"⚡ [Multi-GPU] Activating DataParallel for high-throughput distributed tensor computation across all {num_gpus} devices.")
+        print(f"⚡ [Multi-GPU] Bọc nn.DataParallel cho Student và Teacher trên {num_gpus} GPUs...")
         student = nn.DataParallel(student)
         teacher = nn.DataParallel(teacher)
 
     n_iter_per_epoch = len(dataloader)
-    lr_schedule = get_cosine_schedule(args.lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(args.warmup_epochs, args.epochs // 5 + 1))
+    lr_schedule = get_cosine_schedule(effective_lr, 1e-6, args.epochs, n_iter_per_epoch, warmup_epochs=min(args.warmup_epochs, args.epochs // 5 + 1))
     momentum_schedule = get_cosine_schedule(0.996, 1.0, args.epochs, n_iter_per_epoch, warmup_epochs=0)
 
     dino_loss = DINOLoss(
@@ -808,26 +864,26 @@ def train_ssl_dinov3(args):
         except TypeError:
             ckpt = torch.load(args.resume, map_location="cpu")
 
-        raw_student = student.module if hasattr(student, "module") else student
-        raw_teacher = teacher.module if hasattr(teacher, "module") else teacher
+        raw_student = unwrap_model(student)
+        raw_teacher = unwrap_model(teacher)
 
         # 1. Nạp Student
         if "student" in ckpt:
-            raw_student.load_state_dict(ckpt["student"])
+            smart_load_state_dict(raw_student, ckpt["student"])
             print("   ✅ [Student] Khôi phục thành công Student Model.")
         elif "model_state" in ckpt:
-            raw_student[0].load_state_dict(ckpt["model_state"], strict=False)
+            smart_load_state_dict(raw_student[0], ckpt["model_state"])
             print("   ✅ [Student Backbone] Khôi phục từ model_state.")
 
         # 2. Nạp Teacher
         if "teacher" in ckpt:
-            raw_teacher.load_state_dict(ckpt["teacher"])
+            smart_load_state_dict(raw_teacher, ckpt["teacher"])
             print("   ✅ [Teacher] Khôi phục thành công Teacher EMA Model.")
         elif "teacher_state" in ckpt:
-            raw_teacher[0].load_state_dict(ckpt["teacher_state"], strict=False)
+            smart_load_state_dict(raw_teacher[0], ckpt["teacher_state"])
             print("   ✅ [Teacher Backbone] Khôi phục từ teacher_state.")
         else:
-            raw_teacher.load_state_dict(raw_student.state_dict())
+            smart_load_state_dict(raw_teacher, clean_state_dict(raw_student.state_dict()))
 
         # 3. Nạp Optimizer
         if "optimizer" in ckpt:
@@ -963,33 +1019,51 @@ def train_ssl_dinov3(args):
         history["teacher_temp"].append(float(dino_loss.teacher_temp_schedule[epoch]))
 
         # Save Checkpoint (Always save UNWRAPPED model state dicts to prevent 'module.' prefix bugs!)
-        student_raw = student.module if hasattr(student, "module") else student
-        teacher_raw = teacher.module if hasattr(teacher, "module") else teacher
+        student_raw = unwrap_model(student)
+        teacher_raw = unwrap_model(teacher)
 
-        if avg_loss < best_loss or (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
+        clean_student_sd = clean_state_dict(student_raw.state_dict())
+        clean_teacher_sd = clean_state_dict(teacher_raw.state_dict())
+        clean_backbone_sd = clean_state_dict(student_raw[0].state_dict())
+        clean_teacher_backbone_sd = clean_state_dict(teacher_raw[0].state_dict())
+
+        ckpt_payload = {
+            "epoch": epoch + 1,
+            "student": clean_student_sd,
+            "teacher": clean_teacher_sd,
+            "optimizer": optimizer.state_dict(),
+            "loss": avg_loss,
+            "best_loss": min(best_loss, avg_loss),
+            "backbone_name": args.backbone,
+            "embed_dim": embed_dim,
+            "history": history,
+            "args": vars(args),
+        }
+
+        # Luôn lưu checkpoint cuối cùng của epoch
+        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+        torch.save(ckpt_payload, last_ckpt_path)
+
+        # Lưu checkpoint tốt nhất khi đạt loss thấp nhất
+        is_best = (avg_loss < best_loss or epoch == start_epoch)
+        if is_best:
             best_loss = min(best_loss, avg_loss)
+            best_ckpt_path = os.path.join(args.save_dir, "best_checkpoint.pth")
+            torch.save(ckpt_payload, best_ckpt_path)
 
-            # Save full student/teacher training state
+        if is_best or (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
+            # Save full student/teacher training state (latest)
             full_ckpt_path = os.path.join(args.save_dir, "dinov3_traffic_ssl_latest.pth")
-            torch.save({
-                "epoch": epoch + 1,
-                "student": student_raw.state_dict(),
-                "teacher": teacher_raw.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "loss": avg_loss,
-                "backbone_name": args.backbone,
-                "embed_dim": embed_dim,
-                "history": history,
-            }, full_ckpt_path)
+            torch.save(ckpt_payload, full_ckpt_path)
 
             # Save Clean Domain-Adapted DINOv3 Backbone (Ready for downstream tasks / graph caching!)
             backbone_path = os.path.join(args.save_dir, "dinov3_traffic_backbone.pth")
-            torch.save(student_raw[0].state_dict(), backbone_path)
+            torch.save(clean_backbone_sd, backbone_path)
             # Teacher (EMA) backbone: DINO evaluates the teacher by default -> compare both in the eval script
-            torch.save(teacher_raw[0].state_dict(), os.path.join(args.save_dir, "dinov3_traffic_backbone_teacher.pth"))
+            torch.save(clean_teacher_backbone_sd, os.path.join(args.save_dir, "dinov3_traffic_backbone_teacher.pth"))
             # Backward compatibility alias
-            torch.save(student_raw[0].state_dict(), os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
-            print(f"   -> Checkpoint saved to: {backbone_path}")
+            torch.save(clean_backbone_sd, os.path.join(args.save_dir, "dinov2_traffic_backbone.pth"))
+            print(f"   -> Checkpoint đã lưu thành công: {os.path.basename(best_ckpt_path if is_best else last_ckpt_path)}")
 
             # Save updated training curves periodically
             if args.save_figures:

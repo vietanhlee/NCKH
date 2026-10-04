@@ -39,6 +39,27 @@ if dino_dir not in sys.path:
 # Import unified model builder from train_ssl_dinov3
 from train_ssl_dinov3 import build_backbone
 
+# Import Multi-GPU and safe checkpoint utilities
+try:
+    from common.gpu_utils import (
+        setup_multi_gpu,
+        unwrap_model,
+        clean_state_dict,
+        smart_load_state_dict,
+        save_clean_checkpoint,
+        get_available_devices,
+    )
+except ImportError:
+    from DINO.common.gpu_utils import (
+        setup_multi_gpu,
+        unwrap_model,
+        clean_state_dict,
+        smart_load_state_dict,
+        save_clean_checkpoint,
+        get_available_devices,
+    )
+
+
 
 def set_seed(seed: int = 42):
     random.seed(seed)
@@ -273,66 +294,101 @@ def train_counting_dinov3(args):
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+    # 2. Transforms (Divisible by 14: 224x224)
+    train_transform = transforms.Compose([
+        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
     val_transform = transforms.Compose([
         transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    train_loader = DataLoader(
-        VehicleCountingDataset(train_df, args.image_dir, transform=train_transform),
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=True,
-    )
-    val_loader = DataLoader(
-        VehicleCountingDataset(val_df, args.image_dir, transform=val_transform),
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-    )
-    test_loader = DataLoader(
-        VehicleCountingDataset(test_df, args.image_dir, transform=val_transform),
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-    )
-
-    # 3. Model & Optimizer
-    model = DINOv3CountingModel(
+    # 3. Model & Multi-GPU Setup (Auto-Detect and Scale across ALL available GPUs)
+    base_model = DINOv3CountingModel(
         backbone_name=args.backbone,
         pretrained_weights=args.ssl_weights,
         freeze_backbone=args.freeze_backbone,
         head_hidden_dim=256,
         num_classes=2,
-    ).to(device)
+    )
 
-    # Optimizer with differential LR if fine-tuning end-to-end
+    model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+        model=base_model,
+        batch_size_per_gpu=args.batch_size,
+        base_lr=args.lr,
+        device_arg=args.device,
+    )
+
+    train_loader = DataLoader(
+        VehicleCountingDataset(train_df, args.image_dir, transform=train_transform),
+        batch_size=effective_batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True if device.type == "cuda" else False,
+    )
+    val_loader = DataLoader(
+        VehicleCountingDataset(val_df, args.image_dir, transform=val_transform),
+        batch_size=effective_batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+    )
+    test_loader = DataLoader(
+        VehicleCountingDataset(test_df, args.image_dir, transform=val_transform),
+        batch_size=effective_batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+    )
+
+    # 4. Optimizer with differential LR if fine-tuning end-to-end
+    raw_m = unwrap_model(model)
     if args.freeze_backbone:
-        optimizer = torch.optim.AdamW(model.head.parameters(), lr=args.lr, weight_decay=1e-4)
+        optimizer = torch.optim.AdamW(raw_m.head.parameters(), lr=effective_lr, weight_decay=1e-4)
     else:
         optimizer = torch.optim.AdamW([
-            {"params": model.backbone.parameters(), "lr": args.lr * 0.1, "weight_decay": 1e-4},
-            {"params": model.head.parameters(), "lr": args.lr, "weight_decay": 1e-4},
+            {"params": raw_m.backbone.parameters(), "lr": effective_lr * 0.1, "weight_decay": 1e-4},
+            {"params": raw_m.head.parameters(), "lr": effective_lr, "weight_decay": 1e-4},
         ])
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     criterion = nn.SmoothL1Loss()  # Huber loss for robust counting regression
 
-    # 4. Multi-GPU DataParallel Setup
-    num_gpus = torch.cuda.device_count() if device.type == "cuda" else 0
-    if num_gpus > 1:
-        gpu_names = [torch.cuda.get_device_name(i) for i in range(num_gpus)]
-        print(f"⚡ [Multi-GPU] Detected {num_gpus} GPUs: {gpu_names}")
-        print(f"⚡ [Multi-GPU] Activating DataParallel for Counting across all {num_gpus} devices.")
-        model = nn.DataParallel(model)
-
+    # 5. Resume from Checkpoint if requested
+    start_epoch = 0
     best_val_mae = float("inf")
     best_weights = None
+    if getattr(args, "resume", None) and os.path.isfile(args.resume):
+        print(f"\n🔄 [Resume] Đang nạp checkpoint từ: {args.resume}")
+        ckpt_data = torch.load(args.resume, map_location="cpu")
+        if isinstance(ckpt_data, dict) and "model_state" in ckpt_data:
+            smart_load_state_dict(raw_m, ckpt_data["model_state"])
+            if "optimizer_state" in ckpt_data:
+                try:
+                    optimizer.load_state_dict(ckpt_data["optimizer_state"])
+                except Exception:
+                    pass
+            if "scheduler_state" in ckpt_data:
+                try:
+                    scheduler.load_state_dict(ckpt_data["scheduler_state"])
+                except Exception:
+                    pass
+            if "epoch" in ckpt_data:
+                start_epoch = ckpt_data["epoch"]
+            if "best_val_mae" in ckpt_data:
+                best_val_mae = ckpt_data["best_val_mae"]
+            print(f"✅ [Resume] Khôi phục thành công từ epoch {start_epoch}, best_val_mae = {best_val_mae:.4f}")
+        elif isinstance(ckpt_data, dict):
+            smart_load_state_dict(raw_m, ckpt_data)
+            print("✅ [Resume] Đã nạp state_dict thành công.")
+        best_weights = copy.deepcopy(clean_state_dict(raw_m.state_dict()))
 
-    # 5. Training Loop
-    for epoch in range(args.epochs):
+    # 6. Training Loop
+    os.makedirs(args.save_dir, exist_ok=True)
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         total_loss = 0.0
 
@@ -349,16 +405,42 @@ def train_counting_dinov3(args):
             pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         scheduler.step()
-        train_loss = total_loss / len(train_loader)
+        train_loss = total_loss / max(1, len(train_loader))
 
         # Validation
         val_metrics = evaluate(model, val_loader, device)
         curr_val_mae = val_metrics["tot_mae"]
 
+        raw_m = unwrap_model(model)
+        clean_curr_state = clean_state_dict(raw_m.state_dict())
+
+        # Lưu best checkpoint khi đạt MAE tốt nhất
         if curr_val_mae < best_val_mae:
             best_val_mae = curr_val_mae
-            raw_m = model.module if hasattr(model, "module") else model
-            best_weights = copy.deepcopy(raw_m.state_dict())
+            best_weights = copy.deepcopy(clean_curr_state)
+            best_ckpt = {
+                "epoch": epoch + 1,
+                "model_state": best_weights,
+                "optimizer_state": optimizer.state_dict(),
+                "scheduler_state": scheduler.state_dict(),
+                "best_val_mae": best_val_mae,
+                "val_metrics": val_metrics,
+                "args": vars(args),
+            }
+            torch.save(best_ckpt, os.path.join(args.save_dir, "best_checkpoint.pth"))
+
+        # Lưu last checkpoint mỗi epoch
+        last_ckpt = {
+            "epoch": epoch + 1,
+            "model_state": clean_curr_state,
+            "optimizer_state": optimizer.state_dict(),
+            "scheduler_state": scheduler.state_dict(),
+            "curr_val_mae": curr_val_mae,
+            "best_val_mae": best_val_mae,
+            "val_metrics": val_metrics,
+            "args": vars(args),
+        }
+        torch.save(last_ckpt, os.path.join(args.save_dir, "last_checkpoint.pth"))
 
         if (epoch + 1) % 5 == 0 or (epoch + 1) == args.epochs:
             print(
@@ -367,12 +449,13 @@ def train_counting_dinov3(args):
                 f"Best Tot MAE: {best_val_mae:.3f}"
             )
 
-    # 6. Final Evaluation on Unseen Test Split
+    # 7. Final Evaluation on Unseen Test Split
     print("\n" + "=" * 70)
     print(" 🏁 FINAL TEST EVALUATION (BEST CHECKPOINT)")
     print("=" * 70)
-    raw_m = model.module if hasattr(model, "module") else model
-    raw_m.load_state_dict(best_weights)
+    raw_m = unwrap_model(model)
+    if best_weights is not None:
+        smart_load_state_dict(raw_m, best_weights)
     test_metrics = evaluate(model, test_loader, device)
 
     print(f" 🚗 CARS       : MAE = {test_metrics['car_mae']:.4f} | RMSE = {test_metrics['car_rmse']:.4f} | R2 = {test_metrics['car_r2']:.4f}")
@@ -381,12 +464,14 @@ def train_counting_dinov3(args):
     print("=" * 70 + "\n")
 
     # Save Best Model Checkpoint
-    os.makedirs(args.save_dir, exist_ok=True)
     save_path = os.path.join(args.save_dir, f"dinov3_counting_ratio_{int(args.few_shot_ratio*100)}.pth")
+    if best_weights is None:
+        best_weights = clean_state_dict(unwrap_model(model).state_dict())
     torch.save(best_weights, save_path)
     # Also save dinov2 compatibility alias
     torch.save(best_weights, os.path.join(args.save_dir, f"dinov2_counting_ratio_{int(args.few_shot_ratio*100)}.pth"))
-    print(f"💾 Checkpoint saved to: {save_path}\n")
+    print(f"💾 [Checkpoint] Đã lưu mô hình tốt nhất vào: {save_path}")
+    print(f"🏆 [Checkpoint] Đã lưu best_checkpoint.pth và last_checkpoint.pth tại: {args.save_dir}\n")
 
 
 def main():
@@ -403,6 +488,7 @@ def main():
     parser.add_argument("--num_workers", type=int, default=4, help="DataLoader workers")
     parser.add_argument("--save_dir", type=str, default="checkpoints/dinov3_counting", help="Output directory")
     parser.add_argument("--device", type=str, default="cuda", help="Device ('cuda' or 'cpu')")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token for gated models")
 

@@ -224,17 +224,18 @@ def train_fg_counting(args):
 
         if metrics["mae_total"] < best_mae:
             best_mae = metrics["mae_total"]
-            ckpt_path = os.path.join(args.save_dir, f"best_counting_model_{args.mode}.pth")
-            save_checkpoint(
-                save_path=ckpt_path,
-                model=raw_model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                epoch=epoch + 1,
-                metrics=metrics,
-                extra_dict={"num_gpus": num_gpus, "args": vars(args)},
-                verbose=False,
-            )
+            for b_name in [f"best_counting_model_{args.mode}.pth", "best_checkpoint.pth"]:
+                ckpt_path = os.path.join(args.save_dir, b_name)
+                save_checkpoint(
+                    save_path=ckpt_path,
+                    model=raw_model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    epoch=epoch + 1,
+                    metrics=metrics,
+                    extra_dict={"num_gpus": num_gpus, "args": vars(args)},
+                    verbose=False,
+                )
 
         # Lưu Last Checkpoint mỗi epoch
         last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")

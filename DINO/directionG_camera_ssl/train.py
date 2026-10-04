@@ -42,6 +42,13 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 from common.backbone_loader import get_dino_backbone, extract_tokens
+from common.gpu_utils import (
+    get_available_devices,
+    setup_multi_gpu,
+    unwrap_model,
+    clean_state_dict,
+    smart_load_state_dict,
+)
 from directionG_camera_ssl.features import FrozenExtractor
 from directionG_camera_ssl.tam import PositionStats, GMMCalibrator
 from directionG_camera_ssl.masking import agm_sample
@@ -103,6 +110,48 @@ class DINOHead(nn.Module):
                 return F.linear(feat, w)
             else:
                 return self.last_layer(feat)
+
+
+class DirectionGStudentModel(nn.Module):
+    """
+    Wrapper gom toàn bộ luồng tính toán của Student (Backbone + DINO Head + iBOT Head)
+    để phân bổ song song hoàn hảo trên toàn bộ các GPU qua nn.DataParallel.
+    """
+    def __init__(self, backbone: nn.Module, dino_head: nn.Module, ibot_head: nn.Module, patch_size: int = 16):
+        super().__init__()
+        self.backbone = backbone
+        self.dino_head = dino_head
+        self.ibot_head = ibot_head
+        self.patch_size = patch_size
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
+        B, Hp, Wp, D = patch_spatial.shape
+        patches = patch_spatial.reshape(B, Hp * Wp, D)
+        dino_logits = self.dino_head(cls_token)
+        ibot_logits = self.ibot_head(patches)
+        return cls_token, patches, dino_logits, ibot_logits
+
+
+class DirectionGTeacherModel(nn.Module):
+    """
+    Wrapper gom toàn bộ luồng suy luận của Teacher EMA để tận dụng tối đa Multi-GPU.
+    """
+    def __init__(self, backbone: nn.Module, dino_head: nn.Module, ibot_head: nn.Module, patch_size: int = 16):
+        super().__init__()
+        self.backbone = backbone
+        self.dino_head = dino_head
+        self.ibot_head = ibot_head
+        self.patch_size = patch_size
+
+    @torch.no_grad()
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
+        B, Hp, Wp, D = patch_spatial.shape
+        patches = patch_spatial.reshape(B, Hp * Wp, D)
+        dino_logits = self.dino_head(cls_token)
+        ibot_logits = self.ibot_head(patches)
+        return cls_token, patches, dino_logits, ibot_logits
 
 
 class TrafficCameraDataset(Dataset):
@@ -326,14 +375,22 @@ def train_direction_g():
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
 
-    # Khởi tạo thiết bị tính toán an toàn
-    if "cuda" in args.device.lower() and not torch.cuda.is_available():
-        print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
+    # 1. Phát hiện phần cứng và thiết lập Multi-GPU tự động
+    primary_device, num_gpus, gpu_names = get_available_devices()
+    if args.device.lower() == "cpu" or num_gpus == 0:
         device = torch.device("cpu")
+        num_gpus = 0
     else:
-        device = torch.device(args.device)
+        device = primary_device
 
-    print(f"🚀 [Direction G] Khởi chạy huấn luyện SSL trên thiết bị: {device}")
+    print("\n" + "=" * 80)
+    print(" 🚀 [DIRECTION G] VEHICLE-CENTRIC SSL PRETRAINING (TAM + AGM + SRS)")
+    print("=" * 80)
+    print(f" Kiến trúc Backbone   : {args.model_name}")
+    print(f" Thiết bị chính        : {device}")
+    print(f" Số GPU khả dụng       : {num_gpus} ({', '.join(gpu_names) if gpu_names else 'CPU Only'})")
+    print(f" Thư mục lưu kết quả   : {args.output_dir}")
+    print("=" * 80)
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Khởi tạo Mixed Precision Scaler
@@ -344,7 +401,7 @@ def train_direction_g():
     else:
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
-    # 1. Khởi tạo Student & Teacher backbone
+    # 2. Khởi tạo Student & Teacher backbone và Projection Heads
     print(f"📦 [Backbone] Nạp mô hình Student DINOv3 '{args.model_name}'...")
     student_backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.model_name,
@@ -359,18 +416,44 @@ def train_direction_g():
     for p in teacher_backbone.parameters():
         p.requires_grad = False
 
-    # 2. Đầu chiếu DINO và iBOT Heads
-    student_dino_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_dino_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_dino_head.load_state_dict(student_dino_head.state_dict())
+    student_dino_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim)
+    teacher_dino_head = copy.deepcopy(student_dino_head)
     for p in teacher_dino_head.parameters():
         p.requires_grad = False
 
-    student_ibot_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_ibot_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim).to(device)
-    teacher_ibot_head.load_state_dict(student_ibot_head.state_dict())
+    student_ibot_head = DINOHead(in_dim=embed_dim, out_dim=args.out_dim)
+    teacher_ibot_head = copy.deepcopy(student_ibot_head)
     for p in teacher_ibot_head.parameters():
         p.requires_grad = False
+
+    # Đóng gói Student & Teacher thành module hoàn chỉnh
+    student_base = DirectionGStudentModel(
+        backbone=student_backbone,
+        dino_head=student_dino_head,
+        ibot_head=student_ibot_head,
+        patch_size=patch_size,
+    )
+    teacher_base = DirectionGTeacherModel(
+        backbone=teacher_backbone,
+        dino_head=teacher_dino_head,
+        ibot_head=teacher_ibot_head,
+        patch_size=patch_size,
+    )
+
+    # Tự động nhận diện toàn bộ GPU và kích hoạt Multi-GPU DataParallel
+    student_model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+        model=student_base,
+        batch_size_per_gpu=args.batch_size,
+        base_lr=args.lr,
+        device_arg=args.device,
+        scale_lr=True,
+    )
+    teacher_model = teacher_base.to(device)
+    if num_gpus > 1:
+        teacher_model = nn.DataParallel(teacher_model)
+
+    raw_s = unwrap_model(student_model)
+    raw_t = unwrap_model(teacher_model)
 
     # 3. Module FrozenExtractor & PositionStats cho TAM
     print("🔍 [TAM] Khởi tạo FrozenExtractor & PositionStats...")
@@ -379,10 +462,13 @@ def train_direction_g():
         pca_dim=64,
         device=device,
         hf_token=args.hf_token,
-        backbone=student_backbone,
+        backbone=raw_s.backbone,
         embed_dim=embed_dim,
         patch_size=patch_size,
     )
+    if num_gpus > 1:
+        frozen_extractor = nn.DataParallel(frozen_extractor)
+
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
     calibrator = GMMCalibrator()
 
@@ -391,43 +477,52 @@ def train_direction_g():
     ibot_loss_fn = iBOTPatchLoss(out_dim=args.out_dim).to(device)
     koleo_loss_fn = KoLeoLoss().to(device)
 
-    trainable_params = (
-        list(student_backbone.parameters())
-        + list(student_dino_head.parameters())
-        + list(student_ibot_head.parameters())
-    )
-    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=args.weight_decay)
+    trainable_params = [p for p in student_model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=args.weight_decay)
 
-    # Khôi phục trạng thái từ file resume nếu có
+    # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
     if args.resume and os.path.isfile(args.resume):
         print(f"🔄 [Resume] Đang nạp checkpoint từ: {args.resume}")
         try:
-            ckpt = torch.load(args.resume, map_location=device, weights_only=False)
+            ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
         except TypeError:
-            ckpt = torch.load(args.resume, map_location=device)
+            ckpt = torch.load(args.resume, map_location="cpu")
+
+        raw_curr_s = unwrap_model(student_model)
+        raw_curr_t = unwrap_model(teacher_model)
+
         if "student_backbone" in ckpt:
-            student_backbone.load_state_dict(ckpt["student_backbone"])
+            smart_load_state_dict(raw_curr_s.backbone, ckpt["student_backbone"], strict=False, verbose=True)
         if "teacher_backbone" in ckpt:
-            teacher_backbone.load_state_dict(ckpt["teacher_backbone"])
+            smart_load_state_dict(raw_curr_t.backbone, ckpt["teacher_backbone"], strict=False, verbose=True)
         if "student_dino_head" in ckpt:
-            student_dino_head.load_state_dict(ckpt["student_dino_head"])
+            smart_load_state_dict(raw_curr_s.dino_head, ckpt["student_dino_head"], strict=False, verbose=False)
         if "student_ibot_head" in ckpt:
-            student_ibot_head.load_state_dict(ckpt["student_ibot_head"])
+            smart_load_state_dict(raw_curr_s.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
         if "pos_stats" in ckpt:
-            pos_stats.load_state_dict(ckpt["pos_stats"])
+            pos_stats.load_state_dict(clean_state_dict(ckpt["pos_stats"]))
         if "optimizer" in ckpt:
-            optimizer.load_state_dict(ckpt["optimizer"])
+            try:
+                optimizer.load_state_dict(ckpt["optimizer"])
+                dest_device = torch.device(device)
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                            state[k] = v.to(dest_device)
+                print("   ✅ [Optimizer] Khôi phục toàn bộ trạng thái Optimizer.")
+            except Exception as e_opt:
+                print(f"   ⚠️ [Optimizer Notice] {e_opt}")
         if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
             try:
                 scaler.load_state_dict(ckpt["scaler"])
             except Exception:
                 pass
-        if "epoch" in ckpt:
+        if "epoch" in ckpt and ckpt["epoch"] is not None:
             start_epoch = int(ckpt["epoch"]) + 1
             print(f"   ⏱️ Tiếp tục huấn luyện từ epoch {start_epoch + 1}")
-        if "best_loss" in ckpt:
+        if "best_loss" in ckpt and ckpt["best_loss"] is not None:
             best_loss = float(ckpt["best_loss"])
         print("✅ [Resume] Đã khôi phục thành công trạng thái mô hình!")
 
@@ -447,7 +542,7 @@ def train_direction_g():
 
     loader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=effective_batch_size,
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=(device.type == "cuda"),
@@ -464,12 +559,31 @@ def train_direction_g():
     last_checkpoint_path = os.path.join(args.output_dir, "last_checkpoint.pth")
     latest_checkpoint_path = os.path.join(args.output_dir, "dinov3_directionG_latest.pth")
 
+    def save_g_checkpoint(save_path: str, epoch_num: int, is_best: bool = False):
+        raw_curr_s = unwrap_model(student_model)
+        raw_curr_t = unwrap_model(teacher_model)
+        checkpoint_dict = {
+            "epoch": epoch_num,
+            "student_backbone": clean_state_dict(raw_curr_s.backbone.state_dict()),
+            "teacher_backbone": clean_state_dict(raw_curr_t.backbone.state_dict()),
+            "student_dino_head": clean_state_dict(raw_curr_s.dino_head.state_dict()),
+            "student_ibot_head": clean_state_dict(raw_curr_s.ibot_head.state_dict()),
+            "pos_stats": clean_state_dict(pos_stats.state_dict()),
+            "optimizer": optimizer.state_dict(),
+            "scaler": scaler.state_dict() if use_amp else None,
+            "history": history,
+            "best_loss": best_loss,
+            "num_gpus": num_gpus,
+            "effective_batch_size": effective_batch_size,
+            "args": vars(args),
+        }
+        torch.save(checkpoint_dict, save_path)
+        if is_best:
+            print(f"🏆 [Checkpoint] Đã lưu mô hình tốt nhất mới (Best Loss: {best_loss:.4f}) tại: {save_path}")
+
     try:
         for epoch in range(start_epoch, args.epochs):
-            student_backbone.train()
-            student_dino_head.train()
-            student_ibot_head.train()
-
+            student_model.train()
             epoch_losses = []
             epoch_dino_losses = []
             epoch_ibot_losses = []
@@ -520,7 +634,7 @@ def train_direction_g():
                     masks.append(m_b)
                 mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
 
-                # Bước D: Forward Student & Teacher trong AMP autocast
+                # Bước D: Forward Student & Teacher trong AMP autocast (Song song đa GPU)
                 target_H = 16 * patch_size
                 target_W = 28 * patch_size
                 if x1.shape[-2] != target_H or x1.shape[-1] != target_W:
@@ -533,16 +647,10 @@ def train_direction_g():
                 with torch.amp.autocast(device_type=device_type, enabled=use_amp):
                     # Teacher nhận ảnh gốc x1_vit không che
                     with torch.no_grad():
-                        t_cls, t_patches_spatial = extract_tokens(teacher_backbone, x1_vit, patch_size=patch_size)
-                        t_patches = t_patches_spatial.reshape(B, 448, embed_dim)
-                        t_dino_logits = teacher_dino_head(t_cls)
-                        t_ibot_logits = teacher_ibot_head(t_patches)
+                        t_cls, t_patches, t_dino_logits, t_ibot_logits = teacher_model(x1_vit)
 
                     # Student nhận ảnh x_student_vit (đã qua SRS)
-                    s_cls, s_patches_spatial = extract_tokens(student_backbone, x_student_vit, patch_size=patch_size)
-                    s_patches = s_patches_spatial.reshape(B, 448, embed_dim)
-                    s_dino_logits = student_dino_head(s_cls)
-                    s_ibot_logits = student_ibot_head(s_patches)
+                    s_cls, s_patches, s_dino_logits, s_ibot_logits = student_model(x_student_vit)
 
                     # Bước E: Tính tổn thất Loss
                     loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
@@ -561,11 +669,9 @@ def train_direction_g():
                 # Bước G: Cập nhật EMA Teacher (momentum 0.996)
                 momentum = 0.996
                 with torch.no_grad():
-                    for param_s, param_t in zip(student_backbone.parameters(), teacher_backbone.parameters()):
-                        param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-                    for param_s, param_t in zip(student_dino_head.parameters(), teacher_dino_head.parameters()):
-                        param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
-                    for param_s, param_t in zip(student_ibot_head.parameters(), teacher_ibot_head.parameters()):
+                    raw_curr_s = unwrap_model(student_model)
+                    raw_curr_t = unwrap_model(teacher_model)
+                    for param_s, param_t in zip(raw_curr_s.parameters(), raw_curr_t.parameters()):
                         param_t.data.mul_(momentum).add_((1.0 - momentum) * param_s.detach().data)
 
                 epoch_losses.append(total_loss.item())
@@ -614,28 +720,14 @@ def train_direction_g():
                     epoch=epoch + 1,
                 )
 
-            # Lưu checkpoint từng epoch: last_checkpoint và best_checkpoint nếu loss thấp nhất
-            epoch_state = {
-                "epoch": epoch,
-                "student_backbone": student_backbone.state_dict(),
-                "teacher_backbone": teacher_backbone.state_dict(),
-                "student_dino_head": student_dino_head.state_dict(),
-                "student_ibot_head": student_ibot_head.state_dict(),
-                "pos_stats": pos_stats.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "scaler": scaler.state_dict() if use_amp else None,
-                "history": history,
-                "best_loss": best_loss,
-                "args": vars(args),
-            }
-            torch.save(epoch_state, last_checkpoint_path)
-            torch.save(epoch_state, latest_checkpoint_path)
+            # Lưu checkpoint từng epoch: last_checkpoint và latest_checkpoint
+            save_g_checkpoint(last_checkpoint_path, epoch_num=epoch)
+            save_g_checkpoint(latest_checkpoint_path, epoch_num=epoch)
 
+            # Nếu đạt kỷ lục loss thấp nhất, lưu best_checkpoint.pth
             if avg_tot < best_loss:
                 best_loss = avg_tot
-                epoch_state["best_loss"] = best_loss
-                torch.save(epoch_state, best_checkpoint_path)
-                print(f"🏆 [Checkpoint] Đã lưu mô hình tốt nhất mới (Best Loss: {best_loss:.4f}) tại: {best_checkpoint_path}")
+                save_g_checkpoint(best_checkpoint_path, epoch_num=epoch, is_best=True)
 
     except KeyboardInterrupt:
         print("\n⚠️ [Dừng Sớm] Nhận tín hiệu ngắt (Ctrl+C). Đang tiến hành lưu khẩn cấp trạng thái và hình ảnh...")
@@ -651,25 +743,15 @@ def train_direction_g():
             "history": history,
             "final_epoch": len(history["total"]),
             "best_loss": best_loss,
+            "num_gpus": num_gpus,
+            "effective_batch_size": effective_batch_size,
             "args": vars(args),
             "total_time_seconds": time.time() - start_time,
         }, f, indent=2, ensure_ascii=False)
     print(f"📈 [Metrics] Đã lưu thông số chi tiết tại: {metrics_path}")
 
-    # 8. Lưu checkpoint toàn diện
-    torch.save({
-        "epoch": len(history["total"]) - 1,
-        "student_backbone": student_backbone.state_dict(),
-        "teacher_backbone": teacher_backbone.state_dict(),
-        "student_dino_head": student_dino_head.state_dict(),
-        "student_ibot_head": student_ibot_head.state_dict(),
-        "pos_stats": pos_stats.state_dict(),
-        "optimizer": optimizer.state_dict(),
-        "scaler": scaler.state_dict() if use_amp else None,
-        "history": history,
-        "best_loss": best_loss,
-        "args": vars(args),
-    }, latest_checkpoint_path)
+    # 8. Lưu checkpoint toàn diện cuối cùng
+    save_g_checkpoint(latest_checkpoint_path, epoch_num=len(history["total"]) - 1)
 
     elapsed_time = time.time() - start_time
     vis_path = os.path.join(args.output_dir, "directionG_progress.png")
@@ -679,6 +761,7 @@ def train_direction_g():
     print("=" * 80)
     print(f" 💾 Checkpoint Weights (Latest): {latest_checkpoint_path}")
     print(f" 💾 Checkpoint Weights (Best)  : {best_checkpoint_path}")
+    print(f" 💾 Checkpoint Weights (Last)  : {last_checkpoint_path}")
     print(f" 🖼️ Ảnh Trực Quan Hóa (Visual) : {vis_path}")
     print(f" 📊 Đồ Thị Hàm Mất Mát (Loss)  : {loss_curve_path}")
     print(f" 📈 Nhật Ký Huấn Luyện (JSON)  : {metrics_path}")

@@ -278,17 +278,18 @@ def train_decomposition(args):
         # Lưu Checkpoint
         if avg_loss < best_loss:
             best_loss = avg_loss
-            ckpt_path = os.path.join(args.save_dir, "best_decomposition_model.pth")
-            save_checkpoint(
-                save_path=ckpt_path,
-                model=raw_model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                epoch=epoch + 1,
-                metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
-                extra_dict={"num_gpus": num_gpus, "args": vars(args)},
-                verbose=False,
-            )
+            for b_name in ["best_decomposition_model.pth", "best_checkpoint.pth"]:
+                ckpt_path = os.path.join(args.save_dir, b_name)
+                save_checkpoint(
+                    save_path=ckpt_path,
+                    model=raw_model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    epoch=epoch + 1,
+                    metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
+                    extra_dict={"num_gpus": num_gpus, "args": vars(args)},
+                    verbose=False,
+                )
 
         # Lưu Last Checkpoint mỗi epoch
         last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
