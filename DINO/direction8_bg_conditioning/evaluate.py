@@ -5,12 +5,26 @@
    1. Khả năng thích ứng sang Camera chưa thấy (Unseen Camera Generalization)
    2. So sánh FiLM vs Prompt vs Cross-Attention vs Delta-Concatenation vs No-BG
    3. Độ bền vững dưới bộ nhiễu Background Degradation Benchmark (BDB)
+ Tích hợp xuất Metrics JSON & Biểu đồ trực quan hóa cao cấp
 =============================================================================
 """
 
+import os
+import json
+import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
+
+# Chống xung đột OpenMP và hỗ trợ tiếng Việt trên Windows
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -131,9 +145,121 @@ def run_bdb_robustness_comparison(
     return mae_degradation_curves
 
 
+def run_full_conditioning_evaluation(
+    models: Dict[str, BackgroundConditionedModel],
+    data_loader: torch.utils.data.DataLoader,
+    descriptor_extractor: RobustSceneDescriptorExtractor,
+    sample_frame: torch.Tensor,
+    sample_bg: torch.Tensor,
+    gt_count: float,
+    device: torch.device,
+    save_dir: Optional[str] = "checkpoints/direction8_bg_conditioning",
+) -> Dict[str, Any]:
+    """
+    Chạy đánh giá trọn vẹn Hướng 8, lưu metrics JSON và trực quan hóa 4 biểu đồ.
+    """
+    gen_results = evaluate_unseen_camera_generalization(models, data_loader, descriptor_extractor, device)
+    bdb_results = run_bdb_robustness_comparison(
+        models.get("FiLM", list(models.values())[0]), descriptor_extractor, sample_frame, sample_bg, gt_count, device
+    )
+
+    combined_report = {
+        "unseen_generalization": gen_results,
+        "bdb_noise_robustness": bdb_results,
+        "sample_gt_count": float(gt_count),
+    }
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        metrics_path = os.path.join(save_dir, "bg_conditioning_metrics.json")
+        try:
+            with open(metrics_path, "w", encoding="utf-8") as f:
+                json.dump(combined_report, f, indent=2, ensure_ascii=False)
+            print(f"📁 [Metrics] Đã lưu báo cáo điều kiện hóa tại: {metrics_path}")
+        except Exception as e_m:
+            print(f"⚠️ [Metrics Warning] {e_m}")
+
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+
+            fig, axs = plt.subplots(1, 4, figsize=(21, 4.8), dpi=150)
+
+            # Panel (a): Unseen Camera Frame Input & Reference Background
+            f_np = sample_frame[0].permute(1, 2, 0).cpu().numpy()
+            f_np = (f_np - f_np.min()) / (f_np.max() - f_np.min() + 1e-6)
+            b_np = sample_bg.permute(1, 2, 0).cpu().numpy()
+            b_np = (b_np - b_np.min()) / (b_np.max() - b_np.min() + 1e-6)
+
+            # Ghép nửa frame và nửa bg
+            composite = np.zeros_like(f_np)
+            mid_w = f_np.shape[1] // 2
+            composite[:, :mid_w] = f_np[:, :mid_w]
+            composite[:, mid_w:] = b_np[:, mid_w:]
+            axs[0].imshow(composite)
+            axs[0].axvline(x=mid_w, color="yellow", linestyle="--", linewidth=2)
+            axs[0].set_title("(a) Unseen Camera Inputs\n(Left: Frame | Right: Background)", fontsize=11, fontweight="bold")
+            axs[0].axis("off")
+
+            # Panel (b): Trimmed Background Descriptor z
+            with torch.no_grad():
+                z_vec = descriptor_extractor.extract_scene_descriptor(sample_bg.unsqueeze(0).to(device))
+            z_np = z_vec[0].cpu().numpy()
+            # Hiển thị 32 chiều đầu tiên của z
+            show_dims = min(32, len(z_np))
+            axs[1].bar(np.arange(show_dims), z_np[:show_dims], color="#2ca02c", alpha=0.8)
+            axs[1].set_xlabel("Descriptor z Component Index")
+            axs[1].set_ylabel("Normalized Feature Value")
+            axs[1].set_title(f"(b) Trimmed Scene Descriptor $z$\n(Dim: {len(z_np)} dims)", fontsize=11, fontweight="bold")
+            axs[1].grid(True, linestyle="--", alpha=0.5)
+
+            # Panel (c): So sánh hiệu năng các mô hình trên camera chưa thấy
+            m_names = list(gen_results.keys())
+            m_maes = [gen_results[m]["counting_mae"] for m in m_names]
+            m_f1s = [gen_results[m]["macro_f1"] * 100 for m in m_names]
+            x_m = np.arange(len(m_names))
+            b_w = 0.35
+            axs[2].bar(x_m - b_w/2, m_maes, b_w, label="Counting MAE", color="#d62728")
+            axs[2].bar(x_m + b_w/2, m_f1s, b_w, label="Macro F1 (%)", color="#1f77b4")
+            axs[2].set_xticks(x_m)
+            axs[2].set_xticklabels(m_names)
+            axs[2].set_xlabel("Conditioning Mechanism")
+            axs[2].set_title("(c) Unseen Camera Generalization\n(FiLM vs Baseline)", fontsize=11, fontweight="bold")
+            axs[2].grid(True, linestyle="--", alpha=0.5, axis="y")
+            axs[2].legend(fontsize=8)
+
+            # Panel (d): Khảo sát độ bền vững BDB Noise Robustness
+            severities = [1, 2, 3, 4, 5]
+            colors = {"ghost_injection": "#9467bd", "camera_shift": "#8c564b", "optical_change": "#e377c2"}
+            labels = {"ghost_injection": "Ghost Injection", "camera_shift": "Camera Shift", "optical_change": "Optical Change"}
+            for n_type, errs in bdb_results.items():
+                c = colors.get(n_type, "blue")
+                lbl = labels.get(n_type, n_type)
+                axs[3].plot(severities, errs, "-o", color=c, linewidth=2, label=lbl)
+            axs[3].set_xlabel("BDB Noise Severity Level")
+            axs[3].set_ylabel("Counting Absolute Error")
+            axs[3].set_title("(d) BDB Degradation Robustness\n(FiLM Conditioned Model)", fontsize=11, fontweight="bold")
+            axs[3].grid(True, linestyle="--", alpha=0.5)
+            axs[3].legend(fontsize=8)
+
+            plt.tight_layout()
+            chart_path = os.path.join(save_dir, "bg_conditioning_results.png")
+            plt.savefig(chart_path, bbox_inches="tight")
+            plt.close()
+            print(f"📊 [Charts] Đã lưu biểu đồ điều kiện hóa tại: {chart_path}")
+        except Exception as e_plot:
+            print(f"⚠️ [Conditioning Chart Warning] {e_plot}")
+
+    return combined_report
+
+
 if __name__ == "__main__":
-    print("Testing Direction E Evaluation Pipeline...")
-    # Demo mock backbone
+    parser = argparse.ArgumentParser(description="Direction 8 Background Conditioning Evaluation")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction8_bg_conditioning", help="Thư mục lưu báo cáo")
+    cli_args, _ = parser.parse_known_args()
+
+    print("🚀 Đang khởi chạy kiểm thử Direction 8 Background Conditioning Evaluation...")
     class DummyBackbone(nn.Module):
         def forward(self, x):
             B, C, H, W = x.shape
@@ -148,7 +274,6 @@ if __name__ == "__main__":
 
     models = {"FiLM": model_film, "No-Conditioning": model_none}
 
-    # Giả lập 6 mẫu test
     dataset = []
     for _ in range(6):
         dataset.append({
@@ -161,9 +286,17 @@ if __name__ == "__main__":
     loader = torch.utils.data.DataLoader(dataset, batch_size=2)
     device = torch.device("cpu")
 
-    evaluate_unseen_camera_generalization(models, loader, extractor, device)
-
-    # Chạy thử BDB
     sample_f = torch.rand(1, 3, 256, 448)
     sample_b = torch.rand(3, 256, 448)
-    run_bdb_robustness_comparison(model_film, extractor, sample_f, sample_b, gt_count=15.0, device=device)
+
+    run_full_conditioning_evaluation(
+        models=models,
+        data_loader=loader,
+        descriptor_extractor=extractor,
+        sample_frame=sample_f,
+        sample_bg=sample_b,
+        gt_count=15.0,
+        device=device,
+        save_dir=cli_args.save_dir,
+    )
+    print("✅ Hoàn tất kiểm thử Direction 8!")

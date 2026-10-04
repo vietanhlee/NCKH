@@ -185,6 +185,7 @@ def train_fg_counting(args):
 
     # 5. Training Loop
     best_mae = float("inf")
+    history = {"epochs": [], "loss": [], "mae_total": [], "mae_bike": [], "mae_car": []}
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
     for epoch in range(start_epoch, args.epochs):
@@ -209,10 +210,17 @@ def train_fg_counting(args):
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
         scheduler.step()
+        avg_train_loss = epoch_loss / max(1, len(train_loader))
 
         # Đánh giá sau mỗi epoch
         metrics = evaluate_mae(model, test_loader, device, mode=args.mode)
-        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — Test MAE [Bike: {metrics['mae_bike']:.2f}, Car: {metrics['mae_car']:.2f}, Total: {metrics['mae_total']:.2f}]")
+        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — Train Loss: {avg_train_loss:.4f} | Test MAE [Bike: {metrics['mae_bike']:.2f}, Car: {metrics['mae_car']:.2f}, Total: {metrics['mae_total']:.2f}]")
+
+        history["epochs"].append(epoch + 1)
+        history["loss"].append(float(avg_train_loss))
+        history["mae_total"].append(float(metrics["mae_total"]))
+        history["mae_bike"].append(float(metrics["mae_bike"]))
+        history["mae_car"].append(float(metrics["mae_car"]))
 
         if metrics["mae_total"] < best_mae:
             best_mae = metrics["mae_total"]
@@ -225,8 +233,149 @@ def train_fg_counting(args):
                 epoch=epoch + 1,
                 metrics=metrics,
                 extra_dict={"num_gpus": num_gpus, "args": vars(args)},
-                verbose=True,
+                verbose=False,
             )
+
+        # Lưu Last Checkpoint mỗi epoch
+        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+        save_checkpoint(
+            save_path=last_ckpt_path,
+            model=raw_model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            epoch=epoch + 1,
+            metrics=metrics,
+            extra_dict={"num_gpus": num_gpus, "args": vars(args)},
+            verbose=False,
+        )
+
+    # Lưu metrics JSON
+    metrics_path = os.path.join(args.save_dir, "training_metrics.json")
+    try:
+        import json
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "args": vars(args),
+                "history": history,
+                "best_mae": float(best_mae),
+            }, f, indent=2, ensure_ascii=False)
+        print(f"📊 [Metrics] Đã lưu lịch sử huấn luyện tại: {metrics_path}")
+    except Exception as e_m:
+        print(f"⚠️ [Metrics Warning] {e_m}")
+
+    # Vẽ biểu đồ Loss & MAE Curve
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5), dpi=150)
+        ax1.plot(history["epochs"], history["loss"], "b-o", linewidth=2, label="Train Loss")
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss")
+        ax1.set_title("Hàm mất mát huấn luyện (Smooth L1)", fontweight="bold")
+        ax1.grid(True, linestyle="--", alpha=0.6)
+        ax1.legend()
+
+        ax2.plot(history["epochs"], history["mae_total"], "r-s", linewidth=2, label="Total MAE")
+        ax2.plot(history["epochs"], history["mae_bike"], "g--^", linewidth=1.5, label="Bike MAE")
+        ax2.plot(history["epochs"], history["mae_car"], "m-.d", linewidth=1.5, label="Car MAE")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("MAE (Sai số xe)")
+        ax2.set_title(f"Sai số đếm xe trên tập kiểm thử ({args.mode})", fontweight="bold")
+        ax2.grid(True, linestyle="--", alpha=0.6)
+        ax2.legend()
+
+        plt.tight_layout()
+        loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
+        plt.savefig(loss_curve_path, bbox_inches="tight")
+        plt.close()
+        print(f"📈 [Charts] Đã lưu biểu đồ sai số tại: {loss_curve_path}")
+    except Exception as e_plot:
+        print(f"⚠️ [Chart Warning] {e_plot}")
+
+    # Xuất ảnh trực quan hóa PCA Feature Map & Kết quả đếm
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        print("\n🎨 [Visualization] Đang xuất ảnh trực quan hóa dự báo số lượng xe...")
+        test_batch = next(iter(test_loader))
+        val_rgb = test_batch["rgb"][:1].to(device)
+        val_delta = test_batch.get("delta")
+        if val_delta is not None:
+            val_delta = val_delta[:1].to(device)
+        with torch.no_grad():
+            val_preds = model(val_rgb, delta=val_delta)[0].cpu().numpy()
+        val_gt = test_batch["counts"][0].cpu().numpy()
+
+        img_np = val_rgb[0].permute(1, 2, 0).cpu().numpy()
+        img_np = (img_np * np.array([0.229, 0.224, 0.225])) + np.array([0.485, 0.456, 0.406])
+        img_np = np.clip(img_np, 0.0, 1.0)
+
+        # Trích xuất PCA tokens từ backbone
+        backbone_m = raw_model.backbone
+        backbone_m.eval()
+        with torch.no_grad():
+            feat_out = backbone_m(val_rgb)
+            if isinstance(feat_out, dict):
+                tokens = feat_out.get("x_norm_patchtokens", feat_out.get("patch_tokens"))
+            elif hasattr(backbone_m, "get_intermediate_layers"):
+                layers = backbone_m.get_intermediate_layers(val_rgb, n=1, return_class_token=True)
+                tokens = layers[0][0] if isinstance(layers[0], tuple) else layers[0]
+            else:
+                tokens = feat_out
+
+        if tokens is not None:
+            tokens_np = tokens[0].detach().cpu().numpy()
+            tokens_centered = tokens_np - tokens_np.mean(axis=0)
+            u, s, vt = np.linalg.svd(tokens_centered, full_matrices=False)
+            pca3 = u[:, :3]
+            pca3 = (pca3 - pca3.min(axis=0)) / (pca3.max(axis=0) - pca3.min(axis=0) + 1e-6)
+            h_p = int(np.sqrt(len(tokens_np)))
+            pca_rgb = pca3.reshape(h_p, h_p, 3)
+        else:
+            pca_rgb = np.zeros((14, 14, 3))
+
+        fig, axes = plt.subplots(1, 4, figsize=(18, 4.5), dpi=150)
+        axes[0].imshow(img_np)
+        axes[0].set_title("1. Ảnh Giao Thông Đầu Vào", fontsize=11, fontweight="bold")
+        axes[0].axis("off")
+
+        if val_delta is not None:
+            delta_np = val_delta[0, 0].cpu().numpy()
+            axes[1].imshow(delta_np, cmap="inferno")
+            axes[1].set_title("2. Kênh Sai Khác Tiền Cảnh Δ", fontsize=11, fontweight="bold")
+        else:
+            axes[1].imshow(img_np)
+            axes[1].set_title("2. RGB Không Δ", fontsize=11, fontweight="bold")
+        axes[1].axis("off")
+
+        axes[2].imshow(pca_rgb)
+        axes[2].set_title("3. DINOv3 PCA Feature Map", fontsize=11, fontweight="bold")
+        axes[2].axis("off")
+
+        categories = ["Xe Máy", "Ô Tô", "Tổng"]
+        x_pos = np.arange(len(categories))
+        width = 0.35
+        axes[3].bar(x_pos - width/2, val_gt, width, label="Thực tế (GT)", color="steelblue")
+        axes[3].bar(x_pos + width/2, val_preds, width, label="AI Dự Báo", color="coral")
+        axes[3].set_xticks(x_pos)
+        axes[3].set_xticklabels(categories, fontsize=10, fontweight="bold")
+        axes[3].set_ylabel("Số lượng xe")
+        axes[3].set_title("4. Đối Chiếu Số Lượng Đếm", fontsize=11, fontweight="bold")
+        axes[3].grid(True, linestyle="--", alpha=0.5, axis="y")
+        axes[3].legend()
+
+        plt.suptitle(f"Tiến Trình Đếm Xe Hướng 3 ({args.mode}) — Best MAE: {best_mae:.2f}", fontsize=13, fontweight="bold")
+        plt.tight_layout()
+        vis_path = os.path.join(args.save_dir, "counting_progress.png")
+        plt.savefig(vis_path, bbox_inches="tight")
+        plt.close()
+        print(f"🖼️ [Visualization] Đã lưu ảnh đối chiếu đếm xe tại: {vis_path}")
+    except Exception as e_vis:
+        print(f"💡 [Visualization Notice] {e_vis}")
 
     print(f"\n🎉 [Complete] Huấn luyện hoàn tất! Kỷ lục MAE Total: {best_mae:.3f}")
 

@@ -213,6 +213,9 @@ def train_bg_guided_dino(args):
     # 6. Training Loop
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}] trên {max(1, num_gpus)} thiết bị...")
 
+    best_loss = float("inf")
+    history = {"epochs": [], "loss": [], "entropy": []}
+
     for epoch in range(start_epoch, args.epochs):
         model.train()
         epoch_loss = 0.0
@@ -307,9 +310,86 @@ def train_bg_guided_dino(args):
                 verbose=True,
             )
 
+            # Lưu Best Checkpoint
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                best_ckpt_path = os.path.join(args.save_dir, "best_checkpoint.pth")
+                save_checkpoint(
+                    save_path=best_ckpt_path,
+                    model=raw_model.student_backbone,
+                    optimizer=optimizer,
+                    scaler=scaler,
+                    epoch=epoch + 1,
+                    metrics={"loss": avg_loss, "entropy": dino_loss_fn.last_entropy},
+                    extra_dict={
+                        "teacher_state": clean_state_dict(raw_model.teacher_backbone.state_dict()),
+                        "head_state": clean_state_dict(raw_model.student_head.state_dict()),
+                        "num_gpus": num_gpus,
+                        "args": vars(args),
+                    },
+                    verbose=False,
+                )
+
+        # Lưu Last Checkpoint
+        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+        save_checkpoint(
+            save_path=last_ckpt_path,
+            model=raw_model.student_backbone,
+            optimizer=optimizer,
+            scaler=scaler,
+            epoch=epoch + 1,
+            metrics={"loss": avg_loss, "entropy": dino_loss_fn.last_entropy},
+            extra_dict={
+                "teacher_state": clean_state_dict(raw_model.teacher_backbone.state_dict()),
+                "head_state": clean_state_dict(raw_model.student_head.state_dict()),
+                "num_gpus": num_gpus,
+                "args": vars(args),
+            },
+            verbose=False,
+        )
+
+        history["epochs"].append(epoch + 1)
+        history["loss"].append(float(avg_loss))
+        history["entropy"].append(float(dino_loss_fn.last_entropy))
+
+    # Lưu metrics JSON
+    metrics_path = os.path.join(args.save_dir, "training_metrics.json")
+    try:
+        import json
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "args": vars(args),
+                "history": history,
+                "best_loss": float(best_loss),
+            }, f, indent=2, ensure_ascii=False)
+        print(f"📊 [Metrics] Đã lưu lịch sử huấn luyện tại: {metrics_path}")
+    except Exception as e_m:
+        print(f"⚠️ [Metrics Warning] Không thể lưu JSON: {e_m}")
+
+    # Vẽ biểu đồ Loss Curve
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10, 4.5), dpi=150)
+        plt.plot(history["epochs"], history["loss"], "b-o", linewidth=2, label="DINO SSL Loss")
+        plt.plot(history["epochs"], history["entropy"], "g--s", linewidth=1.5, label="Teacher Entropy")
+        plt.xlabel("Epoch")
+        plt.ylabel("Giá trị")
+        plt.title(f"Tiến trình huấn luyện BG-Guided DINO ({args.backbone})", fontsize=12, fontweight="bold")
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.legend()
+        plt.tight_layout()
+        loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
+        plt.savefig(loss_curve_path, bbox_inches="tight")
+        plt.close()
+        print(f"📈 [Charts] Đã lưu biểu đồ hàm mất mát tại: {loss_curve_path}")
+    except Exception as e_plot:
+        print(f"⚠️ [Chart Warning] {e_plot}")
+
     # 5. Tự động xuất ảnh trực quan hóa PCA Feature Map kiểm chứng mô hình đã học
     try:
-        from direction2_zero_shot_segmentation.pca_extractor import DINOPCAExtractor
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -320,13 +400,38 @@ def train_bg_guided_dino(args):
         sample_img = Image.open(vis_sample["origin_path"]).convert("RGB")
         sample_bg = Image.open(vis_sample["bg_path"]).convert("RGB")
 
-        pca_ext = DINOPCAExtractor(
-            backbone=raw_model.student_backbone,
-            patch_size=patch_size,
-            img_size=args.size_global,
-            device=device,
-        )
-        pca_rgb, pc1_mask = pca_ext.compute_pca_maps(sample_img)
+        # Trích xuất trực tiếp đặc trưng patch từ student backbone
+        raw_backbone = raw_model.student_backbone
+        raw_backbone.eval()
+        from torchvision import transforms
+        tf = transforms.Compose([
+            transforms.Resize((args.size_global, args.size_global)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        inp_t = tf(sample_img).unsqueeze(0).to(device)
+        with torch.no_grad():
+            feat_out = raw_backbone(inp_t)
+            if isinstance(feat_out, dict):
+                tokens = feat_out.get("x_norm_patchtokens", feat_out.get("patch_tokens"))
+            elif hasattr(raw_backbone, "get_intermediate_layers"):
+                layers = raw_backbone.get_intermediate_layers(inp_t, n=1, return_class_token=True)
+                tokens = layers[0][0] if isinstance(layers[0], tuple) else layers[0]
+            else:
+                tokens = feat_out
+
+        if tokens is not None:
+            tokens_np = tokens[0].detach().cpu().numpy()  # (N_patches, C)
+            tokens_centered = tokens_np - tokens_np.mean(axis=0)
+            u, s, vt = np.linalg.svd(tokens_centered, full_matrices=False)
+            pca3 = u[:, :3]
+            pca3 = (pca3 - pca3.min(axis=0)) / (pca3.max(axis=0) - pca3.min(axis=0) + 1e-6)
+            grid_h = args.size_global // patch_size
+            grid_w = args.size_global // patch_size
+            pca_rgb = pca3.reshape(grid_h, grid_w, 3)
+        else:
+            pca_rgb = np.zeros((14, 14, 3))
+
         delta_norm, _ = dataset.subtractor.compute_delta(sample_img, sample_bg)
 
         fig, axes = plt.subplots(1, 4, figsize=(18, 4.5), dpi=150)
@@ -365,6 +470,7 @@ def train_bg_guided_dino(args):
             img_size=args.size_global,
             title_prefix=title_pfx,
         )
+        print(f"✅ [Visualization] Đã lưu lưới đặc trưng Emergent PCA tại: {grid_save_path}")
     except Exception as e_vis:
         print(f"💡 [Visualization Notice] {e_vis}")
 

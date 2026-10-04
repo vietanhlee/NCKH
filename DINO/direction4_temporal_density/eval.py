@@ -166,6 +166,67 @@ def evaluate_temporal_model(args):
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"📁 Báo cáo chi tiết đã lưu tại: {report_path}")
 
+    # Chuẩn hóa thêm file eval_metrics.json
+    eval_metrics_path = os.path.join(args.output_dir, "eval_metrics.json")
+    try:
+        with open(eval_metrics_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2, ensure_ascii=False)
+        print(f"📁 Metrics đánh giá chuẩn đã lưu tại: {eval_metrics_path}")
+    except Exception as e_em:
+        print(f"⚠️ [Eval Metrics Warning] {e_em}")
+
+    # 6. Xuất biểu đồ trực quan hóa đánh giá
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), dpi=150)
+
+        # (a) Ma trận nhầm lẫn LoS
+        im1 = ax1.imshow(confusion_mat, cmap="Blues", interpolation="nearest")
+        plt.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+        ax1.set_title(f"Ma trận nhầm lẫn LoS (Acc: {los_acc:.2f}%)", fontweight="bold")
+        ax1.set_xlabel("Predicted LoS Level")
+        ax1.set_ylabel("Ground Truth LoS Level")
+        tick_marks = np.arange(4)
+        short_names = ["0: Free", "1: Mod", "2: Slow", "3: Gridlock"]
+        ax1.set_xticks(tick_marks)
+        ax1.set_xticklabels(short_names, rotation=30)
+        ax1.set_yticks(tick_marks)
+        ax1.set_yticklabels(short_names)
+
+        # Hiển thị số liệu trong từng ô
+        thresh = confusion_mat.max() / 2.0
+        for i in range(4):
+            for j in range(4):
+                val = confusion_mat[i, j]
+                ax1.text(j, i, f"{val}",
+                         horizontalalignment="center",
+                         color="white" if val > thresh else "black",
+                         fontweight="bold")
+
+        # (b) Scatter plot Occupancy thực tế vs dự đoán
+        ax2.scatter(target_occ_all, pred_occ_all, alpha=0.6, edgecolors="none", c="#1f77b4", s=30)
+        min_v = 0.0
+        max_v = 1.0
+        ax2.plot([min_v, max_v], [min_v, max_v], "r--", linewidth=2, label="Lý tưởng ($y = x$)")
+        ax2.set_xlim(-0.02, 1.02)
+        ax2.set_ylim(-0.02, 1.02)
+        ax2.set_xlabel("Ground Truth Occupancy $\\rho$")
+        ax2.set_ylabel("Predicted Occupancy $\\hat{\\rho}$")
+        ax2.set_title(f"Tương quan Occupancy (MAE: {mae:.4f} | RMSE: {rmse:.4f})", fontweight="bold")
+        ax2.grid(True, linestyle="--", alpha=0.5)
+        ax2.legend()
+
+        plt.tight_layout()
+        eval_fig_path = os.path.join(args.output_dir, "temporal_density_evaluation.png")
+        plt.savefig(eval_fig_path, bbox_inches="tight")
+        plt.close()
+        print(f"📊 [Charts] Đã lưu biểu đồ đánh giá tại: {eval_fig_path}")
+    except Exception as e_plot:
+        print(f"⚠️ [Eval Chart Warning] {e_plot}")
+
 
 if __name__ == "__main__":
     args = parse_args()

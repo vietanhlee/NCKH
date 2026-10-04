@@ -196,11 +196,14 @@ def train_decomposition(args):
 
     # 5. Vòng lặp huấn luyện
     best_loss = float("inf")
+    history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
     for epoch in range(start_epoch, args.epochs):
         model.train()
         total_loss = 0.0
+        total_rec = 0.0
+        total_prior = 0.0
         pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
         for batch in pbar:
@@ -223,6 +226,9 @@ def train_decomposition(args):
             optimizer.step()
 
             total_loss += loss.item()
+            total_rec += loss_dict.get("loss_rec", 0.0)
+            total_prior += loss_dict.get("loss_prior", 0.0)
+
             pbar.set_postfix({
                 "loss": f"{loss.item():.4f}",
                 "rec": f"{loss_dict.get('loss_rec', 0.0):.4f}",
@@ -231,8 +237,16 @@ def train_decomposition(args):
             })
 
         scheduler.step()
-        avg_loss = total_loss / len(loader)
-        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — Loss TB: {avg_loss:.4f}")
+        avg_loss = total_loss / max(1, len(loader))
+        avg_rec = total_rec / max(1, len(loader))
+        avg_prior = total_prior / max(1, len(loader))
+
+        history["epochs"].append(epoch + 1)
+        history["loss"].append(float(avg_loss))
+        history["loss_rec"].append(float(avg_rec))
+        history["loss_prior"].append(float(avg_prior))
+
+        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
 
         # Xuất ảnh trực quan kiểm tra
         with torch.no_grad():
@@ -241,15 +255,24 @@ def train_decomposition(args):
             s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
             s_preds = model(s_origin)
             s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
+            progress_path = os.path.join(args.save_dir, "decomposition_progress.png")
+            epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
             save_visual_sample(
                 s_origin, s_bg,
                 s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
-                save_path=os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png"),
+                save_path=epoch_vis_path,
+                epoch=epoch + 1,
+            )
+            # Đồng thời cập nhật decomposition_progress.png mới nhất ở thư mục gốc
+            save_visual_sample(
+                s_origin, s_bg,
+                s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
+                save_path=progress_path,
                 epoch=epoch + 1,
             )
 
         # Lưu Checkpoint
-        if avg_loss < best_loss or (epoch + 1) == args.epochs:
+        if avg_loss < best_loss:
             best_loss = avg_loss
             ckpt_path = os.path.join(args.save_dir, "best_decomposition_model.pth")
             save_checkpoint(
@@ -258,10 +281,56 @@ def train_decomposition(args):
                 optimizer=optimizer,
                 scheduler=scheduler,
                 epoch=epoch + 1,
-                metrics={"loss": avg_loss},
+                metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
                 extra_dict={"num_gpus": num_gpus, "args": vars(args)},
-                verbose=True,
+                verbose=False,
             )
+
+        # Lưu Last Checkpoint mỗi epoch
+        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+        save_checkpoint(
+            save_path=last_ckpt_path,
+            model=raw_model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            epoch=epoch + 1,
+            metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
+            extra_dict={"num_gpus": num_gpus, "args": vars(args)},
+            verbose=False,
+        )
+
+    # Lưu metrics JSON
+    metrics_path = os.path.join(args.save_dir, "training_metrics.json")
+    try:
+        import json
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "args": vars(args),
+                "history": history,
+                "best_loss": float(best_loss),
+            }, f, indent=2, ensure_ascii=False)
+        print(f"📊 [Metrics] Đã lưu lịch sử huấn luyện tại: {metrics_path}")
+    except Exception as e_m:
+        print(f"⚠️ [Metrics Warning] Không thể lưu JSON: {e_m}")
+
+    # Vẽ biểu đồ Loss Curves
+    try:
+        plt.figure(figsize=(10, 4.5), dpi=150)
+        plt.plot(history["epochs"], history["loss"], "b-o", linewidth=2, label="Total Loss")
+        plt.plot(history["epochs"], history["loss_rec"], "r--s", linewidth=1.5, label="Reconstruction Loss")
+        plt.plot(history["epochs"], history["loss_prior"], "g-.^", linewidth=1.5, label="Prior BG Loss")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title(f"Tiến trình huấn luyện Traffic Scene Decomposition ({args.backbone})", fontsize=12, fontweight="bold")
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.legend()
+        plt.tight_layout()
+        loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
+        plt.savefig(loss_curve_path, bbox_inches="tight")
+        plt.close()
+        print(f"📈 [Charts] Đã lưu biểu đồ hàm mất mát tại: {loss_curve_path}")
+    except Exception as e_plot:
+        print(f"⚠️ [Chart Warning] {e_plot}")
 
     print("\n🎉 [Complete] Huấn luyện Scene Decomposition thành công!")
 

@@ -8,11 +8,13 @@
 """
 
 import argparse
+import json
 import os
 import sys
 import time
 from typing import Dict, Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -163,6 +165,12 @@ def train_temporal_density(args):
     # 5. Huấn luyện
     best_mae = float("inf")
     start_time = time.time()
+    history = {
+        "epochs": [],
+        "loss": [],
+        "mae_occupancy": [],
+        "los_acc": [],
+    }
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}] trên {max(1, num_gpus)} thiết bị...")
 
     for epoch in range(start_epoch, args.epochs):
@@ -228,6 +236,11 @@ def train_temporal_density(args):
         epoch_mae = total_mae / max(1, total_samples)
         epoch_acc = (correct_los / max(1, total_samples)) * 100.0
 
+        history["epochs"].append(epoch + 1)
+        history["loss"].append(float(epoch_loss))
+        history["mae_occupancy"].append(float(epoch_mae))
+        history["los_acc"].append(float(epoch_acc))
+
         print(
             f"📊 Epoch [{epoch+1:02d}/{args.epochs:02d}] "
             f"Loss: {epoch_loss:.4f} | "
@@ -236,21 +249,186 @@ def train_temporal_density(args):
             f"LR: {scheduler.get_last_lr()[0]:.2e}"
         )
 
-        # Lưu checkpoint tốt nhất theo MAE Occupancy và lưu epoch cuối
-        if epoch_mae < best_mae or (epoch + 1) == args.epochs:
-            best_mae = min(best_mae, epoch_mae)
-            ckpt_path = os.path.join(args.save_dir, "best_temporal_model.pth")
-            save_checkpoint(
-                save_path=ckpt_path,
-                model=raw_model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                scaler=scaler,
-                epoch=epoch + 1,
-                metrics={"loss": epoch_loss, "mae_occupancy": epoch_mae, "los_accuracy": epoch_acc},
-                extra_dict={"best_mae": best_mae, "num_gpus": num_gpus, "args": vars(args)},
-                verbose=True,
-            )
+        # Lưu checkpoint tốt nhất theo MAE Occupancy
+        if epoch_mae < best_mae:
+            best_mae = epoch_mae
+            for ckpt_name in ["best_temporal_model.pth", "best_checkpoint.pth"]:
+                ckpt_path = os.path.join(args.save_dir, ckpt_name)
+                save_checkpoint(
+                    save_path=ckpt_path,
+                    model=raw_model,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    scaler=scaler,
+                    epoch=epoch + 1,
+                    metrics={"loss": epoch_loss, "mae_occupancy": epoch_mae, "los_accuracy": epoch_acc},
+                    extra_dict={"best_mae": best_mae, "num_gpus": num_gpus, "args": vars(args)},
+                    verbose=(ckpt_name == "best_temporal_model.pth"),
+                )
+
+        # Lưu epoch cuối cùng phục vụ resume liên tục
+        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
+        save_checkpoint(
+            save_path=last_ckpt_path,
+            model=raw_model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            epoch=epoch + 1,
+            metrics={"loss": epoch_loss, "mae_occupancy": epoch_mae, "los_accuracy": epoch_acc},
+            extra_dict={"best_mae": best_mae, "num_gpus": num_gpus, "args": vars(args)},
+            verbose=False,
+        )
+
+    # Lưu metrics JSON
+    metrics_path = os.path.join(args.save_dir, "training_metrics.json")
+    try:
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "args": vars(args),
+                "history": history,
+                "best_mae": float(best_mae),
+            }, f, indent=2, ensure_ascii=False)
+        print(f"📊 [Metrics] Đã lưu lịch sử huấn luyện tại: {metrics_path}")
+    except Exception as e_m:
+        print(f"⚠️ [Metrics Warning] {e_m}")
+
+    # Vẽ biểu đồ Loss & MAE Curve
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5), dpi=150)
+        ax1.plot(history["epochs"], history["loss"], "b-o", linewidth=2, label="Train Loss (Smooth L1 + CE)")
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss")
+        ax1.set_title("Hàm mất mát Spatio-Temporal", fontweight="bold")
+        ax1.grid(True, linestyle="--", alpha=0.6)
+        ax1.legend()
+
+        ax2.plot(history["epochs"], history["mae_occupancy"], "r-s", linewidth=2, label="Occupancy MAE")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Occupancy MAE", color="r")
+        ax2.tick_params(axis="y", labelcolor="r")
+        ax2.grid(True, linestyle="--", alpha=0.6)
+
+        ax2_twin = ax2.twinx()
+        ax2_twin.plot(history["epochs"], history["los_acc"], "g--^", linewidth=2, label="LoS Accuracy (%)")
+        ax2_twin.set_ylabel("LoS Accuracy (%)", color="g")
+        ax2_twin.tick_params(axis="y", labelcolor="g")
+
+        lines1, labels1 = ax2.get_legend_handles_labels()
+        lines2, labels2 = ax2_twin.get_legend_handles_labels()
+        ax2.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
+        ax2.set_title("Chỉ số MAE Chiếm dụng & Độ chính xác LoS", fontweight="bold")
+
+        plt.tight_layout()
+        loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
+        plt.savefig(loss_curve_path, bbox_inches="tight")
+        plt.close()
+        print(f"📈 [Charts] Đã lưu biểu đồ học tập tại: {loss_curve_path}")
+    except Exception as e_plot:
+        print(f"⚠️ [Chart Warning] {e_plot}")
+
+    # Xuất ảnh trực quan hóa PCA Feature Map & Kết quả ước lượng không-thời gian
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        print("\n🎨 [Visualization] Đang xuất ảnh trực quan hóa Spatio-Temporal Density & LoS...")
+        sample_batch = next(iter(dataloader))
+        val_rgb_seq = sample_batch["rgb_seq"][:1].to(device)
+        val_delta_seq = sample_batch["delta_seq"][:1].to(device)
+        val_occ_seq = sample_batch["occupancy_seq"][0].cpu().numpy()
+        val_los_gt = int(sample_batch["current_los"][0].item())
+        cam_id = sample_batch["cam_id"][0]
+
+        model.eval()
+        with torch.no_grad():
+            preds_demo = model(val_rgb_seq, val_delta_seq)
+            pred_occ = float(preds_demo["pred_occupancy"][0].item())
+            pred_los = int(torch.argmax(preds_demo["logits_los"][0]).item())
+
+        last_frame_tensor = val_rgb_seq[0, -1]
+        img_np = last_frame_tensor.permute(1, 2, 0).cpu().numpy()
+        img_np = (img_np * np.array([0.229, 0.224, 0.225])) + np.array([0.485, 0.456, 0.406])
+        img_np = np.clip(img_np, 0.0, 1.0)
+
+        delta_np = val_delta_seq[0, -1, 0].cpu().numpy()
+        delta_np = (delta_np * 0.5) + 0.5
+        delta_np = np.clip(delta_np, 0.0, 1.0)
+
+        H, W = img_np.shape[:2]
+        road_mask = dataset._get_road_mask(cam_id, H, W)
+
+        backbone_m = raw_model.backbone
+        backbone_m.eval()
+        with torch.no_grad():
+            feat_out = backbone_m(val_rgb_seq[:, -1])
+            if isinstance(feat_out, dict):
+                tokens = feat_out.get("x_norm_patchtokens", feat_out.get("patch_tokens"))
+            elif hasattr(backbone_m, "get_intermediate_layers"):
+                layers = backbone_m.get_intermediate_layers(val_rgb_seq[:, -1], n=1, return_class_token=True)
+                tokens = layers[0][0] if isinstance(layers[0], tuple) else layers[0]
+            else:
+                tokens = feat_out
+
+        if tokens is not None:
+            tokens_np = tokens[0].detach().cpu().numpy()
+            tokens_centered = tokens_np - tokens_np.mean(axis=0)
+            u, s, vt = np.linalg.svd(tokens_centered, full_matrices=False)
+            pca3 = u[:, :3]
+            pca3 = (pca3 - pca3.min(axis=0)) / (pca3.max(axis=0) - pca3.min(axis=0) + 1e-6)
+            h_p = int(np.sqrt(len(tokens_np)))
+            pca_rgb = pca3.reshape(h_p, h_p, 3)
+        else:
+            pca_rgb = np.zeros((14, 14, 3))
+
+        fig, axs = plt.subplots(1, 4, figsize=(18, 4.5), dpi=150)
+
+        overlay = img_np.copy()
+        overlay[road_mask, 1] = np.clip(overlay[road_mask, 1] * 0.6 + 0.4, 0.0, 1.0)
+        axs[0].imshow(overlay)
+        axs[0].set_title(f"(a) Frame $x_t$ + Road Mask\nCam: {cam_id}", fontsize=11, fontweight="bold")
+        axs[0].axis("off")
+
+        im2 = axs[1].imshow(delta_np, cmap="inferno")
+        axs[1].set_title("(b) Optical Motion $\\Delta_t$\n(Road Subtraction)", fontsize=11, fontweight="bold")
+        axs[1].axis("off")
+        plt.colorbar(im2, ax=axs[1], fraction=0.046, pad=0.04)
+
+        axs[2].imshow(pca_rgb)
+        axs[2].set_title("(c) DINOv3 PCA Feature Map\n(Semantic Clustering)", fontsize=11, fontweight="bold")
+        axs[2].axis("off")
+
+        los_names = ["0: Free-Flow", "1: Moderate", "2: Slow", "3: Gridlock"]
+        time_steps = list(range(1, len(val_occ_seq) + 1))
+        axs[3].plot(time_steps, val_occ_seq, "b-o", linewidth=2, label="GT Proxy $\\rho$")
+        axs[3].plot([time_steps[-1]], [pred_occ], "r*", markersize=14, label=f"Pred $\\hat{{\\rho}}$: {pred_occ:.3f}")
+        axs[3].axhline(y=0.15, color="green", linestyle=":", alpha=0.7, label="LoS Thresh 1 (0.15)")
+        axs[3].axhline(y=0.35, color="orange", linestyle=":", alpha=0.7, label="LoS Thresh 2 (0.35)")
+        axs[3].axhline(y=0.60, color="red", linestyle=":", alpha=0.7, label="LoS Thresh 3 (0.60)")
+        axs[3].set_ylim(-0.05, 1.05)
+        axs[3].set_xlabel("Time step in Window (t)")
+        axs[3].set_ylabel("Occupancy Ratio $\\rho$")
+        
+        gt_los_str = los_names[val_los_gt] if 0 <= val_los_gt < 4 else str(val_los_gt)
+        pred_los_str = los_names[pred_los] if 0 <= pred_los < 4 else str(pred_los)
+        color_badge = "green" if pred_los == val_los_gt else "red"
+        axs[3].set_title(f"(d) Occupancy Sequence & LoS\nGT: {gt_los_str} | Pred: {pred_los_str}", 
+                          fontsize=10, fontweight="bold", color=color_badge)
+        axs[3].grid(True, linestyle="--", alpha=0.5)
+        axs[3].legend(fontsize=8, loc="upper left")
+
+        plt.tight_layout()
+        prog_path = os.path.join(args.save_dir, "temporal_density_progress.png")
+        plt.savefig(prog_path, bbox_inches="tight")
+        plt.close()
+        print(f"🖼️ [Visualization] Đã lưu ảnh trực quan hóa tại: {prog_path}")
+    except Exception as e_vis:
+        print(f"⚠️ [Visualization Warning] {e_vis}")
 
     elapsed = time.time() - start_time
     print(f"\n🎉 [Complete] Huấn luyện Direction 4 hoàn tất sau {elapsed/60:.2f} phút! Kỷ lục MAE Occupancy: {best_mae:.4f}")
