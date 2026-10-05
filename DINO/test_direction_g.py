@@ -118,6 +118,24 @@ class TestDirectionG(unittest.TestCase):
         self.assertIsNotNone(s_cls.grad)
         self.assertFalse(torch.isnan(s_cls.grad).any())
 
+    def test_05_position_stats_dynamic_resume(self):
+        """Kiểm tra PositionStats tự động co giãn dung lượng camera khi load state_dict có shape khác (570 vs 16 cams)."""
+        # Giả lập checkpoint đã train trên 570 camera
+        stats_saved = PositionStats(num_cams=570, num_patches=448, num_states=4, feat_dim=64)
+        saved_sd = stats_saved.state_dict()
+
+        # Mô hình mới khởi tạo với 16 camera mặc định
+        stats_new = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64)
+        self.assertEqual(stats_new.num_cams, 16)
+
+        # Nạp state_dict: Phải tự động mở rộng lên 570 mà không văng RuntimeError
+        stats_new.load_state_dict(saved_sd)
+        self.assertEqual(stats_new.num_cams, 570)
+        self.assertEqual(stats_new.mu.shape, (570, 448, 4, 64))
+        self.assertEqual(stats_new.w.shape, (570, 448, 4))
+        self.assertEqual(stats_new.s.shape, (570, 448, 4))
+        self.assertEqual(stats_new.is_initialized.shape, (570,))
+
 
 if __name__ == "__main__":
     unittest.main()

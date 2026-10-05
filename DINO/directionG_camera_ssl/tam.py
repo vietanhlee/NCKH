@@ -66,6 +66,31 @@ class PositionStats(nn.Module):
         # Đánh dấu camera đã được khởi tạo
         self.register_buffer("is_initialized", torch.zeros(num_cams, dtype=torch.bool))
 
+    def set_cam_capacity(self, target_cams: int):
+        """Đặt lại số lượng camera chính xác cho PositionStats và tái cấu trúc buffer."""
+        if target_cams == self.num_cams:
+            return
+        device = self.mu.device
+        dtype = self.mu.dtype
+        self.register_buffer("mu", torch.zeros(target_cams, self.num_patches, self.num_states, self.feat_dim, device=device, dtype=dtype))
+        self.register_buffer("w", torch.full((target_cams, self.num_patches, self.num_states), 1.0 / self.num_states, device=device, dtype=dtype))
+        self.register_buffer("s", torch.full((target_cams, self.num_patches, self.num_states), 0.2, device=device, dtype=dtype))
+        self.register_buffer("is_initialized", torch.zeros(target_cams, dtype=torch.bool, device=device))
+        self.num_cams = target_cams
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        """
+        Tự động điều chỉnh kích thước buffer cho PositionStats khi số lượng camera trong checkpoint
+        khác với số camera khởi tạo mặc định (ví dụ checkpoint có 570 camera nhưng init là 16 camera).
+        """
+        mu_key = prefix + "mu"
+        if mu_key in state_dict:
+            cams_in_ckpt = state_dict[mu_key].shape[0]
+            if cams_in_ckpt != self.num_cams:
+                self.set_cam_capacity(cams_in_ckpt)
+
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+
     def ensure_cam_capacity(self, max_cid: int):
         """Mở rộng dung lượng camera động nếu gặp camera_id lớn hơn num_cams hiện tại."""
         if max_cid < self.num_cams:

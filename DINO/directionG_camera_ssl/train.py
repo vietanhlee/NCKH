@@ -600,7 +600,13 @@ def train_direction_g():
             smart_load_state_dict(raw_curr_t.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
 
         if "pos_stats" in ckpt:
-            pos_stats.load_state_dict(clean_state_dict(ckpt["pos_stats"]))
+            pos_dict = clean_state_dict(ckpt["pos_stats"])
+            if "mu" in pos_dict and pos_dict["mu"].shape[0] != pos_stats.num_cams:
+                cams_in_ckpt = pos_dict["mu"].shape[0]
+                print(f"   ⚙️ [TAM Scale] Tự động mở rộng dung lượng camera ({pos_stats.num_cams} -> {cams_in_ckpt} cameras)...")
+                pos_stats.set_cam_capacity(cams_in_ckpt)
+            pos_stats.load_state_dict(pos_dict)
+            print(f"   ✅ [PositionStats] Khôi phục thành công thống kê vị trí cho {pos_stats.num_cams} camera.")
         if "dino_center" in ckpt and hasattr(dino_loss_fn, "center"):
             dino_loss_fn.center.copy_(ckpt["dino_center"].to(device))
         if "ibot_center" in ckpt and hasattr(ibot_loss_fn, "center"):
