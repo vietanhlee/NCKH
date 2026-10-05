@@ -497,29 +497,119 @@ def train_direction_g():
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
-    if args.resume and os.path.isfile(args.resume):
-        print(f"🔄 [Resume] Đang nạp checkpoint từ: {args.resume}")
+    history = {"total": [], "dino": [], "ibot": [], "koleo": []}
+
+    resume_target = args.resume
+    if resume_target:
+        # 1. Hỗ trợ tự động sửa đường dẫn Kaggle nếu người dùng copy nhầm URL 'models/<user>/<slug>/'
+        if not os.path.exists(resume_target):
+            norm_path = resume_target.replace("\\", "/")
+            if "/kaggle/input/" in norm_path:
+                subparts = norm_path.split("/kaggle/input/")[1].split("/")
+                # Nếu có dạng 'models/<user>/<slug>/...' -> Thử chuyển thành '/kaggle/input/<slug>/...'
+                if len(subparts) >= 3 and subparts[0] == "models":
+                    alt_path = os.path.join("/kaggle/input", *subparts[2:])
+                    if os.path.exists(alt_path):
+                        print(f"💡 [Smart Path] Tự động chuẩn hóa đường dẫn Kaggle:")
+                        print(f"   Từ: '{resume_target}'")
+                        print(f"   Sang: '{alt_path}'")
+                        resume_target = alt_path
+
+        # 2. Nếu là thư mục, tự động quét tìm file checkpoint bên trong
+        if os.path.isdir(resume_target):
+            found_cand = None
+            for candidate in ["last_checkpoint.pth", "dinov3_directionG_latest.pth", "best_checkpoint.pth"]:
+                cand_path = os.path.join(resume_target, candidate)
+                if os.path.isfile(cand_path):
+                    found_cand = cand_path
+                    break
+            if found_cand is None:
+                import glob
+                pths = glob.glob(os.path.join(resume_target, "**", "*.pth"), recursive=True)
+                if pths:
+                    found_cand = pths[0]
+            if found_cand:
+                print(f"📂 [Smart Path] Đã tìm thấy checkpoint trong thư mục: {found_cand}")
+                resume_target = found_cand
+            else:
+                raise FileNotFoundError(f"❌ [Resume Error] Thư mục '{args.resume}' không chứa bất kỳ file checkpoint (.pth) nào!")
+
+        # 3. Báo lỗi rõ ràng nếu không tìm thấy file thay vì im lặng train mới
+        if not os.path.isfile(resume_target):
+            import glob
+            pths_found = glob.glob("/kaggle/input/**/*.pth", recursive=True)[:5] if os.path.isdir("/kaggle/input") else []
+            err_msg = (
+                f"\n❌ [LỖI RESUME] Không tìm thấy file checkpoint tại: '{resume_target}'\n"
+                f"   Nguyên nhân: Đường dẫn file trên Kaggle không tồn tại.\n"
+            )
+            if pths_found:
+                err_msg += f"   💡 Gợi ý các file .pth hiện có trong /kaggle/input:\n"
+                for p in pths_found:
+                    err_msg += f"      - {p}\n"
+            err_msg += f"   👉 Vui lòng kiểm tra lại đường dẫn bằng lệnh: !ls -R {os.path.dirname(resume_target) if os.path.dirname(resume_target) else '/kaggle/input'}\n"
+            raise FileNotFoundError(err_msg)
+
+        # 4. Tiến hành nạp checkpoint
+        print(f"🔄 [Resume] Đang nạp checkpoint từ: {resume_target}")
         try:
-            ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+            ckpt = torch.load(resume_target, map_location="cpu", weights_only=False)
         except TypeError:
-            ckpt = torch.load(args.resume, map_location="cpu")
+            ckpt = torch.load(resume_target, map_location="cpu")
+
+        if not isinstance(ckpt, dict):
+            raise ValueError(f"❌ Checkpoint file không đúng định dạng dictionary (type={type(ckpt)})")
 
         raw_curr_s = unwrap_model(student_model)
         raw_curr_t = unwrap_model(teacher_model)
+        available_keys = list(ckpt.keys())
+        print(f"   🔑 [Checkpoint Keys] Các trường dữ liệu tìm thấy: {available_keys}")
 
+        # Khôi phục Student Backbone
         if "student_backbone" in ckpt:
             smart_load_state_dict(raw_curr_s.backbone, ckpt["student_backbone"], strict=False, verbose=True)
+        elif "model_state" in ckpt or "state_dict" in ckpt or "model" in ckpt:
+            sd = ckpt.get("model_state", ckpt.get("state_dict", ckpt.get("model")))
+            bb_sd = {k.replace("backbone.", ""): v for k, v in sd.items() if "backbone." in k}
+            if bb_sd:
+                smart_load_state_dict(raw_curr_s.backbone, bb_sd, strict=False, verbose=True)
+            else:
+                smart_load_state_dict(raw_curr_s.backbone, sd, strict=False, verbose=True)
+
+        # Khôi phục Teacher Backbone
         if "teacher_backbone" in ckpt:
             smart_load_state_dict(raw_curr_t.backbone, ckpt["teacher_backbone"], strict=False, verbose=True)
+        else:
+            # Đồng bộ lại teacher từ student nếu checkpoint không lưu riêng teacher
+            with torch.no_grad():
+                for ps, pt in zip(raw_curr_s.backbone.parameters(), raw_curr_t.backbone.parameters()):
+                    pt.data.copy_(ps.data)
+
+        # Khôi phục Heads
         if "student_dino_head" in ckpt:
             smart_load_state_dict(raw_curr_s.dino_head, ckpt["student_dino_head"], strict=False, verbose=False)
+        if "teacher_dino_head" in ckpt:
+            smart_load_state_dict(raw_curr_t.dino_head, ckpt["teacher_dino_head"], strict=False, verbose=False)
+        elif "student_dino_head" in ckpt:
+            smart_load_state_dict(raw_curr_t.dino_head, ckpt["student_dino_head"], strict=False, verbose=False)
+
         if "student_ibot_head" in ckpt:
             smart_load_state_dict(raw_curr_s.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
+        if "teacher_ibot_head" in ckpt:
+            smart_load_state_dict(raw_curr_t.ibot_head, ckpt["teacher_ibot_head"], strict=False, verbose=False)
+        elif "student_ibot_head" in ckpt:
+            smart_load_state_dict(raw_curr_t.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
+
         if "pos_stats" in ckpt:
             pos_stats.load_state_dict(clean_state_dict(ckpt["pos_stats"]))
-        if "optimizer" in ckpt:
+        if "dino_center" in ckpt and hasattr(dino_loss_fn, "center"):
+            dino_loss_fn.center.copy_(ckpt["dino_center"].to(device))
+        if "ibot_center" in ckpt and hasattr(ibot_loss_fn, "center"):
+            ibot_loss_fn.center.copy_(ckpt["ibot_center"].to(device))
+
+        if "optimizer" in ckpt or "optimizer_state" in ckpt:
+            opt_sd = ckpt.get("optimizer", ckpt.get("optimizer_state"))
             try:
-                optimizer.load_state_dict(ckpt["optimizer"])
+                optimizer.load_state_dict(opt_sd)
                 dest_device = torch.device(device)
                 for state in optimizer.state.values():
                     for k, v in state.items():
@@ -528,17 +618,37 @@ def train_direction_g():
                 print("   ✅ [Optimizer] Khôi phục toàn bộ trạng thái Optimizer.")
             except Exception as e_opt:
                 print(f"   ⚠️ [Optimizer Notice] {e_opt}")
+
         if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
             try:
                 scaler.load_state_dict(ckpt["scaler"])
             except Exception:
                 pass
-        if "epoch" in ckpt and ckpt["epoch"] is not None:
-            start_epoch = int(ckpt["epoch"]) + 1
-            print(f"   ⏱️ Tiếp tục huấn luyện từ epoch {start_epoch + 1}")
+
+        if "history" in ckpt and isinstance(ckpt["history"], dict):
+            history = {k: list(v) for k, v in ckpt["history"].items()}
+            print(f"   📊 [History] Khôi phục toàn bộ lịch sử loss ({len(history.get('total', []))} epochs trước).")
+
+        # Xác định epoch tiếp theo
+        found_epoch = None
+        for ep_key in ["epoch", "start_epoch", "last_epoch", "current_epoch"]:
+            if ep_key in ckpt and ckpt[ep_key] is not None:
+                found_epoch = int(ckpt[ep_key])
+                break
+
+        if found_epoch is not None:
+            start_epoch = found_epoch + 1
+            print(f"   ⏱️ [Epoch] Checkpoint ghi nhận đã hoàn thành epoch {found_epoch + 1}. Bắt đầu tiếp tục từ epoch {start_epoch + 1}")
+        else:
+            print("   ⚠️ [Epoch Notice] Checkpoint không có thông tin epoch. Bắt đầu từ epoch 1 với trọng số đã nạp.")
+
         if "best_loss" in ckpt and ckpt["best_loss"] is not None:
             best_loss = float(ckpt["best_loss"])
         print("✅ [Resume] Đã khôi phục thành công trạng thái mô hình!")
+
+        if start_epoch >= args.epochs:
+            print(f"\n⚠️ [Cảnh Báo Resume] Checkpoint đã hoàn thành {start_epoch}/{args.epochs} epochs.")
+            print(f"💡 Nếu muốn tiếp tục huấn luyện, vui lòng đặt --epochs lớn hơn {start_epoch} (ví dụ: --epochs {start_epoch + 5}).\n")
 
     # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
     if args.data_dir and os.path.isdir(args.data_dir):
@@ -564,9 +674,8 @@ def train_direction_g():
     )
 
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
-    step = 0
+    step = start_epoch * len(loader) if start_epoch > 0 else 0
     start_time = time.time()
-    history = {"total": [], "dino": [], "ibot": [], "koleo": []}
     last_visual_data = None
 
     best_checkpoint_path = os.path.join(args.output_dir, "best_checkpoint.pth")
@@ -581,8 +690,12 @@ def train_direction_g():
             "student_backbone": clean_state_dict(raw_curr_s.backbone.state_dict()),
             "teacher_backbone": clean_state_dict(raw_curr_t.backbone.state_dict()),
             "student_dino_head": clean_state_dict(raw_curr_s.dino_head.state_dict()),
+            "teacher_dino_head": clean_state_dict(raw_curr_t.dino_head.state_dict()),
             "student_ibot_head": clean_state_dict(raw_curr_s.ibot_head.state_dict()),
+            "teacher_ibot_head": clean_state_dict(raw_curr_t.ibot_head.state_dict()),
             "pos_stats": clean_state_dict(pos_stats.state_dict()),
+            "dino_center": dino_loss_fn.center.detach().cpu(),
+            "ibot_center": ibot_loss_fn.center.detach().cpu(),
             "optimizer": optimizer.state_dict(),
             "scaler": scaler.state_dict() if use_amp else None,
             "history": history,
