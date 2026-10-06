@@ -1,34 +1,36 @@
+% Table 1: Specifications Table (Elsevier Data in Brief Standard Template)
 \begin{table*}[!htbp]
 \centering
-\footnotesize
-\renewcommand{\arraystretch}{1.05}
-\caption{Specifications Table of the HCMC-TrafficSnap Dataset.}
+\small
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.15}
+\caption{Specifications Table of the IC4SD-TrafficSnap Dataset.}
 \label{tab:specifications}
-\begin{tabularx}{\textwidth}{@{} l X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash\bfseries}p{4.2cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
-\textbf{Subject} & Computer Science \\
+Subject & Computer Science \\
 \midrule
-\textbf{Specific subject area} & Intelligent Transportation Systems, Computer Vision, Spatio-Temporal Data Mining, Self-Supervised Learning \\
+Specific subject area & Intelligent Transportation Systems, Computer Vision, Spatio-Temporal Data Mining \\
 \midrule
-\textbf{Type of data} & Image time-series (JPEG snapshots), Geographic and camera metadata (CSV: \texttt{camera\_data\_608Cam.csv}, \texttt{routes.csv}), Directed spatial routing distance matrices (NumPy / CSV / XLSX), Python dataset loaders and graph utility routines \\
+Type of data & Image time-series, geospatial metadata, derived road network graph tensors, PyTorch code utilities \\
 \midrule
-\textbf{How data were acquired} & Automated continuous retrieval from the public traffic surveillance portal of Ho Chi Minh City (\url{https://giaothong.hochiminhcity.gov.vn}) via an asynchronous HTTP polling engine. Road network routing distances were computed via the Open Source Routing Machine (OSRM) engine using OpenStreetMap road network data. \\
+How data were acquired & Automated retrieval from the public municipal traffic surveillance portal of the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}) via asynchronous HTTP polling. Driving distances and road network routing were computed using OSRM over OpenStreetMap data. \\
 \midrule
-\textbf{Data format} & Raw (JPEG snapshots, $512 \times 288$ px), Filtered (municipal transmission placeholder cards excised), Structured (CSV metadata, NumPy matrices) \\
+Data format & Raw snapshots: RGB JPEG ($512 \times 288$ px, JFIF 1.01, stream quality factor $\approx 75$--$80$); \newline
+Geospatial metadata: Tabular CSV (\path{routes.csv}, \path{stations.csv}, \path{road_network_distance.csv}); \newline
+Graph tensors: NumPy binary arrays (\path{distance_km.npy}, \path{direction.npy}) and tabular edge list (\path{edges.csv}); \newline
+Code: Python source files (\path{code/}). \\
 \midrule
-\textbf{Parameters for data collection} & Multi-camera time-lapse snapshot polling at an empirical interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s, nominal: 5.0 minutes) across 93.6 continuous hours (3.9 calendar days, from 02/10/2026 17:37 to 06/10/2026 15:12 ICT). Total uncompressed dataset volume: 44.38~GB. Client crawl latency: $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s. \\
+Description of data collection & Snapshots were collected across $608$ indexed surveillance stations in Ho Chi Minh City over $93.6$ continuous hours (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) with an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s). Camera positions are mapped to OpenStreetMap road geometry, yielding a derived directed spatial graph with $2,450$ corridor links within a $6.0$~km driving cutoff horizon. \\
 \midrule
-\textbf{Description of data collection} & A total of 714,123 surveillance snapshots collected from 608 indexed municipal camera stations across Ho Chi Minh City, Vietnam (572 continuous active stations yielding 1,250--1,268 frames each; 36 stations with initial stream connection dropouts). High-angle mast mounting at $6.0$--$15.0$~m elevation. Raw snapshots undergo automated integrity checking to filter out $284 \times 177$ error placeholder cards. Directed road distances were computed for camera node pairs within a 6.0~km spatial cutoff horizon, yielding 2,450 valid directed corridors. \\
+Data source location & Region: Ho Chi Minh City, Vietnam (former urban districts, core metropolitan area); \newline
+Coordinates: $[10.68^\circ\text{N} - 10.88^\circ\text{N}, 106.58^\circ\text{E} - 106.82^\circ\text{E}]$. \\
 \midrule
-\textbf{Data source location} & City/Region: Ho Chi Minh City, Vietnam \newline
-Latitude and Longitude: $10^\circ 46'\text{N}, 106^\circ 40'\text{E}$ (bounding box: $10.68^\circ - 10.88^\circ\text{N}$, $106.58^\circ - 106.82^\circ\text{E}$) \\
+Data accessibility & Repository name: Zenodo; \newline
+Direct URL: \url{https://doi.org/10.5281/zenodo.22929940} (Release v2.0); \newline
+Licensing: Surveillance imagery and metadata are released for non-commercial academic research; derived road graph is licensed under the Open Database License (ODbL); code is under the MIT License. \\
 \midrule
-\textbf{Data accessibility} & Repository name: Zenodo \newline
-Data identification number: \url{https://doi.org/10.5281/zenodo.22929940} \newline
-Direct URL: \url{https://zenodo.org/record/22929940} \newline
-License: Derived metadata, graph tensors, and code are released under Creative Commons Attribution 4.0 International (CC BY 4.0). Surveillance snapshots are provided for non-commercial academic research. Road graph data \copyright\ OpenStreetMap contributors under ODbL. \\
-\midrule
-\textbf{Related research article} & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
+Related research article & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
 \bottomrule
 \end{tabularx}
 \end{table*}

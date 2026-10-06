@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SAMPLE_DIR = os.path.join(BASE_DIR, "..", "zenodo_bundle", "sample_preview", "sample_camera_sequences", "camera_images_5012")
+SAMPLE_DIR = os.path.join(BASE_DIR, "..", "zenodo_bundle", "sample_preview", "sample_camera_sequences")
 
 def audit_pii_and_resolution():
     image_paths = sorted(glob.glob(os.path.join(SAMPLE_DIR, "*.jpg")))

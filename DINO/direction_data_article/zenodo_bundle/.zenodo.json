@@ -1,10 +1,11 @@
 {
-  "title": "HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic",
+  "title": "IC4SD-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Geospatial Road Network Dataset for Heterogeneous Urban Traffic",
   "upload_type": "dataset",
   "publication_date": "2026-10-06",
-  "description": "<p><strong>HCMC-TrafficSnap</strong> is an open-access, city-scale multimodal dataset comprising over 1,000,000 discrete surveillance camera snapshots (~1.22 million frames) coupled with an OpenStreetMap-derived directed road routing distance graph across 608 active traffic surveillance stations in Ho Chi Minh City, Vietnam. The dataset spans 7 continuous calendar days (168 consecutive hours) at a 5-minute sampling interval, capturing the visual and spatial dynamics of motorcycle-dominant mixed urban mobility (70-80% two-wheelers).</p><p><strong>Key Highlights:</strong></p><ul><li><strong>Scale:</strong> 608 active municipal camera stations (indexed in range [1, 657]) across expressways, arterials, and roundabouts.</li><li><strong>Temporal Span:</strong> 7 continuous days (Monday 00:00 to Sunday 23:59 ICT) at ~300 s polling interval.</li><li><strong>Visual Modality:</strong> 512x288 pixel JPEG snapshots named by <code>{station_id}_{unix_timestamp}.jpg</code> with an average file size of 65.87 KB.</li><li><strong>Spatial Topology:</strong> Directed 608x608 shortest-path routing distance matrix (2,420 valid corridors <= 5.0 km) derived from OpenStreetMap, exhibiting pronounced directional asymmetry (1,054 one-way pairs and 232 distance-asymmetric pairs).</li><li><strong>Privacy by Design:</strong> High pole mounting (>6 m) and sub-Nyquist ground sampling distance physically guarantee zero resolvable faces or license plates (0.00% PII).</li><li><strong>Applications:</strong> Multi-camera self-supervised representation learning, background-foreground scene decomposition, unsupervised incident detection, and spatio-temporal graph neural networks.</li></ul>",
+    "description": "<p><strong>IC4SD-TrafficSnap</strong> is an open-access multimodal dataset coupling 714,123 discrete surveillance camera snapshots (44.38 GiB / 47.66 GB) across 608 indexed stations in Ho Chi Minh City, Vietnam, and OpenStreetMap-derived geospatial road network metadata. As a direct derived representation of the geospatial road layout and sequential corridor adjacency, a 608x608 directed spatial graph topology (2,450 corridors <= 6.0 km) is provided for spatio-temporal modeling.</p><p><strong>Key Modalities & Highlights:</strong></p><ul><li><strong>Scale & Stations:</strong> 608 active municipal camera stations across arterials and intersections in former urban districts of Ho Chi Minh City, fully mapped to geospatial coordinates and road topology.</li><li><strong>Surveillance Image Time-Series:</strong> 714,123 valid 512x288 pixel JPEG snapshots acquired continuously over 93.6 hours (spanning 5 calendar days: October 2 to October 6, 2026) at an empirical polling interval of 269.0 +/- 239.7 s (median: 263.0 s).</li><li><strong>Geospatial Road Network & Derived Graph:</strong> Station GPS coordinates, elevations, arterial classifications, and pairwise shortest driving distances from OpenStreetMap (OSRM v5.27.1), yielding a 608x608 directed spatial graph with 1,070 unidirectional links without reverse edges and 238 distance-asymmetric pairs.</li><li><strong>Quantified Negligible Privacy Risk:</strong> High pole mounting (>6 m) and downward oblique viewing physically guarantee zero legible human faces or vehicle license plates (95% CI upper bound <= 0.0015% across 200,000 audited frames via the Rule of Three).</li><li><strong>Licensing:</strong> Public academic research use for surveillance imagery and metadata; Open Database License (ODbL) for the OpenStreetMap-derived road graph; MIT License for PyTorch loaders and graph code.</li></ul>",
   "access_right": "open",
-  "license": "cc-by-4.0",
+  "license": "odbl",
+  "version": "2.0.0",
   "creators": [
     {
       "name": "Le, Viet-Anh",
@@ -21,12 +22,12 @@
     "Intelligent Transportation Systems",
     "Image Time-Series",
     "Traffic Camera Snapshots",
+    "Geospatial Road Network",
     "Self-Supervised Learning",
-    "Spatio-Temporal Graph Networks",
-    "Directed Road Graph",
+    "Spatio-Temporal Graph Modeling",
     "Motorcycle-Dominant Traffic",
     "Ho Chi Minh City",
-    "HCMC-TrafficSnap"
+    "IC4SD-TrafficSnap"
   ],
   "related_identifiers": [
     {

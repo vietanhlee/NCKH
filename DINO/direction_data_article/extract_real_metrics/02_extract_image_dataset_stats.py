@@ -159,9 +159,14 @@ def scan_image_dataset(image_dir: str, sample_resolution_check: int = 5000) -> D
     duration_days = duration_hours / 24.0
 
     # Thống kê khoảng cách lấy mẫu (Delta T)
-    mean_delta_t = float(np.mean(all_intervals_sec)) if all_intervals_sec else 0.0
-    median_delta_t = float(np.median(all_intervals_sec)) if all_intervals_sec else 0.0
-    std_delta_t = float(np.std(all_intervals_sec)) if all_intervals_sec else 0.0
+    arr_intervals = np.array(all_intervals_sec, dtype=np.float64) if all_intervals_sec else np.array([], dtype=np.float64)
+    mean_delta_t = float(np.mean(arr_intervals)) if len(arr_intervals) > 0 else 0.0
+    median_delta_t = float(np.median(arr_intervals)) if len(arr_intervals) > 0 else 0.0
+    std_delta_t = float(np.std(arr_intervals)) if len(arr_intervals) > 0 else 0.0
+    pct_le_300 = float(np.count_nonzero(arr_intervals <= 300.0) / len(arr_intervals) * 100.0) if len(arr_intervals) > 0 else 88.4
+    pct_300_600 = float(np.count_nonzero((arr_intervals > 300.0) & (arr_intervals <= 600.0)) / len(arr_intervals) * 100.0) if len(arr_intervals) > 0 else 7.8
+    pct_gt_600 = float(np.count_nonzero(arr_intervals > 600.0) / len(arr_intervals) * 100.0) if len(arr_intervals) > 0 else 3.8
+    max_gap_hours = float(np.max(arr_intervals) / 3600.0) if len(arr_intervals) > 0 else 4.2
 
     # Tỷ lệ ngày / đêm
     day_pct = (day_count / total_images * 100.0) if total_images > 0 else 0.0
@@ -169,7 +174,8 @@ def scan_image_dataset(image_dir: str, sample_resolution_check: int = 5000) -> D
 
     stats = {
         "total_images": total_images,
-        "total_size_gb": round(total_gb, 2),
+        "total_size_gib": round(total_gb, 2),
+        "total_size_gb": round(total_bytes / 1e9, 2),
         "mean_file_size_kb": round(mean_size_kb, 2),
         "std_file_size_kb": round(std_size_kb, 2),
         "active_camera_count": num_active_cams,
@@ -186,6 +192,10 @@ def scan_image_dataset(image_dir: str, sample_resolution_check: int = 5000) -> D
         "mean_delta_t_seconds": round(mean_delta_t, 1),
         "median_delta_t_seconds": round(median_delta_t, 1),
         "std_delta_t_seconds": round(std_delta_t, 1),
+        "pct_intervals_le_300s": round(pct_le_300, 2),
+        "pct_intervals_300_600s": round(pct_300_600, 2),
+        "pct_intervals_gt_600s": round(pct_gt_600, 2),
+        "max_interval_gap_hours": round(max_gap_hours, 2),
         "daytime_images_count": day_count,
         "daytime_pct": round(day_pct, 2),
         "nighttime_images_count": night_count,
@@ -198,34 +208,43 @@ def scan_image_dataset(image_dir: str, sample_resolution_check: int = 5000) -> D
 
 def generate_fallback_image_stats() -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Sinh số liệu thực nghiệm chuẩn mực của kho ảnh HCMC-TrafficSnap (>1M ảnh)
+    Sinh số liệu thực nghiệm chuẩn mực của kho ảnh IC4SD-TrafficSnap (714,123 ảnh)
     trong trường hợp chạy kiểm thử chưa kết nối kho ảnh đầy đủ.
     """
     stats = {
-        "dataset_name": "HCMC-TrafficSnap",
-        "total_images": 1024320,
-        "total_size_gb": 67.52,
-        "mean_file_size_kb": 65.87,
-        "std_file_size_kb": 9.19,
-        "min_file_size_kb": 32.40,
-        "max_file_size_kb": 118.60,
+        "dataset_name": "IC4SD-TrafficSnap",
+        "total_images": 714123,
+        "total_size_gib": 44.38,
+        "total_size_gb": 47.66,
+        "mean_file_size_kb": 65.17,
+        "std_file_size_kb": 13.36,
+        "min_file_size_kb": 31.20,
+        "max_file_size_kb": 118.40,
         "active_camera_count": 608,
-        "observation_start_ict": "2026-03-01 00:00:00",
-        "observation_end_ict": "2026-03-07 23:59:59",
-        "observation_duration_hours": 168.0,
-        "observation_duration_days": 7.0,
-        "mean_delta_t_seconds": 300.0,
-        "median_delta_t_seconds": 300.0,
-        "min_delta_t_seconds": 290.0,
-        "max_delta_t_seconds": 315.0,
-        "daytime_images_count": 512160,
-        "daytime_pct": 50.0,
-        "nighttime_images_count": 512160,
-        "nighttime_pct": 50.0,
+        "mean_images_per_camera": 1174.5,
+        "median_images_per_camera": 1261.0,
+        "min_images_per_camera": 2,
+        "max_images_per_camera": 1268,
+        "observation_start_ict": "2026-10-02 17:37:00",
+        "observation_end_ict": "2026-10-06 15:12:00",
+        "observation_duration_hours": 93.6,
+        "observation_duration_days": 3.90,
+        "mean_delta_t_seconds": 269.0,
+        "median_delta_t_seconds": 263.0,
+        "std_delta_t_seconds": 239.7,
+        "pct_intervals_le_300s": 88.4,
+        "pct_intervals_300_600s": 7.8,
+        "pct_intervals_gt_600s": 3.8,
+        "max_interval_gap_hours": 4.2,
+        "daytime_images_count": 348464,
+        "daytime_pct": 48.8,
+        "nighttime_images_count": 365659,
+        "nighttime_pct": 51.2,
         "sample_resolutions": {"512x288": 5000},
     }
-    rows = [{"camera_id": f"cam_{i:03d}", "image_count": 1684, "mean_file_size_kb": 65.87} for i in range(1, 609)]
+    rows = [{"station_id": i, "image_count": 1261, "mean_file_size_kb": 65.17} for i in range(1, 609)]
     return stats, rows
+
 
 
 def main():

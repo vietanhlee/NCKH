@@ -52,7 +52,8 @@ g:/nckh/zenodo_bundle/
 ├── checksums.sha256                           # Mã băm SHA-256 xác thực tính toàn vẹn 61 tệp
 │
 ├── metadata/                                  # Dữ liệu hình học & topo
-│   ├── routes.csv                # ID, tọa độ kinh/vĩ, loại đường, độ cao camera
+│   ├── routes.csv                    # ID, Vị trí, CamID, Tọa độ kinh/vĩ, độ cao camera
+│   ├── stations.csv                  # Bậc vào/ra (in/out-degree) và vai trò topo đồ thị
 │   └── road_network_distance.xlsx    # Ma trận khoảng cách định tuyến 608x608 từ OSM
 │
 ├── sample_preview/sample_camera_sequences/    # Tập ảnh mẫu mini (50 ảnh) để chạy thử nghiệm tức thì

@@ -1,9 +1,14 @@
-\begin{thebibliography}{1}
+\begin{thebibliography}{10}
 \expandafter\ifx\csname url\endcsname\relax
   \def\url#1{\texttt{#1}}\fi
 \expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
 \expandafter\ifx\csname href\endcsname\relax
   \def\href#1#2{#2} \def\path#1{#1}\fi
+
+\bibitem{jica2014hcmc}
+{Japan International Cooperation Agency (JICA) and Ho Chi Minh City People's
+  Committee}, {The Project for Study on the Master Plan of Urban Transport
+  System in Ho Chi Minh City (HUTRANS)}, Tech. rep., Technical Report (2014).
 
 \bibitem{li2018diffusion}
 Y.~Li, R.~Yu, C.~Shahabi, Y.~Liu, {Diffusion Convolutional Recurrent Neural
@@ -40,5 +45,15 @@ B.~Yu, H.~Yin, Z.~Zhu, {Spatio-Temporal Graph Convolutional Networks: A Deep
 T.~N. Kipf, M.~Welling, {Semi-Supervised Classification with Graph
   Convolutional Networks}, International Conference on Learning Representations
   (ICLR) (2017).
+
+\bibitem{pech2000diatom}
+J.~L. Pech-Pacheco, G.~Crist{\'o}bal, J.~Chamorro-Martinez,
+  J.~Fern{\'a}ndez-Valdivia, {Diatom Autofocusing in Brightfield Microscopy: A
+  Comparative Study}, in: Proceedings of 15th International Conference on
+  Pattern Recognition (ICPR), Vol.~3, 2000, pp. 314--317.
+
+\bibitem{hanley1983if}
+J.~A. Hanley, A.~Lippman-Hand, {If Nothing Goes Wrong, Is Everything All Right?
+  Interpreting Zero Numerators}, JAMA 249~(13) (1983) 1743--1745.
 
 \end{thebibliography}

@@ -38,28 +38,48 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 VN_TZ = timezone(timedelta(hours=7))
 
 
-def load_camera_endpoints(routes_csv_path: str) -> List[Dict[str, Any]]:
-    """Đọc danh sách các trạm camera từ file routes.csv."""
-    if not os.path.exists(routes_csv_path):
-        raise FileNotFoundError(f"Không tìm thấy routes.csv tại: {routes_csv_path}")
+def load_camera_endpoints(camera_csv_path: str) -> List[Dict[str, Any]]:
+    """Đọc danh sách các trạm camera từ file camera_data_608Cam.csv (hoặc routes.csv)."""
+    if not os.path.exists(camera_csv_path):
+        # Fallback to local or bundle alternatives
+        parent_dir = os.path.dirname(camera_csv_path)
+        for alt in ["camera_data_608Cam.csv", "../camera_data_608Cam.csv", "../zenodo_bundle/metadata/camera_data_608Cam.csv"]:
+            candidate = os.path.normpath(os.path.join(parent_dir, alt))
+            if os.path.exists(candidate):
+                camera_csv_path = candidate
+                break
+
+    if not os.path.exists(camera_csv_path):
+        raise FileNotFoundError(f"Không tìm thấy file danh mục camera tại: {camera_csv_path}")
 
     cameras = []
-    with open(routes_csv_path, mode="r", encoding="utf-8") as f:
+    with open(camera_csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:
-                station_id = int(row["station_id"])
+                # Chấp nhận cả stt hoặc station_id
+                stt_val = row.get("stt") or row.get("station_id")
+                if not stt_val:
+                    continue
+                station_id = int(stt_val)
+                name = row.get("Location") or row.get("station_name") or f"Station {station_id}"
+                cam_id = row.get("CamID", "")
+                lat = float(row.get("latitude", 0.0))
+                lng = float(row.get("longitude", 0.0))
+                elev = float(row.get("camera_elevation_m", 8.0))
+
                 cameras.append({
                     "station_id": station_id,
-                    "name": row.get("station_name", f"Station {station_id}"),
-                    "lat": float(row.get("latitude", 0.0)),
-                    "lng": float(row.get("longitude", 0.0)),
-                    "elevation": float(row.get("camera_elevation_m", 8.0))
+                    "name": name,
+                    "cam_id": cam_id,
+                    "lat": lat,
+                    "lng": lng,
+                    "elevation": elev
                 })
             except (ValueError, KeyError):
                 continue
 
-    print(f"[Collector] Đã nạp thành công {len(cameras)} trạm camera hợp lệ từ routes.csv.")
+    print(f"[Collector] Đã nạp thành công {len(cameras)} trạm camera hợp lệ từ {os.path.basename(camera_csv_path)}.")
     return cameras
 
 
@@ -204,7 +224,7 @@ def run_collection_cycle(
 
 def main():
     parser = argparse.ArgumentParser(description="Bộ thu thập ảnh camera thực tế HCMC-TrafficSnap.")
-    parser.add_argument("--routes_csv", type=str, default="../zenodo_bundle/metadata/routes.csv",
+    parser.add_argument("--routes_csv", "--camera_csv", type=str, default="../zenodo_bundle/metadata/routes.csv",
                         help="Đường dẫn đến file routes.csv chứa 608 trạm.")
     parser.add_argument("--output_dir", type=str, default="data/raw_snapshots",
                         help="Thư mục lưu trữ ảnh cào được.")
@@ -218,7 +238,7 @@ def main():
                         help="Số luồng đồng thời (mặc định: 24).")
 
     args = parser.parse_args()
-    cameras = load_camera_endpoints(args.routes_csv)
+    cameras = load_camera_endpoints(args.camera_csv)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.log_csv)), exist_ok=True)
 

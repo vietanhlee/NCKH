@@ -1,18 +1,18 @@
 {
+  "dataset_name": "HCMC-TrafficSnap",
   "num_nodes": 608,
-  "station_id_min": 1,
-  "station_id_max": 657,
   "num_directed_edges": 2450,
-  "cutoff_distance_km": 6.0,
+  "cutoff_radius_meters": 6000.0,
+  "gaussian_sigma_meters": 1090.0,
   "degree_distribution": {
     "out_degree_mean": 4.03,
-    "out_degree_std": 2.01,
+    "out_degree_std": 2.58,
     "out_degree_min": 0,
-    "out_degree_max": 13,
+    "out_degree_max": 17,
     "in_degree_mean": 4.03,
-    "in_degree_std": 2.06,
+    "in_degree_std": 2.16,
     "in_degree_min": 0,
-    "in_degree_max": 13
+    "in_degree_max": 14
   },
   "edge_classification_and_asymmetry": {
     "total_connected_node_pairs": 1760,
@@ -20,21 +20,25 @@
     "oneway_only_pairs_pct": 60.8,
     "bidirectional_pairs": 690,
     "bidirectional_pairs_pct": 39.2,
-    "bidirectional_asymmetric_pairs_over_50m": 238,
-    "bidirectional_asymmetric_pct": 34.49,
-    "bidirectional_symmetric_pairs": 452,
-    "bidirectional_symmetric_pct": 65.51
+    "bidirectional_asymmetric_pairs_over_50m": 232,
+    "bidirectional_asymmetric_pct": 33.62,
+    "bidirectional_symmetric_pairs": 458,
+    "mean_bidi_distance_delta_meters": 115.95,
+    "max_bidi_distance_delta_meters": 2780.0
   },
   "distance_distribution_meters": {
-    "mean_edge_distance": 1159.5669387755102,
-    "std_edge_distance": 1088.857085039928,
-    "median_edge_distance": 823.0,
+    "mean_edge_distance": 1159.57,
+    "std_edge_distance": 1088.86,
     "min_edge_distance": 3.0,
-    "max_edge_distance": 6000.0
+    "max_edge_distance": 6000.0,
+    "q25_edge_distance": 384.0,
+    "q50_edge_distance": 823.0,
+    "q75_edge_distance": 1560.0
   },
   "dcrnn_transition_operators": {
+    "formulation": "Dual Directed Random Walk: P_f = D_O^{-1} * W, P_b = D_I^{-1} * W^T",
     "spectral_radius_Pf": 1.0,
     "spectral_radius_Pb": 1.0,
-    "sparsity_pct": 99.34
+    "stability_guarantee": "rho(P) <= 1.0 (Strictly stable stochastic matrices)"
   }
 }

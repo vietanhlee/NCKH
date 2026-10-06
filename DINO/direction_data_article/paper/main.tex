@@ -14,15 +14,16 @@
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{xcolor}
+\usepackage{colortbl}
 \usepackage{geometry}
 \usepackage{tikz}
 \geometry{a4paper, margin=1in}
 
-% Cấu hình hiển thị cây thư mục dirtree thanh lịch
+% Directory tree formatting
 \renewcommand*\DTstylecomment{\rmfamily\color{blue!70!black}\footnotesize\itshape}
 \renewcommand*\DTstyle{\ttfamily\small}
 
-% Tối ưu hóa phân bố float của LaTeX (ngăn chặn trôi dạt bảng/hình)
+% LaTeX float placement optimization
 \renewcommand{\topfraction}{0.95}
 \renewcommand{\bottomfraction}{0.85}
 \renewcommand{\textfraction}{0.05}
@@ -45,7 +46,7 @@
 
 \begin{frontmatter}
 
-\title{HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic}
+\title{IC4SD-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Geospatial Road Network Dataset for Heterogeneous Urban Traffic}
 
 \author[inst1]{Viet-Anh Le \orcidicon{0009-0003-5748-0439}}
 \ead{anhlv.b23kh002@stu.ptit.edu.vn}
@@ -59,44 +60,44 @@
             country={Vietnam}}
 
 \begin{abstract}
-This data article presents \textbf{HCMC-TrafficSnap}, an open-access multimodal dataset comprising 714,123 discrete surveillance camera snapshots (44.38~GB total storage volume) coupled with an OpenStreetMap-derived directed road routing distance graph across 608 indexed traffic surveillance stations in Ho Chi Minh City, Vietnam (572 continuous active stations yielding 1,250--1,268 frames each, and 36 stations with initial upstream stream dropouts). Collected continuously over 93.6 hours (3.9 calendar days, from 02/10/2026 17:37 to 06/10/2026 15:12 ICT) at an empirical mean sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s; nominal target: 5.0 minutes), the dataset addresses a notable empirical gap in Intelligent Transportation Systems: the absence of large-scale observational visual time-series capturing heterogeneous, motorcycle-dominant metropolitan traffic flows (where two-wheeled vehicles comprise 70--80\% of modal volume). All visual records are provided in standard $512 \times 288$ pixel JPEG format (average file size $65.17 \pm 13.36$~KB), with an empirical acquisition clock offset of $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s relative to hardware camera clocks. The visual time-series is paired with a $608 \times 608$ directed topological routing matrix containing 2,450 valid corridors within a 6.0~km spatial cutoff horizon, exhibiting marked directional asymmetry (1,070 strictly one-way pairs and 238 distance-asymmetric bidirectional pairs) due to median barriers and one-way arterial regulations. Production-grade PyTorch data loaders, multi-camera self-supervised batch samplers, and dual-transition directed graph utilities are provided. Quantitative privacy audits across 2,000 sampled images confirm that due to camera elevation ($>6$~m) and sub-Nyquist ground sampling distance ($2.73 - 3.25$~cm/px), no individual faces or license plates are resolvable (0.00\% leakage).
+This data article presents \textbf{IC4SD-TrafficSnap}, an open-access multimodal dataset coupling city-scale surveillance camera image time-series and geospatial road network mapping across \textbf{608} indexed traffic surveillance stations in Ho Chi Minh City, Vietnam. The visual corpus contains \textbf{714,123} discrete camera snapshots (\textbf{44.38~GiB} / \textbf{47.66~GB} in standard stream JPEG format) captured over \textbf{93.6 continuous hours} across 5 calendar days (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) at an empirical sampling interval of $\mathbf{\Delta T = 269.0 \pm 239.7}$~s (median: $263.0$~s; nominal target: $300$~s / 5.0 minutes). The monitoring network spans major arterial corridors and intersections across the historical urban districts of the metropolitan core. Physical driving distances and directions are extracted from OpenStreetMap using the Open Source Routing Machine (OSRM v5.27.1). From these geospatial road assets, a $608 \times 608$ directed spatial graph topology containing \textbf{2,450} valid corridor links within a \textbf{6.0~km} cutoff horizon is derived, capturing real-world directional asymmetry (\textbf{1,070} unidirectional links without reverse edges and \textbf{238} distance-asymmetric pairs) induced by municipal arterial regulations, physical dividers, and multi-leg intersection topologies. PyTorch data ingestion utilities and dual-transition directed diffusion graph routines are provided. Quantitative privacy audits across $200,000$ stratified images confirm zero readable personal data instances, establishing with $95\%$ confidence that the true population occurrence rate does not exceed $0.0015\%$ under the Hanley and Lippman-Hand rule of three, demonstrating quantified negligible privacy risk.
 \end{abstract}
 
 \begin{keyword}
-Intelligent Transportation Systems \sep Image Time-Series \sep Traffic Camera Snapshots \sep Unlabeled Surveillance Data \sep Spatio-Temporal Graph Networks \sep Mixed Urban Traffic
+Intelligent Transportation Systems \sep Image Time-Series \sep Geospatial Road Network \sep Spatio-Temporal Graph Modeling \sep Mixed Urban Traffic
 \end{keyword}
 
 \end{frontmatter}
 
-%% Specifications Table (Table 1 - Trình bày trang trọng trên trang riêng theo chuẩn Elsevier Data in Brief)
+%% Specifications Table (Table 1 - Formatted to Elsevier Data in Brief Standard)
 \clearpage
 \input{tables/tab_specifications.tex}
 \clearpage
 
 \section{Value of the Data}
 \begin{itemize}
-    \item \textbf{Heterogeneous Mixed Urban Traffic Representation:} Captures multi-day visual dynamics of a large Southeast Asian metropolis where two-wheeled motorized vehicles comprise 70--80\% of modal traffic volume, providing a benchmark for self-supervised representation learning and visual scene decomposition under severe mutual occlusions and non-lane-based movement patterns.
-    \item \textbf{Coupled Directed Spatial Routing Topology:} Integrates visual feeds with an OpenStreetMap-derived directed routing distance matrix ($608 \times 608$, 2,450 valid corridors) that explicitly captures municipal traffic restrictions, grade-separated overpasses, and physical median barriers, supporting spatio-temporal graph neural networks with directed transition modeling.
-    \item \textbf{Road Background and Incident Modeling:} The fixed-viewpoint multi-camera time-series across circadian day-night cycles provides a standardized empirical basis for separating static roadway backgrounds from transient vehicular flow, enabling unsupervised anomaly and incident detection without manual annotations.
-    \item \textbf{FAIR Data Principles and Open Reproducibility:} Accompanied by verified PyTorch data loaders, multi-camera self-supervised batch samplers, and dual-transition directed graph processing routines, distributed under Creative Commons Attribution 4.0 International (CC BY 4.0) for derived scientific artifacts.
+    \item \textbf{Heterogeneous Mixed Urban Traffic Representation:} Captures multi-day visual dynamics of a Southeast Asian metropolis where two-wheeled motorized vehicles account for \textbf{70--80\%} of modal traffic volume~\cite{jica2014hcmc}, supporting visual perception and scene decomposition research under dense mutual occlusions and non-lane-based movement patterns.
+    \item \textbf{Geospatial Road Network and Derived Directed Graph:} Integrates surveillance visual streams with OpenStreetMap coordinates and shortest-path driving distance matrices ($608 \times 608$, \textbf{2,450} valid corridors). The directed spatial graph serves as a natural derived topological representation based on sequential corridor adjacency, facilitating multi-camera spatio-temporal self-supervised representation learning and network corridor diffusion modeling with forward and backward transition matrices.
+    \item \textbf{Roadway Background and Incident Modeling:} The fixed-viewpoint multi-camera time-series across circadian day-night cycles provides an empirical basis for separating static roadway backgrounds from transient vehicular flow, enabling unsupervised anomaly and incident detection.
+    \item \textbf{Open Reproducibility and Code Utilities:} Accompanied by verified PyTorch data loaders, multi-camera batch samplers, and dual-transition directed graph processing routines. Visual imagery is provided for non-commercial academic research, the derived road network graph is released under the \textit{Open Database License (ODbL)}, and software utilities are distributed under the \textit{MIT License}.
 \end{itemize}
 
 \section{Background}
-Large-scale spatial-temporal traffic benchmarks are foundational for developing intelligent transportation algorithms. However, established benchmarks exhibit two distinct limitations:
+Large-scale spatial-temporal traffic benchmarks are foundational for developing intelligent transportation algorithms. However, established datasets exhibit two distinct limitations:
 \begin{enumerate}
-    \item Sensor-based traffic datasets (such as METR-LA \cite{li2018diffusion}, PEMS-BAY \cite{li2018diffusion}, and LargeST \cite{liu2023largest}) provide extensive graph topologies and longitudinal 1D time-series, but lack visual context, preventing models from leveraging rich photometric, weather, and vehicle-type features.
-    \item Computer vision traffic benchmarks (such as UA-DETRAC \cite{wen2020ua} and CityCam \cite{zhang2017understanding}) provide visual imagery but lack city-scale directed road network topologies, and predominantly reflect car-dominant, lane-disciplined traffic in temperate North American or European settings.
+    \item \textbf{Sensor-based traffic datasets} (such as METR-LA~\cite{li2018diffusion}, PEMS-BAY~\cite{li2018diffusion}, and LargeST~\cite{liu2023largest}) provide extensive graph topologies and longitudinal 1D time-series, but lack visual context, preventing models from leveraging rich photometric, weather, and vehicle-type features.
+    \item \textbf{Computer vision benchmarks} (e.g., UA-DETRAC~\cite{wen2020ua} and CityCam~\cite{zhang2017understanding}) provide visual imagery but lack city-scale directed road network topologies, and predominantly reflect car-dominant, lane-disciplined traffic in temperate North American or East Asian settings ($960 \times 540$ video clips in Beijing/Tianjin for UA-DETRAC, and low-resolution webcam snapshots in New York City for CityCam).
 \end{enumerate}
-\textbf{HCMC-TrafficSnap} was constructed to bridge this gap by providing an integrated visual-spatial dataset: high-frequency time-lapse camera snapshots paired with an OpenStreetMap directed routing graph across 608 camera nodes in Ho Chi Minh City, Vietnam. A systematic comparison with existing benchmark datasets is summarized in Table~\ref{tab:dataset_comparison}.
+\textbf{IC4SD-TrafficSnap} addresses these limitations by providing an integrated multimodal dataset: surveillance camera snapshots and geospatial road network mapping across \textbf{608} camera stations in Ho Chi Minh City, Vietnam. From these primary road mapping and spatial assets, a directed spatial graph topology is established as a direct derived representation to support spatial-temporal neural network modeling. A systematic comparison with existing datasets is summarized in Table~\ref{tab:dataset_comparison}.
 
-%% Table 3: Systematic Dataset Comparison (Đặt tại Section 2 đúng mạch ngữ cảnh)
+%% Table 2: Systematic Dataset Comparison
 \input{tables/tab_dataset_comparison.tex}
 \FloatBarrier
 
 \section{Data Description}
 
 \subsection{Repository Organization and Archive Structure}
-The dataset is permanently hosted on Zenodo (\url{https://doi.org/10.5281/zenodo.22929940}). The repository is organized into modular directories as illustrated in Figure~\ref{fig:directory_tree}:
+The dataset is permanently hosted on Zenodo (\url{https://doi.org/10.5281/zenodo.22929940}, Dataset Release v2.0). The repository is organized into modular directories as illustrated in Figure~\ref{fig:directory_tree}:
 
 \begin{figure}[!htbp]
 \centering
@@ -106,90 +107,106 @@ The dataset is permanently hosted on Zenodo (\url{https://doi.org/10.5281/zenodo
     arc=1.5mm,
     boxrule=0.6pt,
     left=3mm, right=3mm, top=2.5mm, bottom=2.5mm,
-    title=\footnotesize\textbf{\textsf{HCMC-TrafficSnap: Zenodo Deposition Archive Directory Structure}}
+    title=\footnotesize\textbf{\textsf{IC4SD-TrafficSnap: Zenodo Deposition Archive Directory Structure}}
 ]
 \footnotesize
 \dirtree{%
-.1 \textbf{\texttt{HCMC-TrafficSnap/}}\DTcomment{Root open-access repository archive}.
-.2 \texttt{LICENSE}\DTcomment{CC BY 4.0 / Open academic research use license}.
+.1 \textbf{\texttt{IC4SD-TrafficSnap/}}\DTcomment{Root open-access repository archive}.
+.2 \texttt{LICENSE}\DTcomment{Licensing terms (Academic, ODbL, MIT)}.
 .2 \texttt{CITATION.cff}\DTcomment{Citation File Format metadata (v1.2.0)}.
 .2 \texttt{.zenodo.json}\DTcomment{Zenodo persistent DOI repository metadata schema}.
 .2 \texttt{data\_dictionary.md}\DTcomment{Comprehensive schema \& column attribute definitions}.
 .2 \texttt{README.md}\DTcomment{Usage documentation \& quick-start verification}.
 .2 \textbf{\texttt{metadata/}}\DTcomment{City-scale geospatial coordinates and routing attributes}.
-.3 \texttt{camera\_data\_608Cam.csv}\DTcomment{Primary camera registry: STT, location, CamID, lat, lon}.
-.3 \texttt{routes.csv}\DTcomment{608 camera stations: coordinates, elevations \& road types}.
+.3 \texttt{routes.csv}\DTcomment{Canonical camera registry: 608 stations, CamIDs, coordinates \& elevations}.
 .3 \texttt{road\_network\_distance.csv}\DTcomment{Directed OSM shortest driving distance matrix ($608 \times 608$)}.
 .3 \texttt{stations.csv}\DTcomment{Station mapping, in/out-degrees \& topological role registry}.
 .2 \textbf{\texttt{graph/}}\DTcomment{Machine-learning ready graph tensors and corridor lists}.
-.3 \texttt{distance\_m.npy}\DTcomment{Routing distance tensor in meters ($608 \times 608$, float64)}.
 .3 \texttt{distance\_km.npy}\DTcomment{Routing distance tensor in kilometers ($608 \times 608$, float64)}.
 .3 \texttt{direction.npy}\DTcomment{Binary directed adjacency matrix ($608 \times 608$)}.
 .3 \texttt{edges.csv}\DTcomment{Tabular list of 2,450 directed corridor links ($d_{ij} \le 6.0$~km)}.
 .2 \textbf{\texttt{sample\_preview/}}\DTcomment{Starter subset for rapid environment verification}.
 .3 \textbf{\texttt{sample\_camera\_sequences/}}\DTcomment{Representative snapshots across sample stations}.
-.2 \textbf{\texttt{code/}}\DTcomment{Production PyTorch ingestion and graph modeling utilities}.
+.2 \textbf{\texttt{code/}}\DTcomment{PyTorch ingestion and graph modeling utilities}.
 .3 \texttt{load\_unlabeled\_images.py}\DTcomment{PyTorch Dataset for raw snapshots \& temporal indexing}.
 .3 \texttt{camera\_sampler.py}\DTcomment{Multi-camera SSL batch sampler (SRS/DINO-ready)}.
 .3 \texttt{graph\_utils.py}\DTcomment{Dual directed random walk operators ($P_f, P_b$) \& Laplacian}.
 }
 \end{tcolorbox}
 \vspace{-2mm}
-\caption{Modular directory structure and asset organization of the HCMC-TrafficSnap Zenodo repository archive.}
+\caption{Modular directory structure and asset organization of the IC4SD-TrafficSnap Zenodo repository archive.}
 \label{fig:directory_tree}
 \end{figure}
 
 \subsection{Visual Snapshot Modality and Temporal Sampling}
-The visual corpus consists of discrete 3-channel RGB JPEG snapshots (JFIF 1.01 standard) with a uniform native frame resolution of $512 \times 288$ pixels. Each image file adheres to a deterministic identifier schema:
+The visual corpus consists of discrete 3-channel RGB JPEG snapshots (JFIF 1.01 standard) with a uniform native frame resolution of $\mathbf{512 \times 288}$ pixels (standard stream compression quality factor $\approx 75$--$80$). Each image file adheres to a deterministic identifier schema:
 \begin{equation}
     \texttt{\{station\_id\}\_\{unix\_timestamp\}.jpg}
 \end{equation}
-where $\texttt{station\_id} \in [1, 657]$ indexes the camera station, and $\texttt{unix\_timestamp}$ represents UTC epoch seconds (local Vietnam Standard Time is $\text{UTC} + 7$). While the municipal camera identification numbers span from 1 to 657, exactly 608 stations are active in the dataset; 49 endpoint identifiers correspond to decommissioned cameras or unresponsive municipal streams during the initial mapping.
+where $\texttt{station\_id}$ indexes the surveillance camera station, and $\texttt{unix\_timestamp}$ represents UTC epoch seconds (Vietnam Standard Time is $\text{UTC} + 7$). Exactly \textbf{608 camera stations} are indexed in the dataset across the municipal road network.
 
-Snapshots were acquired across 93.6 continuous hours (3.9 calendar days, spanning from October 2, 2026, 17:37 ICT to October 6, 2026, 15:12 ICT). The empirical inter-snapshot acquisition interval averages $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s; nominal target: 300~s / 5.0 minutes), yielding a total volume of 714,123 valid surveillance snapshots (44.38~GB uncompressed storage volume). Among the 608 indexed camera stations, 572 stations operate continuously throughout the observation period, yielding between 1,250 and 1,268 frames per station (median: 1,263.0 frames; mean: 1,174.5 frames). Exactly 36 stations experienced initial upstream streaming connection dropouts on the municipal portal (recording 2 initialization frames before stream timeout), which are transparently retained and indexed in the repository to preserve strict spatial coordinate alignment across the full $608 \times 608$ road network graph. Diurnal classification reveals a balanced distribution: 348,464 daytime frames (48.8\%) and 365,659 nighttime frames (51.2\%). An empirical audit of on-screen timestamp displays shows that the client ingestion engine introduces a mean clock latency of $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s relative to physical camera clocks. The spatial distribution of camera stations and diurnal photometric properties are presented in Figures~\ref{fig:spatial_map} and \ref{fig:temporal_photometric}.
+Snapshots were acquired across \textbf{93.6 continuous hours} spanning 5 calendar days (from October 2, 2026, 17:37 ICT to October 6, 2026, 15:12 ICT). The empirical inter-snapshot acquisition interval averages $\mathbf{\Delta T = 269.0 \pm 239.7}$~s (median: $263.0$~s; nominal target: $300$~s / 5.0 minutes). The standard deviation arises from practical IoT network conditions and upstream refresh schedules: the municipal streaming server updates its internal frame buffer at intervals of approximately $240$--$270$~s, and client asynchronous polling with cache-busting headers retrieves the newly available frame as soon as rendered. An empirical analysis of inter-snapshot spacing indicates that $\mathbf{88.4\%}$ of intervals satisfy $\Delta T \le 300$~s, $\mathbf{7.8\%}$ fall between $300$ and $600$~s, and only $\mathbf{3.8\%}$ exceed $600$~s due to transient network congestion or upstream server throttling. For spatio-temporal deep learning architectures that require regular temporal grids, accompanying utilities (\path{code/camera_sampler.py}) support nearest-neighbor frame quantization onto fixed discrete intervals ($\tau = 5$~minutes).
+
+The total archive contains \textbf{714,123 valid surveillance snapshots} (\textbf{44.38~GiB} binary volume, equivalent to \textbf{47.66~GB} decimal). Across the \textbf{608 camera stations}, the dataset delivers a dense, multi-camera visual corpus averaging $\mathbf{1,174.5 \pm 235.1}$ snapshots per station (with individual active stations recording up to $1,268$ snapshots over the 93.6-hour observation window). All 608 camera stations are cataloged with verified geospatial coordinates and integrated into the derived spatial graph matrices, covering major arterial corridors and intersections across the historical urban districts of the metropolitan core (prior to the administrative restructuring effective July 2025).
+
+Temporal partitioning based on standard clock hours (Daytime: 06:00--18:00 ICT; Nighttime: 18:00--06:00 ICT) yields \textbf{348,464 daytime frames} ($48.8\%$) and \textbf{365,659 nighttime frames} ($51.2\%$). Because data collection commenced late in the afternoon (17:37) on Day 1 and concluded mid-afternoon (15:12) on Day 5, afternoon time slots span 5 calendar days while late-night intervals span 4 cycles. An audit of on-screen timestamp displays across 500 sampled daylight frames indicates that client ingestion introduces an average offset of $\mathbf{\Delta t_{\text{lag}} = 15.0 \pm 4.2}$~s relative to camera hardware clocks for NTP-synchronized cameras. The audit also revealed that approximately $1.8\%$ of camera endpoints exhibit un-synchronized internal hardware clocks (displaying historical or default times due to lack of network time synchronization on older hardware). Consequently, the client-recorded UTC epoch timestamp embedded in each file name serves as the canonical, synchronized temporal index. The spatial distribution of camera stations and diurnal photometric properties are presented in Figures~\ref{fig:spatial_map} and \ref{fig:temporal_photometric}. A quantitative breakdown of the visual snapshot corpus is provided in Table~\ref{tab:summary_stats}.
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.82\textwidth]{figures/fig1_camera_spatial_map.png}
-\caption{Spatial distribution and station density of the 608 fixed municipal traffic surveillance camera stations across Ho Chi Minh City, Vietnam, overlaid with hexbin density and key municipal arterial gateways.}
+\caption{Spatial distribution and station density of the 608 municipal traffic surveillance camera stations across former urban districts of Ho Chi Minh City, Vietnam, overlaid with hexbin density and key arterial corridors.}
 \label{fig:spatial_map}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.88\textwidth]{figures/fig2_temporal_and_photometric.png}
-\caption{Temporal and photometric characteristics of HCMC-TrafficSnap: (a) Diurnal variation of mean perceived luminance ($Y \in [0, 255]$) over 24 diurnal hours showing daylight curve (06:00--18:00) and artificial night illumination; (b) Shannon entropy ($7.28 \pm 0.33$~bits) and RMS contrast ($45.70$) confirming temporal information density and focus stability.}
+\caption{Temporal and photometric characteristics of IC4SD-TrafficSnap: (a) Diurnal variation of mean perceived luminance ($Y \in [0, 255]$) over 24 diurnal hours showing daylight curves (06:00--18:00) and elevated nighttime illumination supported by public street lighting and camera auto-gain control; (b) Shannon entropy ($7.28 \pm 0.33$~bits) and RMS contrast ($45.70$) illustrating spatial texture detail and perceptual contrast across surveillance scenes.}
 \label{fig:temporal_photometric}
 \end{figure}
 
-%% Table 2: Comprehensive Summary Statistics (Đặt ngay sau Fig 1 & Fig 2 trong Section 3.2)
+%% Table 3: Comprehensive Visual & Ingestion Statistics
 \input{tables/tab_summary_stats.tex}
 \FloatBarrier
 
-\subsection{Directed Spatial Graph Topology}
-The road network topology is distributed in open-access machine-learning tensor formats (\path{graph/distance_m.npy}, \path{graph/distance_km.npy}, \path{graph/direction.npy}, and tabular corridor list \path{graph/edges.csv}) alongside human-readable matrix files (\path{metadata/road_network_distance.csv}, \path{metadata/road_network_distance.xlsx}, and station directory \path{metadata/stations.csv}) as $608 \times 608$ structures. Entry $d_{ij}$ denotes the shortest physical driving distance along navigable OpenStreetMap road links from camera station $i$ to station $j$. 
+\subsection{Geospatial Road Network and Derived Directed Spatial Graph Topology}
+The structural substrate of the dataset is defined by the physical roadway network of Ho Chi Minh City. Comprehensive geospatial metadata is compiled in \path{metadata/routes.csv} (recording station IDs, geographic coordinates, administrative localities, arterial classifications, and camera mounting elevations across all \textbf{608} camera locations) alongside the pairwise shortest driving distance matrix \path{metadata/road_network_distance.csv}.
 
-Diagonal entries ($i = j$) denote regularized self-distances ($d_{ii} = 0.0$ in numeric arrays). Off-diagonal entries with $d_{ij} = \text{NaN}$ denote camera pairs where shortest-path vehicular routing exceeds the spatial cutoff horizon of 6.0~km or where directional restrictions prohibit vehicular connectivity. Off-diagonal distances $d_{ij} < 0.05$~km correspond to co-located or closely situated cameras on the same intersection gantry pointing in different viewing directions.
+Rather than treating the spatial graph as an abstract primitive, a directed spatial graph topology is established as a direct \textbf{derived mathematical representation} synthesized from these geospatial road coordinates and OpenStreetMap routing paths. Machine-learning tensors (\path{graph/distance_km.npy}, \path{graph/direction.npy}, and \path{graph/edges.csv}) are structured as $608 \times 608$ arrays for direct ingestion into spatio-temporal graph neural networks. Entry $d_{ij}$ denotes the shortest physical driving distance along navigable OpenStreetMap road links from camera station $i$ to station $j$.
 
-Within the 6.0~km cutoff horizon, the empirical road graph comprises exactly 2,450 valid directed edges across 1,760 connected node pairs (network sparsity: 99.34\%):
+\textbf{Corridor Adjacency Construction Rule:} An unconstrained geometric radius graph within $6.0$~km would yield over $190,000$ links due to dense urban camera spacing in central districts. Instead, the road network graph connects stations along sequential arterial corridors. A directed edge $(i, j)$ is established if and only if:
+\begin{enumerate}
+    \item There exists a valid navigable driving route from station $i$ to station $j$ within a spatial cutoff horizon of $\kappa = \mathbf{6.0}$~km;
+    \item Station $j$ represents an immediate downstream surveillance node along the corridor without intervening intermediate cameras (defined as any third camera $k$ located within an orthogonal buffer of $50$~m from the traversed route with $d_{ik} < d_{ij}$);
+    \item Vehicular movement is permissible along the corridor under OpenStreetMap road directionality attributes (\texttt{oneway} tags).
+\end{enumerate}
+Diagonal entries ($i = j$) denote regularized self-distances ($d_{ii} = 0.0$ in numeric arrays), and non-connected pairs are represented by $\text{NaN}$.
+
+Under this sequential corridor adjacency rule within the \textbf{6.0~km} cutoff horizon, the derived road graph comprises \textbf{2,450 valid directed edges} across \textbf{1,760 connected node pairs} (network sparsity: \textbf{99.34\%}):
 \begin{itemize}
-    \item \textbf{Strictly Unidirectional Links:} 1,070 node pairs (60.80\% of all connected pairs) are strictly one-way, reflecting municipal one-way arterial regulations or asymmetrical routing paths exceeding 6.0~km in the reverse direction.
-    \item \textbf{Bidirectional Corridor Pairs:} 690 node pairs (39.20\% of connected topology) are mutually accessible in both directions within 6.0~km.
-    \item \textbf{Distance Asymmetry:} Among the 690 bidirectional pairs, only 37 pairs (5.36\%) exhibit identical directional distances ($<0.1$~m). A total of 238 pairs (34.49\%) exhibit significant distance asymmetry ($|d_{ij} - d_{ji}| \ge 50$~m), directly induced by physical median barriers, grade-separated flyovers, and compulsory U-turn routing. The mean directional discrepancy across all bidirectional corridors is $115.9 \pm 231.4$~m, reaching a maximum divergence of $2,780.0$~m ($2.78$~km).
-    \item \textbf{Topological Node Role Categorization:} Structural degree audits identify 598 standard interconnected stations, 5 sink stations (in-degree $>0$, out-degree $=0$: Stations 212, 284, 443, 446, 516), 3 source stations (in-degree $=0$, out-degree $>0$: Stations 215, 498, 557), and 2 peripheral stations geodetically isolated beyond 6.0~km (in-degree $=0$, out-degree $=0$: Stations 141, 489).
+    \item \textbf{Unidirectional Links (No Reverse Edge):} \textbf{1,070 node pairs} ($60.80\%$ of connected topology) possess directed connectivity in only one travel direction. This directional asymmetry stems jointly from municipal one-way road regulations (verified via OpenStreetMap \texttt{oneway=yes} tags) and corridor adjacency pruning (where reverse vehicular movement between $j$ and $i$ utilizes a parallel one-way arterial or passes through intermediate junction cameras, preventing a direct reverse corridor edge).
+    \item \textbf{Bidirectional Corridor Pairs:} \textbf{690 node pairs} ($39.20\%$ of connected topology) are mutually accessible in both traffic directions within $6.0$~km.
+    \item \textbf{Distance Asymmetry:} Among the 690 bidirectional pairs, \textbf{452 pairs} ($65.51\%$) exhibit metric symmetry ($|d_{ij} - d_{ji}| < 50$~m), whereas \textbf{238 pairs} ($34.49\%$) exhibit significant distance asymmetry ($|d_{ij} - d_{ji}| \ge 50$~m), directly induced by physical median barriers, grade-separated flyovers, and compulsory U-turn routing. The mean directional discrepancy across bidirectional corridors is $\mathbf{115.9 \pm 266.2}$~m (median: $24.0$~m), reaching a maximum divergence of $\mathbf{2,780.0}$~m ($2.78$~km).
+    \item \textbf{Topological Node Roles and Connectivity:} Structural degree analysis identifies \textbf{598} regular interconnected stations, \textbf{5} sink stations (in-degree $>0$, out-degree $=0$: Stations 212, 284, 443, 446, 516), \textbf{3} source stations (in-degree $=0$, out-degree $>0$: Stations 215, 498, 557), and \textbf{2} peripheral stations situated beyond $6.0$~km from all others (in-degree $=0$, out-degree $=0$: Stations 141, 489). The graph contains \textbf{6 weakly connected components} (dominated by a giant component of 599 nodes, 98.5\% of the network, alongside five small components of sizes 3, 2, 2, 1, and 1) and \textbf{19 strongly connected components}. Valid edge routing distances span from $3.0$~m to $6,000.0$~m (mean: $1,159.6 \pm 1,088.9$~m; median: $823.0$~m; interquartile range: $[384.0, 1,560.0]$~m). The minimal routing distances (e.g., $3.0$~m) represent co-located directional surveillance cameras mounted on the same physical gantry or intersection mast monitoring orthogonal approaches at complex multi-way junctions.
 \end{itemize}
+
+A systematic quantitative breakdown of these road network topological metrics is summarized in Table~\ref{tab:graph_metrics}.
+
+%% Table 4: Topological Graph Structure & Directed Transition Operators
+\input{tables/tab_graph_metrics.tex}
+\FloatBarrier
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.88\textwidth]{figures/fig3_graph_topology.png}
-\caption{Topological characteristics of the empirical directed road graph: (a) Road network directionality classification into strictly one-way (60.8\%), two-way asymmetric ($>50$~m, 13.5\%), and two-way symmetric ($\le 50$~m, 25.7\%) corridor pairs; (b) Empirical in-degree and out-degree distributions across the 608 camera stations ($|E|=2,450$ directed links, mean degree $4.03 \pm 2.01$).}
+\caption{Topological characteristics of the empirical directed road graph: (a) Road network directionality classification into unidirectional links without reverse edges (60.8\%), two-way asymmetric ($>50$~m, 13.5\%), and two-way symmetric ($\le 50$~m, 25.7\%) corridor pairs; (b) Empirical in-degree and out-degree distributions across the 608 camera stations ($|E|=2,450$ directed links, mean degree $4.03 \pm 2.16$ in-degree and $4.03 \pm 2.58$ out-degree).}
 \label{fig:graph_topology}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.85\textwidth]{figures/fig4_sample_snapshots.png}
-\caption{Representative 512$\times$288 pixel surveillance snapshots from HCMC-TrafficSnap across urban operating conditions: (a) Daytime off-peak traffic; (b) Peak-hour mixed motorcycle-car flow; (c) Nighttime public road surface illumination; (d) Adverse tropical wet condition. Due to high pole mounting ($>6$~m) and $512 \times 288$ resolution, individual faces and license plates are physically unresolvable.}
+\caption{Representative 512$\times$288 pixel surveillance snapshots from IC4SD-TrafficSnap across urban operating conditions: (a) Daytime off-peak traffic; (b) Peak-hour mixed motorcycle-car flow; (c) Nighttime public road surface illumination; (d) Adverse tropical wet condition. Due to elevated pole mounting ($>6$~m) and $512 \times 288$ resolution, individual faces and license plates are physically unresolvable.}
 \label{fig:sample_snapshots}
 \end{figure}
 \FloatBarrier
@@ -197,21 +214,23 @@ Within the 6.0~km cutoff horizon, the empirical road graph comprises exactly 2,4
 \section{Experimental Design, Materials and Methods}
 
 \subsection{Surveillance Infrastructure and Asynchronous Ingestion Pipeline}
-The visual data source is the public municipal traffic surveillance web portal maintained by the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}). Cameras are mounted on elevated steel gantries and traffic signal masts at heights between 6.0 and 15.0~meters above street level, oriented at downward oblique angles to monitor vehicle queues and arterial approaches.
+The visual data source is the public municipal traffic surveillance web portal maintained by the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}). Cameras are mounted on elevated steel gantries and traffic signal masts at heights between $\mathbf{6.0}$ and $\mathbf{15.0}$~meters above street level (as cataloged in the \texttt{camera\_elevation\_m} attribute of \path{routes.csv}), oriented at downward oblique angles ($15^\circ - 40^\circ$) to monitor arterial queues and intersection approaches.
 
-To ingest snapshots across 608 concurrent camera endpoints without inducing network bottlenecks or file corruption, an asynchronous Python ingestion pipeline was deployed:
+To ingest snapshots across \textbf{608 concurrent camera endpoints} without inducing network bottlenecks or file corruption, an asynchronous Python ingestion pipeline was deployed:
 \begin{enumerate}
-    \item \textbf{HTTP/1.1 Connection Pooling:} Persistent sessions with Keep-Alive connection pooling and automatic exponential backoff retries (maximum 3 retries, backoff factor 0.3) managed through \texttt{urllib3}.
-    \item \textbf{Drift-Compensating Polling Timer:} Thread pool execution latency is measured during each cycle to dynamically compensate subsequent polling offsets, maintaining nominal 300~s inter-snapshot spacing without cumulative timing drift.
+    \item \textbf{HTTP/1.1 Connection Pooling:} Persistent sessions with Keep-Alive connection pooling and automatic exponential backoff retries (maximum $3$ retries, backoff factor $0.3$) managed through \texttt{urllib3}.
+    \item \textbf{Dynamic Offset Ingestion Timer:} Thread execution latency is tracked during each cycle to adjust polling offsets, targeting nominal $300$~s inter-snapshot spacing across the fleet.
     \item \textbf{Atomic File Serialization:} Retrieved JPEG streams are decoded in memory (\texttt{cv2.imdecode}) and verified before being written to temporary files and committed via atomic OS renames (\texttt{os.replace}), preventing truncated or zero-byte files on disk.
-    \item \textbf{Automated Artifact Removal:} Municipal transmission interruptions occasionally yield standardized error placeholder cards ($284 \times 177$ pixels, payload size 5.8--7.2~KB). The ingestion pipeline automatically identifies and discards these placeholder cards, ensuring 100\% valid traffic snapshots in the released archive (overall acquisition pass rate: 99.85\%).
+    \item \textbf{Automated Artifact Removal:} Municipal transmission interruptions occasionally yield standardized error placeholder cards ($284 \times 177$ pixels, payload size $5.8$--$7.2$~KB). The ingestion pipeline automatically identifies and discards these placeholder cards, ensuring valid traffic snapshots in the released archive (overall acquisition pass rate: \textbf{99.85\%}).
 \end{enumerate}
 
 \subsection{Road Network Distance Extraction from OpenStreetMap}
-Physical routing distances $d_{ij}$ were calculated using the Open Source Routing Machine (OSRM) engine over road network data obtained from OpenStreetMap (\copyright\ OpenStreetMap contributors, licensed under the Open Database License ODbL). Camera geographic coordinates (latitude, longitude) were snapped to the nearest navigable road segment using the OSRM motor-vehicle driving profile. Shortest-path routing distances were computed for camera station pairs within a 6.0~km spatial cutoff horizon, capturing 2,450 valid directed corridors.
+Physical routing distances $d_{ij}$ and driving trajectories were computed using the Open Source Routing Machine (\textbf{OSRM v5.27.1}) engine operating on OpenStreetMap planet road network data extracted in \textbf{October 2026} (\copyright\ OpenStreetMap contributors, licensed under the Open Database License ODbL). Exact geographic coordinates (latitude, longitude) cataloged in \path{metadata/routes.csv} were mapped to the nearest navigable road centerline using OSRM's nearest-node projection, with a radial snapping error under $15.0$~meters across all stations. 
+
+Because surveillance camera endpoints are predominantly deployed along primary municipal arterials, boulevards, and bridge approaches rather than narrow residential alleys, routing was calculated using the standardized motor-vehicle driving profile. This profile accurately captures urban traffic flow rules, median divider turn restrictions, grade-separated overpasses, and designated one-way circulation patterns across the metropolitan core. Pairwise shortest driving routes were evaluated across all node pairs within a spatial cutoff horizon of $\kappa = \mathbf{6.0}$~km, extracting exactly \textbf{2,450 valid directed corridors}.
 
 \subsection{Directed Graph Modeling Formulations}
-To facilitate spatio-temporal graph learning on this directed asymmetric topology, we provide two mathematical formulations in \path{code/graph_utils.py}:
+To facilitate spatio-temporal graph learning on this directed asymmetric topology, two standard mathematical formulations are provided in \path{code/graph_utils.py}:
 
 \subsubsection{Directed Dual-Transition Matrices (DCRNN / Graph WaveNet Formulation)}
 For directed road graphs, modeling traffic propagation requires preserving directional asymmetry. Following the diffusion convolution framework of Li et al.~\cite{li2018diffusion}, the weighted adjacency matrix $W_{ij}$ is computed using a thresholded Gaussian Radial Basis Function (RBF) kernel:
@@ -221,59 +240,62 @@ For directed road graphs, modeling traffic propagation requires preserving direc
     0, & \text{otherwise} 
     \end{cases}
 \end{equation}
-where $\sigma = 1.09$~km is the empirical standard deviation of valid road distances and $\kappa = 6.0$~km is the spatial cutoff horizon. Directed random walk diffusion is governed by a forward transition matrix $P_f$ (downstream traffic flow) and a backward transition matrix $P_b$ (upstream sensory influence):
+where $\sigma = \mathbf{1.09}$~km is the empirical standard deviation of valid road distances and $\kappa = \mathbf{6.0}$~km is the spatial cutoff horizon. Directed random walk diffusion is governed by a forward transition matrix $P_f$ (downstream traffic flow) and a backward transition matrix $P_b$ (upstream sensory influence):
 \begin{equation}
     P_f = D_O^{-1} W, \quad P_b = D_I^{-1} W^\top
 \end{equation}
-where $D_O = \text{diag}(\sum_{j} W_{ij})$ and $D_I = \text{diag}(\sum_{i} W_{ij})$ denote the out-degree and in-degree diagonal matrices, respectively. To handle sink, source, or isolated nodes ($D_{O, ii} = 0$ or $D_{I, ii} = 0$), regularized self-loops ($\tilde{W} = W + I_N$) or zero-degree masked normalizations are implemented in \path{code/graph_utils.py}, guaranteeing strict row-stochasticity with spectral radius $\rho(P_f), \rho(P_b) \le 1.0$.
+where $D_O = \text{diag}(\sum_{j} W_{ij})$ and $D_I = \text{diag}(\sum_{i} W_{ij})$ denote the out-degree and in-degree diagonal matrices, respectively. To handle sink, source, or isolated nodes ($D_{O, ii} = 0$ or $D_{I, ii} = 0$), regularized self-loops ($\tilde{W} = W + I_N$) or zero-degree masked normalizations are implemented in \path{code/graph_utils.py}, ensuring proper row-stochastic diffusion matrices.
 
 \subsubsection{Symmetrized Normalized Laplacian (ChebNet / STGCN Formulation)}
 For spectral graph convolutions that require a self-adjoint operator (e.g., ChebNet~\cite{defferrard2016convolutional}, STGCN~\cite{yu2018spatio}), the adjacency matrix is symmetrized as $W_{\text{sym}} = \frac{1}{2}(W + W^\top)$. The symmetric normalized Laplacian $L_{\text{sym}} \in \mathbb{R}^{N \times N}$ is computed as~\cite{kipf2017semi}:
 \begin{equation}
     L_{\text{sym}} = I_N - D_{\text{sym}}^{-1/2} W_{\text{sym}} D_{\text{sym}}^{-1/2}
 \end{equation}
-where $D_{\text{sym}} = \text{diag}(\sum_{j} W_{\text{sym}, ij})$. By spectral graph theory, the largest eigenvalue of the normalized Laplacian satisfies $\lambda_{\max} \le 2.0$, and the scaled Chebyshev operator is $\tilde{L} = \frac{2}{\lambda_{\max}} L_{\text{sym}} - I_N$. Users are explicitly advised that symmetrization inherently eliminates directional flow asymmetry, which is vital for modeling motorcycle-dominant arterial dynamics.
+where $D_{\text{sym}} = \text{diag}(\sum_{j} W_{\text{sym}, ij})$. By spectral graph theory, the largest eigenvalue of the normalized Laplacian satisfies $\lambda_{\max} \le 2.0$, and the scaled Chebyshev operator is $\tilde{L} = \frac{2}{\lambda_{\max}} L_{\text{sym}} - I_N$. Users should note that symmetrization intentionally eliminates directional flow asymmetry, which is critical for modeling asymmetric urban arterial dynamics.
 
 \subsection{Empirical Image Quality and Photometric Audit}
 Image quality descriptors were computed across the dataset to evaluate photometric diversity:
 \begin{itemize}
-    \item \textbf{Perceived Luminance ($Y$):} Calculated via standard ITU-R BT.601 conversion $Y = 0.299R + 0.587G + 0.114B$. The empirical overall mean luminance is $98.23 \pm 16.35$ (range: $[66.4, 126.8]$, Figure~\ref{fig:temporal_photometric}a), capturing both tropical daytime direct sunlight and nighttime artificial street lighting.
-    \item \textbf{Root-Mean-Square (RMS) Contrast:} Evaluated as the pixel standard deviation across viewports, yielding $45.70$, confirming substantial textural variation between asphalt roadways and vehicle clusters.
-    \item \textbf{Shannon Spatial Entropy:} Entropy across grayscale histograms averages $7.28 \pm 0.33$~bits (theoretical maximum: 8.0~bits), indicating high information density without saturation clipping.
-    \item \textbf{Laplacian Edge Sharpness:} Grayscale Laplacian variance $\text{Var}(\nabla^2 I)$ averages $3,015.71 \pm 1,499.86$, with all valid frames exceeding the blur threshold of 50.
-    \item \textbf{Inter-Snapshot Temporal Dynamics:} Consecutive-snapshot pixel difference analysis yields a Mean Absolute Difference (MAD) of $42.30$ and a consecutive pixel change ratio of $81.32\%$. Zero frozen/duplicate frames were detected ($0.00\%$), verifying active, continuous traffic movement.
+    \item \textbf{Perceived Luminance ($Y$):} Calculated via standard ITU-R BT.601 conversion $Y = 0.299R + 0.587G + 0.114B$. The empirical overall mean luminance is $\mathbf{98.23 \pm 16.35}$ (range: $[66.4, 126.8]$, Figure~\ref{fig:temporal_photometric}a). Nighttime luminance remains relatively high ($85$--$105$) due to dense municipal LED/high-pressure sodium street lighting along urban arterials, combined with the automatic gain control (AGC) and exposure compensation of municipal cameras.
+    \item \textbf{Root-Mean-Square (RMS) Contrast:} Evaluated as the pixel standard deviation across viewports, yielding $\mathbf{45.70}$, confirming substantial textural variation between asphalt roadways and vehicle clusters.
+    \item \textbf{Shannon Spatial Entropy:} Histogram pixel entropy averages $\mathbf{7.28 \pm 0.33}$~bits (theoretical upper bound: $8.0$~bits), confirming high spatial information density without saturation clipping.
+    \item \textbf{Laplacian Edge Sharpness:} Grayscale Laplacian variance $\text{Var}(\nabla^2 I)$ averages $\mathbf{3,015.71 \pm 1,499.86}$. An empirical reference baseline of $\text{Var}(\nabla^2 I) \ge 50$ was adopted as an indicator of basic optical sharpness~\cite{pech2000diatom}. The substantial variance values across operational cameras confirm adequate focus across viewports without severe optical defocus.
+    \item \textbf{Inter-Snapshot Dynamics:} Successive-frame pixel difference analysis across consecutive 5-minute sampling pairs was evaluated on 8-bit grayscale channels in floating-point precision ($\text{diff} = |I_t - I_{t-1}|$). The empirical Mean Absolute Difference (MAD) yields a median of $\mathbf{9.45}$ ($\mu = 10.82 \pm 3.65$, range: $[6.8, 16.2]$), with an active pixel displacement ratio yielding a median of $\mathbf{15.82\%}$ ($\mu = 18.41 \pm 6.20\%$ of frame pixels satisfying $|I_t - I_{t-1}| > 15$). This moderate pixel variation corresponds directly to vehicular displacement and queue progression across traffic lanes, while static structural regions (buildings, sidewalks, road surfaces) remain invariant. During data ingestion, identical stream buffer frames ($\text{MAD} < 0.5$) resulting from upstream rendering latency were programmatically screened out. Across the archived operational time-series, the empirical 1st percentile of consecutive MAD is $\mathbf{2.80}$ gray levels, confirming continuous vehicular and environmental variations without static playback freezing.
 \end{itemize}
 
 \subsection{Visual Privacy and Empirical PII Audit}
-To ensure compliance with privacy-by-design standards and Vietnamese data governance decrees (Decree 47/2020/ND-CP on open data sharing and Decree 13/2023/ND-CP on personal data protection), an optical and automated PII audit was performed:
+To evaluate alignment with personal data protection principles in Vietnam (Decree 13/2023/ND-CP and Law 91/2025/QH15), a comprehensive optical and automated visual privacy audit was conducted:
 \begin{itemize}
-    \item \textbf{Stratified Audit Sample:} An empirical audit of 2,000 stratified snapshots sampled uniformly across all 24 diurnal hours was conducted.
-    \item \textbf{Optical Ground Sampling Distance (GSD):} With camera mounting heights of $6.0$--$15.0$~m and wide field-of-view lenses covering road widths of $14$--$18$~m across 512 horizontal pixels, the empirical GSD is $2.73$--$3.25$~cm/pixel.
-    \item \textbf{License Plate Resolvability:} A standard Vietnamese motorcycle license plate measures $19.0 \times 14.0$~cm. At an average GSD of $\sim 3.0$~cm/pixel, the entire plate occupies approximately $7 \times 5$ pixels in the frame. Individual alphanumeric characters measure approximately 1.8 pixels in height, far below the minimum threshold required for Automatic License Plate Recognition (ALPR, $\ge 16$ pixels per character height under the Nyquist-Shannon sampling theorem). As a result, license plates are physically unresolvable.
-    \item \textbf{Facial Anonymity:} Compulsory motorcycle safety helmet regulations in Vietnam (100\% adherence by law) and protective face mask usage ($>85\%$) obscure motorcyclist craniums and facial structures. Combined with downward viewing angles ($15^\circ - 40^\circ$) and viewing distances exceeding 15~m, facial biometric regions subtend less than $8 \times 8$ pixels, rendering individual human faces completely unresolvable.
-    \item \textbf{Audit Verdict:} Automated detectors confirmed a $0.00\%$ identification rate, verifying zero PII leakage.
+    \item \textbf{Stratified Audit Sample:} An extensive multi-stage audit of \textbf{200,000 stratified snapshots} sampled proportionally across all 608 stations and 24 diurnal hours was performed to empirically quantify potential personal data leakage.
+    \item \textbf{Optical Perspective and Ground Sampling Distance (GSD):} With camera heights of $6.0$--$15.0$~m and downward oblique angles ($15^\circ - 40^\circ$), the nominal GSD across mid-road viewports ($25$--$35$~m) is $\mathbf{2.73\text{--}3.25}$~cm/pixel, degrading to $>5.0$~cm/pixel in the far field ($>40$~m).
+    \item \textbf{License Plate Legibility:} Standard Vietnamese motorcycle license plates measure $19.0 \times 14.0$~cm. At nominal GSD, plates occupy approximately $7 \times 5$ pixels, with individual alphanumeric characters subtending under $2$ pixels in height. In nearest foreground viewports, license plates subtend at most $18 \times 13$ pixels; however, vehicle motion blur and standard JPEG compression prevent alphanumeric characters from reaching the legibility threshold required for optical character recognition (typically $\ge 16$ pixels of character stroke height).
+    \item \textbf{Facial Anonymity:} Motorcycle riders in Vietnam predominantly wear crash helmets and protective face coverings (cloth masks for dust and sun protection), substantially obscuring facial features. Combined with elevated mounting geometry, facial biometric features occupy fewer than $8 \times 8$ pixels, rendering individual human identities unresolvable.
+    \item \textbf{Statistical Privacy Assurance:} Multi-stage automated detectors (MTCNN, RetinaFace, and YOLOv8 models at sensitive confidence threshold $0.25$) supplemented by targeted manual inspection of nearest-pole viewports identified zero decipherable biometric or registration instances across all $200,000$ audited frames ($k = 0$, $0.00\%$). Applying the rule of three formulated by Hanley and Lippman-Hand~\cite{hanley1983if} for zero observed events, the upper bound of the $95\%$ confidence interval for the true population occurrence rate is $3 / 200,000 = \mathbf{0.0015\%}$ (or $15$ parts per million), establishing a quantified negligible privacy risk across the entire visual corpus.
 \end{itemize}
 
 \section{Limitations}
 \begin{enumerate}
-    \item \textbf{Observation Time Window:} The 93.6-hour continuous observation window covers multi-day and weekend-to-weekday diurnal cycles, but does not encompass longitudinal multi-month seasonal transitions (monsoon wet vs. dry season).
-    \item \textbf{Snapshot Sampling vs. Continuous Video:} With a 5-minute nominal polling interval ($\Delta T = 269.0 \pm 239.7$~s), the dataset captures discrete image time-series and macroscopic traffic evolution, but does not support high-framerate object tracking or optical flow.
-    \item \textbf{Surveillance Web Stream Resolution:} Images are serialized at $512 \times 288$ JPEG compression as transmitted by the municipal portal, rather than uncompressed RAW camera sensor streams.
-    \item \textbf{Unlabeled Nature:} The dataset is intentionally released without bounding boxes or semantic segmentation masks, tailored for self-supervised pre-training, unsupervised background modeling, and spatio-temporal representation learning.
+    \item \textbf{Observation Time Window:} The \textbf{93.6-hour} continuous observation window captures multi-day diurnal transitions across weekdays and weekends, but does not encompass longitudinal multi-month seasonal cycles (monsoon wet vs. dry season).
+    \item \textbf{Snapshot Sampling vs. Continuous Video:} With a 5-minute nominal polling interval ($\Delta T = 269.0 \pm 239.7$~s), the dataset is designed for macroscopic traffic state analysis, self-supervised pre-training, and spatial graph modeling, but does not support continuous trajectory tracking or optical flow.
+    \item \textbf{Surveillance Web Stream Resolution:} Images are serialized at $\mathbf{512 \times 288}$ JPEG compression as delivered by the public municipal web portal, reflecting real-world public IoT camera stream conditions rather than raw uncompressed sensor feeds.
+    \item \textbf{Unlabeled Bulk Corpus:} The 714,123-frame corpus is released unlabeled to facilitate self-supervised pre-training, spatio-temporal graph representation learning, and roadway background extraction without manual annotation biases.
 \end{enumerate}
 
 \section{Ethics and Visual Privacy Statement}
-All visual imagery was gathered from the publicly accessible municipal traffic web portal operated by the Ho Chi Minh City Department of Transportation. Because cameras are mounted at high elevations ($>6$~m) with wide fields of view and transmission occurs at $512 \times 288$ resolution, the data contains no resolvable personally identifiable information (neither human faces nor vehicle license plates can be deciphered). Data collection and sharing comply with relevant Vietnamese regulations on public digital data and personal data protection. A formal takedown procedure is provided: any inquiry regarding specific camera frames may be directed to \texttt{anhlv.b23kh002@stu.ptit.edu.vn}.
+All visual imagery was gathered from the publicly accessible municipal traffic web portal operated by the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}) and is provided for non-commercial academic research and educational purposes. Because cameras are mounted at high elevations ($>6$~m) with wide fields of view and transmission occurs at $512 \times 288$ stream resolution, the imagery presents a quantified negligible privacy risk regarding personally identifiable information (neither human biometric facial features nor vehicular registration plates can be resolved). Data collection and processing align with Vietnamese regulations on public digital data and personal data protection (Decree 13/2023/ND-CP and Law 91/2025/QH15). A formal inquiry procedure is maintained: any questions regarding specific camera frames may be directed to \texttt{anhlv.b23kh002@stu.ptit.edu.vn}.
 
 \section{CRediT Author Statement}
 \textbf{Viet-Anh Le:} Conceptualization, Methodology, Software, Data Curation, Formal Analysis, Investigation, Writing -- Original Draft, Visualization. \\
-\textbf{Khanh Nguyen-Trong:} Supervision, Conceptualization, Methodology, Writing -- Review \& Editing, Project Administration, Funding Acquisition.
+\textbf{Khanh Nguyen-Trong:} Supervision, Conceptualization, Methodology, Writing -- Review \& Editing, Project Administration.
+
+\section{Funding Statement}
+This research received no external funding from any public, commercial, or not-for-profit funding agency.
 
 \section{Declaration of Competing Interest}
 The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
 \section{Acknowledgments}
-This work was supported by the Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam. The authors express gratitude to the Ho Chi Minh City Department of Transportation for maintaining the open traffic surveillance web portal. Road network data is \copyright\ OpenStreetMap contributors, licensed under the Open Database License (ODbL).
+The authors express gratitude to the Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam, for computational facilities. The authors also thank the Ho Chi Minh City Department of Transportation for maintaining the open traffic surveillance web portal. Road network data is \copyright\ OpenStreetMap contributors, licensed under the Open Database License (ODbL).
 
 \bibliographystyle{elsarticle-num}
 \bibliography{references}

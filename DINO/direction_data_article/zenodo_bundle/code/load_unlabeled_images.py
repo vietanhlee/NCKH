@@ -10,6 +10,10 @@ Mục đích: PyTorch Dataset chuẩn production nạp chuỗi hình ảnh camer
 
 import os
 import sys
+
+# Ngăn chặn xung đột runtime thư viện OpenMP kép trên môi trường Windows / Anaconda
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Callable, Tuple, Dict, Any, List
 from collections import defaultdict
@@ -38,6 +42,7 @@ class TrafficCameraUnlabeledDataset(Dataset):
     def __init__(
         self,
         image_dir: str,
+        resolution: Optional[Tuple[int, int]] = None,
         transform: Optional[Callable] = None,
         allowed_extensions: Tuple[str, ...] = (".jpg", ".jpeg", ".png"),
         preload_index: bool = True,
@@ -47,6 +52,7 @@ class TrafficCameraUnlabeledDataset(Dataset):
 
         Args:
             image_dir (str): Đường dẫn đến thư mục chứa ảnh (hoặc một ngày shard).
+            resolution (Tuple[int, int], optional): Độ phân giải mục tiêu (W, H) để resize ảnh tự động.
             transform (Callable, optional): Pipeline biến đổi ảnh torchvision.
             allowed_extensions (Tuple[str, ...]): Các định dạng ảnh được chấp nhận.
             preload_index (bool): Quét và lập chỉ mục metadata ngay khi khởi tạo.
@@ -55,6 +61,7 @@ class TrafficCameraUnlabeledDataset(Dataset):
             raise FileNotFoundError(f"Không tìm thấy thư mục ảnh tại: {image_dir}")
 
         self.image_dir: str = image_dir
+        self.resolution: Optional[Tuple[int, int]] = resolution
         self.transform: Optional[Callable] = transform
         self.allowed_extensions: Tuple[str, ...] = tuple(ext.lower() for ext in allowed_extensions)
 
@@ -145,6 +152,9 @@ class TrafficCameraUnlabeledDataset(Dataset):
             print(f"⚠️ [TrafficCameraUnlabeledDataset] Cảnh báo lỗi đọc ảnh {img_path}: {exc}")
             image = Image.new("RGB", (224, 224), color=(0, 0, 0))
 
+        if self.resolution is not None and image.size != self.resolution:
+            image = image.resize(self.resolution, Image.BILINEAR)
+
         if self.transform is not None:
             image_tensor = self.transform(image)
         else:
@@ -152,3 +162,8 @@ class TrafficCameraUnlabeledDataset(Dataset):
             image_tensor = TF.to_tensor(image)
 
         return image_tensor, sample_meta
+
+
+# Alias tương thích với tài liệu hướng dẫn nhanh (README.md)
+CameraSequenceDataset = TrafficCameraUnlabeledDataset
+

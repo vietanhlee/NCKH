@@ -1,26 +1,26 @@
-% Table 2: Systematic Comparison of HCMC-TrafficSnap with Existing Benchmarks
+% Table 2: Systematic Dataset Comparison (Elsevier Data in Brief Standard)
 \begin{table*}[!htbp]
 \centering
 \footnotesize
 \setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.22}
-\caption{Systematic comparison of HCMC-TrafficSnap with established benchmark datasets in intelligent transportation and computer vision.}
+\renewcommand{\arraystretch}{1.26}
+\caption{Systematic comparison of IC4SD-TrafficSnap with established datasets in intelligent transportation systems and computer vision.}
 \label{tab:dataset_comparison}
 \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.7cm} c >{\raggedright\arraybackslash}p{1.7cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Dataset} & \textbf{Urban Context \& Flow} & \textbf{Nodes} & \textbf{Time Span} & \textbf{Sensing Modality \& Topology} & \textbf{Primary Target Research Scope} \\
 \midrule
-METR-LA~\cite{li2018diffusion} & Los Angeles, USA \newline (Car-dominant) & 207 & 4 months & Inductive loop (Directed graph) & 1D traffic speed forecasting \\
-\addlinespace[2.5pt]
-PEMS-BAY~\cite{li2018diffusion} & San Francisco, USA \newline (Car-dominant) & 325 & 6 months & Inductive loop (Directed graph) & 1D traffic speed forecasting \\
-\addlinespace[2.5pt]
-LargeST~\cite{liu2023largest} & California, USA \newline (Car-dominant) & 8,600 & 5 years & Inductive loop (Large-scale graph) & Macroscopic spatial network forecasting \\
-\addlinespace[2.5pt]
-UA-DETRAC~\cite{wen2020ua} & Beijing / Tianjin \newline (Car-dominant) & 24 & Short clips & 720p HD video (No spatial graph) & Vehicle detection and tracking \\
-\addlinespace[2.5pt]
+METR-LA~\cite{li2018diffusion} & Los Angeles, USA \newline (Car-dominant) & 207 & 4 months & Inductive loop sensors (Directed graph) & 1D traffic speed forecasting \\
+\addlinespace[3.5pt]
+PEMS-BAY~\cite{li2018diffusion} & San Francisco, USA \newline (Car-dominant) & 325 & 6 months & Inductive loop sensors (Directed graph) & 1D traffic speed forecasting \\
+\addlinespace[3.5pt]
+LargeST~\cite{liu2023largest} & California, USA \newline (Car-dominant) & 8,600 & 5 years & Inductive loop sensors (Large-scale graph) & Macroscopic spatial network forecasting \\
+\addlinespace[3.5pt]
+UA-DETRAC~\cite{wen2020ua} & Beijing / Tianjin, China \newline (Car-dominant) & 24 & Short clips & $960 \times 540$ video (No spatial graph) & Vehicle detection and multi-object tracking \\
+\addlinespace[3.5pt]
 CityCam~\cite{zhang2017understanding} & New York City, USA \newline (Car-dominant) & 212 & Multi-day & Low-res webcams (No graph) & Vehicle counting and density estimation \\
 \midrule
-\textbf{HCMC-TrafficSnap} & \textbf{Ho Chi Minh City, VN} \newline \textbf{(Motorcycle, 70--80\%)} & \textbf{608} & \textbf{93.6 hours} & \textbf{Dual: $512\times288$ RGB snapshots + 608-node directed road graph} & \textbf{Multi-camera SSL, Directed STGNNs, and road background decomposition} \\
+\textbf{IC4SD-TrafficSnap} & \textbf{Ho Chi Minh City, VN} \newline \textbf{(Motorcycle, 70--80\%)} & \textbf{608} & \textbf{93.6 hours} & \textbf{Multimodal: $512\times288$ RGB snapshots + Geospatial road network (derived directed graph)} & \textbf{Multi-camera self-supervised representation learning, roadway background modeling, and spatio-temporal graph analysis} \\
 \bottomrule
 \end{tabularx}
 \end{table*}

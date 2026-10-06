@@ -1,609 +1,609 @@
-﻿station_id,station_name,CamID,district,road_type,latitude,longitude,camera_elevation_m
-1,Trần Quang Khải - Trần Khắc Chân,662b86c41afb9c00172dd31c,Ho Chi Minh City,arterial,10.793215,106.691724,8.0
-2,Tô Ngọc Vân - TX25,5a6065c58576340017d06615,Ho Chi Minh City,arterial,10.87524,106.67831,8.0
-3,Quốc Lộ 13 - cầu Ông Dầu,6623f4df6f998a001b2528eb,Ho Chi Minh City,arterial,10.83582,106.71452,8.0
-4,Cách Mạng Tháng Tám - Bùi Thị Xuân,662b7ce71afb9c00172dc676,Ho Chi Minh City,arterial,10.77254,106.68923,8.0
-5,Nguyễn Thị Định - Đường D,583f969161cfea0012cf68f7,Ho Chi Minh City,arterial,10.7812,106.75841,8.0
-7,Phan Đăng Lưu - Thích Quảng Đức,6623e8da6f998a001b2524a6,Ho Chi Minh City,arterial,10.80351,106.68652,8.0
-9,Điện Biên Phủ - Nguyễn Gia Trí,66b1c426779f74001867415e,Ho Chi Minh City,arterial,10.80163,106.7142,8.0
-10,Quốc lộ 1 - Rạch Láng Le 1,595dc29c3dcfc400106f2894,Ho Chi Minh City,arterial,10.70251,106.56843,8.0
-11,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 11),50163eb1c672aaf682476098,Ho Chi Minh City,arterial,10.807174,106.709694,8.0
-12,Quang Trung - Thống Nhất (Nhánh 12),870bbacfa4de74c679423ce3,Ho Chi Minh City,arterial,10.843682,106.675284,8.0
-13,Lê Văn Việt - Man Thiện (Nhánh 13),01479c074759f0c536288872,Ho Chi Minh City,arterial,10.844627,106.780527,8.0
-14,Ba Tháng Hai - Lê Hồng Phong (Nhánh 14),9375823e0361c7b6b070ec1c,Ho Chi Minh City,arterial,10.783734,106.679539,8.0
-15,Hùng Vương - Nguyễn Tri Phương (Nhánh 15),a4620441148ef21ab37d65b5,Ho Chi Minh City,arterial,10.754444,106.67114,8.0
-16,Hồng Bàng - Thuận Kiều (Nhánh 16),e32e0e9302a56cfdc40cc706,Ho Chi Minh City,arterial,10.750393,106.654174,8.0
-17,Võ Thị Sáu - Hai Bà Trưng (Nhánh 17),39bda308c7aedef4828346d8,Ho Chi Minh City,arterial,10.791036,106.678094,8.0
-18,Mai Chí Thọ - Đồng Văn Cống (Nhánh 18),0898d100c02ad3240590245b,Ho Chi Minh City,arterial,10.769601,106.742302,8.0
-19,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 19),6c45719d52a74c5a665271e4,Ho Chi Minh City,arterial,10.773997,106.709014,8.0
-20,Kinh Dương Vương - Tên Lửa (Nhánh 20),9a1088210eed4b71e250317b,Ho Chi Minh City,arterial,10.735036,106.601502,8.0
-21,Lý Thường Kiệt - Bắc Hải (Nhánh 21),3fd4b8b062c883e80e0b5df0,Ho Chi Minh City,arterial,10.787525,106.656394,8.0
-22,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 22),023e6b1d04f2d5e36acd010d,Ho Chi Minh City,arterial,10.80264,106.681002,8.0
-23,Võ Văn Ngân - Đặng Văn Bi (Nhánh 23),32df116db5440e08d97893a5,Ho Chi Minh City,arterial,10.846845,106.765387,8.0
-24,Nguyễn Oanh - Phan Văn Trị (Nhánh 24),09393775d268fec720a1a41c,Ho Chi Minh City,arterial,10.822292,106.681106,8.0
-25,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 25),f7e781cc6f5a9a88ea6ebc13,Ho Chi Minh City,arterial,10.752995,106.682166,8.0
-26,An Dương Vương - Trần Phú (Nhánh 26),86fec8bf2434efc6dcfd4636,Ho Chi Minh City,arterial,10.751386,106.686718,8.0
-27,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 27),dca4efc7bb0844497093b879,Ho Chi Minh City,arterial,10.773392,106.682738,8.0
-28,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 28),535c563bc9822e72a9fff7d3,Ho Chi Minh City,arterial,10.79808,106.688033,8.0
-29,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 29),47d634c93a287ef779a1d261,Ho Chi Minh City,arterial,10.802771,106.696823,8.0
-30,Lê Duẩn - Pasteur (Nhánh 30),07e56449cce1fe4a3814b565,Ho Chi Minh City,arterial,10.768875,106.699775,8.0
-31,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 31),d73e2776d8ddacb925005a1d,Ho Chi Minh City,arterial,10.801308,106.675871,8.0
-32,Hoàng Sa - Trần Quang Diệu (Nhánh 32),ea8da830e630cbba658e3b3d,Ho Chi Minh City,arterial,10.787275,106.677091,8.0
-33,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 33),d7191d7caac1946e9ed6e616,Ho Chi Minh City,arterial,10.775772,106.679441,8.0
-34,Võ Văn Kiệt - Ký Con (Nhánh 34),0b0c8fdb5c0f7fa8157e78d0,Ho Chi Minh City,arterial,10.764415,106.707957,8.0
-35,Xa Lộ Hà Nội - Cát Lái (Nhánh 35),22fc52ecf9196d700aedc460,Ho Chi Minh City,arterial,10.803949,106.737996,8.0
-37,Phạm Văn Đồng - Phan Văn Trị (Nhánh 37),78121aeef28c99df9ff40b53,Ho Chi Minh City,arterial,10.822393,106.695619,8.0
-38,Cộng Hòa - Hoàng Hoa Thám (Nhánh 38),682693c3b90e51f091b43187,Ho Chi Minh City,arterial,10.796085,106.652093,8.0
-39,Trường Chinh - Tây Thạnh (Nhánh 39),939f0b3d28d9fdacf7f963f1,Ho Chi Minh City,arterial,10.822448,106.63695,8.0
-40,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 40),2aa1a2cfe4d80881a9b77ba5,Ho Chi Minh City,arterial,10.723786,106.699926,8.0
-41,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 41),0241906ffa5979d7ef0fcd42,Ho Chi Minh City,arterial,10.80155,106.679004,8.0
-42,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 42),55d09fe31b2b2dc27a771348,Ho Chi Minh City,arterial,10.799367,106.709315,8.0
-43,Quang Trung - Thống Nhất (Nhánh 43),eb46b732d02e89f482effb82,Ho Chi Minh City,arterial,10.829649,106.65353,8.0
-44,Lê Văn Việt - Man Thiện (Nhánh 44),5a4e49d7e49f3dc5173dffe8,Ho Chi Minh City,arterial,10.853,106.79325,8.0
-45,Ba Tháng Hai - Lê Hồng Phong (Nhánh 45),952b180f24bf81ab6cf5aeeb,Ho Chi Minh City,arterial,10.770524,106.681428,8.0
-46,Hùng Vương - Nguyễn Tri Phương (Nhánh 46),9607d75424e6105b65b0bdc3,Ho Chi Minh City,arterial,10.761093,106.661639,8.0
-47,Hồng Bàng - Thuận Kiều (Nhánh 47),94556c388e41edc9fb9ac6c2,Ho Chi Minh City,arterial,10.756991,106.670204,8.0
-48,Võ Thị Sáu - Hai Bà Trưng (Nhánh 48),e970cbcfbfd4261c39f3191c,Ho Chi Minh City,arterial,10.788813,106.705917,8.0
-49,Mai Chí Thọ - Đồng Văn Cống (Nhánh 49),26e38737565089332bc05da5,Ho Chi Minh City,arterial,10.762442,106.753375,8.0
-50,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 50),bc6f1729b359a5d2a9f5d920,Ho Chi Minh City,arterial,10.782796,106.704108,8.0
-51,Kinh Dương Vương - Tên Lửa (Nhánh 51),4d0bb7590354001c34ebcfc9,Ho Chi Minh City,arterial,10.743034,106.596899,8.0
-52,Lý Thường Kiệt - Bắc Hải (Nhánh 52),9ef0027ff57adf06d19b11bd,Ho Chi Minh City,arterial,10.774043,106.661057,8.0
-53,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 53),aa5717492fe74bda6a90b9ab,Ho Chi Minh City,arterial,10.813923,106.688254,8.0
-54,Võ Văn Ngân - Đặng Văn Bi (Nhánh 54),a473d835f826dc52dca0767c,Ho Chi Minh City,arterial,10.844732,106.760486,8.0
-55,Nguyễn Oanh - Phan Văn Trị (Nhánh 55),5bf021d036f191432fed301c,Ho Chi Minh City,arterial,10.838823,106.68073,8.0
-56,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 56),b369b70fb6fec315537a787a,Ho Chi Minh City,arterial,10.753562,106.688606,8.0
-57,An Dương Vương - Trần Phú (Nhánh 57),fe8c63655eab3e9dbeff9660,Ho Chi Minh City,arterial,10.756977,106.679649,8.0
-58,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 58),04549d7ec1c1e1f866221b79,Ho Chi Minh City,arterial,10.767884,106.688579,8.0
-59,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 59),374bc879db7b52341bcffedd,Ho Chi Minh City,arterial,10.788363,106.686092,8.0
-60,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 60),3607660c51235e5253bd4855,Ho Chi Minh City,arterial,10.803469,106.714588,8.0
-61,Lê Duẩn - Pasteur (Nhánh 61),bb587044c2a0860373f70878,Ho Chi Minh City,arterial,10.779541,106.696323,8.0
-62,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 62),8a7cf03d432c282fa45faf43,Ho Chi Minh City,arterial,10.784077,106.671135,8.0
-63,Hoàng Sa - Trần Quang Diệu (Nhánh 63),427eb9e78e13413e35e19ec0,Ho Chi Minh City,arterial,10.785458,106.673082,8.0
-64,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 64),2c710c70eac27d1e1ae07e89,Ho Chi Minh City,arterial,10.78631,106.688432,8.0
-65,Võ Văn Kiệt - Ký Con (Nhánh 65),21c15b768c0f8f6168ee0615,Ho Chi Minh City,arterial,10.783189,106.700897,8.0
-66,Xa Lộ Hà Nội - Cát Lái (Nhánh 66),bb3fb84c70304e1c878cb0e9,Ho Chi Minh City,arterial,10.80326,106.751504,8.0
-67,Phạm Văn Đồng - Phan Văn Trị (Nhánh 67),66a4e50d666d4fc8c875a34a,Ho Chi Minh City,arterial,10.80445,106.698488,8.0
-68,Cộng Hòa - Hoàng Hoa Thám (Nhánh 68),89140611c47fed463f82dfac,Ho Chi Minh City,arterial,10.801982,106.666906,8.0
-69,Trường Chinh - Tây Thạnh (Nhánh 69),498ce8d45d5d3fee07d0f159,Ho Chi Minh City,arterial,10.812661,106.631912,8.0
-70,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 70),5e471cca99b69caf55f12e15,Ho Chi Minh City,arterial,10.730222,106.693051,8.0
-71,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 71),44843f1e352f05bac4b3a62d,Ho Chi Minh City,arterial,10.808043,106.677215,8.0
-72,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 72),040f6f81ed8a08e06696548f,Ho Chi Minh City,arterial,10.809528,106.703525,8.0
-73,Quang Trung - Thống Nhất (Nhánh 73),10fa225a577778f328013fd3,Ho Chi Minh City,arterial,10.849722,106.651885,8.0
-76,Lê Văn Việt - Man Thiện (Nhánh 76),3ba16f18c15424c0188d9606,Ho Chi Minh City,arterial,10.851195,106.799924,8.0
-77,Ba Tháng Hai - Lê Hồng Phong (Nhánh 77),9016a29807d7a701479649c5,Ho Chi Minh City,arterial,10.763176,106.66887,8.0
-78,Hùng Vương - Nguyễn Tri Phương (Nhánh 78),e8a3037536e28f57a91787e3,Ho Chi Minh City,arterial,10.758997,106.662772,8.0
-79,Hồng Bàng - Thuận Kiều (Nhánh 79),ff20f94bb74a66860dfc7c48,Ho Chi Minh City,arterial,10.741695,106.658449,8.0
-80,Võ Thị Sáu - Hai Bà Trưng (Nhánh 80),dccf7266deab5801b4c940ef,Ho Chi Minh City,arterial,10.780602,106.697189,8.0
-81,Mai Chí Thọ - Đồng Văn Cống (Nhánh 81),c949b220fb192cbaa5e32fcb,Ho Chi Minh City,arterial,10.776045,106.759199,8.0
-82,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 82),1bbbede1d14f664e9ab2d22d,Ho Chi Minh City,arterial,10.775834,106.703924,8.0
-83,Kinh Dương Vương - Tên Lửa (Nhánh 83),1094229402e297f005350e77,Ho Chi Minh City,arterial,10.748808,106.602953,8.0
-84,Lý Thường Kiệt - Bắc Hải (Nhánh 84),67924e85bc2169721d2b98f5,Ho Chi Minh City,arterial,10.77762,106.668657,8.0
-85,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 85),e7d4aa257379e7034645d30e,Ho Chi Minh City,arterial,10.78924,106.693877,8.0
-87,Võ Văn Ngân - Đặng Văn Bi (Nhánh 87),3ffc03287f60536968aa4cfe,Ho Chi Minh City,arterial,10.853279,106.770755,8.0
-88,Nguyễn Oanh - Phan Văn Trị (Nhánh 88),1a0d253acbe93329d344db9f,Ho Chi Minh City,arterial,10.821604,106.667536,8.0
-89,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 89),693266ba6126f6a89d2f40aa,Ho Chi Minh City,arterial,10.761976,106.686876,8.0
-90,An Dương Vương - Trần Phú (Nhánh 90),3f86a8a98edef00962bb88f3,Ho Chi Minh City,arterial,10.758204,106.674672,8.0
-91,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 91),7434c8d5443cb8012aa69576,Ho Chi Minh City,arterial,10.76806,106.693058,8.0
-92,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 92),049c5e21284298fb962de0e2,Ho Chi Minh City,arterial,10.793845,106.692085,8.0
-93,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 93),e384d96fc322e582fa83956c,Ho Chi Minh City,arterial,10.816026,106.716291,8.0
-94,Lê Duẩn - Pasteur (Nhánh 94),53e5c5c85cec20cb881f24dd,Ho Chi Minh City,arterial,10.76997,106.703452,8.0
-95,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 95),55616874416b737b190151cb,Ho Chi Minh City,arterial,10.787603,106.680797,8.0
-96,Hoàng Sa - Trần Quang Diệu (Nhánh 96),887fe513fe712df2f3a7bed0,Ho Chi Minh City,arterial,10.797469,106.672935,8.0
-97,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 97),9f642150c7764e931f63635f,Ho Chi Minh City,arterial,10.795307,106.688502,8.0
-98,Võ Văn Kiệt - Ký Con (Nhánh 98),ead79deafbc1deb2f77c4ebd,Ho Chi Minh City,arterial,10.774676,106.714674,8.0
-99,Xa Lộ Hà Nội - Cát Lái (Nhánh 99),77eb15f262c6ccaadee9b53c,Ho Chi Minh City,arterial,10.799237,106.74607,8.0
-101,Phạm Văn Đồng - Phan Văn Trị (Nhánh 101),5bfaa5427408623d2eb6e715,Ho Chi Minh City,arterial,10.812684,106.692174,8.0
-102,Cộng Hòa - Hoàng Hoa Thám (Nhánh 102),6a896495eb6280fd25312545,Ho Chi Minh City,arterial,10.800883,106.649929,8.0
-103,Trường Chinh - Tây Thạnh (Nhánh 103),144f7366511b6505ccbbf496,Ho Chi Minh City,arterial,10.816414,106.636117,8.0
-104,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 104),b7754c3fca8b86da7746eb5d,Ho Chi Minh City,arterial,10.730604,106.714028,8.0
-105,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 105),8858d2af10aada15d58efa11,Ho Chi Minh City,arterial,10.796783,106.692961,8.0
-106,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 106),4a05564f3b632103712379ff,Ho Chi Minh City,arterial,10.808205,106.703943,8.0
-107,Quang Trung - Thống Nhất (Nhánh 107),33b165dd8aa2223cad8ba0f5,Ho Chi Minh City,arterial,10.829933,106.66696,8.0
-108,Lê Văn Việt - Man Thiện (Nhánh 108),f8b75468756fe459d51b790f,Ho Chi Minh City,arterial,10.844712,106.788112,8.0
-109,Ba Tháng Hai - Lê Hồng Phong (Nhánh 109),1313d07b86211e8360d1b788,Ho Chi Minh City,arterial,10.774886,106.672817,8.0
-110,Hùng Vương - Nguyễn Tri Phương (Nhánh 110),556bfa66b54156284c0eb2bb,Ho Chi Minh City,arterial,10.751426,106.654681,8.0
-111,Hồng Bàng - Thuận Kiều (Nhánh 111),130178b2765ff22d80171d2a,Ho Chi Minh City,arterial,10.750528,106.664751,8.0
-112,Võ Thị Sáu - Hai Bà Trưng (Nhánh 112),a2017415dc60993d4336a0cb,Ho Chi Minh City,arterial,10.790813,106.683434,8.0
-113,Mai Chí Thọ - Đồng Văn Cống (Nhánh 113),3ae57a3cd6422ad14169942c,Ho Chi Minh City,arterial,10.784785,106.749883,8.0
-114,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 114),6c429a5d504815c62d425d0b,Ho Chi Minh City,arterial,10.775029,106.70773,8.0
-115,Kinh Dương Vương - Tên Lửa (Nhánh 115),43b11ccaad6a7edd5ce977ca,Ho Chi Minh City,arterial,10.742766,106.603656,8.0
-117,Lý Thường Kiệt - Bắc Hải (Nhánh 117),7e5812d41a60898d0fa59732,Ho Chi Minh City,arterial,10.778662,106.662686,8.0
-118,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 118),2c0ed37060088fbc8de63efa,Ho Chi Minh City,arterial,10.810764,106.70083,8.0
-119,Võ Văn Ngân - Đặng Văn Bi (Nhánh 119),b77f7ce5ec0ed9f039f482b7,Ho Chi Minh City,arterial,10.840179,106.756997,8.0
-120,Nguyễn Oanh - Phan Văn Trị (Nhánh 120),cde71dbdcdcd22996d7c3ace,Ho Chi Minh City,arterial,10.83562,106.68221,8.0
-121,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 121),f304e9ea81a0cc61578b1161,Ho Chi Minh City,arterial,10.76192,106.715322,8.0
-122,An Dương Vương - Trần Phú (Nhánh 122),f65eb2a29bec1c1de4a2290f,Ho Chi Minh City,arterial,10.760767,106.680985,8.0
-123,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 123),00f916954a3e320b24eb0449,Ho Chi Minh City,arterial,10.781132,106.696411,8.0
-124,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 124),f51fa7a24104dc02feacf59c,Ho Chi Minh City,arterial,10.788978,106.703872,8.0
-125,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 125),36a2f924accb93468cc92703,Ho Chi Minh City,arterial,10.794917,106.710605,8.0
-126,Lê Duẩn - Pasteur (Nhánh 126),60fffc0b246427c52769aab8,Ho Chi Minh City,arterial,10.775617,106.698855,8.0
-127,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 127),b4f5e4adf6e97edaed578aab,Ho Chi Minh City,arterial,10.813917,106.659562,8.0
-128,Hoàng Sa - Trần Quang Diệu (Nhánh 128),8be9897327c1eada01543701,Ho Chi Minh City,arterial,10.79369,106.666598,8.0
-129,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 129),39a74eeab294794f1d7efb1c,Ho Chi Minh City,arterial,10.783825,106.693912,8.0
-130,Võ Văn Kiệt - Ký Con (Nhánh 130),1b60a9acb5abfc9dfee32b8f,Ho Chi Minh City,arterial,10.768614,106.690878,8.0
-131,Xa Lộ Hà Nội - Cát Lái (Nhánh 131),af57216165a4675954e765ef,Ho Chi Minh City,arterial,10.795478,106.757537,8.0
-132,Phạm Văn Đồng - Phan Văn Trị (Nhánh 132),df4170d890681fad1de59cf2,Ho Chi Minh City,arterial,10.813957,106.700432,8.0
-133,Cộng Hòa - Hoàng Hoa Thám (Nhánh 133),a921dfe656c54369fd9bfb8f,Ho Chi Minh City,arterial,10.801865,106.641987,8.0
-134,Trường Chinh - Tây Thạnh (Nhánh 134),2ac28727b8a4c5d79f9c4401,Ho Chi Minh City,arterial,10.831352,106.634571,8.0
-135,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 135),e7e86a76266736faacfb6765,Ho Chi Minh City,arterial,10.714299,106.703892,8.0
-136,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 136),5f2bce49bef423b196ee582c,Ho Chi Minh City,arterial,10.793606,106.678019,8.0
-137,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 137),5b5a6e6e3305286ed262744b,Ho Chi Minh City,arterial,10.79686,106.709882,8.0
-138,Quang Trung - Thống Nhất (Nhánh 138),9bdec694da2e06ee3075c0f9,Ho Chi Minh City,arterial,10.84254,106.670026,8.0
-139,Lê Văn Việt - Man Thiện (Nhánh 139),e419b1737da7c7ef2294b50e,Ho Chi Minh City,arterial,10.836898,106.779724,8.0
-140,Ba Tháng Hai - Lê Hồng Phong (Nhánh 140),2c37129fa400f577759a698f,Ho Chi Minh City,arterial,10.7673,106.668173,8.0
-141,Hùng Vương - Nguyễn Tri Phương (Nhánh 141),9215fedc3fa25f6aedf796b6,Ho Chi Minh City,arterial,10.772324,106.67004,8.0
-142,Hồng Bàng - Thuận Kiều (Nhánh 142),f19564f91b057423947ba696,Ho Chi Minh City,arterial,10.744013,106.665243,8.0
-143,Võ Thị Sáu - Hai Bà Trưng (Nhánh 143),816465667c3003cb9b0056e8,Ho Chi Minh City,arterial,10.806077,106.70166,8.0
-144,Mai Chí Thọ - Đồng Văn Cống (Nhánh 144),c5a35629397d43f69b466673,Ho Chi Minh City,arterial,10.771245,106.742926,8.0
-145,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 145),4b307e7bd71a7075e64f3603,Ho Chi Minh City,arterial,10.792235,106.700839,8.0
-146,Kinh Dương Vương - Tên Lửa (Nhánh 146),a8b9418bc96e9f502a799ce0,Ho Chi Minh City,arterial,10.745851,106.618997,8.0
-147,Lý Thường Kiệt - Bắc Hải (Nhánh 147),ac9d1930ad24cb778be5e1f1,Ho Chi Minh City,arterial,10.768385,106.657724,8.0
-148,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 148),e10b38777074e6b3948d3151,Ho Chi Minh City,arterial,10.77617,106.684205,8.0
-149,Võ Văn Ngân - Đặng Văn Bi (Nhánh 149),92111327a6b29bd9c3673705,Ho Chi Minh City,arterial,10.849179,106.754518,8.0
-151,Nguyễn Oanh - Phan Văn Trị (Nhánh 151),edae95094a2e8587a2e1c265,Ho Chi Minh City,arterial,10.844559,106.666659,8.0
-152,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 152),839b070309f93a0e54349e9b,Ho Chi Minh City,arterial,10.75428,106.685546,8.0
-153,An Dương Vương - Trần Phú (Nhánh 153),2cf2d4b8f5c51c4f2dec9e81,Ho Chi Minh City,arterial,10.76773,106.660413,8.0
-154,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 154),ed8b3775144b132325bbe72c,Ho Chi Minh City,arterial,10.782805,106.691282,8.0
-155,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 155),d152749814998802ad24c54d,Ho Chi Minh City,arterial,10.783648,106.701497,8.0
-156,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 156),ace1532e41885526e700e263,Ho Chi Minh City,arterial,10.802692,106.707698,8.0
-157,Lê Duẩn - Pasteur (Nhánh 157),ebb03ecba2f1973c7631b301,Ho Chi Minh City,arterial,10.780058,106.695117,8.0
-159,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 159),bb6b774870d5a82d9a6f15e8,Ho Chi Minh City,arterial,10.796308,106.679797,8.0
-160,Hoàng Sa - Trần Quang Diệu (Nhánh 160),3ac61f76a96709973e0fe0a1,Ho Chi Minh City,arterial,10.800888,106.669597,8.0
-161,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 161),eae7ab902b4d5ec0a23407d5,Ho Chi Minh City,arterial,10.804664,106.669583,8.0
-162,Võ Văn Kiệt - Ký Con (Nhánh 162),95f03b4d8d14f5ec7d519dcb,Ho Chi Minh City,arterial,10.766886,106.704207,8.0
-163,Xa Lộ Hà Nội - Cát Lái (Nhánh 163),6c205edfe820db9825c67cf5,Ho Chi Minh City,arterial,10.803448,106.747118,8.0
-164,Phạm Văn Đồng - Phan Văn Trị (Nhánh 164),aa1b01e954f44323457b639f,Ho Chi Minh City,arterial,10.818135,106.694756,8.0
-165,Cộng Hòa - Hoàng Hoa Thám (Nhánh 165),db24f53afc58867cfa1d1b2b,Ho Chi Minh City,arterial,10.796785,106.653997,8.0
-166,Trường Chinh - Tây Thạnh (Nhánh 166),e40979303664f7e4da9cb517,Ho Chi Minh City,arterial,10.817056,106.623957,8.0
-167,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 167),05fa44e9c6f2a19dc4bffb35,Ho Chi Minh City,arterial,10.737697,106.704858,8.0
-168,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 168),e664c57f8869377ad54c9afa,Ho Chi Minh City,arterial,10.805403,106.676237,8.0
-169,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 169),212fc667abdfb9d31ef994ec,Ho Chi Minh City,arterial,10.796568,106.706319,8.0
-170,Quang Trung - Thống Nhất (Nhánh 170),5b8890057d253b1e572dd40e,Ho Chi Minh City,arterial,10.844478,106.667983,8.0
-171,Lê Văn Việt - Man Thiện (Nhánh 171),ea0f2ea111068924a3ea4731,Ho Chi Minh City,arterial,10.846333,106.783339,8.0
-172,Ba Tháng Hai - Lê Hồng Phong (Nhánh 172),1710ffc80093a373b8f00352,Ho Chi Minh City,arterial,10.781321,106.668667,8.0
-173,Hùng Vương - Nguyễn Tri Phương (Nhánh 173),c817940cdabdbef7dd6e130d,Ho Chi Minh City,arterial,10.762577,106.665182,8.0
-174,Hồng Bàng - Thuận Kiều (Nhánh 174),97bdc63eff8ca1779c628b5d,Ho Chi Minh City,arterial,10.752359,106.66669,8.0
-175,Võ Thị Sáu - Hai Bà Trưng (Nhánh 175),ce0f4bc3a83b8cce318b872b,Ho Chi Minh City,arterial,10.795703,106.699908,8.0
-176,Mai Chí Thọ - Đồng Văn Cống (Nhánh 176),33ec30dc831f79072975ad5b,Ho Chi Minh City,arterial,10.793844,106.746968,8.0
-177,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 177),c2fb63bb4cf6f4546d5e9f13,Ho Chi Minh City,arterial,10.787556,106.704018,8.0
-178,Kinh Dương Vương - Tên Lửa (Nhánh 178),17cab6493a56dc712de693cf,Ho Chi Minh City,arterial,10.744893,106.611759,8.0
-179,Lý Thường Kiệt - Bắc Hải (Nhánh 179),e2eac3c0f4887212fb962aeb,Ho Chi Minh City,arterial,10.776576,106.662961,8.0
-180,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 180),2bd5f1e0acf2ae80d93927f9,Ho Chi Minh City,arterial,10.795554,106.709139,8.0
-181,Võ Văn Ngân - Đặng Văn Bi (Nhánh 181),7c1aac2bf7bf9f1db81fa29f,Ho Chi Minh City,arterial,10.843152,106.754786,8.0
-182,Nguyễn Oanh - Phan Văn Trị (Nhánh 182),14c2e881da35ed563585729c,Ho Chi Minh City,arterial,10.840765,106.684433,8.0
-183,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 183),cb8428bc4837a56fe2f7fc4d,Ho Chi Minh City,arterial,10.762793,106.689527,8.0
-184,An Dương Vương - Trần Phú (Nhánh 184),3611906f764bf4d3f9317f00,Ho Chi Minh City,arterial,10.756102,106.664722,8.0
-185,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 185),f2d35234c77e3c99cc56c187,Ho Chi Minh City,arterial,10.774106,106.685783,8.0
-187,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 187),520a3d28c238ecd1108fb6a6,Ho Chi Minh City,arterial,10.799301,106.696624,8.0
-188,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 188),834a800ffeb1513bef43bcea,Ho Chi Minh City,arterial,10.794496,106.709929,8.0
-189,Lê Duẩn - Pasteur (Nhánh 189),fd59701638df507cfee758f3,Ho Chi Minh City,arterial,10.782803,106.69369,8.0
-190,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 190),ae0179e63fd96397c1bda87f,Ho Chi Minh City,arterial,10.788822,106.676449,8.0
-192,Hoàng Sa - Trần Quang Diệu (Nhánh 192),349857016cb239095f9e71bf,Ho Chi Minh City,arterial,10.79016,106.675444,8.0
-193,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 193),2c954be315f7f5055a632765,Ho Chi Minh City,arterial,10.783832,106.687056,8.0
-194,Võ Văn Kiệt - Ký Con (Nhánh 194),2f5de5db2cd9d12c461aeb2d,Ho Chi Minh City,arterial,10.756515,106.68824,8.0
-195,Xa Lộ Hà Nội - Cát Lái (Nhánh 195),1a53ec46f3d002968561f6b2,Ho Chi Minh City,arterial,10.795452,106.750392,8.0
-196,Phạm Văn Đồng - Phan Văn Trị (Nhánh 196),39c3a3ea8065435b376b9a34,Ho Chi Minh City,arterial,10.822287,106.710503,8.0
-197,Cộng Hòa - Hoàng Hoa Thám (Nhánh 197),ac47cb0de6dc4df170c763a4,Ho Chi Minh City,arterial,10.808361,106.64592,8.0
-198,Trường Chinh - Tây Thạnh (Nhánh 198),2394a763c6bb6d9dc7f9a659,Ho Chi Minh City,arterial,10.814048,106.62148,8.0
-199,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 199),23bcf74f32db8ea9f7ddbf9d,Ho Chi Minh City,arterial,10.730352,106.700091,8.0
-200,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 200),beb60d8e02ed52c011536ed3,Ho Chi Minh City,arterial,10.801482,106.664582,8.0
-201,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 201),36ada2aa6d70e8b3044a63a9,Ho Chi Minh City,arterial,10.807355,106.723062,8.0
-202,Quang Trung - Thống Nhất (Nhánh 202),a82745ced177b4b8fe2f7f87,Ho Chi Minh City,arterial,10.83763,106.666314,8.0
-204,Lê Văn Việt - Man Thiện (Nhánh 204),314df970c16e1782111c24e5,Ho Chi Minh City,arterial,10.852021,106.77919,8.0
-205,Ba Tháng Hai - Lê Hồng Phong (Nhánh 205),7e83543463bd6c3e54b62b78,Ho Chi Minh City,arterial,10.772893,106.673501,8.0
-206,Hùng Vương - Nguyễn Tri Phương (Nhánh 206),64a3f7998d99ea412fbd0fef,Ho Chi Minh City,arterial,10.758981,106.660616,8.0
-207,Hồng Bàng - Thuận Kiều (Nhánh 207),23efdbe306155d1f5429d954,Ho Chi Minh City,arterial,10.754296,106.661884,8.0
-208,Võ Thị Sáu - Hai Bà Trưng (Nhánh 208),5876b6f30b9d29f6f2568675,Ho Chi Minh City,arterial,10.800709,106.701074,8.0
-209,Mai Chí Thọ - Đồng Văn Cống (Nhánh 209),609eed9bf43b7a103372a661,Ho Chi Minh City,arterial,10.800625,106.740661,8.0
-210,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 210),22323288b30441c274448e7f,Ho Chi Minh City,arterial,10.789079,106.707967,8.0
-211,Kinh Dương Vương - Tên Lửa (Nhánh 211),85c050fb9dd833394b30f2a7,Ho Chi Minh City,arterial,10.759818,106.606334,8.0
-212,Lý Thường Kiệt - Bắc Hải (Nhánh 212),0842252ac2b6d53e5c0a9003,Ho Chi Minh City,arterial,10.769082,106.653405,8.0
-213,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 213),e702b92c21db1a194f8d095d,Ho Chi Minh City,arterial,10.785109,106.688194,8.0
-214,Võ Văn Ngân - Đặng Văn Bi (Nhánh 214),f345d2821fb7084026221de6,Ho Chi Minh City,arterial,10.845127,106.765703,8.0
-215,Nguyễn Oanh - Phan Văn Trị (Nhánh 215),94f3be4df549bd22802e3a74,Ho Chi Minh City,arterial,10.834234,106.693109,8.0
-216,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 216),f31446ad55a9749c3dbc3726,Ho Chi Minh City,arterial,10.765403,106.679885,8.0
-217,An Dương Vương - Trần Phú (Nhánh 217),b9f4e01ece71db0226b49a53,Ho Chi Minh City,arterial,10.749013,106.675835,8.0
-218,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 218),99471125ac4154033907a458,Ho Chi Minh City,arterial,10.762938,106.705852,8.0
-219,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 219),5bed1d20da7d2dfd6994b426,Ho Chi Minh City,arterial,10.800936,106.694047,8.0
-220,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 220),c5cbf10d11b915b2e7538208,Ho Chi Minh City,arterial,10.787395,106.723331,8.0
-221,Lê Duẩn - Pasteur (Nhánh 221),1707ab2698f25a83958e6ae9,Ho Chi Minh City,arterial,10.778584,106.708103,8.0
-222,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 222),8ae5f48651e42758c87adf2b,Ho Chi Minh City,arterial,10.782645,106.669705,8.0
-223,Hoàng Sa - Trần Quang Diệu (Nhánh 223),a8e7149cc89d995897bba0f8,Ho Chi Minh City,arterial,10.788242,106.679876,8.0
-224,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 224),06764a7ff2d477de39ed6cf5,Ho Chi Minh City,arterial,10.783999,106.690183,8.0
-225,Võ Văn Kiệt - Ký Con (Nhánh 225),8a651ee1d2387cae85df5f0a,Ho Chi Minh City,arterial,10.759559,106.698361,8.0
-226,Xa Lộ Hà Nội - Cát Lái (Nhánh 226),aa6af1756cc0d3fed4226105,Ho Chi Minh City,arterial,10.802162,106.756216,8.0
-227,Phạm Văn Đồng - Phan Văn Trị (Nhánh 227),846e70a736ed1759a838f270,Ho Chi Minh City,arterial,10.825493,106.689703,8.0
-228,Cộng Hòa - Hoàng Hoa Thám (Nhánh 228),9e0e24ca2d140ab722ebb2d1,Ho Chi Minh City,arterial,10.789227,106.657421,8.0
-229,Trường Chinh - Tây Thạnh (Nhánh 229),dce14b27c8f84c96bb88f84b,Ho Chi Minh City,arterial,10.816859,106.623512,8.0
-230,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 230),ec0a09aee34e00e1db9a00aa,Ho Chi Minh City,arterial,10.742909,106.703325,8.0
-231,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 231),2431c5b3c086b5b65c09374c,Ho Chi Minh City,arterial,10.808334,106.67174,8.0
-232,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 232),886455fb8ca875258c437c1c,Ho Chi Minh City,arterial,10.819686,106.724843,8.0
-233,Quang Trung - Thống Nhất (Nhánh 233),d55308eae0ae56c3a09e37cb,Ho Chi Minh City,arterial,10.836508,106.670873,8.0
-234,Lê Văn Việt - Man Thiện (Nhánh 234),aa6c392625aa188821fcdab6,Ho Chi Minh City,arterial,10.851663,106.793349,8.0
-235,Ba Tháng Hai - Lê Hồng Phong (Nhánh 235),6a5ca467b40aa3418239d669,Ho Chi Minh City,arterial,10.763381,106.678888,8.0
-236,Hùng Vương - Nguyễn Tri Phương (Nhánh 236),65c2268f628ee900396bc364,Ho Chi Minh City,arterial,10.766667,106.65273,8.0
-237,Hồng Bàng - Thuận Kiều (Nhánh 237),9ac713442dc1a50362632d08,Ho Chi Minh City,arterial,10.744634,106.641586,8.0
-238,Võ Thị Sáu - Hai Bà Trưng (Nhánh 238),eae9f1d4c81644c3b30023f1,Ho Chi Minh City,arterial,10.786945,106.69914,8.0
-239,Mai Chí Thọ - Đồng Văn Cống (Nhánh 239),64e9dde75e43744ad9c64cfa,Ho Chi Minh City,arterial,10.795419,106.747393,8.0
-240,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 240),51e831242b5ac4053c8de4e6,Ho Chi Minh City,arterial,10.795129,106.695459,8.0
-242,Kinh Dương Vương - Tên Lửa (Nhánh 242),17d7175334cfb3f38946b270,Ho Chi Minh City,arterial,10.728673,106.612356,8.0
-243,Lý Thường Kiệt - Bắc Hải (Nhánh 243),cd21c6d4ab14fa166e4b97d3,Ho Chi Minh City,arterial,10.778873,106.657938,8.0
-244,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 244),0c7b58b6f9e1ddfadc238bdd,Ho Chi Minh City,arterial,10.78556,106.691687,8.0
-245,Võ Văn Ngân - Đặng Văn Bi (Nhánh 245),aa23d3f5111fb9b9e8ac634d,Ho Chi Minh City,arterial,10.840764,106.769857,8.0
-246,Nguyễn Oanh - Phan Văn Trị (Nhánh 246),c4f22cefe4fcf55ea34e6460,Ho Chi Minh City,arterial,10.834433,106.670581,8.0
-247,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 247),c0b2e01da1037074f2cb7880,Ho Chi Minh City,arterial,10.753689,106.676026,8.0
-249,An Dương Vương - Trần Phú (Nhánh 249),25be8a7efb3c0b8504c57853,Ho Chi Minh City,arterial,10.755699,106.679541,8.0
-250,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 250),68828a34dc2611545c4ea212,Ho Chi Minh City,arterial,10.765614,106.695232,8.0
-252,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 252),e0dee244b254af6eddf68178,Ho Chi Minh City,arterial,10.787258,106.691457,8.0
-253,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 253),e0715dbd58d7621b4b08441e,Ho Chi Minh City,arterial,10.800244,106.704218,8.0
-254,Lê Duẩn - Pasteur (Nhánh 254),a331bcabf0cf1146db6a3564,Ho Chi Minh City,arterial,10.775071,106.688617,8.0
-255,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 255),6060fa7000f30912a2c38450,Ho Chi Minh City,arterial,10.811118,106.674782,8.0
-256,Hoàng Sa - Trần Quang Diệu (Nhánh 256),8c980a17f068ff7680c0a0c0,Ho Chi Minh City,arterial,10.782602,106.681212,8.0
-257,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 257),0b08c3f4eced437700e21ebf,Ho Chi Minh City,arterial,10.786701,106.683432,8.0
-258,Võ Văn Kiệt - Ký Con (Nhánh 258),e77ee266b987b6cc304d861b,Ho Chi Minh City,arterial,10.773013,106.70556,8.0
-259,Xa Lộ Hà Nội - Cát Lái (Nhánh 259),c9038833e5d29a951bdb9a70,Ho Chi Minh City,arterial,10.796956,106.747493,8.0
-260,Phạm Văn Đồng - Phan Văn Trị (Nhánh 260),3ba6bd55fee9edf53dad758e,Ho Chi Minh City,arterial,10.8176,106.680285,8.0
-261,Cộng Hòa - Hoàng Hoa Thám (Nhánh 261),ff961ec8a9900102b8a6643a,Ho Chi Minh City,arterial,10.789378,106.658135,8.0
-262,Trường Chinh - Tây Thạnh (Nhánh 262),bd42598ccc39292935446db1,Ho Chi Minh City,arterial,10.82736,106.627508,8.0
-264,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 264),d84d45de31ec5a1acad036cb,Ho Chi Minh City,arterial,10.735112,106.70489,8.0
-266,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 266),3cd6a36446a05b9d01d9b979,Ho Chi Minh City,arterial,10.823531,106.680157,8.0
-267,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 267),9226982d8c8af1000d409e8a,Ho Chi Minh City,arterial,10.802177,106.703156,8.0
-268,Quang Trung - Thống Nhất (Nhánh 268),e58294dfa40f13caea89a7b0,Ho Chi Minh City,arterial,10.825648,106.664728,8.0
-269,Lê Văn Việt - Man Thiện (Nhánh 269),855f7ef1bd1a41bb85c513b2,Ho Chi Minh City,arterial,10.840449,106.771022,8.0
-270,Ba Tháng Hai - Lê Hồng Phong (Nhánh 270),a57a6596f2e95b8708a0fd9c,Ho Chi Minh City,arterial,10.765927,106.664748,8.0
-271,Hùng Vương - Nguyễn Tri Phương (Nhánh 271),3f1474db08a163f81594ae87,Ho Chi Minh City,arterial,10.771697,106.673853,8.0
-272,Hồng Bàng - Thuận Kiều (Nhánh 272),42902b0de4eca2e333720e81,Ho Chi Minh City,arterial,10.754036,106.66974,8.0
-273,Võ Thị Sáu - Hai Bà Trưng (Nhánh 273),d56c7f5f320eb784f02f73a3,Ho Chi Minh City,arterial,10.789719,106.68651,8.0
-274,Mai Chí Thọ - Đồng Văn Cống (Nhánh 274),ac30c07a0a6187be94182912,Ho Chi Minh City,arterial,10.795585,106.751111,8.0
-275,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 275),b6de1e9b98e6dfa098698997,Ho Chi Minh City,arterial,10.773802,106.704977,8.0
-276,Kinh Dương Vương - Tên Lửa (Nhánh 276),c9af23f72a11e36e5dd742cc,Ho Chi Minh City,arterial,10.735295,106.601738,8.0
-277,Lý Thường Kiệt - Bắc Hải (Nhánh 277),02559f40dcbc3bf4fb1d15bb,Ho Chi Minh City,arterial,10.783209,106.673475,8.0
-278,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 278),d86dc6986a2364d9dd0a56b6,Ho Chi Minh City,arterial,10.790911,106.696904,8.0
-279,Võ Văn Ngân - Đặng Văn Bi (Nhánh 279),ee115ad7701d6209c768cd61,Ho Chi Minh City,arterial,10.845995,106.760603,8.0
-280,Nguyễn Oanh - Phan Văn Trị (Nhánh 280),45dbbad24cb72cda5ed17b17,Ho Chi Minh City,arterial,10.826761,106.671188,8.0
-282,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 282),bb54892491df0ee463d88f05,Ho Chi Minh City,arterial,10.758188,106.677852,8.0
-283,An Dương Vương - Trần Phú (Nhánh 283),3c66285765a65036810a2b1e,Ho Chi Minh City,arterial,10.758364,106.671498,8.0
-284,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 284),283ebfa07b4d4e3e3bafaaad,Ho Chi Minh City,arterial,10.771588,106.683939,8.0
-285,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 285),04bd85b3174a18d99f1765f0,Ho Chi Minh City,arterial,10.786886,106.703843,8.0
-286,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 286),f50aed71ba267cc670a1705a,Ho Chi Minh City,arterial,10.805107,106.70468,8.0
-287,Lê Duẩn - Pasteur (Nhánh 287),d2345399a186215741e93bf1,Ho Chi Minh City,arterial,10.780295,106.704211,8.0
-288,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 288),c6fcc0c6a640b181501d829e,Ho Chi Minh City,arterial,10.782045,106.678847,8.0
-289,Hoàng Sa - Trần Quang Diệu (Nhánh 289),acdd8a394ad2b3edefb3d033,Ho Chi Minh City,arterial,10.782899,106.684065,8.0
-290,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 290),7396943cb77b5a73cb286302,Ho Chi Minh City,arterial,10.781494,106.670761,8.0
-291,Võ Văn Kiệt - Ký Con (Nhánh 291),e81f3b056ac1a6fae039971a,Ho Chi Minh City,arterial,10.75508,106.699885,8.0
-292,Xa Lộ Hà Nội - Cát Lái (Nhánh 292),b0148ff9351a06bf3d66e0b5,Ho Chi Minh City,arterial,10.803278,106.744865,8.0
-293,Phạm Văn Đồng - Phan Văn Trị (Nhánh 293),b507d8811cebf9a16670d2ea,Ho Chi Minh City,arterial,10.824909,106.685408,8.0
-295,Cộng Hòa - Hoàng Hoa Thám (Nhánh 295),5d7ac2a8d20674374cca3124,Ho Chi Minh City,arterial,10.800971,106.637512,8.0
-296,Trường Chinh - Tây Thạnh (Nhánh 296),fb6a410ea595887bff9e3a0d,Ho Chi Minh City,arterial,10.808985,106.629879,8.0
-297,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 297),302ff4791204cfe7fc2054cb,Ho Chi Minh City,arterial,10.723617,106.699324,8.0
-299,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 299),b692b8aae104c9e15e0a619c,Ho Chi Minh City,arterial,10.80695,106.666585,8.0
-300,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 300),5f8bd20fc790619d4ea86035,Ho Chi Minh City,arterial,10.809886,106.701762,8.0
-301,Quang Trung - Thống Nhất (Nhánh 301),10db3d199b2369869f1d3917,Ho Chi Minh City,arterial,10.842738,106.674633,8.0
-302,Lê Văn Việt - Man Thiện (Nhánh 302),2446e6deaf837e9c1742e181,Ho Chi Minh City,arterial,10.826727,106.776025,8.0
-303,Ba Tháng Hai - Lê Hồng Phong (Nhánh 303),8bb95fe63fe52fe122b57e6a,Ho Chi Minh City,arterial,10.775717,106.671776,8.0
-304,Hùng Vương - Nguyễn Tri Phương (Nhánh 304),a9538957aa6cb1adfe56fac8,Ho Chi Minh City,arterial,10.761169,106.661968,8.0
-305,Hồng Bàng - Thuận Kiều (Nhánh 305),cdcb3d32d38fe264bd6deb3a,Ho Chi Minh City,arterial,10.754793,106.656655,8.0
-307,Võ Thị Sáu - Hai Bà Trưng (Nhánh 307),55fa58ee2e488133c19746ca,Ho Chi Minh City,arterial,10.798442,106.695435,8.0
-308,Mai Chí Thọ - Đồng Văn Cống (Nhánh 308),5b4c9021cf80fb29cb945fa2,Ho Chi Minh City,arterial,10.786101,106.743505,8.0
-309,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 309),42aa9990a04685833e4555b8,Ho Chi Minh City,arterial,10.778199,106.70304,8.0
-310,Kinh Dương Vương - Tên Lửa (Nhánh 310),02e12ad0884407066ee7043e,Ho Chi Minh City,arterial,10.745456,106.609432,8.0
-311,Lý Thường Kiệt - Bắc Hải (Nhánh 311),b73ce89b3af70ed5cbfefb5f,Ho Chi Minh City,arterial,10.778118,106.674803,8.0
-312,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 312),e23214fc69c42f61d84c0fbb,Ho Chi Minh City,arterial,10.809069,106.689792,8.0
-313,Võ Văn Ngân - Đặng Văn Bi (Nhánh 313),064df8b8b0adefdae4fa5ff1,Ho Chi Minh City,arterial,10.86081,106.761235,8.0
-314,Nguyễn Oanh - Phan Văn Trị (Nhánh 314),f699359f323cf8cb74968bd1,Ho Chi Minh City,arterial,10.815195,106.670035,8.0
-315,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 315),8b5cb355f0646748ecc02a65,Ho Chi Minh City,arterial,10.742834,106.681688,8.0
-316,An Dương Vương - Trần Phú (Nhánh 316),2a94d5ba711ae9dbbe6dcc54,Ho Chi Minh City,arterial,10.756347,106.685311,8.0
-317,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 317),0a87adad1792498e9af29ff6,Ho Chi Minh City,arterial,10.776115,106.689447,8.0
-318,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 318),231b1b8eb51782f2857fe8f4,Ho Chi Minh City,arterial,10.798135,106.680111,8.0
-319,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 319),84c0b47ba177f32a86e5389c,Ho Chi Minh City,arterial,10.802985,106.718667,8.0
-320,Lê Duẩn - Pasteur (Nhánh 320),9c8bb5d5b4337fe0714f1860,Ho Chi Minh City,arterial,10.767671,106.70735,8.0
-321,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 321),223369fe2f815a960f0e024d,Ho Chi Minh City,arterial,10.798108,106.671178,8.0
-323,Hoàng Sa - Trần Quang Diệu (Nhánh 323),33ee70e3b8fa619edbb5a575,Ho Chi Minh City,arterial,10.793262,106.697666,8.0
-324,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 324),ad8040fbdc9f394fd2733aea,Ho Chi Minh City,arterial,10.789055,106.687186,8.0
-325,Võ Văn Kiệt - Ký Con (Nhánh 325),701ea04555f769398b7325e2,Ho Chi Minh City,arterial,10.764425,106.692701,8.0
-326,Xa Lộ Hà Nội - Cát Lái (Nhánh 326),ee324fbdf76b9723ee622c71,Ho Chi Minh City,arterial,10.807843,106.745251,8.0
-327,Phạm Văn Đồng - Phan Văn Trị (Nhánh 327),c73c70c49a5334760dcd8add,Ho Chi Minh City,arterial,10.820373,106.694879,8.0
-328,Cộng Hòa - Hoàng Hoa Thám (Nhánh 328),9b8803783cb508280117133b,Ho Chi Minh City,arterial,10.805332,106.649869,8.0
-329,Trường Chinh - Tây Thạnh (Nhánh 329),8914db75dcd93097022b3c76,Ho Chi Minh City,arterial,10.8225,106.62542,8.0
-330,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 330),190cb3722f2cdbf64a0aa566,Ho Chi Minh City,arterial,10.728341,106.69457,8.0
-331,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 331),515e723afe74c0e3479e82e5,Ho Chi Minh City,arterial,10.795346,106.674218,8.0
-332,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 332),c7f65197ade1f44d8e8aefa2,Ho Chi Minh City,arterial,10.809256,106.703423,8.0
-333,Quang Trung - Thống Nhất (Nhánh 333),6c67524ccbc471fd11a3254e,Ho Chi Minh City,arterial,10.845457,106.673945,8.0
-334,Lê Văn Việt - Man Thiện (Nhánh 334),18cf84645429c660dfbddaad,Ho Chi Minh City,arterial,10.849807,106.797414,8.0
-336,Ba Tháng Hai - Lê Hồng Phong (Nhánh 336),d346bc4fc00cbd033414497e,Ho Chi Minh City,arterial,10.76491,106.663443,8.0
-337,Hùng Vương - Nguyễn Tri Phương (Nhánh 337),c67cedf0db93ee8f4b7de7ae,Ho Chi Minh City,arterial,10.74397,106.678768,8.0
-338,Hồng Bàng - Thuận Kiều (Nhánh 338),7a3749a1da12417a0060366f,Ho Chi Minh City,arterial,10.759335,106.657455,8.0
-339,Võ Thị Sáu - Hai Bà Trưng (Nhánh 339),194d13a89d961cc94472cf64,Ho Chi Minh City,arterial,10.79134,106.684396,8.0
-340,Mai Chí Thọ - Đồng Văn Cống (Nhánh 340),808e0a9d2aa406e3a199e717,Ho Chi Minh City,arterial,10.802966,106.747834,8.0
-341,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 341),c7ef0f6ad0f31c870c8eb900,Ho Chi Minh City,arterial,10.782975,106.712306,8.0
-342,Kinh Dương Vương - Tên Lửa (Nhánh 342),46fda3ca38b0e8816da505ba,Ho Chi Minh City,arterial,10.746148,106.614591,8.0
-343,Lý Thường Kiệt - Bắc Hải (Nhánh 343),c2eedb0e993147d3c93a5230,Ho Chi Minh City,arterial,10.769476,106.661972,8.0
-344,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 344),2e4697c3db92bd33a23f92c7,Ho Chi Minh City,arterial,10.817156,106.703163,8.0
-345,Võ Văn Ngân - Đặng Văn Bi (Nhánh 345),3857f9e2fbe771ccf0aa94ef,Ho Chi Minh City,arterial,10.863945,106.76041,8.0
-346,Nguyễn Oanh - Phan Văn Trị (Nhánh 346),9badb62e57530abf92a54b27,Ho Chi Minh City,arterial,10.823583,106.677094,8.0
-348,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 348),181ca73af35ce42c0513543f,Ho Chi Minh City,arterial,10.758246,106.693254,8.0
-349,An Dương Vương - Trần Phú (Nhánh 349),c587fa015b454c829ad1e055,Ho Chi Minh City,arterial,10.74266,106.684136,8.0
-350,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 350),1118357450a9fa3c8eedfc6c,Ho Chi Minh City,arterial,10.772236,106.687785,8.0
-351,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 351),a6bd443ba0ae0d5a07aa2534,Ho Chi Minh City,arterial,10.783403,106.684561,8.0
-352,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 352),84de917b4f1b288122e748fa,Ho Chi Minh City,arterial,10.807685,106.713087,8.0
-353,Lê Duẩn - Pasteur (Nhánh 353),f701d0e397aa1451008e1c7b,Ho Chi Minh City,arterial,10.76918,106.687839,8.0
-354,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 354),c5790eecc9abaedf862e6368,Ho Chi Minh City,arterial,10.792714,106.687852,8.0
-355,Hoàng Sa - Trần Quang Diệu (Nhánh 355),0ed0704c34569b5dd094f796,Ho Chi Minh City,arterial,10.786123,106.667475,8.0
-356,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 356),4ef55bf86df61c13599cdc1f,Ho Chi Minh City,arterial,10.785634,106.683018,8.0
-357,Võ Văn Kiệt - Ký Con (Nhánh 357),fafe7083985660e621016f7d,Ho Chi Minh City,arterial,10.746525,106.699066,8.0
-358,Xa Lộ Hà Nội - Cát Lái (Nhánh 358),c1743dd9fd891d4b82aea930,Ho Chi Minh City,arterial,10.799353,106.75767,8.0
-360,Phạm Văn Đồng - Phan Văn Trị (Nhánh 360),0ae756450c0fb9884e4b4332,Ho Chi Minh City,arterial,10.834592,106.707713,8.0
-361,Cộng Hòa - Hoàng Hoa Thám (Nhánh 361),5c03cb3e0d2bdf1de4fb7290,Ho Chi Minh City,arterial,10.799349,106.638348,8.0
-362,Trường Chinh - Tây Thạnh (Nhánh 362),76e1f3067ff3793dc87c3d1f,Ho Chi Minh City,arterial,10.834787,106.629974,8.0
-363,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 363),787a99bedc3776281b794b0e,Ho Chi Minh City,arterial,10.730611,106.702207,8.0
-364,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 364),a1fa3643e871607aa1d17007,Ho Chi Minh City,arterial,10.800485,106.670045,8.0
-365,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 365),9812b003b5399658ef5c97d2,Ho Chi Minh City,arterial,10.798611,106.706425,8.0
-366,Quang Trung - Thống Nhất (Nhánh 366),a84d5baaa9c7b2ea9a80b053,Ho Chi Minh City,arterial,10.838238,106.658753,8.0
-367,Lê Văn Việt - Man Thiện (Nhánh 367),b1f37c2f9dcd3c2d6bd360a0,Ho Chi Minh City,arterial,10.840797,106.783251,8.0
-368,Ba Tháng Hai - Lê Hồng Phong (Nhánh 368),6ac44651e6e2c5514baf0d75,Ho Chi Minh City,arterial,10.76906,106.685432,8.0
-369,Hùng Vương - Nguyễn Tri Phương (Nhánh 369),364f0771c5c482e432693b8b,Ho Chi Minh City,arterial,10.736992,106.675532,8.0
-370,Hồng Bàng - Thuận Kiều (Nhánh 370),aa0c85239a760dbb9cb99c7a,Ho Chi Minh City,arterial,10.764069,106.641313,8.0
-371,Võ Thị Sáu - Hai Bà Trưng (Nhánh 371),6969aeee7a00db16a9f0992c,Ho Chi Minh City,arterial,10.786358,106.690428,8.0
-372,Mai Chí Thọ - Đồng Văn Cống (Nhánh 372),d53f2fc25101a95ceacf2bb9,Ho Chi Minh City,arterial,10.77214,106.740577,8.0
-373,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 373),bb9e94578018111bc02dd9b2,Ho Chi Minh City,arterial,10.773215,106.720518,8.0
-374,Kinh Dương Vương - Tên Lửa (Nhánh 374),ac38ddfe350a5970d03c7c3f,Ho Chi Minh City,arterial,10.749785,106.622972,8.0
-375,Lý Thường Kiệt - Bắc Hải (Nhánh 375),c499d588e6388d9fea2434d1,Ho Chi Minh City,arterial,10.781573,106.649168,8.0
-376,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 376),42d87fab655d5a72f41ef3d4,Ho Chi Minh City,arterial,10.797904,106.696315,8.0
-377,Võ Văn Ngân - Đặng Văn Bi (Nhánh 377),b123968f4e1191e256af7bd3,Ho Chi Minh City,arterial,10.841423,106.770204,8.0
-378,Nguyễn Oanh - Phan Văn Trị (Nhánh 378),e9c7731c149ff66aa7ff65cd,Ho Chi Minh City,arterial,10.829577,106.675101,8.0
-379,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 379),7e8f425c2528b9ddec0d0b92,Ho Chi Minh City,arterial,10.763488,106.688054,8.0
-380,An Dương Vương - Trần Phú (Nhánh 380),d2a00ee233405323066a0d41,Ho Chi Minh City,arterial,10.753312,106.681175,8.0
-382,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 382),412dd5434be546aebc5467ea,Ho Chi Minh City,arterial,10.764851,106.696127,8.0
-384,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 384),de5775bdc0059d50326f4574,Ho Chi Minh City,arterial,10.796245,106.695324,8.0
-385,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 385),6d4bd6f07c73272bf3f77e94,Ho Chi Minh City,arterial,10.803709,106.702491,8.0
-387,Lê Duẩn - Pasteur (Nhánh 387),ac51bd4b28b7cfd083fcd6d1,Ho Chi Minh City,arterial,10.786892,106.696721,8.0
-389,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 389),2e54937c6c47948d64a38463,Ho Chi Minh City,arterial,10.791218,106.682892,8.0
-390,Hoàng Sa - Trần Quang Diệu (Nhánh 390),94fba7c210db48116be48e1b,Ho Chi Minh City,arterial,10.782565,106.668232,8.0
-391,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 391),c1edfb2df0ca1ee1cb1531da,Ho Chi Minh City,arterial,10.775147,106.690048,8.0
-392,Võ Văn Kiệt - Ký Con (Nhánh 392),e4bee4bc310080f5725d7e74,Ho Chi Minh City,arterial,10.757857,106.713538,8.0
-394,Xa Lộ Hà Nội - Cát Lái (Nhánh 394),c7514c5c558841ba60e5f483,Ho Chi Minh City,arterial,10.784545,106.765672,8.0
-395,Phạm Văn Đồng - Phan Văn Trị (Nhánh 395),64ead95034ccd188b439f31d,Ho Chi Minh City,arterial,10.821488,106.697926,8.0
-396,Cộng Hòa - Hoàng Hoa Thám (Nhánh 396),df672a46652a3fbe191b93d7,Ho Chi Minh City,arterial,10.797141,106.650393,8.0
-397,Trường Chinh - Tây Thạnh (Nhánh 397),03043e6a8f2b09ced092f8d2,Ho Chi Minh City,arterial,10.813899,106.638326,8.0
-398,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 398),78b034c80150b595df571828,Ho Chi Minh City,arterial,10.731414,106.703602,8.0
-399,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 399),4ac585789bb668b7b9712724,Ho Chi Minh City,arterial,10.795991,106.670744,8.0
-400,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 400),a9c28db7cfe0d0788a02bb96,Ho Chi Minh City,arterial,10.805662,106.697119,8.0
-401,Quang Trung - Thống Nhất (Nhánh 401),d0007830bb61d6970ff54468,Ho Chi Minh City,arterial,10.827715,106.669046,8.0
-402,Lê Văn Việt - Man Thiện (Nhánh 402),17581242abb18169fc51a3de,Ho Chi Minh City,arterial,10.847867,106.780928,8.0
-403,Ba Tháng Hai - Lê Hồng Phong (Nhánh 403),0a606eb81738d7a5b7619d29,Ho Chi Minh City,arterial,10.771247,106.676181,8.0
-404,Hùng Vương - Nguyễn Tri Phương (Nhánh 404),703d15fefc91ccb5d83a95d1,Ho Chi Minh City,arterial,10.753882,106.660574,8.0
-405,Hồng Bàng - Thuận Kiều (Nhánh 405),c2d05bf8dd2f9abf7dd34e58,Ho Chi Minh City,arterial,10.755667,106.650073,8.0
-406,Võ Thị Sáu - Hai Bà Trưng (Nhánh 406),fc2559680c6a00729f402096,Ho Chi Minh City,arterial,10.792366,106.679779,8.0
-407,Mai Chí Thọ - Đồng Văn Cống (Nhánh 407),ef6b10e06af0875d8adda4bc,Ho Chi Minh City,arterial,10.791633,106.750581,8.0
-408,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 408),dd8ce9b3f9565705426c988d,Ho Chi Minh City,arterial,10.784148,106.714362,8.0
-409,Kinh Dương Vương - Tên Lửa (Nhánh 409),a49a69b7aa4bf42fa961c189,Ho Chi Minh City,arterial,10.755624,106.620915,8.0
-410,Lý Thường Kiệt - Bắc Hải (Nhánh 410),456351bb9dc6ad020fd93ca0,Ho Chi Minh City,arterial,10.761073,106.647963,8.0
-412,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 412),c132a06f6d02e42eaa1d10b9,Ho Chi Minh City,arterial,10.797101,106.692609,8.0
-413,Võ Văn Ngân - Đặng Văn Bi (Nhánh 413),b8498fdd1898d3ea1b24717f,Ho Chi Minh City,arterial,10.855341,106.758694,8.0
-414,Nguyễn Oanh - Phan Văn Trị (Nhánh 414),9179931f7106346985f84236,Ho Chi Minh City,arterial,10.832994,106.672057,8.0
-415,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 415),17f1c5b27a91dbc2065d67e3,Ho Chi Minh City,arterial,10.752908,106.673247,8.0
-416,An Dương Vương - Trần Phú (Nhánh 416),0de8d71e5116d1994f0243d6,Ho Chi Minh City,arterial,10.748814,106.661087,8.0
-418,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 418),3166603588ad8c16d9b3bbae,Ho Chi Minh City,arterial,10.765693,106.699629,8.0
-419,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 419),5e2c9986a2abfe297ee58865,Ho Chi Minh City,arterial,10.783905,106.718859,8.0
-421,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 421),f6047269a02723d9b8e60456,Ho Chi Minh City,arterial,10.805047,106.713979,8.0
-422,Lê Duẩn - Pasteur (Nhánh 422),f36541242198a0c8d7a9416b,Ho Chi Minh City,arterial,10.772633,106.703802,8.0
-423,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 423),32b229b6703987b91ed0db6b,Ho Chi Minh City,arterial,10.790795,106.675476,8.0
-424,Hoàng Sa - Trần Quang Diệu (Nhánh 424),dd727f4a9eb3a66b06dbd8e5,Ho Chi Minh City,arterial,10.808681,106.678732,8.0
-425,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 425),0b0fae0e2e3c6b1d69e848e5,Ho Chi Minh City,arterial,10.796794,106.679575,8.0
-426,Võ Văn Kiệt - Ký Con (Nhánh 426),53ab032d3f5ce58931fbebaf,Ho Chi Minh City,arterial,10.76782,106.713666,8.0
-427,Xa Lộ Hà Nội - Cát Lái (Nhánh 427),c3d919a5881c4ad7ac626baa,Ho Chi Minh City,arterial,10.796184,106.7666,8.0
-428,Phạm Văn Đồng - Phan Văn Trị (Nhánh 428),806c057d8b5d4f60825d0fce,Ho Chi Minh City,arterial,10.825462,106.6942,8.0
-429,Cộng Hòa - Hoàng Hoa Thám (Nhánh 429),1c9c431300b85c08a9d664c5,Ho Chi Minh City,arterial,10.806559,106.65498,8.0
-430,Trường Chinh - Tây Thạnh (Nhánh 430),30e31af773b3a4054e395465,Ho Chi Minh City,arterial,10.819174,106.616938,8.0
-431,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 431),8195c5ae8f1a90ff093be777,Ho Chi Minh City,arterial,10.724683,106.70042,8.0
-432,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 432),7c41cdc0462569b45d800a42,Ho Chi Minh City,arterial,10.798305,106.676165,8.0
-433,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 433),26a6ace31ca7add089b09603,Ho Chi Minh City,arterial,10.804622,106.700117,8.0
-434,Quang Trung - Thống Nhất (Nhánh 434),423a615f7a2a3075b1283041,Ho Chi Minh City,arterial,10.841542,106.667985,8.0
-435,Lê Văn Việt - Man Thiện (Nhánh 435),c286d1382d07a8f91b518299,Ho Chi Minh City,arterial,10.850978,106.791046,8.0
-437,Ba Tháng Hai - Lê Hồng Phong (Nhánh 437),aee23de885a1f06108a85bd2,Ho Chi Minh City,arterial,10.777771,106.677073,8.0
-438,Hùng Vương - Nguyễn Tri Phương (Nhánh 438),70faeaf4c184168739bf7589,Ho Chi Minh City,arterial,10.757639,106.653512,8.0
-439,Hồng Bàng - Thuận Kiều (Nhánh 439),622f950463447893e909af08,Ho Chi Minh City,arterial,10.757537,106.659562,8.0
-440,Võ Thị Sáu - Hai Bà Trưng (Nhánh 440),55c9b9bf95a462a0075f6e6f,Ho Chi Minh City,arterial,10.791273,106.683186,8.0
-441,Mai Chí Thọ - Đồng Văn Cống (Nhánh 441),08d9e20b04362b91908e2cd0,Ho Chi Minh City,arterial,10.774752,106.755225,8.0
-442,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 442),8beefdaa0589ea835116a6c6,Ho Chi Minh City,arterial,10.781784,106.711952,8.0
-443,Kinh Dương Vương - Tên Lửa (Nhánh 443),2ba034e31fad7479d70230f0,Ho Chi Minh City,arterial,10.742527,106.613038,8.0
-444,Lý Thường Kiệt - Bắc Hải (Nhánh 444),11778b44f7cbb2122962890e,Ho Chi Minh City,arterial,10.783306,106.654072,8.0
-445,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 445),645bdf20ebee6133e5d1efbc,Ho Chi Minh City,arterial,10.802869,106.688702,8.0
-446,Võ Văn Ngân - Đặng Văn Bi (Nhánh 446),a50ed0f0c7579f8f0fcc20bf,Ho Chi Minh City,arterial,10.847724,106.762027,8.0
-447,Nguyễn Oanh - Phan Văn Trị (Nhánh 447),d2256c940609b6496323d22c,Ho Chi Minh City,arterial,10.833277,106.67427,8.0
-448,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 448),96e60671dc46458e0eabd449,Ho Chi Minh City,arterial,10.767846,106.677343,8.0
-449,An Dương Vương - Trần Phú (Nhánh 449),a09dc3241bf8a189d95bc1d2,Ho Chi Minh City,arterial,10.754705,106.668382,8.0
-450,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 450),690e954fe6f9f46ddf28e1be,Ho Chi Minh City,arterial,10.785076,106.692772,8.0
-451,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 451),d54b8f2bda8d8ec39c892c15,Ho Chi Minh City,arterial,10.799755,106.685916,8.0
-452,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 452),7c0914417af253c3ea0d437f,Ho Chi Minh City,arterial,10.803236,106.719617,8.0
-453,Lê Duẩn - Pasteur (Nhánh 453),0f5ace99b1b9f1e10aa79176,Ho Chi Minh City,arterial,10.780158,106.706724,8.0
-454,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 454),60d38402fcbfaad3007fedc9,Ho Chi Minh City,arterial,10.791262,106.685775,8.0
-455,Hoàng Sa - Trần Quang Diệu (Nhánh 455),93f222e4df584d2013fd7cf9,Ho Chi Minh City,arterial,10.806591,106.676597,8.0
-456,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 456),e32f775d07c1d763ffdf9401,Ho Chi Minh City,arterial,10.784036,106.696827,8.0
-457,Võ Văn Kiệt - Ký Con (Nhánh 457),79b1d12bd406e3059a9c0896,Ho Chi Minh City,arterial,10.780737,106.695317,8.0
-458,Xa Lộ Hà Nội - Cát Lái (Nhánh 458),b28ceeaf16378fc3b17833ea,Ho Chi Minh City,arterial,10.797839,106.749846,8.0
-459,Phạm Văn Đồng - Phan Văn Trị (Nhánh 459),99d11fc33067444bb1947a5c,Ho Chi Minh City,arterial,10.809044,106.691351,8.0
-460,Cộng Hòa - Hoàng Hoa Thám (Nhánh 460),743e366e1481b4a5537aab55,Ho Chi Minh City,arterial,10.793467,106.641058,8.0
-461,Trường Chinh - Tây Thạnh (Nhánh 461),478567d9b623bfc1d39b73f3,Ho Chi Minh City,arterial,10.813923,106.631374,8.0
-462,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 462),b622722d7af62a6a0f7380f7,Ho Chi Minh City,arterial,10.742904,106.694413,8.0
-463,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 463),413be6c71cea0c9dfd1bfbe8,Ho Chi Minh City,arterial,10.806775,106.669488,8.0
-464,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 464),37d0134df05392f19b278048,Ho Chi Minh City,arterial,10.802804,106.716199,8.0
-465,Quang Trung - Thống Nhất (Nhánh 465),a1626b49e08249bf22cde606,Ho Chi Minh City,arterial,10.829518,106.666159,8.0
-466,Lê Văn Việt - Man Thiện (Nhánh 466),f8f91d32a4a299bf3be00796,Ho Chi Minh City,arterial,10.847832,106.78634,8.0
-467,Ba Tháng Hai - Lê Hồng Phong (Nhánh 467),6e326232538571142d4ca1b8,Ho Chi Minh City,arterial,10.773413,106.693042,8.0
-468,Hùng Vương - Nguyễn Tri Phương (Nhánh 468),9dab5c065d0d32a62fe1f0cc,Ho Chi Minh City,arterial,10.753098,106.662552,8.0
-469,Hồng Bàng - Thuận Kiều (Nhánh 469),0f7ff397920aef1ba3f5bf7d,Ho Chi Minh City,arterial,10.749115,106.653456,8.0
-470,Võ Thị Sáu - Hai Bà Trưng (Nhánh 470),8a3d50844bdf32114073c0e4,Ho Chi Minh City,arterial,10.784001,106.702912,8.0
-472,Mai Chí Thọ - Đồng Văn Cống (Nhánh 472),1fda2a2a84331037b0da5feb,Ho Chi Minh City,arterial,10.794764,106.742234,8.0
-473,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 473),7f019a209197cf464abc8a08,Ho Chi Minh City,arterial,10.775441,106.710271,8.0
-474,Kinh Dương Vương - Tên Lửa (Nhánh 474),420fe393b1d89ea8a8b52a76,Ho Chi Minh City,arterial,10.737882,106.617863,8.0
-475,Lý Thường Kiệt - Bắc Hải (Nhánh 475),77459c4c1db0447b73ca9848,Ho Chi Minh City,arterial,10.777423,106.646074,8.0
-476,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 476),6db52e8492a62a63ba31cd93,Ho Chi Minh City,arterial,10.81448,106.706767,8.0
-477,Võ Văn Ngân - Đặng Văn Bi (Nhánh 477),71c05e26bb3e644e31489ca8,Ho Chi Minh City,arterial,10.846298,106.761398,8.0
-478,Nguyễn Oanh - Phan Văn Trị (Nhánh 478),3cf1978870aed71a4c951fb9,Ho Chi Minh City,arterial,10.833787,106.680776,8.0
-479,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 479),f0c5c567bbcde8970c2bad37,Ho Chi Minh City,arterial,10.763068,106.700582,8.0
-480,An Dương Vương - Trần Phú (Nhánh 480),25798035870ef3ad2fc9c7ff,Ho Chi Minh City,arterial,10.754784,106.665514,8.0
-481,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 481),5d24f1c44c7b0ffdfff7394f,Ho Chi Minh City,arterial,10.762465,106.685353,8.0
-482,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 482),e7fc52073a5a977f0c8132c9,Ho Chi Minh City,arterial,10.791235,106.712156,8.0
-483,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 483),d5fa009dea6d3ac67e3ef3c0,Ho Chi Minh City,arterial,10.796959,106.71429,8.0
-484,Lê Duẩn - Pasteur (Nhánh 484),0a5497ea33e0b239fa3e4a4a,Ho Chi Minh City,arterial,10.779369,106.707707,8.0
-485,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 485),b11bfada78e741920fd7111c,Ho Chi Minh City,arterial,10.815615,106.670253,8.0
-486,Hoàng Sa - Trần Quang Diệu (Nhánh 486),94adf2847683da1e22ab3bd1,Ho Chi Minh City,arterial,10.784284,106.687853,8.0
-487,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 487),d1a991ee848d42cfd211156f,Ho Chi Minh City,arterial,10.793055,106.699974,8.0
-488,Võ Văn Kiệt - Ký Con (Nhánh 488),4239393f5a16de2381219f80,Ho Chi Minh City,arterial,10.772771,106.696626,8.0
-489,Xa Lộ Hà Nội - Cát Lái (Nhánh 489),8e5368ad94c90c4d74d6bd26,Ho Chi Minh City,arterial,10.805925,106.76097,8.0
-490,Phạm Văn Đồng - Phan Văn Trị (Nhánh 490),95931659068bbd2c606505cf,Ho Chi Minh City,arterial,10.826364,106.702758,8.0
-491,Cộng Hòa - Hoàng Hoa Thám (Nhánh 491),b514f8ab714cfd9b9ab09d22,Ho Chi Minh City,arterial,10.810033,106.656554,8.0
-492,Trường Chinh - Tây Thạnh (Nhánh 492),01be451c33ed616115ea0933,Ho Chi Minh City,arterial,10.825257,106.63469,8.0
-493,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 493),aeefd8d09ea0cade3a6519bd,Ho Chi Minh City,arterial,10.729163,106.703574,8.0
-495,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 495),84e1a22c57b75aac81866e03,Ho Chi Minh City,arterial,10.808552,106.664665,8.0
-496,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 496),4ed712ca1b66e9d46397b116,Ho Chi Minh City,arterial,10.806149,106.707653,8.0
-497,Quang Trung - Thống Nhất (Nhánh 497),dd90aa43b7962f6a49864e3f,Ho Chi Minh City,arterial,10.83873,106.673328,8.0
-498,Lê Văn Việt - Man Thiện (Nhánh 498),8ffc200427022a37604eba84,Ho Chi Minh City,arterial,10.848029,106.782771,8.0
-499,Ba Tháng Hai - Lê Hồng Phong (Nhánh 499),df1f7514dac432320272411b,Ho Chi Minh City,arterial,10.760221,106.67937,8.0
-500,Hùng Vương - Nguyễn Tri Phương (Nhánh 500),aaf1fc2e8ae886e56eea9b28,Ho Chi Minh City,arterial,10.763364,106.684106,8.0
-501,Hồng Bàng - Thuận Kiều (Nhánh 501),731fcfc57145517d558fa75f,Ho Chi Minh City,arterial,10.751638,106.659653,8.0
-502,Võ Thị Sáu - Hai Bà Trưng (Nhánh 502),e49d6d633d3eb128d5a07a1b,Ho Chi Minh City,arterial,10.791095,106.70602,8.0
-503,Mai Chí Thọ - Đồng Văn Cống (Nhánh 503),c5115f4df6adf3fe0b4dd611,Ho Chi Minh City,arterial,10.782638,106.749032,8.0
-504,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 504),f319ea3fd93c6a45f0c5664c,Ho Chi Minh City,arterial,10.786963,106.707993,8.0
-505,Kinh Dương Vương - Tên Lửa (Nhánh 505),c2a0cbc519c2a89d3156c4e8,Ho Chi Minh City,arterial,10.738729,106.614353,8.0
-507,Lý Thường Kiệt - Bắc Hải (Nhánh 507),83955e9c8ced5640c86c796f,Ho Chi Minh City,arterial,10.784389,106.649988,8.0
-508,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 508),155ddcb38c3cc6ca77ae5e64,Ho Chi Minh City,arterial,10.803164,106.686799,8.0
-509,Võ Văn Ngân - Đặng Văn Bi (Nhánh 509),bcf76c47a8f4bf0d63060f08,Ho Chi Minh City,arterial,10.86076,106.752315,8.0
-510,Nguyễn Oanh - Phan Văn Trị (Nhánh 510),b59e05d2e4bc5d30364ee432,Ho Chi Minh City,arterial,10.827029,106.681118,8.0
-511,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 511),fbd3565b1f3e7a030e0bc3b7,Ho Chi Minh City,arterial,10.770324,106.683974,8.0
-512,An Dương Vương - Trần Phú (Nhánh 512),39b67187fd81846701b7153a,Ho Chi Minh City,arterial,10.751758,106.686949,8.0
-513,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 513),18d00b207cb82c41375f9d85,Ho Chi Minh City,arterial,10.761916,106.67361,8.0
-514,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 514),cd4e3ee7713684b8b7a6f62d,Ho Chi Minh City,arterial,10.79502,106.693784,8.0
-515,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 515),ea98b0a4b440b46d0ef79277,Ho Chi Minh City,arterial,10.79293,106.718167,8.0
-516,Lê Duẩn - Pasteur (Nhánh 516),fa91b652c352ec10e3bad5da,Ho Chi Minh City,arterial,10.78145,106.693687,8.0
-517,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 517),4797d3654077d1a6e482ed35,Ho Chi Minh City,arterial,10.785158,106.68148,8.0
-518,Hoàng Sa - Trần Quang Diệu (Nhánh 518),e50813ef6572af621e9006fd,Ho Chi Minh City,arterial,10.793402,106.678707,8.0
-519,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 519),c4579288e691c1a231f78e67,Ho Chi Minh City,arterial,10.802373,106.676639,8.0
-520,Võ Văn Kiệt - Ký Con (Nhánh 520),52048d47bd325a384d06d6ee,Ho Chi Minh City,arterial,10.755896,106.693965,8.0
-523,Xa Lộ Hà Nội - Cát Lái (Nhánh 523),783356e1d9ad3468e2c7be9f,Ho Chi Minh City,arterial,10.800835,106.754047,8.0
-524,Phạm Văn Đồng - Phan Văn Trị (Nhánh 524),04634aea4b0707d8f91f8f17,Ho Chi Minh City,arterial,10.81787,106.701516,8.0
-525,Cộng Hòa - Hoàng Hoa Thám (Nhánh 525),bceff848428c477e7d18f219,Ho Chi Minh City,arterial,10.791488,106.65875,8.0
-526,Trường Chinh - Tây Thạnh (Nhánh 526),416f980df38281454e5e8dc9,Ho Chi Minh City,arterial,10.813543,106.638438,8.0
-527,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 527),571f9dbd383bb031c6616934,Ho Chi Minh City,arterial,10.733242,106.706054,8.0
-528,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 528),d65841ae88d9a8307c2a6c1f,Ho Chi Minh City,arterial,10.803458,106.674782,8.0
-529,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 529),34540a0da9b321ec0c3164ad,Ho Chi Minh City,arterial,10.808342,106.721433,8.0
-530,Quang Trung - Thống Nhất (Nhánh 530),2480a3b241af40386ea941d1,Ho Chi Minh City,arterial,10.840072,106.668772,8.0
-531,Lê Văn Việt - Man Thiện (Nhánh 531),550ae68971c9d1254905835e,Ho Chi Minh City,arterial,10.845782,106.793921,8.0
-532,Ba Tháng Hai - Lê Hồng Phong (Nhánh 532),3abc13779b66c791f67e6659,Ho Chi Minh City,arterial,10.765689,106.687808,8.0
-534,Hùng Vương - Nguyễn Tri Phương (Nhánh 534),17dc28626109d11bbfa9a92b,Ho Chi Minh City,arterial,10.757879,106.655354,8.0
-535,Hồng Bàng - Thuận Kiều (Nhánh 535),495bc232d92bd45c4879f3f7,Ho Chi Minh City,arterial,10.755125,106.652452,8.0
-536,Võ Thị Sáu - Hai Bà Trưng (Nhánh 536),2e2ddcc9f5139a2b313472f2,Ho Chi Minh City,arterial,10.795825,106.688179,8.0
-537,Mai Chí Thọ - Đồng Văn Cống (Nhánh 537),a56e031a2ad03719a3385fd1,Ho Chi Minh City,arterial,10.779831,106.731684,8.0
-538,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 538),9dfecf52ef46ab44f4fd52b2,Ho Chi Minh City,arterial,10.778482,106.687109,8.0
-539,Kinh Dương Vương - Tên Lửa (Nhánh 539),53609f645148f4b0b911e657,Ho Chi Minh City,arterial,10.729629,106.618883,8.0
-540,Lý Thường Kiệt - Bắc Hải (Nhánh 540),c57d15c18eb334dddd7463d8,Ho Chi Minh City,arterial,10.782086,106.661604,8.0
-541,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 541),88c1e53b99cb1624217859b7,Ho Chi Minh City,arterial,10.794364,106.692018,8.0
-542,Võ Văn Ngân - Đặng Văn Bi (Nhánh 542),2953f6115779cbc74fb8e510,Ho Chi Minh City,arterial,10.851171,106.755233,8.0
-543,Nguyễn Oanh - Phan Văn Trị (Nhánh 543),4c674039769ce8e543b0c902,Ho Chi Minh City,arterial,10.843527,106.685119,8.0
-544,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 544),62b598e8c98fa285892b789b,Ho Chi Minh City,arterial,10.756032,106.684715,8.0
-545,An Dương Vương - Trần Phú (Nhánh 545),e1abaeca2de46ee3a41a06f7,Ho Chi Minh City,arterial,10.757867,106.655566,8.0
-546,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 546),1aa4329f9b4c948675f546aa,Ho Chi Minh City,arterial,10.771523,106.685744,8.0
-547,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 547),3dd1fc9fdf8283186934bffb,Ho Chi Minh City,arterial,10.783487,106.695551,8.0
-548,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 548),3c292fb306c9d34ec9f4cbcb,Ho Chi Minh City,arterial,10.815481,106.717627,8.0
-549,Lê Duẩn - Pasteur (Nhánh 549),e43c0139ea55526849577c33,Ho Chi Minh City,arterial,10.774931,106.702781,8.0
-550,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 550),103d9e3e3f7939ee37b5e018,Ho Chi Minh City,arterial,10.806595,106.681897,8.0
-551,Hoàng Sa - Trần Quang Diệu (Nhánh 551),fc8a8c567641b2d03f3ff2e0,Ho Chi Minh City,arterial,10.788677,106.674325,8.0
-552,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 552),835a2bfa1987cf6d3a7b1b61,Ho Chi Minh City,arterial,10.793186,106.688348,8.0
-553,Võ Văn Kiệt - Ký Con (Nhánh 553),a7bd9c98458cd9d232f85667,Ho Chi Minh City,arterial,10.775262,106.704581,8.0
-554,Xa Lộ Hà Nội - Cát Lái (Nhánh 554),88c0ce05624580d66ba55735,Ho Chi Minh City,arterial,10.809596,106.747818,8.0
-555,Phạm Văn Đồng - Phan Văn Trị (Nhánh 555),96df6180835e6a568d5357cf,Ho Chi Minh City,arterial,10.830339,106.700281,8.0
-556,Cộng Hòa - Hoàng Hoa Thám (Nhánh 556),51002f14840f779f7fed42fb,Ho Chi Minh City,arterial,10.818102,106.641686,8.0
-557,Trường Chinh - Tây Thạnh (Nhánh 557),67e28a15e25ae59bcab6e741,Ho Chi Minh City,arterial,10.828088,106.631083,8.0
-558,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 558),99d62dab5dda21d8cd9fc121,Ho Chi Minh City,arterial,10.725289,106.698529,8.0
-559,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 559),375ff6dd860853d9e81d61aa,Ho Chi Minh City,arterial,10.796337,106.674593,8.0
-560,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 560),c13535411246b77db40e9961,Ho Chi Minh City,arterial,10.807383,106.70621,8.0
-561,Quang Trung - Thống Nhất (Nhánh 561),6b7c2e9f455d5571d2b097f3,Ho Chi Minh City,arterial,10.838305,106.680238,8.0
-562,Lê Văn Việt - Man Thiện (Nhánh 562),a6887f1b616fe5ce99f6e398,Ho Chi Minh City,arterial,10.86032,106.785891,8.0
-563,Ba Tháng Hai - Lê Hồng Phong (Nhánh 563),73c763d0fb402f9595da68aa,Ho Chi Minh City,arterial,10.771404,106.67436,8.0
-564,Hùng Vương - Nguyễn Tri Phương (Nhánh 564),f61e2e656cc19a279f9539f1,Ho Chi Minh City,arterial,10.763108,106.658618,8.0
-565,Hồng Bàng - Thuận Kiều (Nhánh 565),0ef4e45a9cfefee63eaeecd9,Ho Chi Minh City,arterial,10.752041,106.644551,8.0
-566,Võ Thị Sáu - Hai Bà Trưng (Nhánh 566),7795a09594212a47b3ae2b71,Ho Chi Minh City,arterial,10.792294,106.698578,8.0
-567,Mai Chí Thọ - Đồng Văn Cống (Nhánh 567),2a4b2764225b15476fdd4172,Ho Chi Minh City,arterial,10.779535,106.759392,8.0
-568,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 568),edc6e52afda026ba1ee0cace,Ho Chi Minh City,arterial,10.772294,106.694785,8.0
-569,Kinh Dương Vương - Tên Lửa (Nhánh 569),cedcf25d3419203edfe5bda2,Ho Chi Minh City,arterial,10.744096,106.621177,8.0
-570,Lý Thường Kiệt - Bắc Hải (Nhánh 570),a04aca303887270a007c57f9,Ho Chi Minh City,arterial,10.789271,106.654529,8.0
-571,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 571),8198af3ea311dfdf7f6620f9,Ho Chi Minh City,arterial,10.810729,106.692092,8.0
-572,Võ Văn Ngân - Đặng Văn Bi (Nhánh 572),33cb425fad59fd427e1a3817,Ho Chi Minh City,arterial,10.849819,106.771569,8.0
-573,Nguyễn Oanh - Phan Văn Trị (Nhánh 573),8c47b19594a69eefc41c9067,Ho Chi Minh City,arterial,10.836719,106.665489,8.0
-574,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 574),c43ee5f6a6ce62e4f6d91fe8,Ho Chi Minh City,arterial,10.769612,106.695541,8.0
-575,An Dương Vương - Trần Phú (Nhánh 575),e826ddf1481c21271751f96a,Ho Chi Minh City,arterial,10.751195,106.675066,8.0
-576,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 576),e25dfb1fd69aaec45464ee04,Ho Chi Minh City,arterial,10.777452,106.693285,8.0
-577,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 577),600ae657a4695cec36f3ff8c,Ho Chi Minh City,arterial,10.787098,106.692427,8.0
-578,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 578),f56d7c018607bbaa020087d5,Ho Chi Minh City,arterial,10.800896,106.721882,8.0
-579,Lê Duẩn - Pasteur (Nhánh 579),f829c1aba75a0ac22f683654,Ho Chi Minh City,arterial,10.783849,106.695235,8.0
-580,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 580),5a0fa258e5c62d3effcc366b,Ho Chi Minh City,arterial,10.801574,106.651712,8.0
-581,Hoàng Sa - Trần Quang Diệu (Nhánh 581),8d33bca3906a68da4ce3b5fb,Ho Chi Minh City,arterial,10.79739,106.665582,8.0
-582,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 582),bf8ce559224581ff4a7c380f,Ho Chi Minh City,arterial,10.7847,106.676243,8.0
-583,Võ Văn Kiệt - Ký Con (Nhánh 583),31ae17abceb7d92740360bc0,Ho Chi Minh City,arterial,10.757743,106.708787,8.0
-584,Xa Lộ Hà Nội - Cát Lái (Nhánh 584),a281add4fa44ed7ab1709d78,Ho Chi Minh City,arterial,10.797458,106.754872,8.0
-585,Phạm Văn Đồng - Phan Văn Trị (Nhánh 585),c22115f2cfdb17ec3ffacf98,Ho Chi Minh City,arterial,10.819425,106.702516,8.0
-586,Cộng Hòa - Hoàng Hoa Thám (Nhánh 586),9fba0b5d609850fe150a492f,Ho Chi Minh City,arterial,10.802115,106.636936,8.0
-587,Trường Chinh - Tây Thạnh (Nhánh 587),4e2e40d55b05fb9065fec9e0,Ho Chi Minh City,arterial,10.82217,106.62555,8.0
-588,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 588),f9f79fd46299f26ec840aa24,Ho Chi Minh City,arterial,10.718047,106.698975,8.0
-589,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 589),21d6eb93fc59c676b723abc6,Ho Chi Minh City,arterial,10.810906,106.678002,8.0
-590,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 590),f52cb176326062435a20fc2c,Ho Chi Minh City,arterial,10.800411,106.708006,8.0
-591,Quang Trung - Thống Nhất (Nhánh 591),5a92e9313e7c8d505ef18e8e,Ho Chi Minh City,arterial,10.835927,106.679714,8.0
-592,Lê Văn Việt - Man Thiện (Nhánh 592),068d797b5eb3f7670aad8537,Ho Chi Minh City,arterial,10.849555,106.78584,8.0
-593,Ba Tháng Hai - Lê Hồng Phong (Nhánh 593),70d8c0e9f09ec50702a7711e,Ho Chi Minh City,arterial,10.779342,106.67531,8.0
-594,Hùng Vương - Nguyễn Tri Phương (Nhánh 594),fbe130a6e5635e844c459926,Ho Chi Minh City,arterial,10.756128,106.665229,8.0
-595,Hồng Bàng - Thuận Kiều (Nhánh 595),5e57b9cb9c1e2da075e6c5b1,Ho Chi Minh City,arterial,10.753527,106.657602,8.0
-596,Võ Thị Sáu - Hai Bà Trưng (Nhánh 596),11e578736fc82ba9cfbb47a5,Ho Chi Minh City,arterial,10.794921,106.693816,8.0
-597,Mai Chí Thọ - Đồng Văn Cống (Nhánh 597),5c8d2006ba5d534faf09ae94,Ho Chi Minh City,arterial,10.789261,106.746154,8.0
-598,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 598),95cc62f3e93a62cbb26614c3,Ho Chi Minh City,arterial,10.782729,106.690514,8.0
-599,Kinh Dương Vương - Tên Lửa (Nhánh 599),e77b87a18d250dce7fe91522,Ho Chi Minh City,arterial,10.749631,106.615572,8.0
-600,Lý Thường Kiệt - Bắc Hải (Nhánh 600),31436069cc3c28d5ae807d4d,Ho Chi Minh City,arterial,10.783784,106.63503,8.0
-601,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 601),7d6407459f7b804fc9473259,Ho Chi Minh City,arterial,10.818807,106.691283,8.0
-602,Võ Văn Ngân - Đặng Văn Bi (Nhánh 602),cfa5952fb56bb14a429289ca,Ho Chi Minh City,arterial,10.860065,106.756181,8.0
-603,Nguyễn Oanh - Phan Văn Trị (Nhánh 603),6f15195d26084cefd5ed9559,Ho Chi Minh City,arterial,10.836402,106.669673,8.0
-604,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 604),22bab77c7c75a526989a16ba,Ho Chi Minh City,arterial,10.75281,106.699812,8.0
-605,An Dương Vương - Trần Phú (Nhánh 605),786aa67bdb6225b04d8157eb,Ho Chi Minh City,arterial,10.754675,106.673639,8.0
-606,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 606),40048b61e16a643cc8efc55c,Ho Chi Minh City,arterial,10.780461,106.695165,8.0
-607,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 607),a335868e1cb7e326bdb94f97,Ho Chi Minh City,arterial,10.792703,106.70072,8.0
-608,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 608),a23c06b019808aa429bd7040,Ho Chi Minh City,arterial,10.820327,106.712039,8.0
-609,Lê Duẩn - Pasteur (Nhánh 609),f12203f7a7ce2145070f188a,Ho Chi Minh City,arterial,10.781109,106.706605,8.0
-610,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 610),d18e9b159dd7cf5171ad4cb8,Ho Chi Minh City,arterial,10.804244,106.683996,8.0
-612,Hoàng Sa - Trần Quang Diệu (Nhánh 612),d1b4c070bd4945f40360bb05,Ho Chi Minh City,arterial,10.79331,106.670356,8.0
-613,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 613),df20e993f392cff174d0451a,Ho Chi Minh City,arterial,10.800667,106.676029,8.0
-614,Võ Văn Kiệt - Ký Con (Nhánh 614),ca2c52c441cd9e1412ea353e,Ho Chi Minh City,arterial,10.770521,106.693466,8.0
-615,Xa Lộ Hà Nội - Cát Lái (Nhánh 615),df6e7a8ddffd8a54208f1b01,Ho Chi Minh City,arterial,10.800687,106.75473,8.0
-616,Phạm Văn Đồng - Phan Văn Trị (Nhánh 616),9984b3b67f03f6a0a23284fc,Ho Chi Minh City,arterial,10.822371,106.702075,8.0
-617,Cộng Hòa - Hoàng Hoa Thám (Nhánh 617),b78653af997d81dc68f0321a,Ho Chi Minh City,arterial,10.81441,106.650828,8.0
-618,Trường Chinh - Tây Thạnh (Nhánh 618),31250ca56c939df967117a90,Ho Chi Minh City,arterial,10.812247,106.637213,8.0
-619,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 619),d1c956f6d170b4711797f03d,Ho Chi Minh City,arterial,10.740016,106.692579,8.0
-620,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 620),10a152708be9a95ac850f8aa,Ho Chi Minh City,arterial,10.803679,106.676809,8.0
-621,Đinh Bộ Lĩnh - Bạch Đằng (Nhánh 621),4213dc140b4cddf87e080f00,Ho Chi Minh City,arterial,10.800819,106.721806,8.0
-622,Quang Trung - Thống Nhất (Nhánh 622),996e7dd5877e5ff6cdcc7419,Ho Chi Minh City,arterial,10.8373,106.664105,8.0
-623,Lê Văn Việt - Man Thiện (Nhánh 623),69e54272200a6a1ed9d25954,Ho Chi Minh City,arterial,10.845115,106.782525,8.0
-626,Ba Tháng Hai - Lê Hồng Phong (Nhánh 626),5e4828b9b3e5d485d02f3734,Ho Chi Minh City,arterial,10.76233,106.66188,8.0
-627,Hùng Vương - Nguyễn Tri Phương (Nhánh 627),1557b6fad138dd0193c72e98,Ho Chi Minh City,arterial,10.770956,106.660024,8.0
-628,Hồng Bàng - Thuận Kiều (Nhánh 628),92f2934a45c9a6d421ca63ec,Ho Chi Minh City,arterial,10.746169,106.640673,8.0
-629,Võ Thị Sáu - Hai Bà Trưng (Nhánh 629),212bf5d3639c677351e832a5,Ho Chi Minh City,arterial,10.783988,106.682815,8.0
-630,Mai Chí Thọ - Đồng Văn Cống (Nhánh 630),e180e176d096e27f3c63e592,Ho Chi Minh City,arterial,10.796536,106.754879,8.0
-631,Nguyễn Hữu Cảnh - Tôn Đức Thắng (Nhánh 631),22b4879c5c7b59556010c7b5,Ho Chi Minh City,arterial,10.776595,106.724519,8.0
-632,Kinh Dương Vương - Tên Lửa (Nhánh 632),ed63a7368eeeb74082534954,Ho Chi Minh City,arterial,10.750154,106.610201,8.0
-633,Lý Thường Kiệt - Bắc Hải (Nhánh 633),bdfd8963b5d62e4cd4ce9489,Ho Chi Minh City,arterial,10.755805,106.676528,8.0
-634,Phan Đăng Lưu - Hoàng Hoa Thám (Nhánh 634),52ef3ee6609e851262149ed9,Ho Chi Minh City,arterial,10.790983,106.679237,8.0
-635,Võ Văn Ngân - Đặng Văn Bi (Nhánh 635),9c67c3d10a38d038cf4f854a,Ho Chi Minh City,arterial,10.859381,106.784018,8.0
-636,Nguyễn Oanh - Phan Văn Trị (Nhánh 636),adffedbcf0fa32daf90d66cc,Ho Chi Minh City,arterial,10.842574,106.682611,8.0
-637,Trần Hưng Đạo - Nguyễn Văn Cừ (Nhánh 637),e0a2a99ce186f40f1c40ed8a,Ho Chi Minh City,arterial,10.762558,106.691327,8.0
-638,An Dương Vương - Trần Phú (Nhánh 638),30b3752dbc20b59b01ca50b9,Ho Chi Minh City,arterial,10.762271,106.67415,8.0
-640,Nguyễn Thị Minh Khai - Cách Mạng Tháng Tám (Nhánh 640),ec05ed9c088b4e7b3399986a,Ho Chi Minh City,arterial,10.774334,106.690699,8.0
-642,Điện Biên Phủ - Đinh Tiên Hoàng (Nhánh 642),4e45cda6c842b405d5b00a7d,Ho Chi Minh City,arterial,10.785468,106.695555,8.0
-644,Bạch Đằng - Xô Viết Nghệ Tĩnh (Nhánh 644),a8f43ce81ba5b7012645198c,Ho Chi Minh City,arterial,10.787556,106.711713,8.0
-645,Lê Duẩn - Pasteur (Nhánh 645),3838ee20a2181c75c0a5cd7b,Ho Chi Minh City,arterial,10.771591,106.689371,8.0
-646,Nguyễn Văn Trỗi - Trương Quốc Dung (Nhánh 646),17b6d5506692cc1400180ec0,Ho Chi Minh City,arterial,10.796839,106.685636,8.0
-647,Hoàng Sa - Trần Quang Diệu (Nhánh 647),f3bdb3c45cb2ebb48c02b91c,Ho Chi Minh City,arterial,10.795547,106.666936,8.0
-648,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng (Nhánh 648),8a34536e101722f4e615dd8a,Ho Chi Minh City,arterial,10.779683,106.692726,8.0
-650,Võ Văn Kiệt - Ký Con (Nhánh 650),28589282474ce40e7ac7339b,Ho Chi Minh City,arterial,10.76024,106.697703,8.0
-652,Xa Lộ Hà Nội - Cát Lái (Nhánh 652),4e5bea707869cf39b1e6440d,Ho Chi Minh City,arterial,10.8056,106.744353,8.0
-653,Phạm Văn Đồng - Phan Văn Trị (Nhánh 653),6ce7071a1562c6f44bfb4ae3,Ho Chi Minh City,arterial,10.820643,106.688028,8.0
-654,Cộng Hòa - Hoàng Hoa Thám (Nhánh 654),5869950c2814ac5befe824bf,Ho Chi Minh City,arterial,10.796689,106.649758,8.0
-655,Trường Chinh - Tây Thạnh (Nhánh 655),babfa81c3f7ebbb36b9e6e2f,Ho Chi Minh City,arterial,10.801456,106.633024,8.0
-656,Nguyễn Văn Linh - Nguyễn Hữu Thọ (Nhánh 656),f0069b42233b4b1295441a7a,Ho Chi Minh City,arterial,10.730343,106.70682,8.0
-657,Hoàng Văn Thụ - Nguyễn Văn Trỗi (Nhánh 657),192e7d7d3d612f9221ec935e,Ho Chi Minh City,arterial,10.800691,106.682113,8.0
+﻿stt,Location,CamID,latitude,longitude,"latitude, longitude",Phường
+1,Trần Quang Khải - Trần Khắc Chân,662b86c41afb9c00172dd31c,10.79189,106.691054,"10.7918902432446, 106.691054105759","Phường Tân Định, Quận 1"
+2,Tô Ngọc Vân - TX25,5a6065c58576340017d06615,10.87971,106.677986,"10.8797100979598, 106.677986383438",Phường Thới An
+3,Quốc Lộ 13 - cầu Ông Dầu,6623f4df6f998a001b2528eb,10.836193,106.71381,"10.8361932799182, 106.713809967041",Phường Hiệp Bình
+4,Cách Mạng Tháng Tám - Bùi Thị Xuân,662b7ce71afb9c00172dc676,10.772645,106.691065,"10.7726452614037, 106.691064834595",Phường Bến Thành
+5,Nguyễn Thị Định - Đường D,583f969161cfea0012cf68f7,10.764682,106.781423,"10.7646823693643, 106.781423091888",Phường Cát Lái
+7,Phan Đăng Lưu - Thích Quảng Đức,6623e8da6f998a001b2524a6,10.803293,106.684531,"10.8032933150268, 106.684530973434",
+9,Điện Biên Phủ - Nguyễn Gia Trí,66b1c426779f74001867415e,10.80108,106.715162,"10.8010801833774, 106.715161800385",
+10,Quốc lộ 1 - Rạch Láng Le 1,595dc29c3dcfc400106f2894,10.861082,106.686398,"10.8610818827294, 106.686397790909",Phường An Phú Đông
+11,Lũy Bán Bích - Thoại Ngọc Hầu,6623f1046f998a001b2527db,10.782152,106.636122,"10.7821519725547, 106.636122465134",
+12,Cao tốc LTDG - Võ Chí Công,5d9de4de766c880017188cbb,10.796828,106.790763,"10.796827763223, 106.790762543678",
+13,Võ Nguyên Giáp - Đỗ Xuân Hợp (1),6623f44f6f998a001b2528aa,10.834971,106.765716,"10.8349709243101, 106.765716075897",
+14,Kinh Dương Vương - Tên Lửa,662a881a1afb9c00172d2559,10.738052,106.614976,"10.7380517925754, 106.61497592926",
+15,Nguyễn Chí Thanh - Thuận Kiều,662b4ecb1afb9c00172d8692,10.757678,106.658009,"10.7576784340111, 106.658009290695",
+16,Lý Tự Trọng - Chu Mạnh Trinh,5deb576d1dc17d7c5515ad15,10.781944,106.704602,"10.781944, 106.704602",
+17,Trường Sơn - Ga Quốc Nội 2,5b8b2323ca057700116405d0,10.812947,106.664903,"10.8129465937096, 106.664902567863",
+18,Ba Tháng Hai – Sư Vạn Hạnh,63ae7a50bfd3d90017e8f2b2,10.769778,106.67083,"10.7697784337206, 106.670830249786",Phường Hòa Hưng
+19,Phan Đăng Lưu - Lê Văn Duyệt,587ee0ecb807da0011e33d50,10.801997,106.696483,"10.8019970541825, 106.696482896805",
+20,Võ Văn Kiệt - Huỳnh Mẫn Đạt,56de42f611f398ec0c48128f,10.75196,106.677198,"10.751960277381, 106.677197813988",Phường An Đông
+21,Nút giao Mỹ Thủy 2,56de42f611f398ec0c4812a2,10.770116,106.775587,"10.7701157, 106.7755866",
+22,Huỳnh Tấn Phát - Phạm Hữu Lầu,63bd1f21bfd3d90017ec3d04,10.705204,106.73766,"10.7052043577961, 106.737660169601",phường Phú Thuận
+23,Phổ Quang - Hoàng Minh Giám,58df4d95dc195800111e04b9,10.807962,106.672879,"10.8079619154301, 106.672879457474",
+24,Quốc lộ 1 - KCX Linh Trung 1,586e28a0f9fab7001111b0b3,10.872082,106.768742,"10.872081942303, 106.768741607666",Phường Linh Xuân
+25,Quốc lộ 1 - Đường Lê Thị Riêng 2,595dd8463dcfc400106f28b2,10.861925,106.654415,"10.8619248135124, 106.654415130615",Phường Thới An
+26,Lê Văn Sỹ - Huỳnh Văn Bánh,5d8cd4ee766c880017188946,10.79189,106.671453,"10.7918902432446, 106.671452522278",
+27,Đinh Tiên Hoàng - Trần Quang Khải,662b81721afb9c00172dcc44,10.792744,106.696075,"10.7927439077816, 106.696075201035",
+28,Nguyễn Thị Định - Đường C (20-1),67e217c43215f90017863bc8,10.76591,106.779567,"10.7659102810674, 106.77956700325",Phường Cát Lái
+29,Vòng xoay Mũi Tàu Phú Lâm,66b1c3c2779f740018674125,10.745942,106.624095,"10.7459416028391, 106.624095439911",
+30,Nguyễn Văn Quỳ - Cầu Phú Mỹ,5a8269c45058170011f6eae4,10.740961,106.736737,"10.7409610852775, 106.7367374897",
+31,Võ Văn Kiệt - Nguyễn Tri Phương 2,56de42f611f398ec0c481297,10.750369,106.670079,"10.7503686605855, 106.670079231262",Phường An Đông
+32,Võ Văn Kiệt - Cầu Chữ Y 1,5822adbbedeb6c0012a2d65f,10.751944,106.683673,"10.7519444666594, 106.68367266655",Phường Chợ Quán
+33,Nguyễn Thị Minh Khai - Bà Huyện Thanh Quan,6623e43e6f998a001b2522cb,10.774806,106.690625,"10.7748059039379, 106.690624952316",
+34,Đinh Tiên Hoàng - Võ Thị Sáu 1,5a823e425058170011f6eaa4,10.791774,106.695775,"10.7917743133057, 106.695774793625",
+35,Tôn Đức Thắng - Hàm Nghi,649da72ca6068200171a6dbb,10.771075,106.706353,"10.7710748334425, 106.70635342598","Sài Gòn, Thủ Đức"
+37,Lê Văn Duyệt - Vũ Huy Tấn,63b65fd8bfd3d90017eaa461,10.795653,106.696086,"10.7956526724414, 106.696085929871",
+38,Cộng Hòa - Tân Kỳ Tân Quý,5deb576d1dc17d7c5515ad08,10.804136,106.637651,"10.8041364085074, 106.637651324272",phường Tân Bình
+39,Quốc lộ 1 - Ngã 4 Ga,595dc70d3dcfc400106f289a,10.861524,106.679971,"10.8615244216871, 106.679971218109",Phường An Phú Đông
+40,Điện Biên Phủ - Nguyễn Văn Thương 2,587c79e9b807da0011e33d3d,10.798688,106.718965,"10.7986878751089, 106.718965172768",
+41,Nguyễn Hữu Cảnh - Ngô Tất Tố 2 (Dạ cầu Thủ Thiêm 1),63b65ebebfd3d90017eaa3ae,10.789145,106.716428,"10.7891447995017, 106.71642780304",
+42,Cộng Hòa - Út Tịch 2,5874769eb807da0011e33cec,10.800105,106.657757,"10.8001053464053, 106.657757163048",
+43,Cầu Tân Thuận 2 - Q7 (Q7-Q4),63b660f8bfd3d90017eaa4ea,10.752651,106.723863,"10.7526506780822, 106.723862886429",phường Tân Thuận
+44,Nguyễn Hữu Cảnh - Tôn Đức Thắng,58af994abd82540010390c37,10.782632,106.706235,"10.7826315159924, 106.706235408783",
+45,Hoàng Minh Giám - Hồng Hà,56df8108c062921100c143db,10.809032,106.674022,"10.8090315732439, 106.674022078514",
+46,Hậu Giang - Hẻm 491,63ae7903bfd3d90017e8f211,10.748392,106.63667,"10.7483923035435, 106.636669635773",
+47,Hoàng Diệu - Đoàn Văn Bơ 2,63ae7727bfd3d90017e8f14a,10.763507,106.703719,"10.7635071530486, 106.703719496727",phường Xóm Chiếu
+48,Phạm Văn Đồng - Kha Vạn Cân 2,6623f36e6f998a001b252878,10.866392,106.762283,"10.8663923069317, 106.762282848358",
+49,Nút giao Hàng Xanh 5 (Hàng Xanh - Bạch Đằng),5d9ddec9766c880017188c9c,10.802155,106.711503,"10.8021551350728, 106.711503267288",
+50,Điện Biên Phủ - Pasteur,5deb576d1dc17d7c5515ad02,10.784344,106.691553,"10.7843441648872, 106.691552996635",
+51,Cách Mạng Tháng Tám - Trường Sơn,63ae79aabfd3d90017e8f26a,10.785862,106.66649,"10.7858618271433, 106.6664904356",
+52,Phạm Văn Đồng - Đường 20 (hướng đi Sân bay),5d8cd7fb766c880017188954,10.829138,106.722366,"10.8291383225836, 106.722366213799",
+53,Võ Văn Kiệt - Hải Thượng Lãn Ông 1,56de42f611f398ec0c481293,10.749979,106.663234,"10.7499786604875, 106.663234233856",Chợ Lớn
+54,Nơ Trang Long - Chu Văn An,63b66089bfd3d90017eaa4bd,10.811408,106.695753,"10.8114079914905, 106.695753335953",
+55,Cách Mạng Tháng Tám - Bắc Hải,63ae798abfd3d90017e8f255,10.78691,106.664624,"10.7869104851311, 106.664623618126",
+56,Nguyễn Văn Linh - Trịnh Quang Nghị 2,662a89f51afb9c00172d26ef,10.7024,106.634653,"10.7024001433989, 106.634652614593",Xã Bình Hưng
+57,Nguyễn Thị Minh Khai - Đinh Tiên Hoàng 2,6318287ec9eae60017a19f36,10.786563,106.701729,"10.7865626894198, 106.701729297638",
+58,Trần Văn Giàu - Cầu Đôi,6792f3058c5ed4001b27f58e,10.793766,106.505671,"10.7937661942221, 106.505670547485",
+59,Cộng Hòa - Út Tịch 1,587476e3b807da0011e33cee,10.801038,106.657854,"10.8010380283306, 106.657853722572",
+60,Cầu Phú Hữu 2,597bf277faa7ea0011c7c29f,10.820892,106.792302,"10.8208924000834, 106.792302131653",
+61,Cao tốc LTDG - Đỗ Xuân Hợp 2,5d9de49d766c880017188cb9,10.79618,106.778848,"10.7961796195486, 106.778848171234",
+62,Nút giao Hàng Xanh 7 (Hàng Xanh - Cầu Văn Thánh),5d9ddf49766c880017188ca0,10.801228,106.712324,"10.8012277259948, 106.712324023247",
+63,Lý Thái Tổ - Nguyễn Đình Chiểu,63ae763bbfd3d90017e8f0c4,10.766258,106.67878,"10.7662581006404, 106.678780317307",
+64,Phạm Văn Đồng - Kha Vạn Cân (hướng đi Sân bay),5d8cda6a766c880017188960,10.841193,106.743824,"10.8411932946322, 106.743823885918",
+65,Cách Mạng Tháng Tám - Sương Nguyệt Anh,662b80e81afb9c00172dcbec,10.773035,106.690051,"10.7730352321784, 106.690050959587",
+66,Nút giao Nguyễn Thái Sơn 3 (Phạm Văn Đồng),56df84abc062921100c143e5,10.814222,106.679236,"10.8142217306645, 106.679236292839",
+67,Tùng Thiện Vương - Cao Xuân Dục,662a86a11afb9c00172d2410,10.745604,106.658567,"10.7456043005395, 106.65856719017",phường Phú Định
+68,Võ Văn Kiệt - Nguyễn Văn Cừ 1,56de42f611f398ec0c48128b,10.754321,106.686913,"10.7543213358374, 106.68691277504",Phường Cầu Ông Lãnh
+69,Nam Kỳ Khởi Nghĩa - Trần Quốc Toản,58e49ff8d9d6200011e0b9d4,10.786315,106.687224,"10.7863150164711, 106.687223911285",
+70,Đinh Tiên Hoàng - Võ Thị Sáu 2,5a8241105058170011f6eaa6,10.791922,106.695786,"10.7919218604929, 106.695785522461",
+71,Lê Duẩn - Mạc Đĩnh Chi,65e054fb6b18080018db6632,10.783216,106.701187,"10.7832164525575, 106.701187491417",
+72,Quốc lộ 50 - Cầu Ông Thìn (2),5a825ded5058170011f6ead7,10.648451,106.655831,"10.6484508725221, 106.655831336975",xã Hưng Long
+73,Trường Chinh - Xuân Hồng,5d8cdb0a766c880017188964,10.793713,106.651658,"10.7937134991298, 106.651657819748",phường Bảy Hiền
+76,Nút giao Mỹ Thủy (7),63b5503bbfd3d90017ea7ccc,10.769747,106.775082,"10.7697468141455, 106.775082349777",
+77,Võ Trần Chí - Trần Văn Giàu 1,662a873b1afb9c00172d2483,10.748951,106.581824,"10.7489509551128, 106.581823825836",
+78,Nguyễn Hữu Cảnh - Ung Văn Khiêm,66b1c3fa779f740018674146,10.799131,106.723707,"10.7991305062692, 106.723707318306",
+79,Lý Tự Trọng - Hai Bà Trưng 2,5ad0621c98d8fc001102e268,10.779138,106.702335,"10.779137682017, 106.702335476875",
+80,Ba Tháng Hai - Thành Thái,66b1c34d779f74001867409e,10.768197,106.666828,"10.768197450899, 106.666828393936",Phường Hòa Hưng
+81,Quốc lộ 1 - BQB Cầu vượt Quang Trung A (hướng An Sương),595f89323dcfc400106f28ee,10.8532,106.633172,"10.8532003648042, 106.633172035217",Phường Trung Mỹ Tây
+82,Võ Văn Kiệt - Nguyễn Văn Cừ 2,56de42f611f398ec0c48128c,10.753642,106.686441,"10.7536415, 106.6864407",Phường Chợ Quán
+83,625 Quang Trung,662b558c1afb9c00172d8ed2,10.835129,106.663492,"10.8351289878163, 106.663491725922",
+84,Võ Nguyên Giáp - Đỗ Xuân Hợp (2),6623f4836f998a001b2528bf,10.835498,106.765802,"10.8354978023394, 106.765801906586",
+85,Nam Kỳ Khởi Nghĩa - Hàm Nghi,662b85bf1afb9c00172dd149,10.770969,106.701128,"10.7709694352995, 106.701128482819",phường Bến Thành
+87,Tỉnh lộ 43 - KCX Linh Trung 2,63b54bcdbfd3d90017ea7a82,10.896083,106.718091,"10.8960825794088, 106.718090772629",
+88,Võ Văn Kiệt - Cầu Chà Và 2 (trên cầu),5b5995a3fd4edb0019c7d9ab,10.74894,106.660348,"10.7489404145267, 106.660348176956",Chợ Lớn
+89,Nam Kỳ Khởi Nghĩa - Võ Văn Tần,662b81a31afb9c00172dcc65,10.780539,106.693908,"10.7805394362678, 106.693907976151",
+90,Ba Tháng Hai - Lý Thường Kiệt 3,63ae7b3cbfd3d90017e8f34d,10.764461,106.659817,"10.7644610285251, 106.659817099571",Phường Diên Hồng
+91,Nguyễn Thị Minh Khai - Đinh Tiên Hoàng 1,6318283cc9eae60017a19f0c,10.78661,106.701568,"10.7866101161314, 106.701568365097",
+92,Nút giao Ngã sáu Cộng Hòa,5deb576d1dc17d7c5515acf6,10.765389,106.681205,"10.765389, 106.681205",
+93,Cầu vượt Sóng Thần 2,58746488b807da0011e33cd7,10.874305,106.748507,"10.8743050851613, 106.748507022858",Phường Dĩ An
+94,Hai Bà Trưng - Nguyễn Đình Chiểu,662b83381afb9c00172dcf88,10.784692,106.695957,"10.7846919631639, 106.695957183838",
+95,Mai Chí Thọ - Nguyễn Cơ Thạch 1,5822b5ededeb6c0012a2d66a,10.773214,106.722586,"10.7732144077704, 106.722586154938",
+96,Cầu Tân Thuận 2 - Q7 (Q4-Q7),63b660d8bfd3d90017eaa4d5,10.752767,106.723691,"10.7527666230832, 106.723691225052",phường Tân Thuận
+97,Ba Tháng Hai - Lê Đại Hành 1,63ae7be0bfd3d90017e8f3a8,10.762153,106.657199,"10.7621527500863, 106.657199263573",Phường Minh Phụng
+98,Lê Văn Việt - Hoàng Hữu Nam,63b54a04bfd3d90017ea783e,10.850208,106.813674,"10.8502078623705, 106.813673973084",
+99,Cầu Sài Gòn (10),63b54f70bfd3d90017ea7c86,10.798561,106.726277,"10.7985614089434, 106.726276874542",
+101,Quốc lộ 1 - An Phú Đông 13 (1),595d984b3dcfc400106f2879,10.858953,106.711691,"10.8589534719139, 106.711691021919",Phường An Phú Đông
+102,Quốc lộ 1 - ĐH Nông Lâm 2,58746122b807da0011e33cc5,10.86723,106.787941,"10.8672299545045, 106.787940859795",Phường Linh Xuân
+103,11B Nguyễn Bỉnh Khiêm,662b7f651afb9c00172dc992,10.785735,106.7066,"10.7857353555811, 106.706600189209",
+104,Khánh Hội - Vĩnh Hội,63ae768dbfd3d90017e8f0f1,10.756003,106.701279,"10.7560025246799, 106.701278686523",phường Vĩnh Hội
+105,Nguyễn Văn Linh - Trịnh Quang Nghị,662a89ae1afb9c00172d26ad,10.702822,106.633537,"10.7028218314316, 106.633536815643",Xã Bình Hưng
+106,Lã Xuân Oai - Đường D2,63b54a70bfd3d90017ea7862,10.83005,106.80449,"10.830049838744, 106.804490089417",
+107,Trường Chinh - Phan Văn Hớn 2 (HM-Q12),58e49783d9d6200011e0b9ce,10.827473,106.624761,"10.8274733494884, 106.624760627747",phường Đông Hưng Thuận
+108,Nút giao Ngã sáu Phù Đổng 1,5deb576d1dc17d7c5515ad0c,10.771135,106.693342,"10.771135, 106.693342",
+109,Quốc Lộ 22 - Nguyễn Thị Sóc,6623ef776f998a001b252768,10.861672,106.602745,"10.8616719345273, 106.602745056152",xã Xuân Thới Sơn
+110,Quốc lộ 1 - Đinh Đức Thiện 2,58d7bbf2c1e33c00112b3216,10.665627,106.570795,"10.6656266937569, 106.570794582367",Xã Bình Chánh
+111,Tên Lửa - Đường số 7,662b51d21afb9c00172d89bf,10.752197,106.610255,"10.7521974381054, 106.610255241394",
+112,Quốc lộ 1 - Bình Đường,58746295b807da0011e33ccb,10.875222,106.758962,"10.8752217316573, 106.758962273598",Phường Dĩ An
+113,Nguyễn Văn Linh - Huỳnh Tấn Phát 2,585b2baec3f96200127dc508,10.752545,106.728331,"10.7525452734972, 106.728331446648",Phường Tân Thuận
+114,BX Miền Đông - Đinh Bộ Lĩnh 2,5a606cd08576340017d06628,10.814411,106.710055,"10.8144114199963, 106.71005487442",
+115,Nguyễn Trãi - Nguyễn Cư Trinh,662b80051afb9c00172dcaf6,10.762527,106.68658,"10.7625269242757, 106.686580181122",
+117,Phan Đăng Lưu - Phan Xích Long,587ee2aeb807da0011e33d52,10.802039,106.683233,"10.8020392090947, 106.683232784271",
+118,Lê Trọng Tấn - Đường Kênh 19/5,662b5bc31afb9c00172d92e2,10.809342,106.615083,"10.8093424582973, 106.615083217621",
+119,Hoàng Văn Thụ - Bùi Thị Xuân,662b58401afb9c00172d90f5,10.800648,106.661823,"10.8006480938667, 106.661823391914",
+120,Cầu vượt Sóng Thần 1,5874644cb807da0011e33cd5,10.875806,106.750985,"10.8758064874328, 106.750985383987",Phường Tam Bình
+121,Trần Hưng Đạo - Ký Con,662b867b1afb9c00172dd250,10.769299,106.696676,"10.7692988698081, 106.696676015854",
+122,Cầu Phú Hữu 1,597bf0b8faa7ea0011c7c293,10.816393,106.79168,"10.8163926125139, 106.791679859161",
+123,Mai Chí Thọ - Tố Hữu (C6),5a10c79f02eb490011a0b0dd,10.771317,106.716717,"10.7713172490313, 106.716717481613",
+124,Lê Duẩn - Phạm Ngọc Thạch,662b83ff1afb9c00172dcffb,10.780508,106.698189,"10.7805078178228, 106.698188781738",
+125,Nguyễn Thị Minh Khai - Mạc Đĩnh Chi,5deb576d1dc17d7c5515ad19,10.784426,106.699659,"10.784426, 106.699659",
+126,Nguyễn Trãi - Nguyễn Văn Cừ,5b6329fdfd4edb0019c7dc0b,10.759649,106.684375,"10.7596494601112, 106.684375405312",
+127,Tô Ký (Tỉnh lộ 15) - Đông Bắc,589add0fb3bf7600110283ae,10.855613,106.623339,"10.8556133114939, 106.623339056969",
+128,Võ Thị Sáu - Hai Bà Trưng,5deb576d1dc17d7c5515ad01,10.787859,106.691816,"10.7878590168447, 106.691815853119",
+129,Cầu Sài Gòn 9 (Bình Thạnh - Thủ Đức),58abbf72bd82540010390ba4,10.798561,106.72632,"10.7985614089434, 106.726319789886",
+130,Phạm Văn Đồng - Đào Trinh Nhất,6623f1f16f998a001b25281f,10.865065,106.759043,"10.865064709737, 106.759042739868",
+131,Nút giao Phú Nhuận 1 (Phan Đình Phùng),58ad6961bd82540010390be5,10.799046,106.680379,"10.7990461956223, 106.680378913879",
+132,Hoàng Hữu Nam - Đường D400,5a8257e25058170011f6eacd,10.870085,106.814098,"10.8700853140978, 106.814097762108",
+133,Điện Biên Phủ - Nguyễn Hữu Cảnh,5a606dbc8576340017d0662b,10.797818,106.721127,"10.7978184191454, 106.721127033234",
+134,Lê Đức Thọ - Hẻm 688,662b52a31afb9c00172d8b01,10.846467,106.670605,"10.846467192202, 106.670604944229",
+135,Cầu Sài Gòn 5 (dạ cầu Thủ Đức),58abbee5bd82540010390ba2,10.799162,106.729399,"10.7991621227557, 106.729398965836",
+136,Lê Văn Lương - Đường số 15,662a8ef41afb9c00172d2af2,10.744988,106.704326,"10.7449876687987, 106.704325675964",phường Tân Hưng
+137,Võ Nguyên Giáp - quay đầu An Phú (2),6623f5b56f998a001b25292f,10.802271,106.746608,"10.8022710610062, 106.746608018875",
+138,Ba Tháng Hai - Tạ Uyên,66b1c398779f7400186740e3,10.760198,106.653256,"10.7601975506409, 106.653256416321",phường Phú Thọ
+139,Kỳ Đồng - Bà Huyện Thanh Quan,6623e31e6f998a001b252250,10.781667,106.681677,"10.7816671586319, 106.681677103043",
+140,Lý Chính Thắng - Trương Định,5deb576d1dc17d7c5515acfe,10.782516,106.683689,"10.7825155824841, 106.683688759804",Phường Nhiêu Lộc
+141,Tỉnh Lộ 8 - Cầu Phú Cường,6792f3cf8c5ed4001b27f61e,10.977131,106.643643,"10.9771309811361, 106.643643379211",
+142,Quốc lộ 1 - Nguyễn Văn Linh,58d7b3e8c1e33c00112b3207,10.69015,106.595364,"10.6901498501196, 106.595363616943",Phường Bình Đông
+143,Nam Kỳ Khởi Nghĩa - Lý Chính Thắng,58e49e3dd9d6200011e0b9d1,10.788602,106.684788,"10.7886020312638, 106.6847884655",
+144,Lý Thường Kiệt - Lạc Long Quân,5d8cdc57766c88001718896e,10.790446,106.652473,"10.7904463853615, 106.652473211288",
+145,Hùng Vương - Nguyễn Chí Thanh,66f1266f538c780017c93579,10.760767,106.67406,"10.760766720521, 106.67405962944",
+146,Lê Văn Việt - Man Thiện,5ad0679598d8fc001102e274,10.845234,106.786707,"10.8452343413582, 106.786707043648",
+147,Nút giao Bốn Xã 3 (Lê Văn Quới),5a824b6c5058170011f6eaab,10.773842,106.621397,"10.773841521503, 106.621397137642",
+148,Mai Chí Thọ - Đồng Văn Cống 1,58175ac4edeb6c0012a2d5bb,10.78788,106.749607,"10.7878800952932, 106.749606728554",
+149,Âu Cơ - Thoại Ngọc Hầu,6623f0576f998a001b2527ac,10.785925,106.641583,"10.7859250629045, 106.641583442688",
+151,Võ Văn Kiệt - Cầu Ông Lãnh 1,56de42f611f398ec0c481288,10.763792,106.697652,"10.7637917349984, 106.697652339935",phường Cầu Ông Lãnh
+152,Lê Quang Định - Nơ Trang Long,5d8cd614766c88001718894a,10.808194,106.69519,"10.8081937627675, 106.69519007206",
+153,Nguyễn Oanh - Phan Văn Trị (2),5a824f975058170011f6eab8,10.831072,106.676913,"10.8310719980749, 106.676913499832",
+154,Nút giao Bốn Xã 1 (Bình Long),5a824c3e5058170011f6eaae,10.773884,106.621649,"10.7738836803625, 106.621649265289",
+155,Nút giao Công Trường Dân Chủ,5deb576d1dc17d7c5515acf9,10.777768,106.68202,"10.777768, 106.68202",Phường Xuân Hòa
+156,Nguyễn Hữu Cảnh - Ngô Tất Tố (Cầu Thủ Thiêm 1),587470c2b807da0011e33ce4,10.789203,106.715097,"10.7892027649838, 106.715097427368",
+157,Nguyễn Thị Định - Đường C (20-2),67e217ea3215f90017863bf1,10.766063,106.779546,"10.7660631109292, 106.779545545578",Phường Cát Lái
+159,Nam Kỳ Khởi Nghĩa - Nguyễn Du,662b7f251afb9c00172dc8bc,10.776787,106.697996,"10.7767873576075, 106.697995662689",
+160,Nguyễn Oanh - Lê Đức Thọ,6623ec826f998a001b252686,10.841936,106.676613,"10.8419361769392, 106.676613092422",
+161,Ba Tháng Hai - Lý Thường Kiệt,5deb576d1dc17d7c5515ad23,10.763649,106.659903,"10.763649, 106.659903",Phường Minh Phụng
+162,Phạm Văn Đồng - Lê Quang Định 1,587efb60b807da0011e33d5d,10.819275,106.689193,"10.8192748027252, 106.689192652702",
+163,Tô Ký (Tỉnh lộ 15) - Hẻm 146,589ad89eb3bf7600110283ac,10.848617,106.633612,"10.8486167661312, 106.633611917496",
+164,Trường Chinh - Phan Huy Ích 1,662b5adc1afb9c00172d925b,10.82358,106.629202,"10.8235795946401, 106.629202365875",phường Tân Sơn
+165,Đường hầm (Đầu hầm Tp Thủ Đức),5b87c386ca057700116404a6,10.771043,106.715902,"10.7710432140034, 106.715902090073",
+166,Võ Văn Ngân - Đặng Văn Bi,5d8cd542766c880017188948,10.851146,106.757981,"10.8511456568495, 106.757980585098",
+167,Phan Đăng Lưu - Hoàng Hoa Thám,6623e8406f998a001b252465,10.803177,106.692352,"10.8031773894881, 106.692352294922",
+168,Trường Chinh - Phạm Văn Bạch 2,5875cef0b807da0011e33d14,10.813463,106.632797,"10.8134629721378, 106.632796525955",phường Tây Thạnh
+169,Lý Tự Trọng - Hai Bà Trưng 1,5a823d555058170011f6eaa2,10.779111,106.702116,"10.7791113331904, 106.702115535736",
+170,Quốc lộ 1 - Đường 15 (1),595da2853dcfc400106f2883,10.860102,106.698827,"10.8601019727034, 106.698827147484",Phường An Phú Đông
+171,Hoàng Văn Thụ - Trần Quốc Hoàn,587c8183b807da0011e33d3f,10.801307,106.662269,"10.8013067666529, 106.662268638611",
+172,Đinh Tiên Hoàng - Nguyễn Đình Chiểu,5deb576d1dc17d7c5515ad06,10.788566,106.699558,"10.788566, 106.699558",
+173,90 Nguyễn Thái Sơn,662b54711afb9c00172d8d4f,10.816087,106.6801,"10.8160870038835, 106.680099964142",
+174,Nguyễn Văn Linh - Phạm Hùng 2,5a8279865058170011f6eaef,10.727574,106.67789,"10.7275738904052, 106.677889823914",Xã Bình Hưng
+175,Tháp Mười - Phạm Đình Hổ,662b4faa1afb9c00172d875e,10.749726,106.64948,"10.7497256871815, 106.649479866028",
+176,Võ Trần Chí - Trần Văn Giàu 2,662a87641afb9c00172d24b0,10.749225,106.58088,"10.7492250102216, 106.580879688263",
+177,Nút giao Mỹ Thủy 1,56de42f611f398ec0c4812a1,10.769926,106.774707,"10.769926, 106.7747069",
+178,Khánh Hội - Cầu Kênh Tẻ,63ae7669bfd3d90017e8f0d9,10.752872,106.70218,"10.7528720275909, 106.702179908752",phường Vĩnh Hội
+179,Nguyễn Thị Định - Thân Văn Nhiếp,63b65e6abfd3d90017eaa361,10.79033,106.754236,"10.7903304548658, 106.754236221313",Phường Bình Trưng
+180,Nguyễn Lương Bằng - Phạm Hữu Lầu,662a8fd41afb9c00172d2bac,10.70454,106.732371,"10.7045402040992, 106.732370853424",
+181,Trường Sơn - Phan Đình Giót,56f11afc3ac17b11001c504e,10.804874,106.664216,"10.8048741133609, 106.664215922356",
+182,Nguyễn Văn Linh - Huỳnh Tấn Phát 1,585b2b1ec3f96200127dc505,10.752883,106.728594,"10.7528825680397, 106.728594303131",phường Tân Thuận
+183,Nguyễn Văn Linh - Nguyễn Hữu Thọ (3),5a825b7d5058170011f6ead4,10.728201,106.700442,"10.7282010989927, 106.700441837311",Phường Tân Hưng
+184,Bạch Đằng - Lê Quang Định,5a6069238576340017d0661c,10.802619,106.698436,"10.8026188385378, 106.698435544968",
+185,Điện Biên Phủ - Nguyễn Bỉnh Khiêm,662b857b1afb9c00172dd106,10.792085,106.699739,"10.7920852162229, 106.699739098549",
+187,Cao Thắng – Võ Văn Tần 2,63ae75f9bfd3d90017e8f097,10.769072,106.683276,"10.769072262419, 106.683275699615",
+188,Nguyễn Tất Thành - Cầu Tân Thuận 1,63ae7829bfd3d90017e8f1ac,10.756435,106.719351,"10.7564346782916, 106.719351410866",phường Xóm Chiếu
+189,Nguyễn Thái Học - Phạm Ngũ Lão,65e0556b6b18080018db665e,10.768977,106.694638,"10.7689774034613, 106.694637537003",
+190,Nguyễn Thị Minh Khai - Nguyễn Bỉnh Khiêm 2,662b81eb1afb9c00172dcc85,10.788233,106.703939,"10.7882331590867, 106.703939437866",
+192,Xa lộ Hà Nội - Đường D1,63b54d27bfd3d90017ea7ae5,10.858195,106.787775,"10.8581948267685, 106.787774562836",
+193,Huỳnh Tấn Phát - Phú Thuận,662a8cc51afb9c00172d2938,10.7308,106.732006,"10.7307995207108, 106.732006072998",phường Tân Mỹ
+194,Võ Chí Công - Đường số 2,587654d3b807da0011e33d36,10.762548,106.767583,"10.7625480044979, 106.767582893372",
+195,Đường hầm (Đầu hầm Tp Thủ Đức),5990ffdbbec3b90016d2ad2d,10.770585,106.713402,"10.7705847317646, 106.713402271271",
+196,Nguyễn Văn Linh - Nguyễn Hữu Thọ (1),5a8259035058170011f6eacf,10.729123,106.700549,"10.7291234621994, 106.700549125671",Phường Tân Hưng
+197,Hưng Phú - Chánh Hưng 1,58744f1fb807da0011e33cbd,10.745968,106.668985,"10.7459679545654, 106.668984889984",phường Chánh Hưng
+198,Tỉnh lộ 43 - Chân cầu Gò Dưa,63b54cffbfd3d90017ea7ad0,10.873051,106.732392,"10.8730512767713, 106.732392311096",
+199,Hà Huy Giáp - Cầu Phú Long 1,589b4644b3bf7600110283ce,10.898421,106.693125,"10.8984214318454, 106.693124771118",
+200,Phạm Văn Đồng - Hiệp Bình (hướng đi Sân bay),5d8cd8e2766c880017188958,10.837405,106.732848,"10.8374050930507, 106.732848286629",
+201,Nguyễn Duy Trinh - Lã Xuân Oai,63b54938bfd3d90017ea77f6,10.805549,106.817161,"10.8055485847835, 106.817160844803",
+202,Quốc Lộ 1 - Tô Ký,6623ebd76f998a001b25264d,10.852231,106.626456,"10.8522309658882, 106.626455783844",Phường Trung Mỹ Tây
+204,Ung Văn Khiêm - Nguyễn Gia Trí (D2),586e2995f9fab7001111b0b5,10.807519,106.716396,"10.8075192972885, 106.716395616531",
+205,Phạm Văn Đồng - Tô Ngọc Vân (hướng đi Bình Dương),5d8cd98d766c88001718895a,10.853395,106.751463,"10.8533952979021, 106.751462817192",
+206,Quang Trung - Phan Huy Ích,6623ee666f998a001b252726,10.844297,106.640124,"10.8442965283387, 106.640124320984",
+207,Nguyễn Thị Minh Khai - Phạm Ngọc Thạch,662b84c11afb9c00172dd0b5,10.781783,106.696934,"10.7817830924671, 106.696933507919",
+208,Hương Lộ 2 - Mã Lò,662b51201afb9c00172d889a,10.765447,106.60414,"10.7654465210122, 106.60413980484",
+209,Nút giao Thủ Đức (Võ Văn Ngân),56df8198c062921100c143dd,10.849275,106.773784,"10.8492753334826, 106.773784160614",
+210,Mai Chí Thọ - Đồng Văn Cống 2,56de42f611f398ec0c481282,10.787685,106.749945,"10.7876851195878, 106.74994468689",
+211,Quang Trung - Tân Sơn,5a6066608576340017d06617,10.839439,106.647216,"10.839438820585, 106.647216081619",
+212,Phan Đình Phùng - Nguyễn Trọng Tuyển,6623ea416f998a001b25260a,10.797191,106.681151,"10.7971913554037, 106.681151390076",
+213,Lê Văn Sỹ - Trần Quang Diệu,662b872d1afb9c00172dd36a,10.787812,106.67789,"10.7878115903301, 106.677889823914",
+214,Nguyễn Thị Minh Khai - Nguyễn Thượng Hiền,6623e4b06f998a001b2522f1,10.770379,106.686387,"10.7703792050172, 106.686387062073",
+215,Mai Chí Thọ - Võ Nguyên Giáp (Cát Lái cầu B),56de42f611f398ec0c48127e,10.806255,106.754065,"10.8062546704304, 106.754064559937",
+216,Quốc lộ 1 - Đường Tô Ngọc Vân 1,595dd3a63dcfc400106f28a7,10.861767,106.671018,"10.8617667641718, 106.671018004417",Phường Thới An
+217,Trường Sơn - Ga Quốc Nội 1,56f8d743025e9511002786c5,10.812868,106.664929,"10.8128675561166, 106.664929389954",
+218,Nguyễn Văn Linh - Quốc lộ 50 (2),5a8266105058170011f6eadf,10.719077,106.655762,"10.7190774577163, 106.655761599541",Xã Bình Hưng
+219,Trường Chinh - Phan Huy Ích 2,662b5afe1afb9c00172d9284,10.822726,106.629814,"10.8227260178037, 106.629813909531",phường Tây Thạnh
+220,Vĩnh Lộc - Nguyễn Thị Tú 1,5a82602c5058170011f6ead9,10.813579,106.579174,"10.8135788937036, 106.579173803329",
+221,Huỳnh Tấn Phát - Lưu Trọng Lư 2,585b2980c3f96200127dc502,10.755128,106.727993,"10.755127675229, 106.727993488312",phường Tân Thuận
+222,Nguyễn Thị Minh Khai - Nguyễn Thiện Thuật,56de42f611f398ec0c481284,10.76649,106.682482,"10.7664899801327, 106.682481765747",
+223,Bạch Đằng - Đặng Văn Sâm,662b56c51afb9c00172d9071,10.814649,106.671742,"10.8146485314923, 106.671742200851",
+224,Ba Tháng Hai - Lê Hồng Phong 1,63ae7a08bfd3d90017e8f285,10.771096,106.673266,"10.7710959130666, 106.673265695572",Phường Hòa Hưng
+225,Nguyễn Văn Linh - đường số 1,662a8b061afb9c00172d27d7,10.723273,106.660874,"10.7232729964823, 106.660873889923",Xã Bình Hưng
+226,Phan Đăng Lưu - Nơ Trang Long,587ee7d7b807da0011e33d55,10.803188,106.694852,"10.8031879281753, 106.694852113724",
+227,Nguyễn Thị Minh Khai - Hai Bà Trưng,5deb576d1dc17d7c5515ad17,10.782987,106.698076,"10.782987, 106.698076",
+228,Lê Văn Quới - Mã Lò,662b51a41afb9c00172d8926,10.776397,106.601007,"10.7763973916927, 106.601006984711",
+229,Nguyễn Tất Thành - Lê Văn Linh,63ae7893bfd3d90017e8f1e1,10.764345,106.707346,"10.7643450880206, 106.707345843315",phường Xóm Chiếu
+230,đường dẫn cao tốc Thành Phố Hồ Chí Minh - Trung Lương - Tân Túc 1,662a8b9e1afb9c00172d284d,10.688284,106.585783,"10.6882837981823, 106.585782766342",Xã Tân Nhựt
+231,Trần Hưng Đạo - Nguyễn Thái Học 1,5a823ba75058170011f6ea9e,10.76825,106.695769,"10.7682501504601, 106.695769429207",
+232,Trường Chinh - Nguyễn Hồng Đào,662b5a401afb9c00172d91fc,10.798024,106.643729,"10.7980239271457, 106.6437292099",phường Tân Bình
+233,Trường Sơn - Ga Quốc Tế,56df8544c062921100c143e6,10.813632,106.665364,"10.8136315853096, 106.665363907814",
+234,Quốc lộ 1 - Cầu vượt Tân Thới Hiệp 2,595ddb493dcfc400106f28b6,10.862088,106.649732,"10.8620881310764, 106.649731993675",Phường Tân Thới Hiệp
+235,An Dương Vương - Nguyễn Văn Cừ,66b1c1f2779f740018673f0d,10.761104,106.683179,"10.7611040058688, 106.683179140091",
+236,QL 22 - Giáp Hải,589b4379b3bf7600110283c9,10.971338,106.481676,"10.9713380309812, 106.481675505638",xã Tân An Hội
+237,Nguyễn Thái Sơn - Nguyễn Văn Nghi 2,5a60604f8576340017d0660b,10.824317,106.686376,"10.8243172516762, 106.686376333237",
+238,Phạm Văn Đồng - Tô Ngọc Vân (hướng đi Sân bay),5d8cd9cb766c88001718895c,10.853601,106.751318,"10.8536007677866, 106.751317977905",
+239,Lý Thái Tổ - Hồ Thị Kỷ,6623e6b86f998a001b2523b8,10.766964,106.676345,"10.7669642785384, 106.676344871521",
+240,Đinh Bộ Lĩnh - Nguyễn Xí,5a8256315058170011f6eac9,10.813358,106.709567,"10.8133575888573, 106.709566712379",
+242,Nam Kỳ Khởi Nghĩa - Điện Biên Phủ 2,58af8d68bd82540010390c2e,10.783338,106.6907,"10.7833376554873, 106.690700054169",
+243,Lê Lai - Phan Chu Trinh,65e0552f6b18080018db6647,10.771707,106.697888,"10.7717072215258, 106.697888374329",
+244,Quốc lộ 1 - Đường Vườn Lài 1,595da7783dcfc400106f2888,10.860734,106.691998,"10.8607341730882, 106.691998243332",Phường An Phú Đông
+245,Vòng xoay Phú Lâm (2),66b1c22f779f740018673f6e,10.753631,106.633923,"10.7536309389593, 106.633923053741",
+246,Huỳnh Tấn Phát - cầu Tân Thuận 1,662a8e121afb9c00172d2a3f,10.755423,106.723868,"10.7554228054478, 106.723868250847",phường Tân Thuận
+247,Lê Trọng Tấn - Tây Thạnh,662b5be91afb9c00172d939b,10.808246,106.618774,"10.8082464553192, 106.618773937225",
+249,Cách Mạng Tháng Tám - Tô Hiến Thành,63ae7966bfd3d90017e8f240,10.782879,106.672096,"10.7828791919741, 106.672096252441",
+250,Trần Hưng Đạo - Trần Phú,662b4efc1afb9c00172d86bc,10.752566,106.667848,"10.7525663544172, 106.667847633362",
+252,Trần Quốc Thảo - Kỳ Đồng,662b87551afb9c00172dd43a,10.784897,106.683104,"10.7848974801384, 106.683104038239",
+253,Nút giao Ngã sáu Nguyễn Tri Phương,5deb576d1dc17d7c5515ad21,10.759539,106.668851,"10.759539, 106.668851",
+254,Võ Văn Kiệt - Cầu Ông Lãnh 2,56de42f611f398ec0c481289,10.763902,106.698285,"10.7639024056841, 106.698285341263",phường Bến Thành
+255,Nút giao Phú Nhuận 2 (Phan Đăng Lưu),58ad69c4bd82540010390be7,10.79931,106.680368,"10.7993096663153, 106.680368185043",
+256,Võ Nguyên Giáp - quay đầu An Phú (1),6623f5876f998a001b25291a,10.802134,106.745932,"10.8021340576256, 106.745932102203",
+257,Hai Bà Trưng - Trần Quốc Toản,6623e2e16f998a001b252233,10.789909,106.68938,"10.7899088890498, 106.689380407333",
+258,Nguyễn Duy Trinh - Bưng Ông Thoàn,63b54898bfd3d90017ea77ae,10.791205,106.796894,"10.7912052020479, 106.796894073486",
+259,Đỗ Xuân Hợp - Tây Hòa,63b549b8bfd3d90017ea782c,10.824433,106.769192,"10.8244331690453, 106.769192218781",
+260,Trường Chinh - Tân Hải,662b5b271afb9c00172d9296,10.799942,106.64021,"10.7999419950356, 106.640210151672",phường Tân Bình
+261,Trần Văn Giàu - Nguyễn Cửu Phú,662a87df1afb9c00172d2522,10.747855,106.585021,"10.7478547321893, 106.585021018982",
+262,Trần Hưng Đạo - Nguyễn Thái Học 2,5a823bd55058170011f6eaa0,10.767533,106.695861,"10.7675334356397, 106.695860624313",
+264,Quốc lộ 1 - Đường Lê Thị Riêng 1,595dd7693dcfc400106f28b0,10.861925,106.654265,"10.8619248135124, 106.65426492691",Phường Thới An
+266,Hoàng Minh Giám - Đăng Văn Sâm,6623e88c6f998a001b25248b,10.811197,106.676034,"10.8111972234488, 106.676033735275",
+267,Đỗ Xuân Hợp - Dương Đình Hội,63b54996bfd3d90017ea781a,10.816709,106.774278,"10.8167087590452, 106.774277687073",
+268,Mai Chí Thọ - Trần Não 1,56de42f611f398ec0c481283,10.775797,106.727618,"10.775796632403, 106.72761797905",
+269,Nút giao Lê Đại Hành 1 (Bình Thới),5d8cdcf0766c880017188972,10.768803,106.651835,"10.7688034952946, 106.651834845543",
+270,Cộng Hòa - Hoàng Hoa Thám,662b57ec1afb9c00172d90e3,10.801828,106.648386,"10.8018284344744, 106.64838552475",phường Tân Bình
+271,Phạm Văn Đồng - Phan Văn Trị 1,58af9670bd82540010390c34,10.82123,106.693715,"10.8212296179772, 106.693714857101",
+272,Quốc Lộ 50 - Bùi Minh Trực,662b50571afb9c00172d87df,10.737514,106.656239,"10.7375142028136, 106.656239032745",phường Bình Đông
+273,Võ Nguyên Giáp - Tây Hòa 1,56df8274c062921100c143df,10.826493,106.761033,"10.8264933293527, 106.761032938957",
+274,Tỉnh lộ 10 - Mã Lò,662b52131afb9c00172d8a23,10.758174,106.606983,"10.7581738268099, 106.606982946396",
+275,Quang Trung - Trưng Nữ Vương,5a6061fd8576340017d06613,10.888529,106.596522,"10.8885285926454, 106.596522331238",
+276,Âu Cơ - Lũy Bán Bích,6623f0246f998a001b252797,10.795748,106.638236,"10.7957475229889, 106.638236045837",
+277,Quốc lộ 1 - Đường Vườn Lài 2,595da7d93dcfc400106f288a,10.860555,106.692036,"10.8605550497817, 106.692035794258",Phường An Phú Đông
+278,Phạm Văn Đồng - Kha Vạn Cân 1,6623f3436f998a001b252863,10.866498,106.761661,"10.8664976715355, 106.761660575867",
+279,Vòng xoay Phú Lâm (1),66b1c311779f740018674083,10.754337,106.63491,"10.7543371464344, 106.634910106659",
+280,Võ Trần Chí - Trần Đại Nghĩa,662a896e1afb9c00172d2674,10.730272,106.577425,"10.7302724592873, 106.577425003052",
+282,Huỳnh Tấn Phát - Trần Trọng Cung,662a8cfe1afb9c00172d296e,10.743343,106.729581,"10.7433433113335, 106.729581356049",phường Tân Thuận
+283,QL 22 - Nguyễn Ảnh Thủ 2,589b39d9b3bf7600110283c1,10.855466,106.60716,"10.8554657956616, 106.607159972191",xã Bà Điểm
+284,Nút giao Cây Gõ 3 (dạ cầu),5d8cd326766c88001718893e,10.75419,106.643236,"10.75418958083, 106.643235683441",phường Bình Tây
+285,Quốc lộ 1 - Ngã tư Linh Xuân,587461c1b807da0011e33cc8,10.873557,106.765501,"10.8735570152435, 106.765501499176",Phường Linh Xuân
+286,Khánh Hội - Đường số 41,63ae76afbfd3d90017e8f106,10.757952,106.699777,"10.7579524811918, 106.699776649475",phường Vĩnh Hội
+287,Nguyễn Tất Thành - Cảng SG (Q4-Q7),63b661a3bfd3d90017eaa520,10.759613,106.713322,"10.7596125693667, 106.713321805",phường Xóm Chiếu
+288,Nguyễn Thị Định - Cổng A Cảng Cát Lái,583f926761cfea0012cf68f1,10.759971,106.786578,"10.7599709364081, 106.786578297615",Phường Cát Lái
+289,Mai Chí Thọ - Trần Quý Kiên (1),6878bab06145d3001ba517f7,10.782089,106.739709,"10.7820887360004, 106.739709377289",
+290,Nút giao Thủ Đức (trên cầu),56df81d8c062921100c143de,10.84918,106.774009,"10.8491804998734, 106.774009466171",
+291,Nguyễn Thị Minh Khai - Cống Quỳnh,63ae73cebfd3d90017e8f00d,10.768424,106.684365,"10.7684240589462, 106.684364676476",
+292,Nguyễn Văn Linh - Quản Trọng Linh,662a8a661afb9c00172d2762,10.693987,106.61047,"10.6939873445986, 106.610469818115",Xã Bình Chánh
+293,Thành Thái - cư xá Đồng Tiến,6623e7526f998a001b252407,10.76942,106.666313,"10.7694200783416, 106.666313409805",Phường Hòa Hưng
+295,Nguyễn Văn Trỗi - Nguyễn Đình Chính,586e2492f9fab7001111b0ab,10.795595,106.675336,"10.7955947082032, 106.675336360931",
+296,Cách Mạng Tháng Tám - Phạm Văn Hai (2),662b571d1afb9c00172d9083,10.789292,106.660182,"10.7892923479795, 106.660181879997",
+297,Trường Chinh - Tây Thạnh 2,587479b1b807da0011e33cf9,10.818953,106.628301,"10.8189533898328, 106.628301143646",phường Tây Thạnh
+299,Nguyễn Văn Cừ - Trần Hưng Đạo 1,5b0b7aba0e517b00119fd800,10.756371,106.685368,"10.7563714363383, 106.685367822647",Phường cầu Ông Lãnh
+300,Nguyễn Duy Trinh - Võ Chí Công 2,63b54909bfd3d90017ea77e4,10.790984,106.792903,"10.7909838807122, 106.792902946472",
+301,Quốc lộ 1 - Cầu vượt Tân Thới Hiệp 3,595ddbbf3dcfc400106f28b8,10.86183,106.649796,"10.8618299839181, 106.649796366692",Phường Tân Thới Hiệp
+302,Nguyễn Văn Linh - cầu Tân Thuận 2,662a8ddd1afb9c00172d2a0f,10.752103,106.725065,"10.752102573838, 106.725064516068",phường Tân Thuận
+303,Cao tốc LTDG - Đỗ Xuân Hợp 1,5d9de43b766c880017188cb6,10.796554,106.778896,"10.7965537514336, 106.778896450996",
+304,Quốc lộ 1 - BQB Cầu vượt Quang Trung B (hướng Ngã 4 Ga),595f8f0b3dcfc400106f28f4,10.849112,106.62475,"10.8491120089147, 106.624749898911",Phường Trung Mỹ Tây
+305,Lê Hồng Phong - Nguyễn Trãi,5d8cd3b7766c880017188942,10.757341,106.678185,"10.7573411448313, 106.678184866905",
+307,Cộng Hòa - Đường A4,662b57711afb9c00172d90a7,10.801713,106.649898,"10.8017125083701, 106.649898290634",
+308,Nguyễn Duy Trinh - Đỗ Xuân Hợp,63b54968bfd3d90017ea7808,10.790436,106.781616,"10.7904358462274, 106.781616210938",
+309,Mai Chí Thọ - Lương Định Của 1,56de42f611f398ec0c48127f,10.791532,106.751103,"10.791531914198, 106.751103401184",
+310,Yên Thế - Hồng Hà,58df5016dc195800111e04bd,10.813326,106.668566,"10.8133259738659, 106.668566465378",
+311,Trường Chinh - Đồng Đen,5d8cdac3766c880017188962,10.797039,106.645913,"10.7970385413523, 106.645912528038",phường Tân Bình
+312,Nguyễn Văn Trỗi - Huỳnh Văn Bánh,587ef5dfb807da0011e33d59,10.792891,106.679853,"10.7928914544929, 106.679853200912",
+313,Nguyễn Thị Nghĩa - Lê Lai,662b85f51afb9c00172dd1c2,10.769842,106.694198,"10.7698416728609, 106.694197654724",
+314,Hoàng Văn Thụ - Cộng Hòa,5d8cdbdc766c88001718896a,10.800674,106.660783,"10.8006744408059, 106.660782694817",
+315,Đường số 1 - Cảng Phước Long,63b54d5abfd3d90017ea7afe,10.826667,106.755888,"10.8266672041268, 106.755888462067",
+316,Pasteur - Lê Thánh Tôn,5deb576d1dc17d7c5515ad13,10.775708,106.700359,"10.775708, 106.700359",
+317,Hàm Nghi - Phó Đức Chính,662b862a1afb9c00172dd1ff,10.771175,106.699525,"10.7711749616441, 106.699524521828",phường Bến Thành
+318,Điện Biên Phủ - Cách Mạng Tháng Tám,5deb576d1dc17d7c5515acf2,10.776571,106.683694,"10.7765712954739, 106.683694124222",
+319,Quang Trung - Lê Văn Thọ (2),5a824e465058170011f6eab4,10.836699,106.658326,"10.8366990807787, 106.658325791359",
+320,Cộng Hòa - Ấp Bắc,662b57471afb9c00172d9095,10.802398,106.641573,"10.8023975256098, 106.641572713852",phường Tân Bình
+321,Võ Văn Kiệt - Nguyễn Tri Phương 1,56de42f611f398ec0c481291,10.750337,106.668738,"10.7503370389747, 106.668738126755",Phường An Đông
+323,Lê Văn Chí - Linh Trung,63b54c93bfd3d90017ea7ab8,10.858901,106.77785,"10.8589007882855, 106.777850389481",
+324,Quốc lộ 1 - Nguyễn Văn Quá 2,595f874d3dcfc400106f28ec,10.856667,106.639572,"10.8566669938921, 106.639571785927",Phường Tân Thới Hiệp
+325,Nguyễn Tất Thành - Tôn Đản,5b19d34faf4ff60011d6ea52,10.762564,106.708472,"10.7625638146636, 106.708472371101",phường Xóm Chiếu
+326,Kha Vạn Cân - Đường Số 2,63b3c9bfbfd3d90017e9b039,10.841883,106.746855,"10.8418834903115, 106.746854782104",
+327,Nút giao Ngã bảy Lý Thái Tổ,5deb576d1dc17d7c5515acf4,10.767465,106.674156,"10.767465, 106.674156",
+328,Nguyễn Hữu Cảnh - Nguyễn Bỉnh Khiêm,58af99abbd82540010390c39,10.784623,106.707914,"10.7846234574745, 106.707914471626",
+329,Nguyễn Oanh - Nguyễn Văn Lượng,6623ecc16f998a001b25269e,10.838554,106.675519,"10.838553676621, 106.675518751144",
+330,Nguyễn Đình Chiểu - Cao Thắng,6623e3ea6f998a001b2522ae,10.770042,106.682138,"10.7700419300508, 106.682138442993",
+331,Cống Quỳnh - Bùi Viện,662b7d0c1afb9c00172dc6a6,10.765278,106.690131,"10.7652778808151, 106.690131425858",
+332,Phạm Văn Chiêu - Đường số 59,662b54bb1afb9c00172d8dbb,10.850208,106.652623,"10.8502078623705, 106.652623414993",
+333,Lê Văn Sỹ - Đặng Văn Ngữ,662b58bd1afb9c00172d9119,10.793756,106.668996,"10.7937556552044, 106.66899561882",
+334,Quốc lộ 1 - Nguyễn Văn Quá 1,595f86c43dcfc400106f28ea,10.856625,106.639486,"10.8566248466676, 106.639485955238",Phường Tân Thới Hiệp
+336,Nguyễn Biểu - Cầu Chữ Y,5a82439f5058170011f6eaa9,10.751138,106.683646,"10.75113811876, 106.68364584446",Phường Chánh Hưng
+337,Cách Mạng Tháng Tám - Đỗ Thị Lời,6623e5d66f998a001b25235a,10.78388,106.670326,"10.783880433226, 106.670325994492",
+338,Phạm Văn Đồng - Phan Văn Trị 2,58d7c20ac1e33c00112b321c,10.820766,106.694809,"10.8207659432755, 106.69480919838",
+339,Cầu Sài Gòn 4 (Thủ Đức 1),589d0b74b3bf7600110283d4,10.799742,106.730429,"10.7997417577515, 106.730428934097",
+340,Trường Chinh - Âu Cơ,56df807bc062921100c143da,10.801918,106.636487,"10.8019180137061, 106.63648724556",phường Tân Sơn Nhì
+341,Trần Quang Khải - Trần Nhật Duật,662b82a61afb9c00172dcdfd,10.791648,106.68938,"10.7916478442304, 106.689380407333",
+342,Trường Chinh - Phạm Văn Bạch 1,586e266ef9fab7001111b0b0,10.814085,106.633151,"10.8140847327392, 106.633150577545",phường Tân Sơn
+343,Tô Hiến Thành – Sư Vạn Hạnh,63ae7a74bfd3d90017e8f2c7,10.777894,106.665541,"10.7778940148849, 106.665540933609",
+344,Xa Lộ Hà Nội - Đường 120,59d3414302eb490011a0a610,10.867483,106.803814,"10.8674828287814, 106.803814172745",
+345,Phan Đình Phùng - Huynh Văn Bánh,6623e9e96f998a001b2525ce,10.795863,106.681924,"10.7958634513952, 106.681923866272",
+346,Điện Biên Phủ – Cao Thắng,63ae7a9cbfd3d90017e8f303,10.77273,106.679091,"10.7727295794518, 106.679091453552",Phường Bàn Cờ
+348,Nơ Trang Long - Nguyễn Xí,5a606a0f8576340017d0661e,10.820081,106.704116,"10.8200809679719, 106.704116463661",Phường Bình Lợi Trung
+349,Mai Chí Thọ - Nguyễn Cơ Thạch 2,56de42f611f398ec0c481286,10.773383,106.722919,"10.7733830435244, 106.722918748856",
+350,Tân Kỳ Tân Quý - Lê Trọng Tấn,6623f14b6f998a001b2527f0,10.803757,106.632571,"10.8037570167341, 106.632571220398",
+351,Hậu Giang - Minh Phụng,662b4f411afb9c00172d86fc,10.749784,106.642361,"10.7497836602495, 106.642361283302",
+352,Quốc Lộ 1K - Đường GS1,6792f9c88c5ed4001b27fb3d,10.888097,106.776037,"10.8880966294513, 106.776037216187",
+353,Lê Thánh Tôn - Đồng Khởi,662b843d1afb9c00172dd02d,10.777198,106.701826,"10.7771984022141, 106.701825857162",
+354,Quốc lộ 1 - An Phú Đông 12 (1),595d9b3b3dcfc400106f287e,10.859285,106.705425,"10.8592853785591, 106.70542538166",Phường An Phú Đông
+355,Cộng Hòa - Thăng Long,58df50ffdc195800111e04c0,10.800948,106.660756,"10.8009484488364, 106.660755872726",
+356,Bà Hom - An Dương Vương,662b50e51afb9c00172d886a,10.755971,106.62461,"10.7559709036596, 106.624610424042",
+357,Pasteur - Lê Duẩn,5deb576d1dc17d7c5515ad1a,10.779127,106.697417,"10.779127, 106.697417",
+358,Nam Kỳ Khởi Nghĩa - Lý Tự Trọng,5deb576d1dc17d7c5515ad0b,10.775615,106.699042,"10.775615, 106.699042",
+360,Lê Hồng Phong - Trần Phú,662b4e581afb9c00172d862f,10.760419,106.677096,"10.7604188946108, 106.677095890045",
+361,Cầu vượt nút giao thông Gò Dưa,587464e2b807da0011e33cd9,10.869959,106.733133,"10.8699588780888, 106.733132600784",Phường Tam Bình
+362,Quốc lộ 1 - Cao tốc Trung Lương,58afdbaebd82540010390c48,10.689412,106.592531,"10.689411864849, 106.592531204224",Xã Tân Nhựt
+363,Đường số 1 - Nguyễn Văn Bá,63b54c51bfd3d90017ea7aa0,10.826688,106.760228,"10.8266882798502, 106.760228276253",
+364,Cộng Hòa - Hoàng Hoa Thám,58ad6214bd82540010390be2,10.801312,106.647366,"10.8013120360293, 106.647366285324",phường Bảy Hiền
+365,Trường Chinh - Hoàng Hoa Thám,5deb576d1dc17d7c5515ad09,10.796454,106.647018,"10.7964536316791, 106.647017598152",phường Bảy Hiền
+366,Nam Kỳ Khởi Nghĩa - Võ Thị Sáu,58af8a0bbd82540010390c25,10.784534,106.688544,"10.784533873088, 106.688543558121",
+367,Võ Văn Kiệt - Cầu Chữ Y 2,56de42f611f398ec0c48128e,10.751433,106.684102,"10.7514332528817, 106.684101819992",Phường Chợ Quán
+368,Phạm Văn Đồng - Lê Quang Định 2,587ef859b807da0011e33d5b,10.820055,106.689869,"10.8200546227367, 106.689868569374",
+369,Dương Bá Trạc - Hẻm 219,58744e97b807da0011e33cb9,10.746985,106.689042,"10.7469851294422, 106.689042448998",phường Chánh Hưng
+370,Lã Xuân Oai - Lò Lu,63b54a48bfd3d90017ea7850,10.82438,106.808009,"10.8243804793376, 106.808009147644",
+371,Quốc Lộ 50 - Cầu Nhị Thiên Đường 2,58c2717ed56e930010a39ac0,10.741807,106.656063,"10.7418073259385, 106.656062516536",phường Phú Định
+372,Quốc lộ 1 - Nguyễn Hữu Trí 2,58afcd9bbd82540010390c41,10.696554,106.596699,"10.6965544326304, 106.596699357033",Xã Tân Nhựt
+373,Nguyễn Xiển - Nguyễn Văn Tăng,63b54a9ebfd3d90017ea7911,10.842811,106.828694,"10.8428107736029, 106.828694343567",
+374,Lê Văn Lương - Cầu Long Kiểng (HCM),5bbc7163ca0577001164127f,10.689565,106.70255,"10.6895647333739, 106.702550053597",
+375,Quốc Lộ 1K - đường số 8,6623f3d66f998a001b252890,10.882281,106.769836,"10.8822808688795, 106.769835948944",
+376,Trần Hưng Đạo - Nguyễn Biểu,5b6005b6fd4edb0019c7db25,10.756108,106.683528,"10.7561079280569, 106.683527827263",
+377,Quốc Lộ 1 - Hưng Nhơn,662a902a1afb9c00172d2bed,10.711403,106.599076,"10.7114030554397, 106.59907579422",Xã Tân Nhựt
+378,Võ Văn Kiệt - Pasteur,662b85481afb9c00172dd0f1,10.768719,106.703092,"10.7687191761474, 106.703091859818",Phường Thủ Đức
+379,Phan Văn Hớn - Trần Văn Mười,6623ef2b6f998a001b252753,10.849829,106.587703,"10.8498285289366, 106.587703227997",
+380,Hoàng Văn Thụ - Phạm Văn Hai,66b1c4e7779f7400186741e4,10.8004,106.665455,"10.8004004325254, 106.665455102921",
+382,Lê Văn Sỹ - Hoàng Văn Thụ,587c8661b807da0011e33d43,10.799968,106.66052,"10.7999683420367, 106.660519838333",
+384,Trần Văn Giàu - Tỉnh Lộ 10,662a87a41afb9c00172d24e9,10.761726,106.569679,"10.7617258747396, 106.569678783417",
+385,Quốc lộ 1 - Đường Tô Ngọc Vân 2,595dd4133dcfc400106f28a9,10.861962,106.671023,"10.8619616916798, 106.671023368835",Phường Thới An
+387,Bình Long - Lê Thúc Hoạch,662b5b8c1afb9c00172d92ca,10.788444,106.617208,"10.7884439432433, 106.617207527161",
+389,Tôn Đức Thắng - Lê Duẩn,58af9a07bd82540010390c3b,10.785293,106.703264,"10.7852927046947, 106.703263521194",
+390,Cao Thắng – Võ Văn Tần 1,63ae75debfd3d90017e8f082,10.768503,106.683893,"10.7685031082248, 106.683892607689",
+391,Hà Huy Giáp - An Lộc,6623eb466f998a001b252632,10.853696,106.67922,"10.8536955999934, 106.679220199585",
+392,Quang Trung - Lê Văn Thọ (1),5a824dc05058170011f6eab2,10.836604,106.658181,"10.8366042431825, 106.658180952072",
+394,Lê Duẩn - Nguyễn Bỉnh Khiêm,662b836d1afb9c00172dcfa0,10.787337,106.704819,"10.7873373247725, 106.704819202423",
+395,Quốc lộ 13 - Hiệp Bình,5a606c078576340017d06624,10.849555,106.718917,"10.8495545656016, 106.718916893005",
+396,Ba Tháng Hai - Lý Thái Tổ,5deb576d1dc17d7c5515acf3,10.768198,106.668459,"10.768198, 106.668459",Phường Vườn Lài
+397,Xô Viết Nghệ Tĩnh - Nguyễn Xí 1,5a8254b05058170011f6eac3,10.809674,106.712254,"10.809674419948, 106.712254285812",
+398,An Dương Vương - Đường số 7,662b50c11afb9c00172d8843,10.751744,106.624085,"10.7517441974476, 106.624084711075",
+399,Nguyễn Tất Thành - Cầu Tân Thuận 2,63ae77bfbfd3d90017e8f18f,10.757041,106.717769,"10.757040746338, 106.717768907547",Xóm Chiếu
+400,Quốc Lộ 13 - Nguyễn Thị Nhung,6623f51a6f998a001b252900,10.840345,106.716363,"10.8403450366927, 106.716363430023",
+401,Hoàng Văn Thụ - Xuân Diệu,5deb576d1dc17d7c5515ad0a,10.795418,106.655729,"10.795418, 106.655729",
+402,Dương Bá Trạc - Hẻm 288,58744e3eb807da0011e33cb7,10.744413,106.688919,"10.7444131987789, 106.688919067383",phường Chánh Hưng
+403,Quốc lộ 50 - Tạ Quang Bửu,58744dd9b807da0011e33cb5,10.734162,106.656191,"10.7341621509602, 106.656190752983",phường Bình Đông
+404,Võ Văn Kiệt - An Bình,56de42f611f398ec0c481290,10.749336,106.673293,"10.7493356862526, 106.673292517662",phường An Đông
+405,Nam Kỳ Khởi Nghĩa - Điện Biên Phủ 1,58af8b69bd82540010390c28,10.783274,106.690915,"10.7832744191822, 106.69091463089",
+406,Lý Chính Thắng - Trần Quốc Thảo,6623e3a26f998a001b252291,10.784386,106.684467,"10.7843863222755, 106.684466600418",
+407,QL 22 - Nguyễn Văn Bứa 1,589b3ceeb3bf7600110283c3,10.883735,106.587172,"10.8837348196645, 106.587172150612",
+408,Quốc lộ 1 - BQB Trước bến xe Ngã 4 Ga (hướng đi Bình Phước),595dcab53dcfc400106f289d,10.86163,106.678491,"10.861629788009, 106.678490638733",Phường An Phú Đông
+409,Phan Đăng Lưu - Nguyễn Văn Đậu,58ad7291bd82540010390bf9,10.803841,106.687197,"10.8038413260585, 106.687197089195",
+410,Quốc Lộ 1 - Dương Đình Cúc,662a89211afb9c00172d2636,10.705953,106.597981,"10.705952846726, 106.597981452942",Xã Tân Nhựt
+412,Quốc lộ 1 - Cầu Bến Cát 1,595dd4f43dcfc400106f28ab,10.86164,106.663309,"10.8616403246391, 106.663309335709",Phường Thới An
+413,Quốc Lộ 1 - Ba Làng,6792ef4f8c5ed4001b27f2c0,10.656222,106.555839,"10.6562217600296, 106.5558385849",Xã Bình Chánh
+414,Nguyễn Du - Công xã Paris,662b84771afb9c00172dd076,10.779032,106.700013,"10.7790322866967, 106.700012683868",
+415,Hòa Bình - Lũy Bán Bích,6623f0b46f998a001b2527c3,10.770421,106.631402,"10.7704213643614, 106.631401777267",
+416,Huỳnh Tấn Phát - Cầu Tân Thuận 1,665861d864f11e00173c73a9,10.75547,106.723375,"10.7554702370632, 106.723374724388",phường Tân Thuận
+418,Nguyễn Oanh - Phan Văn Trị (1),5a824ee15058170011f6eab6,10.830608,106.677901,"10.8306083386046, 106.67790055275",
+419,Nguyễn Thái Sơn - Phạm Ngũ Lão,6623ed396f998a001b2526b8,10.820344,106.683469,"10.820344420197, 106.683468818665",
+421,Hoàng Văn Thụ - Nguyễn Văn Trỗi 2,587c8d97b807da0011e33d49,10.8001,106.669189,"10.8001000770077, 106.669188737869",
+422,Cộng Hòa - Bình Giã,59414c883dcfc400106f260b,10.801865,106.645108,"10.8018653200436, 106.645107865334",phường Tân Bình
+423,Võ Nguyên Giáp - Tây Hòa 2,56df82d4c062921100c143e0,10.826493,106.760867,"10.8264933293527, 106.760866641998",
+424,Quốc Lộ 22 - Võ Văn Điều,6792f1008c5ed4001b27f41f,10.988295,106.452713,"10.9882952554727, 106.452713012695",xã Tân An Hội
+425,Phạm Văn Đồng - Quốc Lộ 13 (1),58affc6017139d0010f35cc8,10.826272,106.714014,"10.8262720340397, 106.714013814926",
+426,Quốc lộ 1 - Lê Thị Hoa,587463bab807da0011e33cd3,10.874779,106.7484,"10.8747792130109, 106.748399734497",Phường Tam Bình
+427,Hoàng Diệu - Nguyễn Tất Thành,5deb576d1dc17d7c5515ad1c,10.765294,106.70726,"10.7652936908376, 106.707260012627",phường Xóm Chiếu
+428,Võ Văn Kiệt - Ký Con,56de42f611f398ec0c481287,10.765478,106.700147,"10.7654781410386, 106.700146794319",phường Bến Thành
+429,Tân Kỳ Tân Quý - Tân Quý,662b5c981afb9c00172d94c0,10.799436,106.61931,"10.7994361321658, 106.619310379028",
+430,Nguyễn Hữu Thọ - Phạm Hữu Lầu,662a861e1afb9c00172d23ad,10.695484,106.718187,"10.6954843759884, 106.718187332153",
+431,Trường Chinh - Nguyễn Thái Bình,662b5a9c1afb9c00172d9240,10.794662,106.650145,"10.7946620093783, 106.650145053864",phường Bảy Hiền
+432,Trần Văn Giàu - Đường Thanh Niên,662a88a01afb9c00172d25d1,10.788033,106.517043,"10.788032914001, 106.517043113709",
+433,Hồng Bàng - Tạ Uyên,662b4e201afb9c00172d85f9,10.753726,106.653825,"10.7537258027461, 106.653825044632",Chợ Lớn
+434,Hoàng Văn Thụ - Út Tịch,5d8cdb4b766c880017188966,10.798056,106.658374,"10.7980555437486, 106.658374071121",
+435,Nơ Trang Long - Phan Văn Trị,63b66051bfd3d90017eaa4a3,10.811229,106.695485,"10.8112288386645, 106.695485115051",
+437,Nguyễn Văn Trỗi - Hoàng Văn Thụ 1,56f11ac33ac17b11001c504c,10.799631,106.668411,"10.7996311002478, 106.668410897255",
+438,Lê Văn Sỹ - Phạm Văn Hai,66b1c4a2779f74001867418c,10.797118,106.664554,"10.7971175831128, 106.664553880692",
+439,Cầu Sài Gòn 8 (Thủ Đức),631813ebc9eae60017a196b0,10.799552,106.731228,"10.7995520591487, 106.731228232384",
+440,Trường Sơn - Cửu Long,587475abb807da0011e33cea,10.809174,106.66479,"10.8091738427151, 106.664789915085",
+441,Cách Mạng Tháng Tám - Nguyễn Đình Chiểu,5deb576d1dc17d7c5515ad0e,10.774969,106.686639,"10.774969, 106.686639",
+442,Nguyễn Đình Chiểu - Trương Định,5deb576d1dc17d7c5515ad11,10.777922,106.689658,"10.777922, 106.689658",
+443,Nút giao Bảy Hiền 1 (Cách Mạng Tháng Tám),587478d8b807da0011e33cf3,10.792839,106.653594,"10.7928387592472, 106.653594374657",phường Tân Sơn Nhất
+444,Ba Tháng Hai - Cao Thắng,5deb576d1dc17d7c5515acf8,10.773823,106.67782,"10.773823, 106.67782",Phường Vườn Lài
+445,Đặng Thúc Vịnh - Trịnh Thị Miếng,591c6833a6bfb500119400a3,10.89081,106.613377,"10.890809558636, 106.613377332687",
+446,Quốc Lộ 1- Công ty Pouyen 3 (Cổng),63ae7938bfd3d90017e8f226,10.747085,106.595476,"10.7470852656437, 106.595476269722",Phường Tân Đạo
+447,CT Trung Lương - Võ Trần Chí 2,63b664edbfd3d90017eaaa24,10.684631,106.566884,"10.6846307310993, 106.566883921623",Xã Tân Nhựt
+448,Nút giao Nguyễn Thái Sơn 1 (Hồng Hà),56df83d8c062921100c143e3,10.814085,106.678351,"10.8140847327392, 106.678351163864",
+449,Trần Quang Diệu - Trường Sa,6623e5776f998a001b252337,10.784513,106.678437,"10.7845127944049, 106.678436994553",
+450,Lý Chính Thắng - Nguyễn Thông,5deb576d1dc17d7c5515acfd,10.779306,106.682181,"10.7793063144528, 106.682181358337",Phường Xuân Hòa
+451,Nút giao Thủ Đức (Lê Văn Việt),56df8159c062921100c143dc,10.849075,106.774283,"10.8490751291612, 106.774283051491",
+452,Nguyễn Văn Trỗi - Nguyễn Trọng Tuyển,587ef2e4b807da0011e33d57,10.797687,106.672311,"10.7976866831738, 106.672310829163",xã Hóc Môn
+453,QL 22 - Nguyễn Văn Bứa 2,589b3f7db3bf7600110283c6,10.884109,106.586925,"10.8841088420888, 106.586925387383",xã Xuân Thới Sơn
+454,Hùng Vương - Trần Nhân Tôn,6623e6706f998a001b25239b,10.761273,106.675047,"10.7612726484012, 106.675046682358",
+455,Trần Hưng Đạo - Calmette,662b86551afb9c00172dd227,10.770205,106.69747,"10.7702052976598, 106.697469949722",
+456,Tôn Đức Thắng - Công trường Mê Linh,649da77ea6068200171a6dd4,10.775301,106.706761,"10.775301268578, 106.70676112175",
+457,Vĩnh Lộc - Quách Điêu,63b3c59fbfd3d90017e9ace8,10.812525,106.577597,"10.8125250596398, 106.577596664429",
+458,Phạm Văn Đồng - Quốc Lộ 13 (2),58b5510817139d0010f35d4e,10.825471,106.714357,"10.8254711543978, 106.71435713768",
+459,Nút giao Bốn Xã 2 (Hòa Bình),5a824c905058170011f6eab0,10.773694,106.621783,"10.7736939654481, 106.62178337574",
+460,Nguyễn Thị Minh Khai - Pasteur,5deb576d1dc17d7c5515ad16,10.780518,106.695957,"10.780518, 106.695957",
+461,Lý Thường Kiệt - Tô Hiến Thành 2,63ae7c73bfd3d90017e8f3ed,10.770811,106.658004,"10.7708113380158, 106.658003926277",
+462,Cộng Hòa - Đường C 18,586e1d4ef9fab7001111b0a2,10.801607,106.651111,"10.8016071209638, 106.651110649109",
+463,Nguyễn Trãi - Cống Quỳnh 1,63195512c9eae60017a1c279,10.76634,106.688104,"10.7663399395947, 106.688103715542",
+464,Hai Bà Trưng - Trần Cao Vân,6623df636f998a001b251e92,10.783902,106.697041,"10.7839015119534, 106.69704079628",
+465,Lạc Long Quân - Âu Cơ,5d8cdc9d766c880017188970,10.774769,106.647881,"10.7747690150491, 106.647881269455",
+466,Quốc Lộ 13 - Cầu Vĩnh Bình,6792f1b78c5ed4001b27f4a9,10.868289,106.716213,"10.8682888641092, 106.716213226318",
+467,Cao tốc LTDG - Cầu Bà Dạt 1,58d8ec0adc195800111e042b,10.793524,106.756082,"10.7935237967208, 106.756081581116",
+468,Quốc lộ 1 - BQB Đường dẫn cầu vượt Ngã 4 Ga (hướng đi An Sương),595dc5ac3dcfc400106f2898,10.861345,106.682246,"10.8613452988547, 106.682245731354",Phường An Phú Đông
+469,Xô Viết Nghệ Tĩnh - Nguyễn Xí 2,5a8254f25058170011f6eac5,10.81028,106.712415,"10.8102803807443, 106.712415218353",
+470,Lý Thường Kiệt - Tô Hiến Thành 1,63ae7c53bfd3d90017e8f3d8,10.770495,106.658337,"10.7704951431996, 106.658336520195",
+472,Trường Chinh - Tây Thạnh 1,5874796db807da0011e33cf7,10.819923,106.63079,"10.8199228965258, 106.630790233612",phường Tây Thạnh
+473,Nút giao Công Trường Dân Chủ 2,5deb576d1dc17d7c5515acfa,10.777664,106.681336,"10.777664, 106.681336",Phường Vườn Lài
+474,Cầu vượt Bình Phước 1,58746536b807da0011e33cdc,10.86595,106.72352,"10.8659497751896, 106.723519563675",Phường Hiệp Bình
+475,Hậu Giang - Nguyễn Văn Luông,662b4f7e1afb9c00172d872e,10.748097,106.635103,"10.7480971664479, 106.635103225708",
+476,Lê Văn Sỹ - Nguyễn Trọng Tuyển,662b59291afb9c00172d912b,10.798751,106.662569,"10.7987511081718, 106.662569046021",
+477,Nguyễn Thái Sơn - Phan Văn Trị 1,5a6060a88576340017d0660d,10.826125,106.689493,"10.8261245037402, 106.689493060112",
+478,Nguyễn Hữu Cảnh - Ngô Tất Tố 3 (Nhánh chính cầu Thủ Thiêm 1),63b65f33bfd3d90017eaa405,10.788797,106.716954,"10.7887970063747, 106.716953516006",
+479,Pasteur - Hàm Nghi,5deb576d1dc17d7c5515ad1e,10.770674,106.702639,"10.770674, 106.702639","Sài Gòn, Thủ Đức"
+480,QL 22 - Nguyễn Ảnh Thủ 1,589b3705b3bf7600110283bd,10.855134,106.607385,"10.8551338847726, 106.607385277748",xã bà Điểm
+481,Nguyễn Tất Thành - Cầu Khánh Hội,63ae7759bfd3d90017e8f162,10.767507,106.706037,"10.7675070857977, 106.706036925316",phường Xóm Chiếu
+482,Hoàng Diệu - Đoàn Văn Bơ 1,63ae7709bfd3d90017e8f135,10.763254,106.703811,"10.7632541910898, 106.703810691834",phường Khánh Hội
+483,Quang Trung - Phạm Văn Chiêu,662b55111afb9c00172d8e2e,10.844644,106.640725,"10.8446442571047, 106.640725135803",
+484,Nguyễn Chí Thanh - Ngô Quyền,649da419a6068200171a6c90,10.759207,106.665605,"10.759206770879, 106.665605306625",
+485,Quốc lộ 1 - Nguyễn Hữu Trí 1,58afccadbd82540010390c3f,10.696634,106.596463,"10.6966335007055, 106.596463322639",Xã Tân Nhựt
+486,Trần Quang Khải - Trần Nguyên Đán,662b82761afb9c00172dcda3,10.792359,106.694144,"10.7923592320866, 106.694144010544",
+487,Nút giao Ngã sáu Cộng Hòa,5deb576d1dc17d7c5515acf7,10.765059,106.68172,"10.765059, 106.68172",
+488,Nút giao Hàng Xanh 1 (Viện Máy tính),5d9ddd49766c880017188c94,10.801655,106.711063,"10.8016545453012, 106.71106338501",
+489,Cao tốc LT-DG - Trạm thu phí Long Phước,6792f16e8c5ed4001b27f482,10.785883,106.850624,"10.7858829057319, 106.850624084473",
+490,Quốc lộ 1 - Quang Trung 2 (hướng đi An Sương),595f8d813dcfc400106f28f2,10.852916,106.632432,"10.8529158676222, 106.632431745529",Phường Trung Mỹ Tây
+491,Cầu vượt Bình Phước 2,5874656eb807da0011e33cde,10.864743,106.724212,"10.8647433460363, 106.724211573601",Phường Hiệp Bình
+492,Lê Văn Sỹ - Trường Sa,6623e3566f998a001b25226d,10.786136,106.680937,"10.786135848679, 106.680936813354",
+493,Nguyễn Văn Linh - Nguyễn Lương Bằng (1),5abbb6d698d8fc001102dfc8,10.731443,106.720451,"10.7314425344033, 106.720451116562",Phường Tân Mỹ
+495,Nam Kỳ Khởi Nghĩa - Nguyễn Đình Chiểu,5deb576d1dc17d7c5515ad03,10.781472,106.692835,"10.7814721788992, 106.692835092545",
+496,Nguyễn Tất Thành - Đoàn Như Hài,63ae777cbfd3d90017e8f177,10.766775,106.706455,"10.7667745592657, 106.706455349922",phường Xóm Chiếu
+497,Nguyễn Thị Minh Khai - Nguyễn Bỉnh Khiêm 1,631828cac9eae60017a19f50,10.788707,106.703532,"10.7887074232314, 106.703531742096",
+498,Cầu Sài Gòn 1 (dạ cầu Bình Thạnh),63b3c2fbbfd3d90017e9abbf,10.798009,106.724379,"10.7980089972696, 106.724379211664",
+499,Trường Chinh - Phan Văn Hớn 1 (Q12-HM),58d7c2e6c1e33c00112b321e,10.826983,106.625426,"10.8269833398213, 106.625425815582",phường Đông Hưng Thuận
+500,Võ Chí Công - Liên Phường 1,63b54ad1bfd3d90017ea7974,10.804537,106.792544,"10.8045368770814, 106.792543530464",
+501,Trường Chinh - Trương Công Định,662b5b481afb9c00172d92a8,10.799046,106.641937,"10.7990461956223, 106.641937494278",phường Tân Bình
+502,Đồng Văn Cống - Phan Văn Đáng,56de42f611f398ec0c48129e,10.778505,106.757262,"10.7785053, 106.7572618",
+503,Nút giao Hàng Xanh 2 (ĐH Hồng Bàng),5d9dddb9766c880017188c96,10.799879,106.7066,"10.7998787622235, 106.706600189209",Thủ Đức
+504,Nút giao Cây Gõ 2 (Minh Phụng),5d8cd372766c880017188940,10.755028,106.643268,"10.7550275416962, 106.643267869949",phường Minh Phụng
+505,Vĩnh Lộc - Nguyễn Thị Tú 2,5ad06a0d98d8fc001102e27b,10.813558,106.579319,"10.8135578170586, 106.579318642616",
+507,Xô Viết Nghệ Tĩnh - Đường D5,63b65f64bfd3d90017eaa41f,10.806818,106.711616,"10.8068184838962, 106.711615920067",
+508,Quốc lộ 1 - Đường 14,58746371b807da0011e33cd1,10.86968,106.775951,"10.8696796650458, 106.775951385498",Phường Linh Xuân
+509,Nguyễn Lương Bằng - Hoàng Quốc Việt,63bd1e95bfd3d90017ec3cd5,10.713111,106.731684,"10.7131108376067, 106.731684207916",
+510,Lạc Long Quân - Ông Ích Khiêm,63ae7cd3bfd3d90017e8f408,10.766701,106.642613,"10.7667007795163, 106.64261341095",
+511,Tùng Thiện Vương - Cầu Nhị Thiên Đường,58b555ac17139d0010f35d59,10.744382,106.656073,"10.7443815765443, 106.656072735786",phường Phú Định
+512,Quốc lộ 1 - Cầu vượt Tân Thới Hiệp 1,595ddc123dcfc400106f28ba,10.861751,106.649812,"10.8617509592331, 106.649812459946",Phường Thới An
+513,Quốc lộ 1 - ĐH Nông Lâm 1,587460aab807da0011e33cc2,10.867193,106.788429,"10.8671930769878, 106.788429021835",Phường Linh Xuân
+514,Nguyễn Thị Thập - Lê Văn Lương,662a8f701afb9c00172d2b5e,10.739928,106.703596,"10.739928078758, 106.703596115112",phường Tân Hưng
+515,Nút giao Mỹ Thủy (6),63b55020bfd3d90017ea7cb7,10.770274,106.775157,"10.7702738066308, 106.77515745163",
+516,Quang Trung - Thống Nhất,6623eec96f998a001b25273b,10.834644,106.664371,"10.8346442594662, 106.664371490479",
+517,An Dương Vương - Lê Hồng Phong,662b4d781afb9c00172d8571,10.758912,106.677568,"10.7589116443632, 106.677567958832",
+518,Đinh Bộ Lĩnh - Bạch Đằng 3,5a606a958576340017d06621,10.802866,106.709465,"10.8028664980496, 106.709464788437",
+519,Dương Bá Trạc - đường 9A,662a8c381afb9c00172d28b6,10.738853,106.689584,"10.7388529049553, 106.689584255218",phường Bình Hưng
+520,Nguyễn Tất Thành - Cảng SG (Q7-Q4),63b6617ebfd3d90017eaa50b,10.759244,106.713917,"10.7592436616732, 106.713917255402",phường Xóm Chiếu
+523,Hai Bà Trưng - Lý Chính Thắng,5deb576d1dc17d7c5515acff,10.791464,106.687554,"10.791464, 106.687554",
+524,255 Hoàng Văn Thụ,662b58791afb9c00172d9107,10.800522,106.664302,"10.8005216285264, 106.664301753044",
+525,Trần Hưng Đạo - Nguyễn Cư Trinh,662b811d1afb9c00172dcc1d,10.765014,106.692867,"10.7650143803183, 106.692867279053",
+526,Nguyễn Văn Linh - Nguyễn Thị Thập 2,662a8eb41afb9c00172d2aba,10.737999,106.721824,"10.7379990877391, 106.721824407578",phường Tân Mỹ
+527,Nguyễn Duy Trinh - Võ Chí Công 1,63b548ecbfd3d90017ea77d2,10.790963,106.791991,"10.7909628024813, 106.791990995407",
+528,Võ Thị Sáu - Bà Huyện Thanh Quan,5deb576d1dc17d7c5515acfb,10.780186,106.684263,"10.7801863634439, 106.684262752533",
+529,Mai Chí Thọ - Võ Nguyên Giáp (Cát Lái cầu A),56de42f611f398ec0c48127d,10.804985,106.752707,"10.8049847689326, 106.752707362175",
+530,Hải Thượng Lãn Ông - Cầu Chà Và,56de42f611f398ec0c48128d,10.750585,106.660032,"10.7505847415039, 106.660031676292",Chợ Lớn
+531,Quốc Lộ 50 - Cổng chào Long An,6792f03d8c5ed4001b27f378,10.642472,106.657033,"10.6424723207925, 106.657032966614",xã Cần Giuộc
+532,Lý Thái Tổ - Sư Vạn Hạnh,6623e7076f998a001b2523ea,10.767776,106.671495,"10.7677758540786, 106.671495437622",Phường Vườn Lài
+534,Phạm Văn Đồng - Kha Vạn Cân (hướng đi Quốc lộ 1),5d8cda2e766c88001718895e,10.840819,106.743545,"10.840819218446, 106.74354493618",
+535,Trường Chinh - Tân Kỳ Tân Quý,586e25e1f9fab7001111b0ae,10.803773,106.635919,"10.8037728247342, 106.635918617249",phường Tân Bình
+536,Khánh Hội - Hoàng Diệu,63ae76ddbfd3d90017e8f11b,10.759639,106.698489,"10.7596389198989, 106.698489189148",phường Vĩnh Hội
+537,Lý Tự Trọng - Đồng Khởi,5deb576d1dc17d7c5515ad14,10.777894,106.701037,"10.7778940148849, 106.701037287712",
+538,Nơ Trang Long - Nguyễn Huy Lượng (Bệnh viện Ung Bướu),63b66035bfd3d90017eaa48e,10.805348,106.695024,"10.8053483512381, 106.695023775101",
+539,Huỳnh Tấn Phát - Lưu Trọng Lư 1,585b284ac3f96200127dc500,10.754532,106.727795,"10.7545321437295, 106.727795004845",phường Tân Thuận
+540,Võ Văn Kiệt - Cầu Chà Và 1 (dạ cầu),56de42f611f398ec0c481295,10.749083,106.659994,"10.7490827124077, 106.659994125366",Chợ Lớn
+541,Võ Thị Sáu - Pasteur,5deb576d1dc17d7c5515ad04,10.78603,106.690008,"10.7860304558102, 106.690008044243",
+542,Nguyễn Văn Linh - Phạm Hùng 1,5a8278f35058170011f6eaed,10.728449,106.677117,"10.7284488196731, 106.677117347717",Xã Bình Hưng
+543,Cách Mạng Tháng Tám - Võ Văn Tần,662b830e1afb9c00172dcf50,10.774342,106.688018,"10.7743421575788, 106.688017845154",
+544,Võ Chí Công - Liên Phường 2,63b54aedbfd3d90017ea79c3,10.804948,106.791937,"10.8049478837466, 106.791937351227",
+545,Nguyễn Kiệm - Hồ Văn Huê,586e20a0f9fab7001111b0a7,10.806297,106.678362,"10.8062968247449, 106.6783618927",
+546,Nguyễn Văn Cừ - Trần Hưng Đạo 2,5b0b7bbe0e517b00119fd806,10.756393,106.685357,"10.7563925169909, 106.685357093811",phường Cầu Ông Lãnh
+547,Vòng xoay Gò Vấp (2),6623edd26f998a001b2526f7,10.826794,106.679542,"10.8267936584446, 106.679542064667",
+548,BX Miền Đông - Đinh Bộ Lĩnh 1,5a8255a55058170011f6eac7,10.816814,106.711434,"10.8168141411482, 106.711433529854",
+549,Đường hầm - Đầu Quận 1,56de42f611f398ec0c481294,10.767533,106.70204,"10.7675334356397, 106.702040433884",phường Bến Thành
+550,Mai Chí Thọ - Lương Định Của 2,56de42f611f398ec0c481280,10.792628,106.751447,"10.792627978172, 106.751446723938",
+551,Phan Đăng Lưu - Đinh Tiên Hoàng 2,587ed91db807da0011e33d4e,10.802482,106.697963,"10.8024818353159, 106.697963476181",
+552,Quốc Lộ 1 - Cổng ĐH Quốc gia TPHCM,63b54dcbbfd3d90017ea7ba8,10.865339,106.793847,"10.865338658848, 106.793847084045",Phường Linh Xuân
+553,Võ Văn Kiệt - Trần Đình Xu 2,56de42f611f398ec0c48128a,10.75878,106.692545,"10.7587798913611, 106.692545413971",phường Cầu Ông Lãnh
+554,Vòng xoay Gò Vấp (1),6623ed9b6f998a001b2526cd,10.826098,106.6801,"10.8260981590362, 106.680099964142",
+555,Nam Kỳ Khởi Nghĩa -Nguyễn Thị Minh Khai 2,58b5752e17139d0010f35d5f,10.77947,106.695174,"10.7794696770349, 106.695173978806",
+556,Mai Chí Thọ - Trần Não 2,58175c81edeb6c0012a2d5c2,10.775723,106.727377,"10.7757228548636, 106.727376580238",
+557,Cầu Sài Gòn 11 (Bình Thạnh),631812e6c9eae60017a19567,10.798082,106.723359,"10.7980818909152, 106.723358631134",
+558,Đinh Bộ Lĩnh - Bùi Đình Túy,6623e7b76f998a001b25242d,10.808352,106.709261,"10.8083518403949, 106.709260940552",
+559,Quốc lộ 50 - Cầu Ông Thìn (1),5ad068b198d8fc001102e278,10.652426,106.654587,"10.6524259645754, 106.654586791992",xã Hưng Long
+560,Nguyễn Chí Thanh - Nguyễn Kim,66f126e8538c780017c9362f,10.758701,106.662741,"10.7587008395322, 106.662740707397",
+561,Cống Quỳnh - Phạm Viết Chánh,63ae75a3bfd3d90017e8f051,10.767892,106.685454,"10.767891793263, 106.685453653336",
+562,Lê Lai - Phạm Hồng Thái,662b7d8a1afb9c00172dc71f,10.771222,106.695914,"10.7712223907807, 106.695914268494",
+563,Nguyễn Văn Linh - Nguyễn Lương Bằng (2),5abbb77298d8fc001102dfce,10.731564,106.720328,"10.7315637581429, 106.720327734947",Phường Tân Mỹ
+564,Huỳnh Tấn Phát - Nguyễn Thị Thập,63bd1f48bfd3d90017ec3d19,10.737525,106.730354,"10.7375247437985, 106.730353832245",phường Tân Mỹ
+565,Quốc lộ 1 - Đinh Đức Thiện 1,58aff2c6bd82540010390c55,10.664788,106.569808,"10.6647884855642, 106.569807529449",Xã Bình Chánh
+566,Phạm Văn Đồng - Hiệp Bình (hướng đi Thủ Đức),5d8cd886766c880017188956,10.837252,106.732848,"10.8372522994913, 106.732848286629",
+567,Hai Bà Trưng - Lê Duẩn,5deb576d1dc17d7c5515ad18,10.781431,106.699614,"10.781431, 106.699614",
+568,An Dương Vương - Trần Phú,66b1c1bf779f740018673ef2,10.757742,106.674489,"10.7577416756903, 106.674488782883",
+569,Nguyễn Thị Định - Đường A,56de42f611f398ec0c4812a0,10.762785,106.78359,"10.7627851568961, 106.783590316772",Phường Cát Lái
+570,Tô Ký - Nguyễn Ảnh Thủ,6623efc26f998a001b25277f,10.867572,106.615512,"10.8675723883698, 106.615512371063",
+571,Tùng Thiện Vương - Xóm Củi,662b50841afb9c00172d880d,10.746695,106.660563,"10.7466952613032, 106.660562753677",phường Phú Định
+572,Cầu Sài Gòn 3 (Dạ cầu Bình Thạnh),58abc0cbbd82540010390ba6,10.798229,106.724311,"10.7982289959934, 106.724311485887",
+573,Quốc lộ 1 - Bùi Thanh Khiết 1,58afea5dbd82540010390c4d,10.674193,106.580477,"10.6741931544789, 106.580477356911",Xã Tân Nhựt
+574,Nguyễn Văn Trỗi - Trương Quốc Dung,5deb576d1dc17d7c5515ad07,10.797381,106.672665,"10.797381, 106.672665",
+575,Trường Sơn - Hậu Giang,5d8cdc1d766c88001718896c,10.807672,106.664479,"10.8076721060064, 106.664478778839",
+576,BX Miền Đông - Quốc Lộ 13 (1),5a606c758576340017d06626,10.814232,106.71278,"10.8142322689639, 106.712779998779",
+577,Nguyễn Văn Linh - Quốc lộ 50 (1),5a82628e5058170011f6eadb,10.719937,106.655665,"10.7199365991593, 106.655665040016",Xã Bình Hưng
+578,Quốc Lộ 1 - Độc Lập (cổng KCN Sóng Thần),6792f2248c5ed4001b27f4dc,10.875622,106.751575,"10.8756221051048, 106.751575469971",Phường Dĩ An
+579,Kha Vạn Cân - Võ Văn Ngân,5d8cd653766c88001718894c,10.850977,106.755009,"10.8509770648006, 106.75500869751",
+580,Hải Thượng Lãn Ông - Châu Văn Liêm,662b4de41afb9c00172d85c5,10.750985,106.658996,"10.7509852813336, 106.658996343613",Chợ Lớn
+581,Nam Kỳ Khởi Nghĩa -Nguyễn Thị Minh Khai 1,58af8eb2bd82540010390c30,10.779754,106.695083,"10.7797542439016, 106.695082783699",
+582,Phan Văn Trị - Lê Đức Thọ,6623ee176f998a001b25270c,10.829418,106.681902,"10.829417573494, 106.6819024086",
+583,Quốc lộ 1 - Cầu vượt Linh Xuân,58746314b807da0011e33cce,10.87333,106.76504,"10.8733304866588, 106.765040159225",Phường Linh Xuân
+584,Quốc lộ 1 - Quang Trung 1 (hướng đi Bình Phước),595f8d233dcfc400106f28f0,10.85281,106.632507,"10.8528104982269, 106.632506847382",Phường Đông Hưng Thuận
+585,Đỗ Xuân Hợp - Cầu Cống Đập.,59d34ce302eb490011a0a616,10.810449,106.77622,"10.8104489957249, 106.7762196064",
+586,Nguyễn Văn Linh - Nguyễn Thị Thập 1,662a8e641afb9c00172d2a7e,10.737936,106.721234,"10.7379358419233, 106.721234321594",phường Tân Mỹ
+587,Ba Tháng Hai - Lê Đại Hành 2,63ae7c12bfd3d90017e8f3c0,10.762142,106.656598,"10.7621422099615, 106.656598448753",Phường Phú Thọ
+588,Tam Bình (Số 81),5b0b835b0e517b00119fd80d,10.853084,106.73015,"10.8530844585776, 106.73014998436",
+589,Hai Bà Trưng - Nguyễn Hữu Cầu,662b82da1afb9c00172dce94,10.789371,106.690121,"10.7893713917772, 106.690120697021",
+590,Nút giao Cây Gõ 1 (trên cầu),5d8cd2a3766c88001718893c,10.754443,106.642914,"10.7544425503934, 106.642913818359",phường Minh Phụng
+591,Lý Thường Kiệt - Nguyễn Chí Thanh,662b4e8e1afb9c00172d865c,10.758427,106.661485,"10.7584267930315, 106.661485433578",
+592,Nguyễn Trãi - Trần Phú,66b1c190779f740018673ed4,10.755075,106.671882,"10.7550749733738, 106.67188167572",
+593,Nguyễn Đình Chiểu - Nguyễn Bỉnh Khiêm,662b7f9f1afb9c00172dca50,10.790467,106.701472,"10.7904674636287, 106.701471805573",
+594,Nút giao Bảy Hiền 2 (Hoàng Văn Thụ),58747923b807da0011e33cf5,10.793197,106.653616,"10.7931970867358, 106.653615832329",phường Tân Sơn Nhất
+595,Ba Tháng Hai - Lý Thường Kiệt 2,63ae7af4bfd3d90017e8f32c,10.763613,106.659565,"10.7636125538021, 106.659564971924",Phường Phú Thọ
+596,Tạ Quang Bửu - Phạm Hùng 1,5875d4f8b807da0011e33d1a,10.737272,106.670938,"10.7372717600591, 106.670937538147",phường Chánh Hưng
+597,Quốc Lộ 1A - Cầu Bình Phước,595d92013dcfc400106f2877,10.860703,106.71514,"10.8607025631008, 106.715140342712",Phường An Phú Đông
+598,Nguyễn Thị Định - Lê Phụng Hiểu,583f976361cfea0012cf68f9,10.761958,106.784513,"10.7619577577189, 106.784512996674",
+599,Nguyễn Văn Thủ - Trần Doãn Khanh,662b80721afb9c00172dcb28,10.788634,106.697749,"10.788633648858, 106.69774889946",
+600,Cộng Hòa - Trường Chinh,586e1f18f9fab7001111b0a5,10.807066,106.634953,"10.8070661399436, 106.634953022003",phường Tân Bình
+601,Xô Viết Nghệ Tĩnh - Phan Văn Hân (Cầu Thị Nghè),63b65f8dbfd3d90017eaa434,10.792744,106.707405,"10.7927439077816, 106.707404851913",
+602,Cao tốc LTDG - Cầu Bà Dạt 3,5d9de3c2766c880017188cb3,10.792902,106.754864,"10.7929019935409, 106.754863858223",
+603,Cách Mạng Tháng Tám – Phạm Văn Hai,63ae7cfcbfd3d90017e8f422,10.789045,106.660681,"10.7890446772791, 106.660680770874",
+604,Nút giao Hàng Xanh 8 (HX-VT),5b0e1faacddcc80011ceb449,10.80128,106.71197,"10.8012804197692, 106.711969971657",
+605,Xô Viết Nghệ Tĩnh - Nguyễn Văn Lạc,63b65fa9bfd3d90017eaa449,10.795315,106.709819,"10.7953154258079, 106.709818840027",
+606,Đinh Bộ Lĩnh - Chu Văn An,6623e7f06f998a001b25244a,10.810597,106.709175,"10.8105965337175, 106.709175109863",
+607,Nguyễn Thị Minh Khai - Tôn Thất Tùng,6623e5066f998a001b252317,10.771265,106.687192,"10.7712645500069, 106.687191724777",
+608,Tân Kỳ Tân Quý - Bình Long,662b5c141afb9c00172d93d7,10.79658,106.613742,"10.7965800987319, 106.613742113113",
+609,Hùng Vương - Lê Hồng Phong,66b1c158779f740018673eb4,10.762253,106.676441,"10.7622528812529, 106.676441431046",
+610,Nguyễn Hữu Thọ - Nguyễn Thị Thập 1,56df8381c062921100c143e2,10.740497,106.700946,"10.740497286869, 106.700946092606",phường Tân Hưng
+612,Cách Mạng Tháng Tám - Rạch Bùng Binh,6623e61d6f998a001b252377,10.779454,106.678587,"10.7794538677567, 106.678587198257",
+613,Quốc lộ 1 - Đường 15 (2),595da2dd3dcfc400106f2885,10.860118,106.698709,"10.8601177777294, 106.698709130287",Phường An Phú Đông
+614,Mai Chí Thọ - Xa Lộ Hà Nội (3),6623f1996f998a001b252805,10.809195,106.756039,"10.809194919668, 106.756038665771",
+615,Quốc lộ 1 - BQB Cầu vượt Tân Thới Hiệp B (hướng Bình Phước),595f80e83dcfc400106f28e4,10.860039,106.645693,"10.8600387525913, 106.645692586899",Phường Tân Thới Hiệp
+616,Nút giao Ngã bảy Lý Thái Tổ,5deb576d1dc17d7c5515acf5,10.767428,106.674596,"10.767428, 106.674596",
+617,Cách Mạng Tháng Tám – Hòa Hưng,631955e7c9eae60017a1c30a,10.780223,106.677144,"10.7802232516687, 106.677144169807",
+618,Nguyễn Thái Sơn - Phan Văn Trị 2,5a6060e08576340017d0660f,10.826272,106.68915,"10.8262720340397, 106.689149737358",
+619,Ba Tháng Hai - Lê Hồng Phong 2,63ae7a26bfd3d90017e8f29a,10.771138,106.672922,"10.7711380723106, 106.672922372818",Phường Hòa Hưng
+620,Nguyễn Duy Trinh - Nguyễn Thị Tư,63b548c3bfd3d90017ea77c0,10.792733,106.806947,"10.792733368728, 106.806946992874",
+621,Huỳnh Tấn Phát - Hoàng Quốc Việt,662a8c931afb9c00172d2901,10.714334,106.736941,"10.7143336880567, 106.736941337585",phường Tân Mỹ
+622,Nguyễn Trãi - Cống Quỳnh 2,63195556c9eae60017a1c2ba,10.76683,106.688016,"10.7668302628021, 106.688015724794",
+623,Phổ Quang - Huỳnh Lan Khanh,58df4adedc195800111e04b4,10.804969,106.666592,"10.8049689609963, 106.666592359543",
+626,Nguyễn Thị Định - Đường C,583f958161cfea0012cf68f5,10.766021,106.779873,"10.7660209509751, 106.779872775078",Phường Cái Lái
+627,Đinh Bộ Lĩnh - Bạch Đằng 1,5a8253615058170011f6eabf,10.803072,106.710023,"10.8030720025958, 106.710022687912",
+628,Nguyễn Thị Minh Khai - Trương Định,5deb576d1dc17d7c5515ad0f,10.776014,106.691731,"10.776014, 106.691731",
+629,Hương Lộ 3 - Đường kênh 19/5,662b51761afb9c00172d88ef,10.802956,106.610062,"10.8029560769717, 106.610062122345",
+630,Thành Thái - Tô Hiến Thành,66b1c370779f7400186740b3,10.776387,106.663513,"10.7763868520664, 106.663513183594",
+631,Tô Ký - Nguyễn Văn Quá,6623ec376f998a001b252671,10.847489,106.635168,"10.8474892954581, 106.635167598724",
+632,Nút giao Hàng Xanh 3 (Cầu Thị Nghè - Hàng Xanh),5d9dde1f766c880017188c98,10.800142,106.711294,"10.8001422321862, 106.711294054985",
+633,Xa Lộ Hà Nội - Đường D400,58b5528e17139d0010f35d52,10.871945,106.807773,"10.8719449708741, 106.807773113251",
+634,Nút giao Ngã sáu Nguyễn Tri Phương,5deb576d1dc17d7c5515ad22,10.76009,106.669124,"10.76009, 106.669124",
+635,CT Trung Lương - Võ Trần Chí 1,63b664d2bfd3d90017eaaa0f,10.685258,106.571159,"10.6852580285724, 106.571159362793",Xã Tân Nhựt
+636,Lê Lợi - Phan Bội Châu,662b85031afb9c00172dd0dc,10.772308,106.69894,"10.772307988975, 106.698939800262",
+637,Nút giao Chợ Đệm 1 (CT Trung Lương - Bùi Thanh Khiết),58d7b5a7c1e33c00112b320a,10.685964,106.576288,"10.6859643956044, 106.576287746429",Xã Tân Nhựt
+638,Nguyễn Hữu Thọ - Đường số 15,662a8f3a1afb9c00172d2b31,10.744524,106.701601,"10.7445238765742, 106.701600551605",phường Tân Hưng
+640,Hoàng Văn Thụ - Trần Huy Liệu,5d8cdb9f766c880017188968,10.799373,106.677471,"10.7993728992472, 106.677471399307",
+642,Đinh Bộ Lĩnh - Bạch Đằng 2,5a8253bc5058170011f6eac1,10.803093,106.709395,"10.8030930799773, 106.709395051003",
+644,Võ Nguyên Giáp - Thảo Điền,587c782db807da0011e33d3b,10.801012,106.738277,"10.8010116814233, 106.738277077675",
+645,Nguyễn Thị Thập - Tân Mỹ,662a8d821afb9c00172d29c8,10.738199,106.718316,"10.7381993660681, 106.718316078186",phường Tân Mỹ
+646,Lý Thường Kiệt - Bắc Hải,63ae7d29bfd3d90017e8f437,10.777831,106.656132,"10.7778307774358, 106.656131744385",
+647,Đồng Văn Cống - Nguyễn Thị Định,56de42f611f398ec0c48129f,10.773172,106.770287,"10.7731722, 106.7702866",Phường Cát Lái
+648,Nút giao Ngã sáu Phù Đổng 2,662b80b91afb9c00172dcb5b,10.77157,106.693023,"10.7715702042204, 106.693022847176",
+650,Dương Bá Trạc - Đường số 9,662b50261afb9c00172d87b2,10.742078,106.688179,"10.7420784148825, 106.688178777695",phường Chánh Hưng
+652,BX Miền Đông - Quốc Lộ 13 (2),5a8256df5058170011f6eacb,10.817262,106.713198,"10.8172620146729, 106.713198423386",
+653,Điện Biên Phủ - Trương Định,5deb576d1dc17d7c5515acfc,10.780012,106.687294,"10.7800124617515, 106.68729364872",
+654,Hoàng Văn Thụ - Hồ Văn Huê,587c8c20b807da0011e33d47,10.799447,106.674934,"10.7994466709843, 106.674934029579",
+655,Hưng Phú - Chánh Hưng 2,58744fb0b807da0011e33cc0,10.74639,106.66913,"10.7463895818732, 106.669129729271",phường Chánh Hưng
+656,Hồng Bàng - Nguyễn Thị Nhỏ,5822f23aedeb6c0012a2d6a8,10.753552,106.651154,"10.7535518857808, 106.651153564453",chợ lớn
+657,Mai Chí Thọ - Trần Quý Kiên (3),649da495a6068200171a6cb6,10.781794,106.74001,"10.7817936319045, 106.740009784698",

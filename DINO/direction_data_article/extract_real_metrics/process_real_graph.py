@@ -1,5 +1,5 @@
 """
-HCMC-TrafficSnap: Production Graph Processing and Format Conversion Utility
+IC4SD-TrafficSnap: Production Graph Processing and Format Conversion Utility
 ===========================================================================
 This script processes the raw municipal road network distance matrix (Graph_fix_py_3.xlsx)
 originating from the Ho Chi Minh City traffic surveillance camera deployment.
@@ -156,14 +156,12 @@ def process_graph(
     os.makedirs(output_metadata_dir, exist_ok=True)
 
     # 1. Export NumPy tensors
-    dist_m_path = os.path.join(output_graph_dir, "distance_m.npy")
     dist_km_path = os.path.join(output_graph_dir, "distance_km.npy")
     dir_path = os.path.join(output_graph_dir, "direction.npy")
 
-    np.save(dist_m_path, dist_m)
     np.save(dist_km_path, dist_km)
     np.save(dir_path, adj_directed)
-    print(f"[+] Saved NumPy tensors to {output_graph_dir}: distance_m.npy, distance_km.npy, direction.npy")
+    print(f"[+] Saved NumPy tensors to {output_graph_dir}: distance_km.npy, direction.npy")
 
     # 2. Export Tabular edge list
     df_edges = pd.DataFrame(edge_records)

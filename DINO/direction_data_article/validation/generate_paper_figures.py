@@ -46,15 +46,22 @@ os.makedirs(OUTPUT_FIG_DIR, exist_ok=True)
 
 def generate_fig1_spatial_map():
     """Figure 1: Geographic Distribution of 608 Camera Stations in Ho Chi Minh City."""
-    routes_path = os.path.join(BUNDLE_DIR, "metadata", "routes.csv")
-    df = pd.read_csv(routes_path)
+    cam_path = os.path.join(BUNDLE_DIR, "metadata", "routes.csv")
+    if not os.path.exists(cam_path):
+        cam_path = os.path.join(BUNDLE_DIR, "metadata", "camera_data_608Cam.csv")
+    if not os.path.exists(cam_path):
+        cam_path = os.path.join(os.path.dirname(BUNDLE_DIR), "camera_data_608Cam.csv")
+    df = pd.read_csv(cam_path)
+    
+    # Elevation attribute (default 8.0m standard mast height if not provided)
+    elevations = df['camera_elevation_m'] if 'camera_elevation_m' in df.columns else [8.0] * len(df)
     
     fig, ax = plt.subplots(figsize=(7, 6))
     
     # Scatter plot of cameras
     scatter = ax.scatter(
         df['longitude'], df['latitude'],
-        c=df['camera_elevation_m'], cmap='plasma',
+        c=elevations, cmap='plasma',
         s=28, alpha=0.85, edgecolors='k', linewidth=0.4
     )
     
@@ -142,8 +149,14 @@ def generate_fig2_temporal_and_photometric():
 
 def generate_fig3_graph_topology():
     """Figure 3: Road Distance Distribution, Node Degree, and Asymmetry."""
-    dist_path = os.path.join(BUNDLE_DIR, "metadata", "road_network_distance.xlsx")
-    df = pd.read_excel(dist_path, index_col=0)
+    dist_path_csv = os.path.join(BUNDLE_DIR, "metadata", "road_network_distance.csv")
+    dist_path_xlsx = os.path.join(BUNDLE_DIR, "metadata", "road_network_distance.xlsx")
+    if os.path.exists(dist_path_csv):
+        df = pd.read_csv(dist_path_csv, index_col=0)
+    elif os.path.exists(dist_path_xlsx):
+        df = pd.read_excel(dist_path_xlsx, index_col=0)
+    else:
+        raise FileNotFoundError(f"Không tìm thấy road_network_distance.csv tại {dist_path_csv}")
     arr = df.values.astype(float)
     np.fill_diagonal(arr, np.nan)
     

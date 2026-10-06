@@ -10,6 +10,11 @@ Mục đích: Cung cấp các tiện ích xử lý đồ thị không gian mạn
 """
 
 import os
+import sys
+
+# Ngăn chặn xung đột runtime thư viện OpenMP kép trên môi trường Windows / Anaconda
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from typing import Tuple, List, Optional, Union
 import numpy as np
 import pandas as pd
@@ -30,7 +35,7 @@ def load_road_graph(
         W_ij = 0 nếu ngược lại
 
     Args:
-        graph_source_path (str): Đường dẫn đến distance_m.npy, road_network_distance.csv hoặc .xlsx.
+        graph_source_path (str): Đường dẫn đến distance_km.npy, road_network_distance.csv hoặc .xlsx.
         sigma_scale (float): Hệ số tỷ lệ độ lệch chuẩn sigma.
         distance_threshold_km (float): Ngưỡng khoảng cách tối đa để thiết lập cạnh đồ thị (km, mặc định: 6.0).
         sheet_name: Tên hoặc chỉ số sheet nếu dùng tệp Excel.
@@ -180,3 +185,64 @@ def calculate_dual_directed_transition_matrices(adj: np.ndarray) -> Tuple[np.nda
     P_backward = np.diag(d_in_inv) @ adj_T
 
     return P_forward.astype(np.float32), P_backward.astype(np.float32)
+
+
+def load_directed_graph_operators(
+    distance_npy_path: str,
+    sigma: Optional[float] = 1.09,
+    cutoff_km: float = 6.0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Nạp ma trận khoảng cách có hướng từ tệp .npy và tính toán các toán tử khuếch tán có hướng kép:
+        - Forward Transition Matrix: P_f = D_out^{-1} * W
+        - Backward Transition Matrix: P_b = D_in^{-1} * W^T
+        - Directed Adjacency Matrix: W_ij = exp(-(d_ij / sigma)^2) với 0 < d_ij <= cutoff_km
+
+    Theo cấu trúc mô hình hóa DCRNN (Li et al., ICLR 2018) và Graph WaveNet (Wu et al., IJCAI 2019).
+
+    Args:
+        distance_npy_path (str): Đường dẫn đến tệp ma trận khoảng cách distance_km.npy [N, N].
+        sigma (float, optional): Hệ số chuẩn hóa Gaussian (km, mặc định: 1.09).
+                                 Nếu None hoặc <= 0, sẽ tự động tính bằng độ lệch chuẩn khoảng cách.
+        cutoff_km (float): Ngưỡng cắt bán kính lân cận (km, mặc định: 6.0).
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray]:
+            - Pf: Forward transition matrix [N, N] (float32)
+            - Pb: Backward transition matrix [N, N] (float32)
+            - W:  Directed weighted adjacency matrix [N, N] (float32)
+    """
+    if not os.path.exists(distance_npy_path):
+        raise FileNotFoundError(f"Không tìm thấy tệp ma trận khoảng cách tại: {distance_npy_path}")
+
+    raw_dist = np.load(distance_npy_path)
+    # Tự động chuẩn hóa sang km nếu đơn vị gốc là mét
+    if np.nanmean(raw_dist[raw_dist > 0]) > 50.0:
+        dist_km = raw_dist / 1000.0
+    else:
+        dist_km = raw_dist.copy()
+
+    # Thay thế NaN hoặc Inf
+    dist_km = np.nan_to_num(dist_km, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Xác định mặt nạ cạnh hợp lệ
+    valid_mask = (dist_km > 0.0) & (dist_km <= cutoff_km)
+
+    # Tính sigma tự động nếu cần
+    if sigma is None or sigma <= 0.0:
+        valid_distances = dist_km[valid_mask]
+        if len(valid_distances) > 0:
+            sigma = float(np.std(valid_distances))
+            if sigma < 1e-4:
+                sigma = float(np.mean(valid_distances))
+        else:
+            sigma = 1.09
+
+    N = dist_km.shape[0]
+    W = np.zeros((N, N), dtype=np.float32)
+    W[valid_mask] = np.exp(-((dist_km[valid_mask] / (sigma + 1e-9)) ** 2)).astype(np.float32)
+    np.fill_diagonal(W, 0.0)
+
+    Pf, Pb = calculate_dual_directed_transition_matrices(W)
+    return Pf, Pb, W
+

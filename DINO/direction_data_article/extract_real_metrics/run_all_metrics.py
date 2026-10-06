@@ -76,6 +76,7 @@ def main():
     parser.add_argument("--image-dir", type=str, default="", help="Đường dẫn đến kho ảnh camera thực tế")
     parser.add_argument("--sample-mode", action="store_true", help="Chạy ở chế độ mẫu (sử dụng zenodo_bundle/sample_preview)")
     parser.add_argument("--sample-size", type=int, default=10000, help="Số lượng ảnh lấy mẫu phân tầng")
+    parser.add_argument("--audit-samples", type=int, default=200000, help="Số lượng ảnh kiểm định PII (mặc định: 200000)")
     parser.add_argument("--max-workers", type=int, default=4, help="Số tiến trình CPU xử lý song song")
 
     args = parser.parse_args()
@@ -84,11 +85,11 @@ def main():
     base_dir = Path(__file__).resolve().parent
     sample_preview_dir = base_dir.parent / "zenodo_bundle" / "sample_preview"
     metadata_dir = base_dir.parent / "zenodo_bundle" / "metadata"
-    metadata_stations = metadata_dir / "camera_data_608Cam.csv"
+    metadata_stations = metadata_dir / "routes.csv"
+    if not metadata_stations.exists():
+        metadata_stations = metadata_dir / "camera_data_608Cam.csv"
     if not metadata_stations.exists():
         metadata_stations = base_dir.parent / "camera_data_608Cam.csv"
-    if not metadata_stations.exists():
-        metadata_stations = metadata_dir / "routes.csv"
     metadata_distance = metadata_dir / "road_network_distance.csv"
     output_dir = base_dir / "output"
     paper_tables_dir = base_dir.parent / "paper" / "tables"
@@ -141,7 +142,7 @@ def main():
             "--stations-csv", str(metadata_stations),
             "--distance-csv", str(metadata_distance),
             "--output-dir", str(output_dir),
-            "--cutoff-meters", "5000.0"
+            "--cutoff-meters", "6000.0"
         ]
     )
     if not step3_ok:
@@ -154,7 +155,7 @@ def main():
         [
             "--input-dir", target_image_dir,
             "--output-dir", str(output_dir),
-            "--audit-samples", "2000"
+            "--audit-samples", str(args.audit_samples)
         ]
     )
     if not step4_ok:

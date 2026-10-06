@@ -1,7 +1,9 @@
-# HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic
+# IC4SD-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Geospatial Road Network Dataset for Heterogeneous Urban Traffic
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22929940.svg)](https://doi.org/10.5281/zenodo.22929940)
-[![License: CC BY 4.0](https://img.shields.io/badge/License-CC_BY_4.0-blue.svg)](https://creativecommons.org/licenses/by/4.0/)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![License: ODbL](https://img.shields.io/badge/License-ODbL-blue.svg)](https://opendatacommons.org/licenses/odbl/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
 
@@ -9,59 +11,58 @@
 
 ## 1. Overview
 
-**HCMC-TrafficSnap** is an open-access, city-scale benchmark composed of **over 1,000,000 unlabeled surveillance camera snapshots** ($\approx 1.22$ million total frames) coupled with an **OpenStreetMap-derived directed spatial road network graph**, acquired across **608 active municipal surveillance camera stations** in **Ho Chi Minh City (HCMC), Vietnam**.
+**IC4SD-TrafficSnap** is an open-access multimodal dataset coupling **714,123 discrete surveillance camera snapshots** (44.38 GiB / 47.66 GB in standard stream JPEG format) across **608 indexed camera stations** and **geospatial road network mapping attributes** in **Ho Chi Minh City, Vietnam** (covering former urban districts of the metropolitan core).
 
-The dataset spans **7 continuous calendar days (168 consecutive hours)**, totaling approximately **80 GB** of visual imagery capturing the dynamics of Southeast Asian urban mobility—a regime characterized by intense motorcycle density (70–80% modal share), high spatial occlusions, non-lane-based flow, and tropical monsoon illumination shifts.
+As a direct derived representation based on physical road network geometry and sequential corridor adjacency on OpenStreetMap, a $608 \times 608$ directed spatial graph topology is provided for plug-and-play spatio-temporal modeling.
 
-### Key Benchmark Characteristics
-- **Scale:** 608 active municipal camera stations (indexed in range `[1, 657]`).
-- **Visual Modality:** Discrete $512 \times 288$ pixel JPEG snapshots with an average file size of $65.87 \pm 9.19$~KB.
-- **Temporal Span:** 7 continuous days (Monday 00:00 to Sunday 23:59 ICT) sampled at nominal 5-minute intervals ($\Delta T \approx 300$~s, $\sim 12$ snapshots/hour/station).
-- **Crawl Clock Offset:** Average client crawl time lag relative to hardware camera clocks is $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s.
-- **Spatial Topology:** $608 \times 608$ directed road routing distance matrix from OpenStreetMap (2,420 valid corridors $\le 5.0$~km), capturing 1,054 strictly one-way links and 232 distance-asymmetric bidirectional pairs.
-- **Privacy by Design:** Camera elevations ($>6$~m) and sub-Nyquist ground sampling distance physically guarantee zero resolvable human faces or vehicle license plates (0.00% PII).
+### Key Modalities & Specifications
+- **Surveillance Stations:** 608 indexed municipal stations spanning arterial corridors and intersections across former urban districts in Ho Chi Minh City, fully mapped to geospatial coordinates and network topology.
+- **Visual Image Time-Series:** Discrete $512 \times 288$ pixel JPEG snapshots ($65.17 \pm 13.36$~KB) acquired over 93.6 continuous hours (spanning 5 calendar days: Oct 2 to Oct 6, 2026) at an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s; nominal target: $300$~s / 5.0 min).
+- **Geospatial Road Network:** Camera GPS coordinates, mounting elevations, and pairwise shortest driving distance matrix ($608 \times 608$) derived via OSRM (v5.27.1) from OpenStreetMap.
+- **Derived Directed Spatial Graph:** 2,450 valid directed corridors ($\le 6.0$~km), capturing 1,070 unidirectional links without reverse edges and 238 distance-asymmetric bidirectional pairs.
+- **Quantified Negligible Privacy Risk:** Elevated mounting ($>6$~m) and downward oblique viewing geometry physically guarantee zero legible human faces or vehicle license plates (95\% CI upper bound $\le 0.0015\%$ via Rule of Three across 200,000 audited frames).
 
 ---
 
-## 2. Benchmark Specifications
+## 2. Dataset Specifications
 
 | Attribute | Specification |
 |:---|:---|
-| **Geographic Location** | Ho Chi Minh City, Vietnam ($10^\circ 46' N, 106^\circ 40' E$) |
-| **Active Camera Stations** | 608 fixed surveillance cameras |
-| **Observation Duration** | 7 continuous calendar days (168 consecutive hours) |
-| **Total Snapshot Volume** | $>1,000,000$ ($\approx 1.22 \times 10^6$ frames) |
-| **Total Archive Size** | $\approx 80 \text{ GB}$ (uncompressed JPEG daily tarballs) |
+| **Geographic Location** | Ho Chi Minh City, Vietnam (former urban districts, $10^\circ 46' N, 106^\circ 40' E$) |
+| **Indexed Stations** | 608 active surveillance cameras across municipal road network |
+| **Observation Duration** | 93.6 continuous hours (spanning 5 calendar days) |
+| **Total Snapshot Volume** | 714,123 frames |
+| **Archive Storage Size** | 44.38 GiB (binary) / 47.66 GB (decimal) in standard stream JPEG format |
 | **Image Resolution** | Uniform $512 \times 288$ pixels (16:9 streaming snapshots) |
 | **Image Naming Format** | `{station_id}_{unix_timestamp}.jpg` |
-| **Annotation State** | **Unlabeled (Raw image time-series snapshots)** |
-| **Spatial Graph** | $608 \times 608$ directed road network routing distance matrix (OpenStreetMap) |
-| **License** | Creative Commons Attribution 4.0 International (CC BY 4.0) |
+| **Geospatial Road Network** | Station GPS coordinates, elevations, and OSM distance matrix |
+| **Derived Graph** | $608 \times 608$ directed road network routing distance matrix ($|E| = 2,450$) |
+| **Licensing** | Academic Research (imagery & metadata), ODbL (road network graph), MIT (code) |
 
 ---
 
 ## 3. Repository Structure
 
 ```text
-HCMC-TrafficSnap/
-├── LICENSE                                    # CC BY 4.0 Open-Access Legal Instrument
-├── .zenodo.json                               # Zenodo Deposition Ingestion Metadata
+IC4SD-TrafficSnap/
+├── LICENSE                                    # Multi-part licensing instrument (Academic, ODbL, MIT)
+├── .zenodo.json                               # Zenodo deposition metadata schema
 ├── CITATION.cff                               # Citation File Format (v1.2.0)
-├── README.md                                  # Human-Readable Documentation & Quickstart
-├── data_dictionary.md                         # Canonical Attribute Specification
+├── README.md                                  # Human-readable documentation & quickstart
+├── data_dictionary.md                         # Attribute definitions & schema specifications
 ├── checksums.sha256                           # SHA-256 integrity verification hashes
 │
-├── metadata/                                  # Spatial metadata and topology
-│   ├── routes.csv                             # Camera station geographic & administrative metadata
-│   ├── road_network_distance.xlsx             # Directed OpenStreetMap distance matrix (Excel)
+├── metadata/                                  # Spatial metadata and routing attributes
+│   ├── routes.csv                             # Primary camera registry: ID, Location, CamID, coords & elevations
+│   ├── stations.csv                           # Station topology registry, degrees & node roles
 │   └── road_network_distance.csv              # Directed OpenStreetMap distance matrix (CSV)
 │
-├── graph/                                     # Machine-learning ready graph tensors
-│   ├── distance_m.npy                         # Directed routing distances in meters (608x608)
+├── graph/                                     # Machine-learning ready derived graph tensors
+│   ├── distance_km.npy                        # Directed routing distances in kilometers (608x608)
 │   ├── direction.npy                          # Directional connectivity adjacency (608x608)
-│   └── edges.csv                              # Tabular list of 2,420 valid directed corridor links
+│   └── edges.csv                              # Tabular list of 2,450 valid directed corridor links
 │
-├── sample_preview/                            # Starter demonstration subset (~500 MB)
+├── sample_preview/                            # Starter demonstration subset
 │   └── sample_camera_sequences/               # Sample continuous frames from representative stations
 │
 └── code/                                      # Reference loaders and preprocessing utilities
@@ -73,59 +74,37 @@ HCMC-TrafficSnap/
 
 ---
 
-## 4. Quick-Start Usage
+## 4. Quickstart: PyTorch Data Loading & Graph Ingestion
 
-### 4.1 PyTorch Dataset & Batch Sampling
+### Ingestion of Image Time-Series
 ```python
-from code.load_unlabeled_images import TrafficCameraUnlabeledDataset
-from code.camera_sampler import CameraGroupedSampler
-from torch.utils.data import DataLoader
+from code.load_unlabeled_images import CameraSequenceDataset
 
-# 1. Initialize dataset
-dataset = TrafficCameraUnlabeledDataset(
-    image_dir="sample_preview/sample_camera_sequences"
+dataset = CameraSequenceDataset(
+    image_dir="sample_preview/sample_camera_sequences",
+    resolution=(512, 288)
 )
-
-# 2. Multi-camera SSL sampler (e.g., 8 cameras, 4 snapshots each)
-sampler = CameraGroupedSampler(
-    dataset=dataset,
-    cameras_per_batch=8,
-    samples_per_camera=4,
-    shuffle=True
-)
-
-loader = DataLoader(dataset, batch_sampler=sampler, num_workers=2)
-for images, metadata in loader:
-    print(f"Batch shape: {images.shape}")
-    print(f"Camera IDs: {metadata['station_id']}")
-    break
+print(f"Loaded {len(dataset)} valid surveillance snapshots.")
 ```
 
-### 4.2 Loading Directed Spatial Graph
+### Ingestion of Directed Transition Operators
 ```python
-from code.graph_utils import load_road_graph, calculate_dual_directed_transition_matrices
+import numpy as np
+from code.graph_utils import load_directed_graph_operators
 
-# 1. Load weighted directed adjacency
-adj, node_ids = load_road_graph(
-    excel_path="metadata/road_network_distance.xlsx",
-    distance_threshold_km=5.0
+# Computes forward (Pf) and backward (Pb) diffusion matrices
+Pf, Pb, W = load_directed_graph_operators(
+    distance_npy_path="graph/distance_km.npy",
+    sigma=1.09,
+    cutoff_km=6.0
 )
-
-# 2. Compute DCRNN directed random walk matrices
-P_forward, P_backward = calculate_dual_directed_transition_matrices(adj)
-print(f"Forward transition: {P_forward.shape}, Backward transition: {P_backward.shape}")
+print("Diffusion operators ready. Pf shape:", Pf.shape)
 ```
 
 ---
 
-## 5. Citation
+## 5. Licensing & Terms of Use
 
-```bibtex
-@article{le2026hcmctrafficsnap,
-  title={{HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic}},
-  author={Le, Viet-Anh and Nguyen-Trong, Khanh},
-  journal={Data in Brief},
-  year={2026},
-  doi={10.5281/zenodo.22929940}
-}
-```
+- **Surveillance Snapshots & Metadata:** Aggregated from the public traffic web portal (giaothong.hochiminhcity.gov.vn) for non-commercial academic research and educational use.
+- **Geospatial Road Network & Derived Graph Tensors:** Derived from OpenStreetMap data, licensed under the [Open Database License (ODbL v1.0)](https://opendatacommons.org/licenses/odbl/).
+- **Code & Utility Scripts:** Licensed under the [MIT License](https://opensource.org/licenses/MIT).

@@ -1,54 +1,56 @@
-Creative Commons Attribution 4.0 International Public License
+# IC4SD-TrafficSnap Licensing and Terms of Use
 
-By exercising the Licensed Rights (defined below), You accept and agree to be bound by the terms and conditions of this Creative Commons Attribution 4.0 International Public License ("Public License"). To the extent this Public License may be interpreted as a contract, You are granted the Licensed Rights in consideration of Your acceptance of these terms and conditions, and the Licensor grants You such rights in consideration of benefits the Licensor receives from making the Licensed Material available under these terms and conditions.
+The IC4SD-TrafficSnap dataset incorporates multiple data modalities and code assets, governed by the following respective open licensing instruments:
 
-Section 1 -- Definitions.
+---
 
-a. Adapted Material means material subject to Copyright and Similar Rights that is derived from or based upon the Licensed Material and in which the Licensed Material is translated, altered, arranged, transformed, or otherwise modified in a manner requiring permission under the Copyright and Similar Rights held by the Licensor.
-b. Copyright and Similar Rights means copyright and/or similar rights closely related to copyright including, without limitation, performance, broadcast, sound recording, and Sui Generis Database Rights, without regard to how the rights are labeled or categorized.
-c. Effective Technological Measures means those measures that, in the absence of proper authority, may not be circumvented under laws fulfilling obligations under Article 11 of the WIPO Copyright Treaty adopted on December 20, 1996, and/or similar international agreements.
-d. Exceptions and Limitations means fair use, fair dealing, and/or any other exception or limitation to Copyright and Similar Rights that applies to Your use of the Licensed Material.
-e. Licensed Material means the artistic or literary work, database, or other material to which the Licensor applied this Public License.
-f. Licensed Rights means the rights granted to You subject to the terms and conditions of this Public License, which are limited to all Copyright and Similar Rights that apply to Your use of the Licensed Material and that the Licensor has authority to license.
-g. Licensor means the individual(s) or entity(ies) granting rights under this Public License.
-h. Share means to provide material to the public by any means or process that requires permission under the Licensed Rights, such as reproduction, public display, public performance, distribution, dissemination, communication, or importation, and to make material available to the public including in ways that members of the public may access the material from a place and at a time individually chosen by them.
-i. Sui Generis Database Rights means rights other than copyright resulting from Directive 96/9/EC of the European Parliament and of the Council of 11 March 1996 on the legal protection of databases, as amended and/or succeeded, as well as other essentially equivalent rights anywhere in the world.
-j. You means the individual or entity exercising the Licensed Rights under this Public License.
+## 1. Primary Surveillance Imagery and Vehicle Count Annotations
+**License:** Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)  
+**Applies to:**
+- Unlabeled camera snapshots (`sample_preview/`, raw JPEG archives).
+- Ground-truth vehicle counting annotations.
 
-Section 2 -- Scope.
+You are free to:
+- **Share:** copy and redistribute the material in any medium or format.
+- **Adapt:** remix, transform, and build upon the material.
 
-a. License grant.
-   1. Subject to the terms and conditions of this Public License, the Licensor hereby grants You a worldwide, royalty-free, non-sublicensable, non-exclusive, irrevocable license to exercise the Licensed Rights in the Licensed Material to:
-      A. reproduce and Share the Licensed Material, in whole or in part; and
-      B. produce, reproduce, and Share Adapted Material.
-   2. Exceptions and Limitations. For the avoidance of doubt, where Exceptions and Limitations apply to Your use, this Public License does not apply, and You do not need to comply with its terms and conditions.
-   3. Term. The term of this Public License is specified in Section 6(a).
-   4. Media and formats; technical modifications allowed. The Licensor authorizes You to exercise the Licensed Rights in all media and formats whether now known or hereafter created, and to make technical modifications necessary to do so.
-   5. Downstream recipients. Every recipient of the Licensed Material automatically receives an offer from the Licensor to exercise the Licensed Rights under the terms and conditions of this Public License.
-   6. No endorsement. Nothing in this Public License constitutes or may be construed as permission to assert or imply that You are, or that Your use of the Licensed Material is, sponsored, endorsed, or granted official status by, the Licensor or others designated to receive attribution.
+Under the following terms:
+- **Attribution:** You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+- **NonCommercial:** You may not use the material for commercial purposes without explicit permission.
 
-Section 3 -- License Conditions.
+Official Legal Code: https://creativecommons.org/licenses/by-nc/4.0/legalcode
 
-Your exercise of the Licensed Rights is expressly made subject to the following conditions:
+---
 
-a. Attribution.
-   1. If You Share the Licensed Material (including in modified form), You must:
-      A. retain the following if it is supplied by the Licensor with the Licensed Material:
-         i. identification of the creator(s) of the Licensed Material and any others designated to receive attribution, in any reasonable manner requested by the Licensor;
-         ii. a copyright notice;
-         iii. a notice that refers to this Public License;
-         iv. a notice that refers to the disclaimer of warranties;
-         v. a URI or hyperlink to the Licensed Material to the extent reasonably practicable;
-      B. indicate if You modified the Licensed Material and retain an indication of any previous modifications; and
-      C. indicate the Licensed Material is licensed under this Public License, and include the text of, or the URI or hyperlink to, this Public License.
+## 2. Geospatial Road Network and Derived Spatial Graph Tensors
+**License:** Open Database License (ODbL v1.0)  
+**Applies to:**
+- `metadata/routes.csv`
+- `metadata/road_network_distance.csv`
+- `metadata/stations.csv`
+- `graph/distance_km.npy`
+- `graph/direction.npy`
+- `graph/edges.csv`
 
-Section 4 -- Sui Generis Database Rights.
+The road network routing distances and corridor geometries are derived from OpenStreetMap data (© OpenStreetMap contributors). Under the ODbL:
+- Any adapted database produced from this data must be released under the ODbL.
+- Proper attribution to OpenStreetMap contributors must be maintained.
 
-Where the Licensed Rights include Sui Generis Database Rights that apply to Your use of the Licensed Material:
-a. for the avoidance of doubt, Section 2(a)(1) grants You the right to extract, reuse, reproduce, and Share all or a substantial portion of the contents of the database;
-b. if You include all or a substantial portion of the contents of the database in a database in which You have Sui Generis Database Rights, then the database in which You have Sui Generis Database Rights (but not its individual contents) is Adapted Material; and
-c. You must comply with the conditions in Section 3(a) if You Share all or a substantial portion of the contents of the database.
+Official Legal Code: https://opendatacommons.org/licenses/odbl/1.0/
 
-Section 5 -- Disclaimer of Warranties and Limitation of Liability.
+---
 
-Unless otherwise separately undertaken by the Licensor, to the maximum extent possible, the Licensor offers the Licensed Material as-is and as-available, and makes no representations or warranties of any kind concerning the Licensed Material, whether express, implied, statutory, or other. This includes, without limitation, warranties of title, merchantability, fitness for a particular purpose, non-infringement, absence of latent or other defects, accuracy, or the presence or absence of errors, whether or not known or discoverable. Where disclaimers of warranties are not allowed in full or in part, this disclaimer may not apply to You.
+## 3. Reference Code and Ingestion Utilities
+**License:** MIT License  
+**Applies to:**
+- `code/load_unlabeled_images.py`
+- `code/camera_sampler.py`
+- `code/graph_utils.py`
+
+Copyright (c) 2026 Viet-Anh Le & Khanh Nguyen-Trong (IC4SD Lab, PTIT)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

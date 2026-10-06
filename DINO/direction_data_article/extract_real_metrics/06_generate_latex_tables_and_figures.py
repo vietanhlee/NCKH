@@ -102,16 +102,19 @@ def generate_latex_tables(metrics: Dict[str, Any], output_dirs: List[str]):
     total_stations = graph_stats.get("num_nodes", 608)
     res_w = 512
     res_h = 288
-    total_gb = img_stats.get("total_size_gb", 44.38)
+    total_gib = img_stats.get("total_size_gib", 44.38)
+    total_gb = img_stats.get("total_size_gb", 47.66)
     file_size_mean = img_stats.get("mean_file_size_kb", 65.17)
     file_size_std = img_stats.get("std_file_size_kb", 13.36)
     obs_hours = img_stats.get("observation_duration_hours", 93.6)
-    obs_days = img_stats.get("observation_duration_days", 3.9)
+    obs_days = img_stats.get("observation_duration_days", 3.90)
     mean_dt = img_stats.get("mean_delta_t_seconds", 269.0)
     median_dt = img_stats.get("median_delta_t_seconds", 263.0)
     std_dt = img_stats.get("std_delta_t_seconds", 239.7)
     day_pct = img_stats.get("daytime_pct", 48.8)
     night_pct = img_stats.get("nighttime_pct", 51.2)
+    day_count = img_stats.get("daytime_images_count", 348464)
+    night_count = img_stats.get("nighttime_images_count", 365659)
 
     lum_mean = photo_stats.get("photometric_summary", {}).get("mean_luminance_overall", 98.23)
     lum_std = photo_stats.get("photometric_summary", {}).get("std_luminance_overall", 16.35)
@@ -120,53 +123,68 @@ def generate_latex_tables(metrics: Dict[str, Any], output_dirs: List[str]):
     entropy_std = photo_stats.get("photometric_summary", {}).get("std_shannon_entropy_bits", 0.33)
     laplacian_mean = photo_stats.get("photometric_summary", {}).get("mean_laplacian_variance", 3015.71)
     laplacian_std = photo_stats.get("photometric_summary", {}).get("std_laplacian_variance", 1499.86)
-    mad_val = photo_stats.get("temporal_dynamics_and_integrity", {}).get("mean_consecutive_mad", 42.30)
-    pixel_change_pct = photo_stats.get("temporal_dynamics_and_integrity", {}).get("mean_pixel_change_ratio_pct", 81.32)
-    frozen_pct = photo_stats.get("temporal_dynamics_and_integrity", {}).get("frozen_dead_frame_ratio_pct", 0.0)
+    mad_median = photo_stats.get("temporal_dynamics_and_integrity", {}).get("median_consecutive_mad", 9.45)
+    mad_mean = photo_stats.get("temporal_dynamics_and_integrity", {}).get("mean_consecutive_mad", 10.82)
+    mad_std = photo_stats.get("temporal_dynamics_and_integrity", {}).get("std_consecutive_mad", 3.65)
+    disp_median = photo_stats.get("temporal_dynamics_and_integrity", {}).get("median_pixel_displacement_pct", 15.82)
+    disp_mean = photo_stats.get("temporal_dynamics_and_integrity", {}).get("mean_pixel_displacement_pct", 18.41)
+    disp_std = photo_stats.get("temporal_dynamics_and_integrity", {}).get("std_pixel_displacement_pct", 6.20)
+    pct1_mad = photo_stats.get("temporal_dynamics_and_integrity", {}).get("percentile_1st_consecutive_mad", 2.80)
 
-    tex_summary = f"""% Bảng tổng quan thông số kỹ thuật HCMC-TrafficSnap (Chuẩn xuất bản Elsevier Data in Brief)
+    pii_samples = pii_stats.get("pii_audit_overview", {}).get("total_sampled_images", 200000)
+    pii_upper = pii_stats.get("pii_audit_overview", {}).get("rule_of_three_upper_bound_pct", 0.0015)
+
+    tex_summary = f"""% Table 3: Thống kê định lượng tập ảnh và kiểm toán thị giác IC4SD-TrafficSnap (Chuẩn xuất bản Elsevier Data in Brief)
 \\begin{{table*}}[!htbp]
 \\centering
 \\footnotesize
-\\setlength{{\\tabcolsep}}{{5pt}}
-\\renewcommand{{\\arraystretch}}{{1.12}}
-\\caption{{Quantitative characteristics and technical specifications of the HCMC-TrafficSnap dataset.}}
+\\setlength{{\\tabcolsep}}{{6pt}}
+\\renewcommand{{\\arraystretch}}{{1.18}}
+\\caption{{Empirical characteristics, acquisition timeline, and photometric descriptors of the visual snapshot corpus.}}
 \\label{{tab:summary_stats}}
-\\begin{{tabularx}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}p{{5.4cm}} >{{\\raggedright\\arraybackslash}}p{{3.2cm}} >{{\\raggedright\\arraybackslash}}X @{{}}}}
+\\begin{{tabularx}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}p{{5.5cm}} >{{\\raggedright\\arraybackslash}}p{{3.8cm}} >{{\\raggedright\\arraybackslash}}X @{{}}}}
 \\toprule
-\\textbf{{Characteristic / Parameter}} & \\textbf{{Empirical Value}} & \\textbf{{Technical Specification / Interpretation}} \\\\
+\\textbf{{Characteristic / Descriptor}} & \\textbf{{Empirical Measurement}} & \\textbf{{Technical Specification / Dataset Context}} \\\\
 \\midrule
-\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{\\textsf{{A. Camera Network Infrastructure \\& Spatial Topology}}}}}} \\\\
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{A. Ingestion Timeline \\& Quantitative Volume}}}} \\\\
 \\addlinespace[1.5pt]
-Indexed surveillance stations & ${total_stations}$ nodes ($1 - 657$) & Urban arterials \\& intersections across Ho Chi Minh City \\\\
-Continuous active stations ($>1,200$ frames) & $572$ stations ($94.08\\%$) & Continuous multi-day visual time-series monitoring \\\\
-Initial stream dropout stations ($2$ frames) & $36$ stations ($5.92\\%$) & Upstream municipal streaming server connection timeout \\\\
-Road routing horizon \\& corridors & $6.0$~km cutoff & $2,450$ directed edges across $1,760$ connected node pairs \\\\
+Observation duration & $\\mathbf{{{obs_hours:.1f}\\text{{ hours}}}}$ (${obs_days:.2f}$ days) & Spanning 5 calendar days: Oct 2 (17:37) to Oct 6 (15:12 ICT) \\\\
+\\addlinespace[1.5pt]
+Total valid snapshots collected & $\\mathbf{{{total_imgs:,}\\text{{ frames}}}}$ & Time-lapse surveillance image bank \\\\
+\\addlinespace[1.5pt]
+Monitored surveillance endpoints & $\\mathbf{{{total_stations}\\text{{ stations}}}}$ & Integrated active municipal camera network across urban corridors; mean: $1,174.5$ frames/station (up to $1,268$) \\\\
+\\addlinespace[1.5pt]
+Total archive storage volume & $\\mathbf{{{total_gib:.2f}\\text{{ GiB}}}}$ ($\\mathbf{{{total_gb:.2f}\\text{{ GB}}}}$) & 3-channel RGB JPEG stream archive (Quality factor $\\approx 75$--$80$) \\\\
+\\addlinespace[1.5pt]
+Native snapshot frame resolution & $\\mathbf{{{res_w} \\times {res_h}\\text{{ pixels}}}}$ & $16:9$ streaming aspect ratio ($100\\%$ uniform) \\\\
+\\addlinespace[1.5pt]
+Average snapshot file size & $\\mathbf{{{file_size_mean:.2f} \\pm {file_size_std:.2f}\\text{{ KB}}}}$ & Median: $64.8$~KB (Empirical range: $[31.2, 118.4]$~KB) \\\\
+\\addlinespace[1.5pt]
+Empirical sampling interval ($\\Delta T$) & $\\mathbf{{{mean_dt:.1f} \\pm {std_dt:.1f}\\text{{ s}}}}$ & Median: ${median_dt:.1f}$~s (Nominal polling target: $300$~s / 5.0 min) \\\\
+\\addlinespace[1.5pt]
+Clock-based day / night schedule & $\\mathbf{{{day_pct:.1f}\\% \\;/\\; {night_pct:.1f}\\%}}$ & Daytime ($06:00$--$18:00$: ${day_count:,}$) vs. Nighttime (${night_count:,}$ frames) \\\\
+\\addlinespace[1.5pt]
+Client ingestion time latency ($\\Delta t_{{\\text{{lag}}}}$) & $\\mathbf{{15.0 \\pm 4.2\\text{{ s}}}}$ & Buffer-to-disk offset on NTP-synchronized stations ($1.8\\%$ un-synchronized) \\\\
 \\midrule
-\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{\\textsf{{B. Temporal Timeline \\& Visual Data Volume}}}}}} \\\\
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{B. Photometric Diversity \\& Optical Descriptors}}}} \\\\
 \\addlinespace[1.5pt]
-Continuous observation period & ${obs_hours:.1f}$ hours (${obs_days:.1f}$ days) & Oct 2, 2026 (17:37) to Oct 6, 2026 (15:12 ICT) \\\\
-Total valid snapshots collected & ${total_imgs:,}$ frames & High-frequency time-lapse surveillance image bank \\\\
-Total uncompressed storage volume & ${total_gb:.2f}$~GB & Standardized 3-channel RGB JPEG image archive \\\\
-Native snapshot frame resolution & ${res_w} \\times {res_h}$ pixels & $16:9$ aspect ratio streaming JPEG (100\\% uniform) \\\\
-Average snapshot file size & ${file_size_mean:.2f} \\pm {file_size_std:.2f}$~KB & Median: $64.8$~KB (Empirical range: $[31.2, 118.4]$~KB) \\\\
-Empirical sampling interval ($\\Delta T$) & ${mean_dt:.1f} \\pm {std_dt:.1f}$~s & Median: ${median_dt:.1f}$~s (Nominal polling target: 5.0 minutes) \\\\
-Diurnal illumination distribution & $48.8\\% \\;/\\; 51.2\\%$ & Daytime ($348,464$) vs. Nighttime ($365,659$ frames) \\\\
-Client ingestion time latency ($\\Delta t_{{\\text{{lag}}}}$) & ${photo_stats.get('client_lag_seconds', 15.0):.1f} \\pm 4.2$~s & Ingestion buffer-to-disk lag relative to camera hardware \\\\
+Perceived mean luminance ($Y$) & $\\mathbf{{{lum_mean:.2f} \\pm {lum_std:.2f}}}$ & ITU-R BT.601 8-bit grayscale range $[0, 255]$ \\\\
+\\addlinespace[1.5pt]
+Root-mean-square (RMS) contrast & $\\mathbf{{{rms_contrast:.2f}}}$ & Textural intensity variation between asphalt and vehicles \\\\
+\\addlinespace[1.5pt]
+Shannon spatial entropy & $\\mathbf{{{entropy_mean:.2f} \\pm {entropy_std:.2f}\\text{{ bits}}}}$ & Pixel spatial information density (theoretical maximum: 8.0) \\\\
+\\addlinespace[1.5pt]
+Laplacian edge sharpness & $\\mathbf{{{laplacian_mean:.2f} \\pm {laplacian_std:.2f}}}$ & High empirical focus variance $\\text{{Var}}(\\nabla^2 I)$ confirming adequate optical focus \\\\
 \\midrule
-\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{\\textsf{{C. Photometric Diversity \\& Optical Quality}}}}}} \\\\
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{C. Motion Dynamics \\& Visual Privacy Safeguards}}}} \\\\
 \\addlinespace[1.5pt]
-Perceived mean luminance ($Y$) & ${lum_mean:.2f} \\pm {lum_std:.2f}$ & ITU-R BT.601 8-bit grayscale range $[0, 255]$ \\\\
-Root-mean-square (RMS) contrast & ${rms_contrast:.2f}$ & Textural intensity variation between road and vehicles \\\\
-Shannon spatial entropy & ${entropy_mean:.2f} \\pm {entropy_std:.2f}$~bits & Pixel information density (theoretical maximum: 8.0) \\\\
-Laplacian edge focus sharpness & ${laplacian_mean:.2f} \\pm {laplacian_std:.2f}$ & Mean $\\text{{Var}}(\\nabla^2 I) \\gg 50$ (Zero blurry frames detected) \\\\
-\\midrule
-\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{\\textsf{{D. Motion Dynamics \\& Privacy Audit Safeguards}}}}}} \\\\
+Consecutive frame difference (MAD) & Median: $\\mathbf{{{mad_median:.2f}}}$ ($\\mu = {mad_mean:.2f} \\pm {mad_std:.2f}$) & Mean Absolute Difference across 5-min consecutive pairs (8-bit grayscale) \\\\
 \\addlinespace[1.5pt]
-Consecutive frame difference (MAD) & ${mad_val:.2f}$ & Mean Absolute Difference across successive frames \\\\
-Active pixel displacement ratio & ${pixel_change_pct:.2f}\\%$ & Fluid continuous motorcycle and vehicle traffic movement \\\\
-Frozen / loop-duplicate frame ratio & ${frozen_pct:.2f}\\%$ & Verified zero static or frozen frame playback \\\\
-Identifiable personal data leakage (PII) & $0.00\\%$ ($N = 2,000$) & Sub-Nyquist ground sampling distance ($2.73 - 3.25$~cm/px) \\\\
+Active pixel displacement ratio & Median: $\\mathbf{{{disp_median:.2f}\\%}}$ ($\\mu = {disp_mean:.2f} \\pm {disp_std:.2f}\\%$) & Fraction of pixels with $|I_t - I_{{t-1}}| > 15$ reflecting moving vehicular flow \\\\
+\\addlinespace[1.5pt]
+Inter-frame duplicate screening & $\\mathbf{{\\text{{Filtered}}}}$ & Stream buffer duplicates ($\\text{{MAD}} < 0.5$) removed by deduplication; 1st percentile of inter-frame MAD is ${pct1_mad:.2f}$ \\\\
+\\addlinespace[1.5pt]
+Personal data identification (PII) & $\\mathbf{{0.00\\%}}$ ($N = {pii_samples:,}$) & Quantified negligible risk; 95\\% CI upper bound $\\le {pii_upper:.4f}\\%$ (Rule of Three) \\\\
 \\bottomrule
 \\end{{tabularx}}
 \\end{{table*}}
@@ -179,39 +197,87 @@ Identifiable personal data leakage (PII) & $0.00\\%$ ($N = 2,000$) & Sub-Nyquist
     e_class = graph_stats.get("edge_classification_and_asymmetry", {})
     d_dist = graph_stats.get("degree_distribution", {})
     dist_dist = graph_stats.get("distance_distribution_meters", {})
-    dcrnn = graph_stats.get("dcrnn_transition_operators", {})
     cutoff_km = graph_stats.get("cutoff_distance_km", 6.0)
 
-    tex_graph = f"""% Bảng thông số topo đồ thị mạng đường bộ OSM (Tự động sinh bởi pipeline)
-\\begin{{table}}[tbp]
+    num_edges = graph_stats.get("num_directed_edges", 2450)
+    conn_pairs = e_class.get("total_connected_node_pairs", 1760)
+    oneway_pairs = e_class.get("oneway_only_pairs", 1070)
+    oneway_pct = e_class.get("oneway_only_pairs_pct", 60.80)
+    bidir_pairs = e_class.get("bidirectional_pairs", 690)
+    bidir_pct = e_class.get("bidirectional_pairs_pct", 39.20)
+    asym_pairs = e_class.get("bidirectional_asymmetric_pairs_over_50m", 238)
+    asym_pct = e_class.get("bidirectional_asymmetric_pct", 34.49)
+    sym_pairs = e_class.get("bidirectional_symmetric_pairs", 452)
+    sym_pct = e_class.get("bidirectional_symmetric_pct", 65.51)
+
+    mean_dist = dist_dist.get("mean_edge_distance", 1159.6)
+    std_dist = dist_dist.get("std_edge_distance", 1088.9)
+    med_dist = dist_dist.get("median_edge_distance", 823.0)
+
+    in_deg_mean = d_dist.get("in_degree_mean", 4.03)
+    in_deg_std = d_dist.get("in_degree_std", 2.16)
+    out_deg_mean = d_dist.get("out_degree_mean", 4.03)
+    out_deg_std = d_dist.get("out_degree_std", 2.58)
+
+    tex_graph = f"""% Table 4: Thống kê định lượng topo đồ thị mạng đường bộ OSM (Chuẩn xuất bản Elsevier Data in Brief)
+\\begin{{table*}}[!htbp]
 \\centering
-\\caption{{Topological graph structure and directed transition operator characteristics ($R_{{\\text{{cutoff}}}} = {cutoff_km:.1f}$~km).}}
+\\footnotesize
+\\setlength{{\\tabcolsep}}{{6pt}}
+\\renewcommand{{\\arraystretch}}{{1.28}}
+\\caption{{Quantitative topological properties and directional asymmetry metrics of the derived road routing graph ($R_{{\\text{{cutoff}}}} = {cutoff_km:.1f}$~km).}}
 \\label{{tab:graph_metrics}}
-\\small
-\\begin{{tabular}}{{lll}}
-\\hline
-\\textbf{{Graph Metric}} & \\textbf{{Value}} & \\textbf{{Physical / Methodological Interpretation}} \\\\
-\\hline
-Total graph nodes ($N$) & ${graph_stats.get('num_nodes', 608)}$ & Physical surveillance camera locations \\\\
-Node station index range & $1 - 657$ & 49 non-indexed / decommissioned indices \\\\
-Total directed edges ($|E|$) & ${graph_stats.get('num_directed_edges', 2450)}$ & Road network shortest routes $\\leq {cutoff_km:.1f}$~km \\\\
-Average out-degree & ${d_dist.get('out_degree_mean', 4.03):.2f} \\pm {d_dist.get('out_degree_std', 2.01):.2f}$ & Range: $[{d_dist.get('out_degree_min', 0)}, {d_dist.get('out_degree_max', 13)}]$ reachable neighbors \\\\
-Average in-degree & ${d_dist.get('in_degree_mean', 4.03):.2f} \\pm {d_dist.get('in_degree_std', 2.06):.2f}$ & Balanced directed urban topology \\\\
-Connected node pairs & ${e_class.get('total_connected_node_pairs', 1760)}$ & Unique unordered station pairs with $\\geq 1$ directed path \\\\
-Strictly one-way pairs & ${e_class.get('oneway_only_pairs', 1070)}$ (${e_class.get('oneway_only_pairs_pct', 60.80):.2f}\\%$) & Strict one-way boulevards, overpasses, and ramps \\\\
-Bidirectional pairs & ${e_class.get('bidirectional_pairs', 690)}$ (${e_class.get('bidirectional_pairs_pct', 39.20):.2f}\\%$) & Two-way arterials with dual directional flow \\\\
--- Asymmetric delta ($>50$~m) & ${e_class.get('bidirectional_asymmetric_pairs_over_50m', 238)}$ (${e_class.get('bidirectional_asymmetric_pct', 34.49):.2f}\\%$) & Median barriers and distant U-turn openings \\\\
--- Symmetric distance ($\\leq 50$~m) & ${e_class.get('bidirectional_symmetric_pairs', 452)}$ (${e_class.get('bidirectional_symmetric_pct', 65.51):.2f}\\%$) & Parallel divided road sections \\\\
-Mean network route distance & ${dist_dist.get('mean_edge_distance', 2866.5):.1f} \\pm {dist_dist.get('std_edge_distance', 1180.2):.1f}$~m & Inter-station driving route length \\\\
-Dual transition spectral radius & $\\rho(P_f) = {dcrnn.get('spectral_radius_Pf', 1.0):.4f},\\; \\rho(P_b) = {dcrnn.get('spectral_radius_Pb', 1.0):.4f}$ & Unconditionally stable DCRNN diffusion operators \\\\
-Adjacency matrix sparsity & ${dcrnn.get('sparsity_pct', 99.34):.2f}\\%$ & Compact sparse tensor representation \\\\
-\\hline
-\\end{{tabular}}
-\\end{{table}}
+\\begin{{tabularx}}{{\\textwidth}}{{@{{}} >{{\\raggedright\\arraybackslash}}p{{5.5cm}} >{{\\raggedright\\arraybackslash}}p{{3.8cm}} >{{\\raggedright\\arraybackslash}}X @{{}}}}
+\\toprule
+\\textbf{{Topological Metric / Parameter}} & \\textbf{{Empirical Measurement}} & \\textbf{{Physical / Methodological Interpretation}} \\\\
+\\midrule
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{A. Network Scale \\& Spatial Reachability ($R_{{\\text{{cutoff}}}} = {cutoff_km:.1f}$~km)}}}} \\\\
+\\addlinespace[2.5pt]
+Total indexed graph nodes ($N$) & $\\mathbf{{{total_stations}\\text{{ nodes}}}}$ & Active physical surveillance camera stations in metropolitan core \\\\
+\\addlinespace[3.5pt]
+Valid directed corridor links ($|E|$) & $\\mathbf{{{num_edges:,}\\text{{ edges}}}}$ & Sequential corridor links with driving distance $d_{{ij}} \\le {cutoff_km:.1f}$~km \\\\
+\\addlinespace[3.5pt]
+Connected camera station pairs & $\\mathbf{{{conn_pairs:,}\\text{{ pairs}}}}$ & Unique station pairs connected by $\\ge 1$ directed corridor \\\\
+\\addlinespace[3.5pt]
+Adjacency matrix sparsity ratio & $\\mathbf{{99.34\\%}}$ (Density: $\\mathbf{{0.66\\%}}$) & Compact sparse graph tensor for spatial GNN convolutions \\\\
+\\addlinespace[3.5pt]
+Inter-station routing distance & $\\mathbf{{{mean_dist:.1f} \\pm {std_dist:.1f}\\text{{ m}}}}$ & Median: ${med_dist:.1f}$~m (Range: $[3.0, 6,000.0]$~m; IQR: $[384.0, 1,560.0]$~m) \\\\
+\\midrule
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{B. Directional Asymmetry \\& Corridor Taxonomy}}}} \\\\
+\\addlinespace[2.5pt]
+Unidirectional corridor pairs (no reverse edge) & $\\mathbf{{{oneway_pairs:,}\\text{{ pairs}}}}$ ($\\mathbf{{{oneway_pct:.2f}\\%}}$) & Arterial one-way rules (OSM oneway) and corridor pruning asymmetry \\\\
+\\addlinespace[3.5pt]
+Bidirectional corridor pairs & $\\mathbf{{{bidir_pairs:,}\\text{{ pairs}}}}$ ($\\mathbf{{{bidir_pct:.2f}\\%}}$) & Two-way arterials mutually accessible in both traffic directions \\\\
+\\addlinespace[3.5pt]
+Significant distance asymmetry \\newline ($|d_{{ij}} - d_{{ji}}| \\ge 50$~m) & $\\mathbf{{{asym_pairs:,}\\text{{ pairs}}}}$ ($\\mathbf{{{asym_pct:.2f}\\%}}$) & Physical median barriers, grade-separated flyovers, U-turns \\\\
+\\addlinespace[3.5pt]
+Metric symmetric corridor pairs \\newline ($|d_{{ij}} - d_{{ji}}| < 50$~m) & $\\mathbf{{{sym_pairs:,}\\text{{ pairs}}}}$ ($\\mathbf{{{sym_pct:.2f}\\%}}$) & Divided road corridors with immediate median openings \\\\
+\\addlinespace[3.5pt]
+Directional distance discrepancy & $\\mathbf{{115.9 \\pm 266.2\\text{{ m}}}}$ & Median: $24.0$~m; Maximum divergence: $\\mathbf{{2,780.0\\text{{ m}}}}$ ($2.78$~km) \\\\
+\\midrule
+\\multicolumn{{3}}{{@{{}}l}}{{\\textbf{{C. Structural Degree Distributions \\& Graph Connectivity}}}} \\\\
+\\addlinespace[2.5pt]
+Average node in-degree / out-degree & $\\mathbf{{{in_deg_mean:.2f} \\pm {in_deg_std:.2f}}}$ / $\\mathbf{{{out_deg_mean:.2f} \\pm {out_deg_std:.2f}}}$ & In-degree median: $4.0$ (max: $14$); Out-degree median: $3.0$ (max: $17$) \\\\
+\\addlinespace[3.5pt]
+Standard interconnected stations & $\\mathbf{{598\\text{{ stations}}}}$ & Regular multi-leg intersections and connected arterial segments \\\\
+\\addlinespace[3.5pt]
+Topological sink stations (out-deg = 0) & $\\mathbf{{5\\text{{ stations}}}}$ & Stations 212, 284, 443, 446, 516 (directional arterial terminuses) \\\\
+\\addlinespace[3.5pt]
+Topological source stations (in-deg = 0) & $\\mathbf{{3\\text{{ stations}}}}$ & Stations 215, 498, 557 (outbound arterial origins) \\\\
+\\addlinespace[3.5pt]
+Geodetically isolated stations & $\\mathbf{{2\\text{{ stations}}}}$ & Stations 141 and 489 ($d_{{ij}} > {cutoff_km:.1f}$~km to all other camera nodes) \\\\
+\\addlinespace[3.5pt]
+Weakly connected components & $\\mathbf{{6\\text{{ components}}}}$ & Giant component: 599 nodes (98.5\\%); 5 subgraphs: 3, 2, 2, 1, 1 \\\\
+\\addlinespace[3.5pt]
+Strongly connected components & $\\mathbf{{19\\text{{ components}}}}$ & Strongly connected directed sub-networks and cyclic loops \\\\
+\\bottomrule
+\\end{{tabularx}}
+\\end{{table*}}
 """
     for out_dir in output_dirs:
         with open(os.path.join(out_dir, "tab_graph_metrics.tex"), "w", encoding="utf-8") as f:
             f.write(tex_graph)
+
 
     # 3. Bảng Kiểm định PII: tab_pii_audit.tex
     opt = pii_stats.get("optical_and_nyquist_validation", {})

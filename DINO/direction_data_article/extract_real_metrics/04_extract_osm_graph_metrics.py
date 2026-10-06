@@ -55,7 +55,7 @@ logger = logging.getLogger("OSMGraphMetricsExtractor")
 def load_stations_and_distance_matrix(
     stations_csv: str,
     distance_csv: str,
-    cutoff_meters: float = 5000.0
+    cutoff_meters: float = 6000.0
 ) -> Tuple[pd.DataFrame, np.ndarray, List[str]]:
     """
     Tải dữ liệu danh mục trạm và ma trận khoảng cách đường bộ OSM.
@@ -65,7 +65,7 @@ def load_stations_and_distance_matrix(
     # Tìm file danh mục trạm thay thế nếu file chỉ định không tồn tại
     if not os.path.exists(stations_csv):
         parent_dir = Path(stations_csv).parent
-        for alt_name in ["routes.csv", "camera_stations.csv", "stations.csv"]:
+        for alt_name in ["routes.csv", "camera_data_608Cam.csv", "stations.csv", "camera_stations.csv"]:
             candidate = parent_dir / alt_name
             if candidate.exists():
                 logger.info("Sử dụng file danh mục trạm thay thế: %s", str(candidate))
@@ -76,9 +76,9 @@ def load_stations_and_distance_matrix(
         raise FileNotFoundError(f"Không tìm thấy file danh mục trạm tại: {stations_csv}")
 
     df_stations = pd.read_csv(stations_csv)
-    # Xác định cột định danh trạm: station_id hoặc id hoặc camera_id
+    # Xác định cột định danh trạm: stt, station_id hoặc id hoặc camera_id
     id_col = None
-    for c in ["station_id", "id", "camera_id"]:
+    for c in ["stt", "station_id", "id", "camera_id"]:
         if c in df_stations.columns:
             id_col = c
             break
@@ -324,8 +324,8 @@ def main():
     parser.add_argument("--stations-csv", type=str, default="../zenodo_bundle/metadata/stations_metadata.csv", help="Đường dẫn file trạm")
     parser.add_argument("--distance-csv", type=str, default="../zenodo_bundle/metadata/road_network_distance.csv", help="Đường dẫn file khoảng cách OSM")
     parser.add_argument("--output-dir", type=str, default="./output", help="Thư mục xuất file JSON kết quả")
-    parser.add_argument("--cutoff-meters", type=float, default=5000.0, help="Bán kính ngưỡng kết nối (m)")
-    parser.add_argument("--sigma-meters", type=float, default=1000.0, help="Độ lệch chuẩn Gaussian kernel (m)")
+    parser.add_argument("--cutoff-meters", type=float, default=6000.0, help="Bán kính ngưỡng kết nối (m, mặc định: 6000.0)")
+    parser.add_argument("--sigma-meters", type=float, default=1090.0, help="Độ lệch chuẩn Gaussian kernel (m, mặc định: 1090.0)")
 
     args = parser.parse_args()
 
