@@ -16,6 +16,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        if x.shape[1] >= 3 and x.min() >= -0.05 and x.max() <= 1.05:
+            mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+            norm_rgb = (x[:, :3] - mean) / std
+            return torch.cat([norm_rgb, x[:, 3:]], dim=1) if x.shape[1] > 3 else norm_rgb
+        return x
+
 
 def adapt_patch_embed_to_4ch(
     patch_embed_module: nn.Module,
@@ -192,6 +203,14 @@ class DINOv3FGCountingModel(nn.Module):
         if delta is not None and self.training and self.delta_dropout > 0:
             if torch.rand(1).item() < self.delta_dropout:
                 delta = torch.zeros_like(delta)
+
+        # Tự động chuẩn hóa ImageNet nếu đầu vào chưa được chuẩn hóa (dải [0, 1])
+        if rgb.min() >= -0.05 and rgb.max() <= 1.05 and rgb.shape[1] >= 3:
+            rgb_norm = imagenet_normalize(rgb[:, :3])
+            if rgb.shape[1] > 3:
+                rgb = torch.cat([rgb_norm, rgb[:, 3:]], dim=1)
+            else:
+                rgb = rgb_norm
 
         if self.mode in ["early", "4channel"]:
             if rgb.shape[1] == 4:

@@ -65,7 +65,7 @@ def run_inference(args):
         load_path=args.weights,
         model=model,
         device=device,
-        strict=True,
+        strict=False,
         verbose=True,
     )
     model.eval()

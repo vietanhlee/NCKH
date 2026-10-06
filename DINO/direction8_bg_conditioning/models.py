@@ -17,6 +17,16 @@ from direction8_bg_conditioning.conditioning import (
     CrossAttentionConditioningLayer,
 )
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        if x.min() >= -0.05 and x.max() <= 1.05 and x.shape[1] >= 3:
+            mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+            return (x[:, :3] - mean) / std
+        return x
+
 
 class BackgroundConditionedModel(nn.Module):
     """
@@ -99,7 +109,8 @@ class BackgroundConditionedModel(nn.Module):
         B = rgb_frame.shape[0]
 
         # 1. Trích xuất đặc trưng tokens từ frame camera hiện tại
-        out = self.backbone(rgb_frame)
+        rgb_norm = imagenet_normalize(rgb_frame)
+        out = self.backbone(rgb_norm)
         if isinstance(out, dict):
             tokens = out.get("x_norm_patchtokens", list(out.values())[0])
         elif isinstance(out, torch.Tensor):

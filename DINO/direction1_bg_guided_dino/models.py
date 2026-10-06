@@ -12,6 +12,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        if x.min() >= -0.05 and x.max() <= 1.05 and x.shape[1] >= 3:
+            mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+            return (x[:, :3] - mean) / std
+        return x
+
 
 class DINOHead(nn.Module):
     """
@@ -117,6 +127,7 @@ class BGGuidedDINOModel(nn.Module):
         Hỗ trợ đầy đủ chuẩn Meta DINOv2 / DINOv3 API (get_intermediate_layers, forward_features)
         đảm bảo giữ nguyên chuỗi gradient cho cả Student và Teacher.
         """
+        x = imagenet_normalize(x)
         # 1. Chuẩn Meta DINOv2 / DINOv3 VisionTransformer (Torch Hub / Official)
         if hasattr(backbone, "get_intermediate_layers"):
             outputs = backbone.get_intermediate_layers(x, n=1, return_class_token=True)

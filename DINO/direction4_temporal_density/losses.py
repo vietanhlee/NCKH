@@ -78,7 +78,8 @@ class SpatioTemporalDensityLoss(nn.Module):
         loss_onset = torch.tensor(0.0, device=device)
         if "pred_onset" in preds and "onset_label" in targets:
             target_onset = targets["onset_label"].to(device).float()
-            loss_onset = self.bce_loss(preds["pred_onset"], target_onset)
+            pred_onset_clamped = torch.clamp(preds["pred_onset"], min=1e-6, max=1.0 - 1e-6)
+            loss_onset = self.bce_loss(pred_onset_clamped, target_onset)
 
         # Tổng hợp mất mát có trọng số
         loss_total = (

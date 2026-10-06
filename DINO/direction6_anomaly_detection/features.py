@@ -11,6 +11,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        if x.min() >= -0.05 and x.max() <= 1.05 and x.shape[1] >= 3:
+            mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+            return (x[:, :3] - mean) / std
+        return x
+
 
 class DINOv3PatchFeatureExtractor(nn.Module):
     """
@@ -56,7 +66,8 @@ class DINOv3PatchFeatureExtractor(nn.Module):
         h_p = H // self.patch_size
         w_p = W // self.patch_size
 
-        out = self.backbone(rgb)
+        rgb_norm = imagenet_normalize(rgb)
+        out = self.backbone(rgb_norm)
         if isinstance(out, dict):
             # Lấy patch tokens nếu có trong dict
             tokens = out.get("x_norm_patchtokens", None)
