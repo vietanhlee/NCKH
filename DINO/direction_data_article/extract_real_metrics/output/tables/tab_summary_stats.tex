@@ -1,34 +1,32 @@
 % Bảng tổng quan thông số kỹ thuật HCMC-TrafficSnap (Tự động sinh bởi pipeline)
-\begin{table*}[!htbp]
+\begin{table}[tbp]
 \centering
-\small
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.18}
 \caption{Quantitative characteristics and technical specifications of the HCMC-TrafficSnap dataset.}
 \label{tab:summary_stats}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{6.0cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
-\toprule
-\textbf{Characteristic / Parameter} & \textbf{Empirical Value} & \textbf{Technical Specification / Interpretation} \\
-\midrule
-Total camera stations indexed & $608$ & Urban arterials \& intersections across Ho Chi Minh City \\
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Characteristic / Parameter} & \textbf{Empirical Value} & \textbf{Technical Specification / Unit} \\
+\hline
+Total camera stations indexed & $608$ & Urban arterials \& intersections (Ho Chi Minh City) \\
 Active station network ID range & $1 - 657$ & 49 unassigned / decommissioned node indices \\
-Continuous active stations ($>1,200$ frames) & $572$ ($94.08\%$) & Multi-day continuous longitudinal time-series \\
-Initial stream-dropout stations ($2$ frames) & $36$ ($5.92\%$) & Upstream municipal portal feed connection timeout \\
-Total snapshots collected & $714,123$ & Multi-day continuous time-lapse visual archive \\
+Continuous active stations ($>1,200$ frames) & $572$ ($94.08\%$) & Full multi-day continuous time-series \\
+Initial stream-dropout stations ($2$ frames) & $36$ ($5.92\%$) & Upstream portal feed connection failure \\
+Total snapshots collected & $714,123$ & Multi-day continuous time-lapse crawl \\
 Total uncompressed storage volume & $44.38$~GB & High-resolution JPEG image bank \\
 Native frame resolution & $512 \times 288$ & $16:9$ aspect ratio streaming JPEG (100\% uniform) \\
-Average snapshot file size & $65.17 \pm 13.36$~KB & Median: $64.8$~KB (Empirical range: $[31.2, 118.4]$~KB) \\
+Average snapshot file size & $65.17 \pm 13.36$~KB & Median: $64.8$~KB ($[31.2, 118.4]$~KB range) \\
 Continuous observation duration & $93.6$ hours ($3.9$ days) & 02/10/2026 17:37 to 06/10/2026 15:12 ICT \\
-Empirical sampling period ($\Delta T$) & $269.0 \pm 239.7$~s & Median: $263.0$~s (Nominal target: 5.0 minutes) \\
+Empirical sampling period ($\Delta T$) & $269.0 \pm 239.7$~s & Median: $263.0$~s (Nominal: 5.0 min) \\
 Daylight / Nighttime snapshot balance & $48.8\% \; / \; 51.2\%$ & 348,464 daytime vs. 365,659 nighttime frames \\
 Mean luminance ($Y$) & $98.23 \pm 16.35$ & ITU-R BT.601 8-bit grayscale range $[0, 255]$ \\
 RMS contrast & $45.70$ & Standard deviation of pixel intensities \\
-Shannon spatial entropy & $7.28 \pm 0.33$~bits & Information density (Bits per pixel) \\
+Shannon entropy & $7.28 \pm 0.33$~bits & Information density (Bits per pixel) \\
 Laplacian variance (focus metric) & $3015.71 \pm 1499.86$ & High optical clarity and edge sharpness \\
 Consecutive frame dynamics (MAD) & $42.30$ & Mean Absolute Difference across consecutive frames \\
-Consecutive pixel change ratio & $81.32\%$ & Dynamic vehicle and motorcycle flow movement \\
+Consecutive pixel change ratio & $81.32\%$ & Dynamic vehicle and motorcycle motion \\
 Frozen / dead frame ratio & $0.00\%$ & Zero static loop duplicate detected \\
 Personal data leakage (PII audit) & $0.00\%$ & Strictly unresolvable under Nyquist limit ($N=2,000$) \\
-\bottomrule
-\end{tabularx}
-\end{table*}
+\hline
+\end{tabular}
+\end{table}

@@ -17,36 +17,49 @@ import scipy.sparse as sp
 
 
 def load_road_graph(
-    excel_path: str,
+    graph_source_path: str,
     sigma_scale: float = 1.0,
-    distance_threshold_km: float = 5.0,
+    distance_threshold_km: float = 6.0,
     sheet_name: Union[str, int] = 0,
 ) -> Tuple[np.ndarray, List[int]]:
     """
-    Đọc ma trận khoảng cách mạng lưới từ tệp Excel và tính toán ma trận kề trọng số Gauss.
+    Đọc ma trận khoảng cách mạng lưới từ tệp NPY, CSV hoặc Excel và tính toán ma trận kề trọng số Gauss.
 
     Công thức trọng số RBF Gaussian kernel:
-        W_ij = exp(- (d_ij / sigma)^2) nếu d_ij <= threshold và i != j
+        W_ij = exp(- (d_ij / sigma)^2) nếu 0 < d_ij <= threshold và i != j
         W_ij = 0 nếu ngược lại
 
     Args:
-        excel_path (str): Đường dẫn đến tệp road_network_distance.xlsx.
+        graph_source_path (str): Đường dẫn đến distance_m.npy, road_network_distance.csv hoặc .xlsx.
         sigma_scale (float): Hệ số tỷ lệ độ lệch chuẩn sigma.
-        distance_threshold_km (float): Ngưỡng khoảng cách tối đa để thiết lập cạnh đồ thị (km).
-        sheet_name: Tên hoặc chỉ số sheet trong Excel.
+        distance_threshold_km (float): Ngưỡng khoảng cách tối đa để thiết lập cạnh đồ thị (km, mặc định: 6.0).
+        sheet_name: Tên hoặc chỉ số sheet nếu dùng tệp Excel.
 
     Returns:
         Tuple: (weight_matrix [N, N], node_ids_list)
     """
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"Không tìm thấy tệp ma trận khoảng cách tại: {excel_path}")
+    if not os.path.exists(graph_source_path):
+        raise FileNotFoundError(f"Không tìm thấy tệp ma trận khoảng cách tại: {graph_source_path}")
 
-    # Đọc dữ liệu từ Excel
-    df = pd.read_excel(excel_path, sheet_name=sheet_name, index_col=0)
-    node_ids = [int(col) for col in df.columns if str(col).strip().isdigit()]
+    ext = os.path.splitext(graph_source_path)[1].lower()
+    if ext == ".npy":
+        raw_mat = np.load(graph_source_path)
+        # Nếu đơn vị là mét (giá trị trung bình > 50), đổi sang km
+        if np.nanmean(raw_mat[raw_mat > 0]) > 50.0:
+            dist_mat = raw_mat / 1000.0
+        else:
+            dist_mat = raw_mat.copy()
+        node_ids = list(range(1, dist_mat.shape[0] + 1))
+    elif ext == ".csv":
+        df = pd.read_csv(graph_source_path, index_col=0)
+        node_ids = [int(col) for col in df.columns if str(col).strip().isdigit()]
+        dist_mat = df.apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
+    else:
+        # Đọc dữ liệu từ Excel
+        df = pd.read_excel(graph_source_path, sheet_name=sheet_name, index_col=0)
+        node_ids = [int(col) for col in df.columns if str(col).strip().isdigit()]
+        dist_mat = df.apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
 
-    # Chuyển đổi thành ma trận khoảng cách số học
-    dist_mat = df.apply(pd.to_numeric, errors="coerce").fillna(0.0).to_numpy(dtype=np.float64)
     N = dist_mat.shape[0]
 
     # Tính sigma từ các khoảng cách dương hợp lệ

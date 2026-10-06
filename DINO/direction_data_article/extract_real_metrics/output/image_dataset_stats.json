@@ -1,0 +1,27 @@
+{
+  "total_images": 714123,
+  "total_size_gb": 44.38,
+  "mean_file_size_kb": 65.17,
+  "std_file_size_kb": 13.36,
+  "active_camera_count": 608,
+  "mean_images_per_camera": 1174.5,
+  "median_images_per_camera": 1263.0,
+  "min_images_per_camera": 2,
+  "max_images_per_camera": 1268,
+  "observation_start_ts": 1790937451,
+  "observation_end_ts": 1791274328,
+  "observation_start_ict": "2026-10-02 17:37:31",
+  "observation_end_ict": "2026-10-06 15:12:08",
+  "observation_duration_hours": 93.6,
+  "observation_duration_days": 3.9,
+  "mean_delta_t_seconds": 269.0,
+  "median_delta_t_seconds": 263.0,
+  "std_delta_t_seconds": 239.7,
+  "daytime_images_count": 348464,
+  "daytime_pct": 48.8,
+  "nighttime_images_count": 365659,
+  "nighttime_pct": 51.2,
+  "sample_resolutions": {
+    "512x288": 5000
+  }
+}

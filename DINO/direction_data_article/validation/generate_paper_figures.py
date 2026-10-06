@@ -147,8 +147,8 @@ def generate_fig3_graph_topology():
     arr = df.values.astype(float)
     np.fill_diagonal(arr, np.nan)
     
-    # Valid edges <= 5.0 km
-    valid_mask = (~np.isnan(arr)) & (arr <= 5.0) & (arr > 0.0)
+    # Valid off-diagonal edges from real graph data
+    valid_mask = (~np.isnan(arr)) & (arr > 0.0)
     valid_edges = arr[valid_mask]
     
     # Out-degrees
@@ -174,22 +174,22 @@ def generate_fig3_graph_topology():
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14, 3.8))
     
     # Subplot A: Distance histogram
-    ax1.hist(valid_edges, bins=25, color='#3498db', edgecolor='black', lw=0.5, alpha=0.85)
+    ax1.hist(valid_edges, bins=30, color='#3498db', edgecolor='black', lw=0.5, alpha=0.85)
     ax1.axvline(np.mean(valid_edges), color='red', linestyle='--', lw=1.5, label=f'Mean = {np.mean(valid_edges):.2f} km')
     ax1.axvline(np.median(valid_edges), color='darkorange', linestyle=':', lw=1.8, label=f'Median = {np.median(valid_edges):.2f} km')
-    ax1.set_title(r'(a) Directed Edge Distances ($d_{ij} \leq 5$ km)')
+    ax1.set_title(r'(a) Directed Edge Distances ($d_{ij} \leq 6.0$ km)')
     ax1.set_xlabel('OSM Driving Routing Distance (km)')
-    ax1.set_ylabel('Edge Count (Total: 2,420)')
+    ax1.set_ylabel(f'Edge Count (Total: {len(valid_edges):,})')
     ax1.grid(True, linestyle='--', alpha=0.5)
     ax1.legend(fontsize=8.5)
     
     # Subplot B: Node Out-Degree
-    ax2.hist(out_degrees, bins=range(0, 19), color='#9b59b6', edgecolor='black', lw=0.5, alpha=0.85, align='left')
+    ax2.hist(out_degrees, bins=range(0, int(np.max(out_degrees)) + 2), color='#9b59b6', edgecolor='black', lw=0.5, alpha=0.85, align='left')
     ax2.axvline(np.mean(out_degrees), color='red', linestyle='--', lw=1.5, label=f'Mean = {np.mean(out_degrees):.2f}')
     ax2.set_title('(b) Node Out-Degree Distribution')
     ax2.set_xlabel('Out-Degree (Number of Outgoing Links)')
-    ax2.set_ylabel('Number of Cameras ($N=608$)')
-    ax2.set_xticks(range(0, 18, 2))
+    ax2.set_ylabel(f'Number of Cameras ($N={len(arr)}$)')
+    ax2.set_xticks(range(0, int(np.max(out_degrees)) + 2, 2))
     ax2.grid(True, linestyle='--', alpha=0.5)
     ax2.legend(fontsize=8.5)
     
@@ -198,13 +198,13 @@ def generate_fig3_graph_topology():
     ax3.axvline(50.0, color='black', linestyle='--', lw=1.5, label='Asymmetry Cutoff (50 m)')
     ax3.set_title('(c) Bidirectional Distance Asymmetry')
     ax3.set_xlabel('$|d_{ij} - d_{ji}|$ (meters)')
-    ax3.set_ylabel('Bidirectional Pairs (683 total)')
+    ax3.set_ylabel(f'Bidirectional Pairs ({len(asym_diffs):,} total)')
     ax3.grid(True, linestyle='--', alpha=0.5)
     ax3.legend(fontsize=8.5)
     
     plt.tight_layout()
     out_file = os.path.join(OUTPUT_FIG_DIR, "fig3_graph_topology.png")
-    plt.savefig(out_file)
+    plt.savefig(out_file, dpi=300)
     plt.close()
     print(f"[Done] Figure 3 saved to: {out_file}")
 

@@ -84,7 +84,9 @@ def main():
     base_dir = Path(__file__).resolve().parent
     sample_preview_dir = base_dir.parent / "zenodo_bundle" / "sample_preview"
     metadata_dir = base_dir.parent / "zenodo_bundle" / "metadata"
-    metadata_stations = metadata_dir / "stations_metadata.csv"
+    metadata_stations = metadata_dir / "camera_data_608Cam.csv"
+    if not metadata_stations.exists():
+        metadata_stations = base_dir.parent / "camera_data_608Cam.csv"
     if not metadata_stations.exists():
         metadata_stations = metadata_dir / "routes.csv"
     metadata_distance = metadata_dir / "road_network_distance.csv"

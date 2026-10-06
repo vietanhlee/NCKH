@@ -1,12 +1,12 @@
 % Table: Systematic Comparison of HCMC-TrafficSnap with Existing Benchmarks
 \begin{table*}[!htbp]
 \centering
-\small
-\setlength{\tabcolsep}{3.0pt}
-\renewcommand{\arraystretch}{1.28}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.22}
 \caption{Systematic Comparison of HCMC-TrafficSnap with Existing Benchmark Datasets in Intelligent Transportation and Computer Vision.}
 \label{tab:dataset_comparison}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.2cm} r >{\raggedright\arraybackslash}p{2.1cm} >{\raggedright\arraybackslash}p{2.2cm} c X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.30cm} >{\raggedright\arraybackslash}p{1.95cm} >{\raggedright\arraybackslash}p{1.90cm} c >{\raggedright\arraybackslash}p{1.75cm} >{\raggedright\arraybackslash}p{2.00cm} c >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Dataset} & \textbf{Urban Region} & \textbf{Dominant Flow} & \textbf{Nodes} & \textbf{Duration / Scale} & \textbf{Visual Modality} & \textbf{Graph} & \textbf{Target Applications} \\
 \midrule
@@ -16,11 +16,11 @@
 \addlinespace[2pt]
 \textbf{LargeST}~\cite{liu2023largest} & California, USA & Car-dominant & 8,600 & 5 years (1D) & No (Inductive Loop) & Yes & Large-Scale Spatial Forecasting \\
 \addlinespace[2pt]
-\textbf{UA-DETRAC}~\cite{wen2020ua} & Beijing / Tianjin, CN & Car-dominant & 24 & Short clips (140k) & Yes (720p Video) & No & Vehicle Detection and Tracking \\
+\textbf{UA-DETRAC}~\cite{wen2020ua} & Beijing / Tianjin & Car-dominant & 24 & Short clips (140k) & Yes (720p Video) & No & Vehicle Detection and Tracking \\
 \addlinespace[2pt]
-\textbf{CityCam}~\cite{zhang2017understanding} & New York City, US & Car-dominant & 212 & Multi-day (60M) & Yes (Low-res Webcams) & No & Vehicle Density Estimation, Counting \\
+\textbf{CityCam}~\cite{zhang2017understanding} & New York City & Car-dominant & 212 & Multi-day (60M) & Yes (Low-res Webcams) & No & Vehicle Density Estimation, Counting \\
 \midrule
-\textbf{HCMC-TrafficSnap} & Ho Chi Minh City, VN & \textbf{Motorcycle (70--80\%)} & \textbf{608} & \textbf{7 days ($>10^6$ frames)} & \textbf{Yes ($512\times288$ Snapshots)} & \textbf{Yes} & \textbf{Multi-Camera Time-Series SSL, STGNNs} \\
+\textbf{HCMC-TrafficSnap} & Ho Chi Minh City, VN & \textbf{Motorcycle} \textbf{(70--80\%)} & \textbf{608} & \textbf{93.6h} \textbf{(714,123 frames)} & \textbf{Yes} \textbf{($512\times288$} \textbf{Snapshots)} & \textbf{Yes} & \textbf{Multi-Camera Time-Series SSL, STGNNs} \\
 \bottomrule
 \end{tabularx}
 \end{table*}

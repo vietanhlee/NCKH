@@ -24,10 +24,27 @@ data/
 # Media & Docs exclusions if needed
 *.pdf
 !DINO/Bao_Cao_8_Huong_Nghien_Cuu_DINO.pdf
+!DINO/direction_data_article/**/*.pdf
+!DINO/direction_data_article/hcmc_trafficsnap_article.pdf
 *.png
+!DINO/direction_data_article/**/*.png
 *.md
 !README.md
 !research_ideas_ssl.md
 !DINO/*.md
 !DINO/**/README.md
+!DINO/direction_data_article/**/*.md
 *.json
+!DINO/direction_data_article/**/*.json
+
+# Direction data article files (CSV, XLSX, NPY)
+!DINO/direction_data_article/**/*.csv
+!DINO/direction_data_article/**/*.xlsx
+!DINO/direction_data_article/**/*.npy
+
+# LaTeX auxiliary files to ignore
+*.aux
+*.log
+*.out
+*.synctex.gz
+texput.log

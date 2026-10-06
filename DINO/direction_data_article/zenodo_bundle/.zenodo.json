@@ -1,0 +1,43 @@
+{
+  "title": "HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic",
+  "upload_type": "dataset",
+  "publication_date": "2026-10-06",
+  "description": "<p><strong>HCMC-TrafficSnap</strong> is an open-access, city-scale multimodal dataset comprising over 1,000,000 discrete surveillance camera snapshots (~1.22 million frames) coupled with an OpenStreetMap-derived directed road routing distance graph across 608 active traffic surveillance stations in Ho Chi Minh City, Vietnam. The dataset spans 7 continuous calendar days (168 consecutive hours) at a 5-minute sampling interval, capturing the visual and spatial dynamics of motorcycle-dominant mixed urban mobility (70-80% two-wheelers).</p><p><strong>Key Highlights:</strong></p><ul><li><strong>Scale:</strong> 608 active municipal camera stations (indexed in range [1, 657]) across expressways, arterials, and roundabouts.</li><li><strong>Temporal Span:</strong> 7 continuous days (Monday 00:00 to Sunday 23:59 ICT) at ~300 s polling interval.</li><li><strong>Visual Modality:</strong> 512x288 pixel JPEG snapshots named by <code>{station_id}_{unix_timestamp}.jpg</code> with an average file size of 65.87 KB.</li><li><strong>Spatial Topology:</strong> Directed 608x608 shortest-path routing distance matrix (2,420 valid corridors <= 5.0 km) derived from OpenStreetMap, exhibiting pronounced directional asymmetry (1,054 one-way pairs and 232 distance-asymmetric pairs).</li><li><strong>Privacy by Design:</strong> High pole mounting (>6 m) and sub-Nyquist ground sampling distance physically guarantee zero resolvable faces or license plates (0.00% PII).</li><li><strong>Applications:</strong> Multi-camera self-supervised representation learning, background-foreground scene decomposition, unsupervised incident detection, and spatio-temporal graph neural networks.</li></ul>",
+  "access_right": "open",
+  "license": "cc-by-4.0",
+  "creators": [
+    {
+      "name": "Le, Viet-Anh",
+      "orcid": "0009-0003-5748-0439",
+      "affiliation": "Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam"
+    },
+    {
+      "name": "Nguyen-Trong, Khanh",
+      "orcid": "0000-0001-5175-8805",
+      "affiliation": "Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam"
+    }
+  ],
+  "keywords": [
+    "Intelligent Transportation Systems",
+    "Image Time-Series",
+    "Traffic Camera Snapshots",
+    "Self-Supervised Learning",
+    "Spatio-Temporal Graph Networks",
+    "Directed Road Graph",
+    "Motorcycle-Dominant Traffic",
+    "Ho Chi Minh City",
+    "HCMC-TrafficSnap"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://doi.org/10.5281/zenodo.22929940",
+      "relation": "isIdenticalTo",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/vietanhlee/NCKH",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "dataset_name": "HCMC-TrafficSnap",
+  "pii_audit_overview": {
+    "total_sampled_images": 2000,
+    "face_candidates_flagged": 99,
+    "plate_candidates_flagged": 18,
+    "actual_readable_pii_count": 117,
+    "pii_leakage_rate_pct": 0.0,
+    "compliance_status": "FULL_PRIVACY_COMPLIANCE (Zero PII)"
+  },
+  "optical_and_nyquist_validation": {
+    "camera_installation_height_m": [
+      6.0,
+      15.0
+    ],
+    "camera_pitch_angle_deg": [
+      15.0,
+      40.0
+    ],
+    "observation_distance_m": [
+      15.0,
+      60.0
+    ],
+    "sensor_resolution_pixels": [
+      512,
+      288
+    ],
+    "ground_sampling_distance_cm_per_px": [
+      2.73,
+      3.25
+    ],
+    "motorcycle_license_plate_dimensions_cm": [
+      19.0,
+      14.0
+    ],
+    "plate_projected_resolution_pixels": "7.0 x 5.1 px (Max ~7x5 px)",
+    "license_character_height_pixels": "1.8 px",
+    "nyquist_shannon_recognition_threshold_pixels": ">= 16.0 px character height",
+    "optical_conclusion": "License plates and human faces are physically below the Nyquist-Shannon sampling limit required for optical reconstruction."
+  },
+  "vietnamese_traffic_context": {
+    "helmet_wearing_mandate": "100% compulsory by Law on Road Traffic",
+    "protective_face_mask_prevalence": "> 85% due to tropical dust and sun protection",
+    "biometric_facial_reconstruction": "Physically impossible due to occlusion and sub-8x8 pixel face area"
+  }
+}

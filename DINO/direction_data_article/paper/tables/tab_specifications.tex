@@ -1,7 +1,7 @@
 \begin{table*}[!htbp]
 \centering
-\small
-\renewcommand{\arraystretch}{1.2}
+\footnotesize
+\renewcommand{\arraystretch}{1.05}
 \caption{Specifications Table of the HCMC-TrafficSnap Dataset.}
 \label{tab:specifications}
 \begin{tabularx}{\textwidth}{@{} l X @{}}
@@ -10,18 +10,18 @@
 \midrule
 \textbf{Specific subject area} & Intelligent Transportation Systems, Computer Vision, Spatio-Temporal Data Mining, Self-Supervised Learning \\
 \midrule
-\textbf{Type of data} & Image time-series (JPEG snapshots), Geographic metadata (CSV), Directed spatial routing distance matrices (NumPy / CSV / XLSX), Python dataset loaders and graph utility routines \\
+\textbf{Type of data} & Image time-series (JPEG snapshots), Geographic and camera metadata (CSV: \texttt{camera\_data\_608Cam.csv}, \texttt{routes.csv}), Directed spatial routing distance matrices (NumPy / CSV / XLSX), Python dataset loaders and graph utility routines \\
 \midrule
 \textbf{How data were acquired} & Automated continuous retrieval from the public traffic surveillance portal of Ho Chi Minh City (\url{https://giaothong.hochiminhcity.gov.vn}) via an asynchronous HTTP polling engine. Road network routing distances were computed via the Open Source Routing Machine (OSRM) engine using OpenStreetMap road network data. \\
 \midrule
 \textbf{Data format} & Raw (JPEG snapshots, $512 \times 288$ px), Filtered (municipal transmission placeholder cards excised), Structured (CSV metadata, NumPy matrices) \\
 \midrule
-\textbf{Parameters for data collection} & Multi-camera time-lapse snapshot polling at approximately $\Delta T \approx 300$~s (5 minutes, $\sim 12$~snapshots/hour/station) across 7 continuous days (168 consecutive hours, Monday 00:00 to Sunday 23:59 ICT). Average client crawl time lag relative to camera on-screen clock: $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s. \\
+\textbf{Parameters for data collection} & Multi-camera time-lapse snapshot polling at an empirical interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s, nominal: 5.0 minutes) across 93.6 continuous hours (3.9 calendar days, from 02/10/2026 17:37 to 06/10/2026 15:12 ICT). Total uncompressed dataset volume: 44.38~GB. Client crawl latency: $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s. \\
 \midrule
-\textbf{Description of data collection} & Over 1,000,000 discrete surveillance snapshots ($\approx 1.22$ million total frames) collected from 608 active municipal camera stations mounted at $6.0$--$15.0$~m elevation across Ho Chi Minh City, Vietnam. Raw snapshots undergo automated integrity checking to filter out $284 \times 177$ error placeholder cards. Directed road distances were computed for camera node pairs within a 5.0~km spatial cutoff horizon, yielding 2,420 valid directed corridors. \\
+\textbf{Description of data collection} & A total of 714,123 surveillance snapshots collected from 608 indexed municipal camera stations across Ho Chi Minh City, Vietnam (572 continuous active stations yielding 1,250--1,268 frames each; 36 stations with initial stream connection dropouts). High-angle mast mounting at $6.0$--$15.0$~m elevation. Raw snapshots undergo automated integrity checking to filter out $284 \times 177$ error placeholder cards. Directed road distances were computed for camera node pairs within a 6.0~km spatial cutoff horizon, yielding 2,450 valid directed corridors. \\
 \midrule
 \textbf{Data source location} & City/Region: Ho Chi Minh City, Vietnam \newline
-Latitude and Longitude: $10^\circ 46'\text{N}, 106^\circ 40'\text{E}$ \\
+Latitude and Longitude: $10^\circ 46'\text{N}, 106^\circ 40'\text{E}$ (bounding box: $10.68^\circ - 10.88^\circ\text{N}$, $106.58^\circ - 106.82^\circ\text{E}$) \\
 \midrule
 \textbf{Data accessibility} & Repository name: Zenodo \newline
 Data identification number: \url{https://doi.org/10.5281/zenodo.22929940} \newline
