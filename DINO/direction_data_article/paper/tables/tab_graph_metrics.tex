@@ -1,0 +1,24 @@
+% Bảng thông số topo đồ thị mạng đường bộ OSM (Tự động sinh bởi pipeline)
+\begin{table}[tbp]
+\centering
+\caption{Topological graph structure and directed transition operator characteristics ($R_{\text{cutoff}} = 5.0$~km).}
+\label{tab:graph_metrics}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Graph Metric} & \textbf{Value} & \textbf{Physical / Methodological Interpretation} \\
+\hline
+Total graph nodes ($N$) & $608$ & Physical surveillance camera locations \\
+Total directed edges ($|E|$) & $2420$ & Road network shortest routes $\leq 5.0$~km \\
+Average out-degree & $3.98 \pm 2.57$ & Range: $[0, 17]$ reachable neighbors \\
+Average in-degree & $3.98 \pm 2.17$ & Balanced directed urban topology \\
+Connected node pairs & $1737$ & Unique unordered station pairs with $\geq 1$ directed path \\
+One-way only pairs & $1054$ ($60.68\%$) & Strict one-way boulevards and ramps \\
+Bidirectional pairs & $683$ ($39.32\%$) & Two-way arterials with dual directional flow \\
+-- Asymmetric delta ($>50$~m) & $226$ ($33.09\%$) & Caused by median barriers and U-turn detours \\
+-- Symmetric distance ($\leq 50$~m) & $457$ ($66.91\%$) & Parallel divided roadways \\
+Mean network route distance & $1106.1 \pm 982.9$~m & Inter-station driving route length \\
+Dual transition spectral radius & $\rho(P_f) = 1.0000,\; \rho(P_b) = 1.0000$ & Unconditionally stable DCRNN operators \\
+\hline
+\end{tabular}
+\end{table}

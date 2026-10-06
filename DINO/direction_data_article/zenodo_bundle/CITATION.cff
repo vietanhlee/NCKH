@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you utilize the HCMC-TrafficSnap dataset in your academic research, please cite it as below."
+authors:
+  - family-names: "Le"
+    given-names: "Viet-Anh"
+    orcid: "https://orcid.org/0009-0003-5748-0439"
+    affiliation: "Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT)"
+  - family-names: "Nguyen-Trong"
+    given-names: "Khanh"
+    orcid: "https://orcid.org/0000-0001-5175-8805"
+    affiliation: "Intelligent Computing for Sustainable Development Laboratory (IC4SD), Posts and Telecommunications Institute of Technology (PTIT)"
+title: "HCMC-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Directed Spatial Graph Dataset for Heterogeneous Urban Traffic"
+version: 1.0.0
+doi: 10.5281/zenodo.22929940
+date-released: 2026-10-06
+url: "https://doi.org/10.5281/zenodo.22929940"
+repository-code: "https://github.com/vietanhlee/NCKH"
+keywords:
+  - "intelligent transportation systems"
+  - "image time-series"
+  - "traffic camera snapshots"
+  - "self-supervised learning"
+  - "directed spatial graph"
+  - "mixed urban traffic"
+license: CC-BY-4.0

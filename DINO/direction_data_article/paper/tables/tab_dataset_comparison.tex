@@ -1,0 +1,26 @@
+% Table: Systematic Comparison of HCMC-TrafficSnap with Existing Benchmarks
+\begin{table*}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3.0pt}
+\renewcommand{\arraystretch}{1.28}
+\caption{Systematic Comparison of HCMC-TrafficSnap with Existing Benchmark Datasets in Intelligent Transportation and Computer Vision.}
+\label{tab:dataset_comparison}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.2cm} r >{\raggedright\arraybackslash}p{2.1cm} >{\raggedright\arraybackslash}p{2.2cm} c X @{}}
+\toprule
+\textbf{Dataset} & \textbf{Urban Region} & \textbf{Dominant Flow} & \textbf{Nodes} & \textbf{Duration / Scale} & \textbf{Visual Modality} & \textbf{Graph} & \textbf{Target Applications} \\
+\midrule
+\textbf{METR-LA}~\cite{li2018diffusion} & Los Angeles, USA & Car-dominant & 207 & 4 months (1D) & No (Inductive Loop) & Yes & 1D Traffic Speed Forecasting \\
+\addlinespace[2pt]
+\textbf{PEMS-BAY}~\cite{li2018diffusion} & San Francisco, USA & Car-dominant & 325 & 6 months (1D) & No (Inductive Loop) & Yes & 1D Traffic Speed Forecasting \\
+\addlinespace[2pt]
+\textbf{LargeST}~\cite{liu2023largest} & California, USA & Car-dominant & 8,600 & 5 years (1D) & No (Inductive Loop) & Yes & Large-Scale Spatial Forecasting \\
+\addlinespace[2pt]
+\textbf{UA-DETRAC}~\cite{wen2020ua} & Beijing / Tianjin, CN & Car-dominant & 24 & Short clips (140k) & Yes (720p Video) & No & Vehicle Detection and Tracking \\
+\addlinespace[2pt]
+\textbf{CityCam}~\cite{zhang2017understanding} & New York City, US & Car-dominant & 212 & Multi-day (60M) & Yes (Low-res Webcams) & No & Vehicle Density Estimation, Counting \\
+\midrule
+\textbf{HCMC-TrafficSnap} & Ho Chi Minh City, VN & \textbf{Motorcycle (70--80\%)} & \textbf{608} & \textbf{7 days ($>10^6$ frames)} & \textbf{Yes ($512\times288$ Snapshots)} & \textbf{Yes} & \textbf{Multi-Camera Time-Series SSL, STGNNs} \\
+\bottomrule
+\end{tabularx}
+\end{table*}

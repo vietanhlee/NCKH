@@ -1,0 +1,23 @@
+% Bảng kiểm định định lượng PII và giới hạn quang học Nyquist (Tự động sinh bởi pipeline)
+\begin{table}[tbp]
+\centering
+\caption{Quantitative privacy audit and optical Nyquist-Shannon resolution limits for HCMC-TrafficSnap.}
+\label{tab:pii_audit}
+\small
+\begin{tabular}{lll}
+\hline
+\textbf{Parameter / Audit Criterion} & \textbf{Observed / Calculated Value} & \textbf{Regulatory / Optical Threshold} \\
+\hline
+Sampled test snapshots & $100$ images & Stratified across all 24 diurnal hours \\
+Camera mounting height ($H$) & $6.0 - 15.0$~m & High-angle urban traffic mast \\
+Camera pitch angle ($\theta$) & $15^\circ - 40^\circ$ & Oblique downward traffic viewing \\
+Observation distance ($D$) & $15.0 - 60.0$~m & Distance to moving traffic flow \\
+Sensor ground sampling distance & $2.73 - 3.25$~cm/pixel & Resolution at typical road surface \\
+Motorcycle plate projection & $\approx 7 \times 5$ pixels & Standard plate dimensions ($19 \times 14$~cm) \\
+Plate character stroke height & $\approx 1.8$ pixels & Nyquist OCR limit: $\geq 16.0$ pixels \\
+Biometric face area & $< 8 \times 8$ pixels & Occluded by helmets and face masks \\
+Facial / Plate recognition rate & $0.00\%$ & Zero PII violation across full audit \\
+Regulatory compliance status & Full compliance & Privacy by Design / Decree 47/2020 \\
+\hline
+\end{tabular}
+\end{table}

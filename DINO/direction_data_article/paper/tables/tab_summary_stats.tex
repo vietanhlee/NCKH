@@ -1,0 +1,48 @@
+% Table: Comprehensive Summary Statistics and Empirical Characteristics of HCMC-TrafficSnap
+\begin{table*}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.28}
+\caption{Comprehensive Summary Statistics and Empirical Characteristics of the HCMC-TrafficSnap Dataset.}
+\label{tab:summary_stats}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}X >{\raggedleft\arraybackslash}p{6.4cm} @{}}
+\toprule
+\textbf{Empirical Metric / System Attribute} & \textbf{Measurement Value / Empirical Specification} \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{1. Dataset Scale, Spatial Coverage, and Ingestion Characteristics}} \\
+\addlinespace[2pt]
+\quad Total active surveillance camera stations ($N$) & 608 nodes (operational index range [1, 657]) \\
+\quad Decommissioned / unmapped endpoint IDs & 49 unmapped identifiers \\
+\quad Temporal observation duration & 7 continuous calendar days (168 consecutive hours) \\
+\quad Nominal inter-snapshot sampling interval ($\Delta T$) & $\approx 300$~s (5.0 minutes, $\sim 12$~snapshots/hour/station) \\
+\quad Total snapshot volume ingested & $> 1,000,000$ ($\approx 1.22 \times 10^6$ total valid frames) \\
+\quad Aggregate storage footprint & $\approx 80$~GB (uncompressed JPEG tar shards) \\
+\quad Mean client ingestion clock offset ($\Delta t_{\text{lag}}$) & $15.0 \pm 4.2$~s (stream buffer to disk serialization) \\
+\quad Image acquisition integrity pass rate & $99.85\%$ (error placeholder cards excised) \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{2. Visual, Photometric, and Image Quality Properties}} \\
+\addlinespace[2pt]
+\quad Native frame resolution & $512 \times 288$~pixels (100\% uniform $16:9$ aspect ratio) \\
+\quad Mean snapshot JPEG file size & $65.87 \pm 9.19$~KB \\
+\quad Mean perceived luminance ($Y \in [0, 255]$) & $97.35 \pm 15.03$ (ITU-R BT.601 grayscale) \\
+\quad Diurnal luminance dynamic range & $[67.37, 122.37]$ (solar noon to night illumination) \\
+\quad Root-Mean-Square (RMS) contrast & $45.79 \pm 6.57$ \\
+\quad Spatial Shannon entropy & $7.30 \pm 0.24$~bits (theoretical upper bound: 8.0~bits) \\
+\quad Mean Laplacian edge variance ($\text{Var}(\nabla^2 I)$) & $2836.51 \pm 1252.35$ (median: 2469.70) \\
+\quad Resolvable license plate / facial PII detection rate & $0.00\%$ (strictly sub-Nyquist GSD, $>6$~m elevation) \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{3. Directed Topological Graph and Road Routing Network Properties}} \\
+\addlinespace[2pt]
+\quad Spatial routing cutoff horizon & 5.0~km (OSRM motor-vehicle driving profile) \\
+\quad Total directed network corridors ($d_{ij} \le 5.0$~km) & 2,420 valid directed corridors \\
+\quad Network adjacency sparsity & $99.34\%$ \\
+\quad Total connected node pairs & 1,737 unique station pairs \\
+\quad Strictly one-way corridor pairs & 1,054 pairs ($60.68\%$ of connected topology) \\
+\quad Bidirectional corridor pairs & 683 pairs ($39.32\%$ of connected topology) \\
+\quad Distance asymmetry ($|d_{ij} - d_{ji}| > 50$~m) & 232 pairs ($33.97\%$ of bidirectional corridors) \\
+\quad Mean / median network routing distance & $2.85 \pm 1.12$~km / $2.64$~km \\
+\quad Mean / maximum node out-degree & $3.98 \pm 2.15$ / 11 outgoing corridors \\
+\quad Directed transition spectral radius ($\rho(P_f), \rho(P_b)$) & 1.0 (strictly row-stochastic dual DCRNN operators) \\
+\bottomrule
+\end{tabularx}
+\end{table*}

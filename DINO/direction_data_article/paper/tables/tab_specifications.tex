@@ -1,0 +1,34 @@
+\begin{table*}[!htbp]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\caption{Specifications Table of the HCMC-TrafficSnap Dataset.}
+\label{tab:specifications}
+\begin{tabularx}{\textwidth}{@{} l X @{}}
+\toprule
+\textbf{Subject} & Computer Science \\
+\midrule
+\textbf{Specific subject area} & Intelligent Transportation Systems, Computer Vision, Spatio-Temporal Data Mining, Self-Supervised Learning \\
+\midrule
+\textbf{Type of data} & Image time-series (JPEG snapshots), Geographic metadata (CSV), Directed spatial routing distance matrices (NumPy / CSV / XLSX), Python dataset loaders and graph utility routines \\
+\midrule
+\textbf{How data were acquired} & Automated continuous retrieval from the public traffic surveillance portal of Ho Chi Minh City (\url{https://giaothong.hochiminhcity.gov.vn}) via an asynchronous HTTP polling engine. Road network routing distances were computed via the Open Source Routing Machine (OSRM) engine using OpenStreetMap road network data. \\
+\midrule
+\textbf{Data format} & Raw (JPEG snapshots, $512 \times 288$ px), Filtered (municipal transmission placeholder cards excised), Structured (CSV metadata, NumPy matrices) \\
+\midrule
+\textbf{Parameters for data collection} & Multi-camera time-lapse snapshot polling at approximately $\Delta T \approx 300$~s (5 minutes, $\sim 12$~snapshots/hour/station) across 7 continuous days (168 consecutive hours, Monday 00:00 to Sunday 23:59 ICT). Average client crawl time lag relative to camera on-screen clock: $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s. \\
+\midrule
+\textbf{Description of data collection} & Over 1,000,000 discrete surveillance snapshots ($\approx 1.22$ million total frames) collected from 608 active municipal camera stations mounted at $6.0$--$15.0$~m elevation across Ho Chi Minh City, Vietnam. Raw snapshots undergo automated integrity checking to filter out $284 \times 177$ error placeholder cards. Directed road distances were computed for camera node pairs within a 5.0~km spatial cutoff horizon, yielding 2,420 valid directed corridors. \\
+\midrule
+\textbf{Data source location} & City/Region: Ho Chi Minh City, Vietnam \newline
+Latitude and Longitude: $10^\circ 46'\text{N}, 106^\circ 40'\text{E}$ \\
+\midrule
+\textbf{Data accessibility} & Repository name: Zenodo \newline
+Data identification number: \url{https://doi.org/10.5281/zenodo.22929940} \newline
+Direct URL: \url{https://zenodo.org/record/22929940} \newline
+License: Derived metadata, graph tensors, and code are released under Creative Commons Attribution 4.0 International (CC BY 4.0). Surveillance snapshots are provided for non-commercial academic research. Road graph data \copyright\ OpenStreetMap contributors under ODbL. \\
+\midrule
+\textbf{Related research article} & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
+\bottomrule
+\end{tabularx}
+\end{table*}
