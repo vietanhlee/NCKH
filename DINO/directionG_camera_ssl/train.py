@@ -41,7 +41,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from common.backbone_loader import get_dino_backbone, extract_tokens
+from common.backbone_loader import (
+    get_dino_backbone,
+    extract_tokens,
+    extract_tokens_with_grad,
+    imagenet_normalize,
+)
 from common.gpu_utils import (
     get_available_devices,
     setup_multi_gpu,
@@ -116,6 +121,12 @@ class DirectionGStudentModel(nn.Module):
     """
     Wrapper gom toàn bộ luồng tính toán của Student (Backbone + DINO Head + iBOT Head)
     để phân bổ song song hoàn hảo trên toàn bộ các GPU qua nn.DataParallel.
+
+    Lưu ý nghiệp vụ:
+      - Đầu vào ở dải [0, 1]; chuẩn hóa ImageNet được thực hiện bên trong wrapper.
+      - `masks` (B, N) bool từ AGM: patch bị che được thay bằng mask token của DINOv3,
+        Student phải dự đoán phân phối prototype của Teacher tại các vị trí đó (iBOT MIM).
+      - BẮT BUỘC dùng `extract_tokens_with_grad` để gradient chảy về backbone.
     """
     def __init__(self, backbone: nn.Module, dino_head: nn.Module, ibot_head: nn.Module, patch_size: int = 16):
         super().__init__()
@@ -124,8 +135,15 @@ class DirectionGStudentModel(nn.Module):
         self.ibot_head = ibot_head
         self.patch_size = patch_size
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
+    def forward(
+        self,
+        x: torch.Tensor,
+        masks: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        x = imagenet_normalize(x)
+        cls_token, patch_spatial = extract_tokens_with_grad(
+            self.backbone, x, patch_size=self.patch_size, masks=masks
+        )
         B, Hp, Wp, D = patch_spatial.shape
         patches = patch_spatial.reshape(B, Hp * Wp, D)
         dino_logits = self.dino_head(cls_token)
@@ -136,6 +154,7 @@ class DirectionGStudentModel(nn.Module):
 class DirectionGTeacherModel(nn.Module):
     """
     Wrapper gom toàn bộ luồng suy luận của Teacher EMA để tận dụng tối đa Multi-GPU.
+    Teacher luôn nhìn ảnh gốc KHÔNG che, KHÔNG gradient.
     """
     def __init__(self, backbone: nn.Module, dino_head: nn.Module, ibot_head: nn.Module, patch_size: int = 16):
         super().__init__()
@@ -146,6 +165,7 @@ class DirectionGTeacherModel(nn.Module):
 
     @torch.no_grad()
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        x = imagenet_normalize(x)
         cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
         B, Hp, Wp, D = patch_spatial.shape
         patches = patch_spatial.reshape(B, Hp * Wp, D)
@@ -275,15 +295,26 @@ def save_direction_g_visuals(
         axes[b, 3].set_title("Ảnh Ghép Nền Tĩnh SRS", fontsize=10, fontweight="bold")
         axes[b, 3].axis("off")
 
-        # 5. DINOv3 PCA Feature Map
+        # 5. DINOv3 PCA Feature Map (Nội suy Bilinear mượt mà chuẩn Meta DINOv2/v3)
         if patch_features is not None:
             feats = patch_features[b].detach().cpu().numpy()  # (448, D)
-            feats_norm = feats - feats.mean(axis=0)
+            feats_norm = feats - feats.mean(axis=0, keepdims=True)
             u, s, vt = np.linalg.svd(feats_norm, full_matrices=False)
             pca3 = u[:, :3]  # (448, 3)
-            pca3 = (pca3 - pca3.min(axis=0)) / (pca3.max(axis=0) - pca3.min(axis=0) + 1e-6)
-            pca_img = pca3.reshape(16, 28, 3)
-            axes[b, 4].imshow(pca_img)
+            # Chuẩn hóa min-max trên từng kênh thành phần chính
+            p_min = pca3.min(axis=0, keepdims=True)
+            p_max = pca3.max(axis=0, keepdims=True)
+            pca3_scaled = (pca3 - p_min) / np.maximum(p_max - p_min, 1e-6)
+            pca_grid = pca3_scaled.reshape(16, 28, 3)
+
+            # Nội suy song tuyến tính (Bilinear Interpolation) lên kích thước ảnh thật
+            # Khắc phục hoàn toàn hiện tượng rỗ ô vuông 16x16 thô ráp
+            H_orig, W_orig = img_np.shape[0], img_np.shape[1]
+            pca_tensor = torch.from_numpy(pca_grid).permute(2, 0, 1).unsqueeze(0).float()
+            pca_smooth = F.interpolate(pca_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            pca_smooth_np = pca_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+
+            axes[b, 4].imshow(pca_smooth_np)
             axes[b, 4].set_title("DINOv3 PCA Representation", fontsize=10, fontweight="bold")
         else:
             axes[b, 4].axis("off")
@@ -493,6 +524,7 @@ def train_direction_g():
 
     trainable_params = [p for p in student_model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
@@ -625,6 +657,13 @@ def train_direction_g():
             except Exception as e_opt:
                 print(f"   ⚠️ [Optimizer Notice] {e_opt}")
 
+        if "scheduler" in ckpt and ckpt["scheduler"] is not None:
+            try:
+                scheduler.load_state_dict(ckpt["scheduler"])
+                print("   ✅ [Scheduler] Khôi phục lịch trình Learning Rate (CosineAnnealingLR).")
+            except Exception as e_sched:
+                print(f"   ⚠️ [Scheduler Notice] {e_sched}")
+
         if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
             try:
                 scaler.load_state_dict(ckpt["scaler"])
@@ -703,6 +742,7 @@ def train_direction_g():
             "dino_center": dino_loss_fn.center.detach().cpu(),
             "ibot_center": ibot_loss_fn.center.detach().cpu(),
             "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
             "scaler": scaler.state_dict() if use_amp else None,
             "history": history,
             "best_loss": best_loss,
@@ -782,14 +822,14 @@ def train_direction_g():
                     with torch.no_grad():
                         t_cls, t_patches, t_dino_logits, t_ibot_logits = teacher_model(x1_vit)
 
-                    # Student nhận ảnh x_student_vit (đã qua SRS)
-                    s_cls, s_patches, s_dino_logits, s_ibot_logits = student_model(x_student_vit)
+                    # Student nhận ảnh x_student_vit (SRS) cùng mặt nạ che phân tầng masks (AGM iBOT)
+                    s_cls, s_patches, s_dino_logits, s_ibot_logits = student_model(x_student_vit, masks=mask_batch)
 
-                    # Bước E: Tính tổn thất Loss
+                    # Bước E: Tính tổn thất Loss (KoLeo weight cân bằng 0.02 chống áp đảo)
                     loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
                     loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
                     loss_koleo = koleo_loss_fn(s_cls)
-                    total_loss = loss_dino + 1.0 * loss_ibot + 0.1 * loss_koleo
+                    total_loss = loss_dino + 1.0 * loss_ibot + 0.02 * loss_koleo
 
                 # Bước F: Tối ưu Gradient qua GradScaler
                 optimizer.zero_grad()
@@ -825,6 +865,9 @@ def train_direction_g():
                 if step % 2 == 0 or step == 1:
                     print(f"   [Epoch {epoch+1}/{args.epochs} | Step {step}] Loss: {total_loss.item():.4f} "
                           f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f})")
+
+            # Cập nhật lịch trình Learning Rate Cosine Annealing
+            scheduler.step()
 
             # Kết thúc epoch: Tính giá trị loss trung bình
             avg_tot = float(np.mean(epoch_losses)) if epoch_losses else 0.0

@@ -17,10 +17,11 @@ import torch.nn.functional as F
 
 class KoLeoLoss(nn.Module):
     """
-    Kozachenko-Leonenko differential entropy estimator (KoLeo).
-    Khuyến khích các feature phân bố đều trên mặt cầu đơn vị, chống sụp đổ biểu diễn.
+    Kozachenko-Leonenko differential entropy estimator (KoLeo) (DINOv2/v3).
+    Khuyến khích các feature CLS phân bố đều trên mặt cầu đơn vị, chống sụp đổ biểu diễn.
+    Bổ sung chặn an toàn epsilon và clamp để chống bùng nổ gradient khi có các frame tương tự nhau trong batch.
     """
-    def __init__(self, eps: float = 1e-8):
+    def __init__(self, eps: float = 1e-4):
         super().__init__()
         self.eps = eps
 
@@ -36,10 +37,13 @@ class KoLeoLoss(nn.Module):
         dist_sq = 2.0 - 2.0 * dots
         # Bỏ đường chéo
         dist_sq.fill_diagonal_(float("inf"))
-        # Láng giềng gần nhất
-        min_dist = torch.sqrt(torch.clamp(dist_sq.min(dim=1)[0], min=self.eps))
-        loss = -torch.mean(torch.log(min_dist + self.eps))
-        return loss
+        # Láng giềng gần nhất với clamp chặn an toàn
+        min_dist_sq = dist_sq.min(dim=1)[0]
+        min_dist = torch.sqrt(torch.clamp(min_dist_sq, min=self.eps ** 2))
+        min_dist = torch.clamp(min_dist, min=self.eps, max=2.0)
+        # Giới hạn loss trong khoảng ổn định [0.0, 5.0]
+        loss = -torch.mean(torch.log(min_dist))
+        return torch.clamp(loss, min=0.0, max=5.0)
 
 
 class DINOLoss(nn.Module):

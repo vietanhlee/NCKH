@@ -8,6 +8,7 @@
 
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+import math
 from typing import Dict, Tuple, Optional, Union
 import torch
 import torch.nn as nn
@@ -131,9 +132,12 @@ class NoiseAwareDecompositionLoss(nn.Module):
         l_rec = 0.85 * l_ssim + 0.15 * l_l1
 
         # 2. Prior mềm có độ bất định (Laplace NLL)
-        # Điểm mấu chốt: Stop-grad từ các nhánh khác, chỉ L_prior tối ưu sigma
+        # Chuẩn hóa cận dưới bằng log(sigma_min): Đảm bảo L_prior >= 0,
+        # ngăn chặn triệt để hiện tượng mô hình "ăn gian" bằng cách ép sigma về cận dưới để lấy loss âm:
         l1_diff_bg = torch.abs(B_hat - prior_bg).mean(dim=1, keepdim=True)  # (B, 1, H, W)
-        l_prior = torch.mean(l1_diff_bg / (sigma + 1e-6) + log_sigma)
+        sigma_min = 0.01
+        log_sigma_ratio = log_sigma - math.log(sigma_min)  # Luôn >= 0 vì sigma >= sigma_min
+        l_prior = torch.mean(l1_diff_bg / (sigma + 1e-6) + log_sigma_ratio)
 
         # 3. Nền dùng chung nhiều ngày (L_shared với hàm Charbonnier)
         # Với batch K frames cùng camera x slot khác ngày, tính median theo trục batch
@@ -149,11 +153,24 @@ class NoiseAwareDecompositionLoss(nn.Module):
         excl_weight = torch.exp(-diff_origin_bg / self.tau_excl)
         l_excl = torch.mean(M_alpha * excl_weight)
 
-        # 5. Các ràng buộc hình học bổ trợ
+        # 5. Ràng buộc hướng dẫn tiền cảnh & Chống sụp đổ Mask (Anti-Collapse Mechanism)
+        # Sai khác giữa ảnh gốc và ảnh nền prior là tín hiệu vật lý của xe cộ:
+        diff_motion = torch.abs(origin - prior_bg.detach()).mean(dim=1, keepdim=True)  # (B, 1, H, W)
+        m_guide = torch.clamp((diff_motion - 0.08) / 0.15, 0.0, 1.0).detach()
+        l_guide = F.binary_cross_entropy(M_alpha, m_guide)
+
+        # Vùng tiền cảnh F phải bám sát ảnh gốc tại các vị trí Mask kích hoạt (chống bỏ rơi Foreground):
+        if "pred_fg" in preds:
+            diff_fg = torch.abs(preds["pred_fg"] - origin).mean(dim=1, keepdim=True)
+            l_fg = torch.mean(M_alpha * diff_fg) / (torch.mean(M_alpha).detach() + 1e-4)
+        else:
+            l_fg = torch.tensor(0.0, device=origin.device)
+
+        # 6. Các ràng buộc hình học bổ trợ
         l_tv = total_variation_loss(M_alpha)
         l_sparse = torch.mean(M_alpha)
 
-        # 6. Nhị phân hóa (L_bin): Đẩy M về 0 hoặc 1, kích hoạt sau epoch warmup
+        # 7. Nhị phân hóa (L_bin): Đẩy M về 0 hoặc 1, kích hoạt sau epoch warmup
         if epoch >= warmup_bin_epoch:
             l_bin = torch.mean(M_alpha * (1.0 - M_alpha))
         else:
@@ -164,6 +181,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
             + self.lambda_prior * l_prior
             + self.lambda_shared * l_shared
             + self.lambda_excl * l_excl
+            + 0.1 * l_guide
+            + 0.2 * l_fg
             + self.lambda_tv * l_tv
             + self.lambda_sparse * l_sparse
             + (self.lambda_bin * l_bin if epoch >= warmup_bin_epoch else 0.0)
@@ -176,6 +195,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
             "loss_prior": float(l_prior.item()),
             "loss_shared": float(l_shared.item()),
             "loss_excl": float(l_excl.item()),
+            "loss_guide": float(l_guide.item()),
+            "loss_fg": float(l_fg.item()),
             "loss_tv": float(l_tv.item()),
             "loss_sparse": float(l_sparse.item()),
             "mean_sigma": float(sigma.mean().item()),
@@ -240,10 +261,12 @@ class SceneDecompositionLossV2(nn.Module):
         l_l1 = F.l1_loss(I_recon, origin)
         l_rec = 0.85 * l_ssim + 0.15 * l_l1
 
-        # 2. L_bgPL (Laplace NLL) với B_pseudo
+        # 2. L_bgPL (Laplace NLL) với B_pseudo (chuẩn hóa chặn dưới sigma_min không âm)
         if bg_pseudo is not None:
             l1_diff = torch.abs(B_hat - bg_pseudo).mean(dim=1, keepdim=True)
-            l_bg_pl = torch.mean(l1_diff / (sigma + 1e-6) + log_sigma)
+            sigma_min = 0.01
+            log_sigma_ratio = log_sigma - math.log(sigma_min)
+            l_bg_pl = torch.mean(l1_diff / (sigma + 1e-6) + log_sigma_ratio)
         else:
             l_bg_pl = torch.tensor(0.0, device=origin.device)
 
@@ -279,6 +302,13 @@ class SceneDecompositionLossV2(nn.Module):
         excl_weight = torch.exp(-diff_bg / self.tau_excl)
         l_excl = torch.mean(M_alpha * excl_weight)
 
+        # Ràng buộc tiền cảnh F:
+        if "pred_fg" in preds:
+            diff_fg = torch.abs(preds["pred_fg"] - origin).mean(dim=1, keepdim=True)
+            l_fg = torch.mean(M_alpha * diff_fg) / (torch.mean(M_alpha).detach() + 1e-4)
+        else:
+            l_fg = torch.tensor(0.0, device=origin.device)
+
         # 6. Ràng buộc hình học
         l_tv = total_variation_loss(M_alpha)
         if epoch >= self.warmup_bin_epoch:
@@ -292,6 +322,7 @@ class SceneDecompositionLossV2(nn.Module):
             + self.lambda_mask_pl * l_mask_pl
             + self.lambda_ell * l_ell
             + self.lambda_excl * l_excl
+            + 0.2 * l_fg
             + self.lambda_tv * l_tv
             + (self.lambda_bin * l_bin if epoch >= self.warmup_bin_epoch else 0.0)
         )

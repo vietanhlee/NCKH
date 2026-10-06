@@ -320,19 +320,71 @@ def get_dino_backbone(
     return backbone, embed_dim, patch_size
 
 
-@torch.no_grad()
-def extract_tokens(
+# Thống kê chuẩn hóa ImageNet — DINOv2/DINOv3 (LVD-1689M) đều được tiền huấn luyện với chuẩn này.
+IMAGENET_MEAN: Tuple[float, float, float] = (0.485, 0.456, 0.406)
+IMAGENET_STD: Tuple[float, float, float] = (0.229, 0.224, 0.225)
+
+
+def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+    """
+    Chuẩn hóa ảnh dải [0, 1] theo thống kê ImageNet trước khi đưa vào ViT DINO.
+    Bắt buộc: nếu đưa ảnh [0, 1] thô vào DINOv3, phân phối đầu vào lệch khỏi phân phối
+    tiền huấn luyện → đặc trưng patch bị nhiễu, PCA feature map "rỗ" và kém ngữ nghĩa.
+    """
+    mean = torch.tensor(IMAGENET_MEAN, device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(IMAGENET_STD, device=x.device, dtype=x.dtype).view(1, 3, 1, 1)
+    return (x - mean) / std
+
+
+def _supports_mask_tokens(backbone: nn.Module) -> bool:
+    """Kiểm tra backbone có hỗ trợ `forward_features(x, masks=...)` (mask token kiểu iBOT) hay không."""
+    cached = getattr(backbone, "_agy_supports_masks", None)
+    if cached is not None:
+        return cached
+    supported = False
+    fwd = getattr(backbone, "forward_features", None)
+    if fwd is not None:
+        try:
+            import inspect
+            supported = "masks" in inspect.signature(fwd).parameters
+        except (TypeError, ValueError):
+            supported = False
+    try:
+        backbone._agy_supports_masks = supported
+    except Exception:
+        pass
+    return supported
+
+
+def _pixel_mask_fallback(x: torch.Tensor, masks: torch.Tensor, patch_size: int) -> torch.Tensor:
+    """
+    Fallback khi backbone không hỗ trợ mask token: che trực tiếp các patch trên ảnh
+    (gán giá trị 0 — tức giá trị trung bình sau chuẩn hóa ImageNet).
+    masks: (B, N_patches) bool, True = patch bị che.
+    """
+    B, _, H, W = x.shape
+    hp, wp = H // patch_size, W // patch_size
+    m = masks.view(B, 1, hp, wp).float()
+    m_up = F.interpolate(m, size=(H, W), mode="nearest")
+    return x * (1.0 - m_up)
+
+
+def extract_tokens_with_grad(
     backbone: nn.Module,
     x: torch.Tensor,
     patch_size: int = 16,
+    masks: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Trích xuất đồng thời [CLS] token đại diện toàn cảnh và ma trận Patch Tokens không gian.
+    Trích xuất [CLS] token và Patch Tokens không gian, GIỮ NGUYÊN đồ thị gradient.
+    Dùng cho mọi nhánh cần huấn luyện backbone (Student SSL, fine-tune decoder có mở khóa backbone).
 
     Args:
         backbone: ViT backbone (DINOv3/DINOv2).
-        x: Batch tensor ảnh đầu vào (B, C, H, W).
+        x: Batch tensor ảnh đầu vào ĐÃ chuẩn hóa ImageNet (B, C, H, W).
         patch_size: Kích thước patch tương ứng của mô hình.
+        masks: (B, N_patches) bool tùy chọn — patch bị che sẽ được thay bằng mask token học được
+               (iBOT/DINOv2/DINOv3). Nếu backbone không hỗ trợ, fallback che ở mức pixel.
 
     Returns:
         cls_token: (B, embed_dim)
@@ -347,6 +399,21 @@ def extract_tokens(
 
     h_patches = H // patch_size
     w_patches = W // patch_size
+
+    # Nhánh có mask token (iBOT-style masked image modeling)
+    if masks is not None and masks.any():
+        masks = masks.to(device=x.device, dtype=torch.bool).view(B, h_patches * w_patches)
+        if _supports_mask_tokens(backbone):
+            feat = backbone.forward_features(x, masks=masks)
+            if isinstance(feat, (list, tuple)):
+                feat = feat[0]
+            if isinstance(feat, dict):
+                cls_token = feat["x_norm_clstoken"]
+                patch_raw = feat["x_norm_patchtokens"]
+                patch_raw = patch_raw[:, : h_patches * w_patches, :]
+                return cls_token, patch_raw.reshape(B, h_patches, w_patches, patch_raw.shape[-1])
+        # Fallback: che mức pixel rồi đi tiếp luồng chuẩn bên dưới
+        x = _pixel_mask_fallback(x, masks, patch_size)
 
     # DINOv2 / DINOv3 API
     if hasattr(backbone, "get_intermediate_layers"):
@@ -385,6 +452,21 @@ def extract_tokens(
         patch_raw = torch.cat([patch_raw, pad], dim=1)
 
     embed_dim = patch_raw.shape[-1]
-    patch_spatial = patch_raw.view(B, h_patches, w_patches, embed_dim)
+    patch_spatial = patch_raw.reshape(B, h_patches, w_patches, embed_dim)
 
     return cls_token, patch_spatial
+
+
+@torch.no_grad()
+def extract_tokens(
+    backbone: nn.Module,
+    x: torch.Tensor,
+    patch_size: int = 16,
+    masks: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Phiên bản KHÔNG gradient của `extract_tokens_with_grad` (tương thích ngược API cũ).
+    Chỉ dùng cho nhánh đóng băng: FrozenExtractor (TAM), Teacher EMA, trích xuất đặc trưng suy luận.
+    TUYỆT ĐỐI không dùng cho nhánh Student/backbone cần huấn luyện.
+    """
+    return extract_tokens_with_grad(backbone, x, patch_size=patch_size, masks=masks)

@@ -13,6 +13,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+        return (x - mean) / std
+
 
 class ConvBlock(nn.Module):
     """Khối tích chập kép cơ bản với GroupNorm/BatchNorm và GELU."""
@@ -121,6 +129,13 @@ class TrafficDecompositionNet(nn.Module):
         # Decoder chính dùng chung
         self.decoder = MultiScaleDecompDecoder(in_dim=embed_dim, hidden_dim=256)
 
+        # Nhánh Skip-Connection bảo toàn chi tiết tần số cao từ ảnh RGB gốc
+        self.rgb_skip = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),
+        )
+
         # 5 Heads chuyên biệt (Hướng 2 Mới)
         self.head_alpha = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
@@ -146,12 +161,13 @@ class TrafficDecompositionNet(nn.Module):
         )
 
     def extract_patch_feature_map(self, x: torch.Tensor) -> torch.Tensor:
-        """Trích xuất tensor 2D đặc trưng (B, embed_dim, H_p, W_p) từ ViT."""
+        """Trích xuất tensor 2D đặc trưng (B, embed_dim, H_p, W_p) từ ViT có chuẩn hóa ImageNet."""
         B, C, H, W = x.shape
         H_p = H // self.patch_size
         W_p = W // self.patch_size
 
-        feats = self.backbone(x)
+        x_norm = imagenet_normalize(x)
+        feats = self.backbone(x_norm)
         if isinstance(feats, dict):
             patch_tokens = feats.get("x_norm_patchtokens", None)
             if patch_tokens is None:
@@ -224,8 +240,9 @@ class TrafficDecompositionNet(nn.Module):
 
         pred_ell = self.head_ell(static_token_avg)  # (B, num_light_codes)
 
-        # Giải mã đa tỉ lệ
+        # Giải mã đa tỉ lệ kết hợp Skip-Connection RGB sắc nét
         dec_feat = self.decoder(feat_map, target_hw=(H, W))
+        dec_feat = dec_feat + self.rgb_skip(x)
 
         # 4 đầu ra không gian
         alpha_mask = self.head_alpha(dec_feat)

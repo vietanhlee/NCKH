@@ -20,7 +20,7 @@ _dino_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
 
-from common.backbone_loader import get_dino_backbone, extract_tokens
+from common.backbone_loader import get_dino_backbone, extract_tokens, imagenet_normalize
 
 
 class FrozenExtractor(nn.Module):
@@ -104,6 +104,8 @@ class FrozenExtractor(nn.Module):
             x = F.interpolate(x, size=(target_H, target_W), mode="bilinear", align_corners=False)
             H, W = target_H, target_W
 
+        # Chuẩn hóa ImageNet: đầu vào dataset ở dải [0, 1], DINOv3 yêu cầu (x - mean) / std
+        x = imagenet_normalize(x)
         cls_token, patch_spatial = extract_tokens(self.backbone, x, patch_size=self.patch_size)
         # patch_spatial: (B, H_patches, W_patches, embed_dim)
         B_cur, Hp, Wp, D = patch_spatial.shape
