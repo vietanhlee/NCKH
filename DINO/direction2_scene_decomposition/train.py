@@ -18,6 +18,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -172,9 +173,12 @@ def train_decomposition(args):
 
     # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp trọng số --weights
     start_epoch = 0
+    best_loss = float("inf")
+    history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
+
     if args.resume:
-        if not os.path.isfile(args.resume):
-            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        if not os.path.exists(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file hoặc thư mục checkpoint resume: {args.resume}")
         print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
         ckpt_data = load_checkpoint(
             load_path=args.resume,
@@ -193,14 +197,36 @@ def train_decomposition(args):
                 print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
                 print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
                 args.epochs = target_epochs
+
+        # Khôi phục kỷ lục best_loss trước đó (nếu có)
+        if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
+            saved_loss = ckpt_data["metrics"].get("loss", None)
+            if saved_loss is not None:
+                best_loss = float(saved_loss)
+                print(f"   🏆 [Best Loss] Khôi phục kỷ lục loss tốt nhất trước đó: {best_loss:.4f}")
+
+        # Khôi phục lịch sử huấn luyện từ metrics JSON nếu có để vẽ biểu đồ liền mạch
+        metrics_candidates = [
+            os.path.join(args.save_dir, "training_metrics.json"),
+            os.path.join(os.path.dirname(args.resume) if os.path.isfile(args.resume) else args.resume, "training_metrics.json"),
+        ]
+        for mc in metrics_candidates:
+            if os.path.isfile(mc):
+                try:
+                    with open(mc, "r", encoding="utf-8") as f_m:
+                        old_data = json.load(f_m)
+                        if "history" in old_data and isinstance(old_data["history"], dict):
+                            history = old_data["history"]
+                            print(f"   📈 [History] Đã khôi phục {len(history.get('epochs', []))} epochs lịch sử để tiếp nối biểu đồ.")
+                            break
+                except Exception:
+                    pass
     elif args.weights:
         if os.path.isfile(args.weights):
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
 
     # 5. Vòng lặp huấn luyện
-    best_loss = float("inf")
-    history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
     for epoch in range(start_epoch, args.epochs):

@@ -65,6 +65,23 @@ python DINO/direction2_scene_decomposition/train.py \
 
 ---
 
+### Kịch bản 2b: Tiếp tục huấn luyện từ Checkpoint (Resume Training)
+Khi tiến trình huấn luyện bị gián đoạn (hết giờ GPU Kaggle, mất điện) hoặc muốn mở rộng thêm số epochs:
+```bash
+python DINO/direction2_scene_decomposition/train.py \
+    --bg_dir traffic_backgrounds \
+    --origin_dir output \
+    --resume checkpoints/direction2_scene_decomp/last_checkpoint.pth \
+    --epochs 10 \
+    --save_dir checkpoints/direction2_scene_decomp \
+    --device cuda
+```
+- **Khôi phục toàn diện**: Nạp đầy đủ trạng thái Model, Optimizer, LR Scheduler, Epoch hiện tại và kỷ lục `best_loss`.
+- **Bảo toàn lịch sử**: Giữ nguyên và nối tiếp đồ thị `loss_curve.png` cùng file `training_metrics.json` từ epoch cũ sang epoch mới.
+- **Tự động gia hạn thông minh**: Nếu `--epochs` truyền vào nhỏ hơn hoặc bằng epoch đã lưu, hệ thống sẽ tự động huấn luyện thêm `--epochs` lượt nữa.
+
+---
+
 ### Kịch bản 3: Chạy suy luận tách lớp & Xóa sạch xe (Unsupervised Road Inpainting)
 Sau khi huấn luyện, bạn có thể áp dụng mô hình lên **bất kỳ ảnh giao thông nào** để tự động xuất ra các lớp bóc tách và ảnh composite trực quan:
 
