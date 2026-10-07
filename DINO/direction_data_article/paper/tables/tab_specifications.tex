@@ -21,14 +21,14 @@ Geospatial metadata: Tabular CSV (\path{routes.csv}, \path{stations.csv}, \path{
 Graph tensors: NumPy binary arrays (\path{distance_km.npy}, \path{direction.npy}) and tabular edge list (\path{edges.csv}); \newline
 Code: Python source files (\path{code/}). \\
 \midrule
-Description of data collection & Snapshots were collected across $608$ indexed surveillance stations in Ho Chi Minh City over $93.6$ continuous hours (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) with an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s). Camera positions are mapped to OpenStreetMap road geometry, yielding a derived directed spatial graph with $2,450$ corridor links within a $6.0$~km driving cutoff horizon. \\
+Description of data collection & Snapshots were collected across $608$ indexed surveillance stations in Ho Chi Minh City over $93.6$ continuous hours (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) with an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s, $p_{90}=300.0$~s, $p_{95}=520.0$~s, $p_{99}\approx 1,200.0$~s; heavy right tail driven by 14 peripheral stations with link interruptions). Camera positions are mapped to OpenStreetMap road geometry via a three-stage sequential corridor pruning pipeline, yielding a derived directed spatial graph with $2,450$ corridor links within a $6.0$~km driving search horizon ($1,070$ unidirectional links and $232$ distance-asymmetric pairs, alongside $458$ metric-symmetric pairs). \\
 \midrule
-Data source location & Region: Ho Chi Minh City, Vietnam (former urban districts, core metropolitan area); \newline
-Coordinates: $[10.68^\circ\text{N} - 10.88^\circ\text{N}, 106.58^\circ\text{E} - 106.82^\circ\text{E}]$. \\
+Data source location & Region: Ho Chi Minh City, Vietnam (metropolitan urban core and peri-urban corridors including Thu Duc City, District 12, Binh Chanh, and Hoc Mon); \newline
+Coordinates: $[10.64^\circ\text{N} - 10.99^\circ\text{N}, 106.45^\circ\text{E} - 106.85^\circ\text{E}]$ (dense urban core: $[10.70^\circ\text{N} - 10.88^\circ\text{N}, 106.60^\circ\text{E} - 106.78^\circ\text{E}]$). \\
 \midrule
 Data accessibility & Repository name: Zenodo; \newline
 Direct URL: \url{https://doi.org/10.5281/zenodo.22929940} (Release v2.0); \newline
-Licensing: Surveillance imagery and metadata are released for non-commercial academic research; derived road graph is licensed under the Open Database License (ODbL); code is under the MIT License. \\
+Licensing: Surveillance imagery is released under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) for academic research; derived road network graph is licensed under the Open Database License (ODbL); Python software utilities are distributed under the MIT License. \\
 \midrule
 Related research article & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
 \bottomrule

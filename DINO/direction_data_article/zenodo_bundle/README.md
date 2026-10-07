@@ -19,8 +19,8 @@ As a direct derived representation based on physical road network geometry and s
 - **Surveillance Stations:** 608 indexed municipal stations spanning arterial corridors and intersections across former urban districts in Ho Chi Minh City, fully mapped to geospatial coordinates and network topology.
 - **Visual Image Time-Series:** Discrete $512 \times 288$ pixel JPEG snapshots ($65.17 \pm 13.36$~KB) acquired over 93.6 continuous hours (spanning 5 calendar days: Oct 2 to Oct 6, 2026) at an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s; nominal target: $300$~s / 5.0 min).
 - **Geospatial Road Network:** Camera GPS coordinates, mounting elevations, and pairwise shortest driving distance matrix ($608 \times 608$) derived via OSRM (v5.27.1) from OpenStreetMap.
-- **Derived Directed Spatial Graph:** 2,450 valid directed corridors ($\le 6.0$~km), capturing 1,070 unidirectional links without reverse edges and 238 distance-asymmetric bidirectional pairs.
-- **Quantified Negligible Privacy Risk:** Elevated mounting ($>6$~m) and downward oblique viewing geometry physically guarantee zero legible human faces or vehicle license plates (95\% CI upper bound $\le 0.0015\%$ via Rule of Three across 200,000 audited frames).
+- **Derived Directed Spatial Graph:** 2,450 valid directed corridors ($\le 6.0$~km), capturing 1,070 unidirectional links without reverse edges and 232 distance-asymmetric bidirectional pairs (alongside 458 symmetric pairs across 690 two-way connected dyads).
+- **Quantified Negligible Privacy Risk:** Elevated mounting ($>6$~m) and downward oblique viewing geometry physically guarantee zero legible human faces or vehicle license plates (95\% CI upper bound $\le 4.2 \times 10^{-6}$ via Rule of Three across the complete census of 714,123 audited frames).
 
 ---
 

@@ -22,7 +22,7 @@ Hướng nghiên cứu này đóng vai trò là **Công trình Công bố Dữ l
   2. **Thông tin Bản đồ Địa không gian & Đồ thị Dẫn xuất (Geospatial Road Network & Derived Graph):**
      - Tọa độ GPS trắc địa, độ cao cột (6--15m), phân loại tuyến đường của 608 trạm (`metadata/routes.csv`).
      - Ma trận cự ly lái xe thực tế đo bằng OSRM qua bản đồ OpenStreetMap (`metadata/road_network_distance.csv`).
-     - **Đồ thị không gian có hướng dẫn xuất toán học (Derived Representation):** Thiết lập qua nguyên tắc kề cận hành lang giao thông tuyến tính (sequential corridor adjacency) trong bán kính $\le 6.0\text{ km}$, tổng hợp thành các tensor machine-learning (`graph/distance_km.npy`, `graph/direction.npy`, `graph/edges.csv`) gồm **2,450 hành lang có hướng**, ghi nhận 1,070 cặp một chiều không có cạnh ngược và 238 cặp bất đối xứng $>50\text{ m}$.
+     - **Đồ thị không gian có hướng dẫn xuất toán học (Derived Representation):** Thiết lập qua nguyên tắc kề cận hành lang giao thông tuyến tính (sequential corridor adjacency) trong bán kính $\le 6.0\text{ km}$, tổng hợp thành các tensor machine-learning (`graph/distance_km.npy`, `graph/direction.npy`, `graph/edges.csv`) gồm **2,450 hành lang có hướng**, ghi nhận 1,070 liên kết một chiều không có cạnh ngược và 232 cặp bất đối xứng $>50\text{ m}$ (cùng 458 cặp đối xứng trong 690 cặp có liên kết hai chiều).
 - **Phục vụ trực tiếp cho các hướng trong thư mục `DINO/`**:
   - **Hướng H1 & HG** (`direction1_bg_guided_dino`, `directionG_camera_ssl`): Học tự giám sát bất biến camera (TAM + AGM + SRS).
   - **Hướng H2** (`direction2_scene_decomposition`): Tự bóc tách nền đường tĩnh và tiền cảnh xe cộ động.

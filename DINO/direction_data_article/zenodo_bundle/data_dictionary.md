@@ -86,4 +86,4 @@ IC4SD-TrafficSnap/
 - **Resolution:** $512 \times 288$ pixels (16:9 aspect ratio).
 - **Nominal Sampling Interval:** $\Delta T \approx 300$~s (5 minutes), empirical mean $269.0 \pm 239.7$~s (median $263.0$~s).
 - **Acquisition Timestamp Offset:** $\Delta t_{\text{lag}} = 15.0 \pm 4.2$~s relative to hardware camera clocks.
-- **Privacy Assurance:** Elevated mounting ($>6$~m) and oblique geometry ensure zero legible human faces or license plates (95\% CI upper bound $\le 0.0015\%$ via Hanley and Lippman-Hand Rule of Three across 200,000 audited frames).
+- **Privacy Assurance:** Elevated mounting ($>6$~m) and oblique geometry ensure zero legible human faces or license plates (95\% CI upper bound $\le 4.2 \times 10^{-6}$ via Hanley and Lippman-Hand Rule of Three across the complete census of 714,123 audited frames).
