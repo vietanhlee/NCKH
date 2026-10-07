@@ -142,77 +142,113 @@ Hướng 1 Mới giải quyết triệt để vấn đề này bằng cách tự
     \item \textbf{Không đòi hỏi luồng video dày (No Optical Flow):} Hoạt động ổn định trên chuỗi ảnh chụp ngắt quãng với chu kỳ 3--5 phút mỗi khung hình.
     \item \textbf{Bảo đảm tính bất biến bối cảnh tĩnh (Context Invariance):} Triệt tiêu tương quan giả tạo giữa hình dáng xe cộ và kết cấu mặt đường đặc thù của từng camera.
 \end{enumerate}
-Toàn bộ kiến trúc và quy trình tính toán của Hướng 1 Mới được mô tả trực quan trên Hình~\ref{fig:pipeline_direction1_new}.
 
-\subsection{Khung Lý Thuyết Bản Đồ Dị Biệt Thời Gian TAM}
-Khung hình đầu vào $I_t \in \mathbb{R}^{3 \times H \times W}$ (tỷ lệ chuẩn 16:9, kích thước $256 \times 448$) được phân chia thành $N = 16 \times 28 = 448$ mảng điểm ảnh (patches) không chồng lấn kích thước $16 \times 16$. Vector đặc trưng của từng patch được trích xuất qua bộ mã hóa Vision Transformer đóng băng và chiếu giảm chiều tuyến tính xuống không gian $d = 64$:
+\subsection{Khung Phương Pháp Luận Ba Giai Đoạn Hướng 1 Mới}
+Để giải quyết bài toán biểu diễn phương tiện bất biến bối cảnh mà không cần ảnh nền mốc sạch hay luồng video liên tục, kiến trúc Hướng 1 Mới được phân định rành mạch thành ba giai đoạn độc lập:
+\begin{enumerate}
+    \item \textbf{Giai đoạn 1: Tiền xử lý \& Ước lượng Tiền nghiệm Không--Thời gian (Preprocessing \& Foreground Prior Estimation):} Xây dựng bản đồ độ dị biệt thời gian TAM (Temporal Atypicality Map) tại từng vị trí patch không gian để sinh ra xác suất phương tiện $\pi_t(p) \in [0, 1]$.
+    \item \textbf{Giai đoạn 2: Tăng cường Dữ liệu Có Hướng dẫn Xe cộ (Guided Data Augmentation):} Áp dụng toán tử hoán đổi nền phản thực nghiệm SRS (Static-Region Swap) và kỹ thuật che phân tầng có kiểm soát AGM (Atypicality-Guided Masking) sử dụng token mặt nạ (Mask Token).
+    \item \textbf{Giai đoạn 3: Huấn luyện Tự Giám Sát Đa Tầng (Self-Supervised Distillation Training):} Tối ưu hóa đồng thời hàm mất mát toàn cục DINO qua đầu chiếu 16,384 nguyên mẫu, mất mát cục bộ iBOT có trọng số $\pi(p)$, và điều chuẩn phân tán đặc trưng KoLeo.
+\end{enumerate}
+Sơ đồ khối toàn diện của quy trình ba giai đoạn được minh họa chi tiết trên Hình~\ref{fig:pipeline_direction1_new}.
+
+\subsection{Giai Đoạn 1: Tiền Xử Lý \& Bản Đồ Dị Biệt Thời Gian TAM (TAM Preprocessing)}
+Xét một camera giám sát giao thông cố định quan sát một nút giao. Chuỗi ảnh thu thập theo thời gian gồm $N_{\text{frames}}$ khung hình $I_t \in \mathbb{R}^{3 \times 256 \times 448}$. Mỗi ảnh được chia lưới thành $N = 16 \times 28 = 448$ mảng điểm ảnh (patches) kích thước $16 \times 16\text{ pixels}$.
+Tại mỗi tọa độ patch cố định $p \in \{1, \dots, 448\}$, ta thu nhận được một chuỗi thời gian gồm $N_{\text{frames}}$ vector đặc trưng. Nếu duy trì nguyên bản số chiều đặc trưng của Vision Transformer ($D = 768$ hoặc $384$), chi phí lưu trữ và phân cụm trực tuyến trên hàng nghìn camera sẽ vượt ngưỡng chịu tải bộ nhớ. Do đó, vector đặc trưng patch được trích xuất qua bộ mã hóa ViT đóng băng và chiếu giảm chiều tuyến tính (PCA) xuống $d = 64$ chiều rồi chuẩn hóa L2 lên mặt cầu đơn vị $\mathbb{S}^{63}$:
 \begin{equation}
     u_t(p) = \frac{\mathbf{P} \cdot \operatorname{Encoder}(I_t)_p}{\|\mathbf{P} \cdot \operatorname{Encoder}(I_t)_p\|_2} \in \mathbb{S}^{63}
 \end{equation}
-với $\mathbf{P} \in \mathbb{R}^{64 \times D}$ là ma trận chiếu trực giao và $\mathbb{S}^{63}$ biểu diễn mặt cầu đơn vị 64 chiều.
-Tại mỗi camera $c$ và tại từng tọa độ patch $p \in \{1, \dots, N\}$, hệ thống duy trì trực tuyến $K = 4$ cụm trạng thái quang học tĩnh:
+với $\mathbf{P} \in \mathbb{R}^{64 \times D}$ là ma trận chiếu trực giao bảo toàn tối đa phương sai đặc trưng.
+
+\paragraph{Mô hình đa trạng thái nền quang học ($K = 4$ cụm):} 
+Thực tế hiện trường cho thấy một điểm trên mặt đường không có một trạng thái cố định duy nhất mà biến thiên theo các điều kiện môi trường: (1) Mặt đường trời nắng gắt (độ tương phản cao, bóng đổ sắc nét); (2) Mặt đường trời râm mát hoặc mây mù (ánh sáng tán xạ); (3) Mặt đường ban đêm có đèn cao áp vàng; (4) Mặt đường ẩm ướt sau mưa gây phản chiếu gương.
+Do đó, tại mỗi tọa độ patch $p$, hệ thống không dùng một ảnh nền trung vị đơn nhất mà duy trì một tập hợp $K = 4$ cụm trạng thái quang học tĩnh:
 \begin{equation}
-    \mathcal{C}_k(p) = \left( \bm{\mu}_k(p), n_k(p), t_k^{\text{last}}(p) \right), \quad k \in \{1, \dots, K\}
+    \mathcal{C}_k(p) = \left( \bm{\mu}_k(p), w_k(p), s_k(p) \right), \quad k \in \{1, \dots, 4\}
 \end{equation}
-trong đó $\bm{\mu}_k \in \mathbb{S}^{63}$ là vector tâm cụm đại diện cho các trạng thái chiếu sáng nền (nắng gắt, bóng râm, đèn đường ban đêm, mặt đường ẩm), $n_k$ là số lượt quan sát tích lũy và $t_k^{\text{last}}$ là thời điểm cập nhật gần nhất.
-Khoảng cách Cosine cực tiểu từ đặc trưng quan sát tức thời $u_t(p)$ tới tập hợp các trạng thái nền tĩnh đại diện cho mức độ dị biệt không gian:
-\begin{equation}
-    d_t(p) = 1 - \max_{k \in \{1, \dots, K\}} \bm{\mu}_k(p)^\top u_t(p)
-\end{equation}
-Quy tắc cập nhật trạng thái trực tuyến được xác định:
+trong đó $\bm{\mu}_k(p) \in \mathbb{S}^{63}$ là vector tâm cụm đại diện cho một trạng thái nền bình thường, $w_k(p) \in [0, 1]$ là tần suất xuất hiện tích lũy ($\sum_{k=1}^K w_k = 1$), và $s_k(p) \ge 0$ là độ tản mát khoảng cách Cosine nội bộ của cụm.
+
+\paragraph{Quy luật xác định độ dị biệt và cập nhật trực tuyến:}
+Khi một khung hình mới $I_t$ xuất hiện tại thời điểm $t$, ta không tìm bất thường bên trong từng cụm mà so sánh trực tiếp vector quan sát $u_t(p)$ với toàn bộ các trạng thái nền tĩnh bình thường $\mathcal{S} = \{k \mid w_k \ge 0.15 \land s_k \le 1.5 \cdot \operatorname{median}(s)\}$:
 \begin{itemize}
-    \item Nếu $d_t(p) < \tau_{\text{match}}$ ($\tau_{\text{match}} = 0.25$): Cụm khớp nhất $k^*$ được cập nhật trọng tâm:
+    \item Nếu $u_t(p)$ tương đồng cao với ít nhất một trạng thái tĩnh $k^*$ ($\cos(u_t, \bm{\mu}_{k^*}) \approx 1$), khoảng cách Cosine chuẩn hóa cực tiểu $a_t(p) \approx 0$. Điều này có nghĩa tọa độ $p$ hiện tại đang hiển thị mặt đường bình thường. Trọng tâm $\bm{\mu}_{k^*}$ và độ phân tán $s_{k^*}$ được cập nhật gia số theo quy tắc trung bình động hàm mũ (Exponential Moving Average -- EMA) không cần đạo hàm.
+    \item Nếu tại thời điểm $t$ có một phương tiện giao thông (xe máy, ô tô, xe buýt) di chuyển đè lên patch $p$, vector $u_t(p)$ mang thuộc tính quang học kim loại/yên xe/màu sơn hoàn toàn xa lạ với cả 4 trạng thái mặt đường. Lúc này, khoảng cách dị biệt Mahalanobis-like vọt lên rất cao:
     \begin{equation}
-        \bm{\mu}_{k^*}(p) \leftarrow \frac{(1 - \beta)\bm{\mu}_{k^*}(p) + \beta u_t(p)}{\|(1 - \beta)\bm{\mu}_{k^*}(p) + \beta u_t(p)\|_2}
+        a_t(p) = \min_{k \in \mathcal{S}} \frac{1 - \bm{\mu}_k(p)^\top u_t(p)}{s_k(p) + \epsilon}
     \end{equation}
-    \item Nếu $d_t(p) \ge \tau_{\text{match}}$: Trạng thái hiện tại được xem là dị biệt; nếu kéo dài, cụm có tần suất xuất hiện thấp nhất sẽ bị thay thế.
 \end{itemize}
-Xác suất thuộc về phương tiện giao thông $\pi_t(p) \in [0, 1]$ được ước lượng thông qua mô hình hỗn hợp Gauss (Gaussian Mixture Model) gồm 2 thành phần (Nền tĩnh $\mathcal{N}_0$ và Phương tiện $\mathcal{N}_1$):
-\begin{equation}
-    \pi_t(p) = P(\text{Vehicle} \mid d_t(p)) = \frac{w_1 \mathcal{N}(d_t(p); \mu_1, \sigma_1^2)}{w_0 \mathcal{N}(d_t(p); \mu_0, \sigma_0^2) + w_1 \mathcal{N}(d_t(p); \mu_1, \sigma_1^2)}
-\end{equation}
 
-\subsection{Cơ Chế Che Phân Tầng Thích Ứng AGM}
-Thuật toán che phân tầng AGM phân bổ tổng ngân sách che $M = \lfloor 0.6 \cdot N \rfloor = 268\text{ patches}$ theo tỷ lệ cân bằng giữa vùng phương tiện và vùng nền:
+\paragraph{Hiệu chuẩn xác suất tiền cảnh bằng Gaussian Mixture Model (GMM):}
+Khoảng cách dị biệt $a_t(p)$ là một đại lượng vô hướng biến thiên từ 0 đến hàng chục. Để phục vụ việc che và tráo ảnh trong các bước tiếp theo, đại lượng này cần được chuyển đổi thành xác suất có điều kiện chặt chẽ $\pi_t(p) \in [0, 1]$ (xác suất patch $p$ chứa phương tiện). 
+Hệ thống sử dụng mô hình hỗn hợp Gauss hai thành phần trên biến ngẫu nhiên logarit $\log a_t(p)$: Thành phần $\mathcal{N}(\mu_{\text{bg}}, \sigma_{\text{bg}}^2)$ ứng với phân bố nền đường bình thường và $\mathcal{N}(\mu_{\text{fg}}, \sigma_{\text{fg}}^2)$ ứng với phân bố phương tiện giao thông ($\mu_{\text{fg}} > \mu_{\text{bg}}$). Theo định lý Bayes, xác suất hậu nghiệm thuộc về phương tiện giao thông được tính toán tức thời:
 \begin{equation}
-    M_v = \min\left( \lfloor \phi \cdot M \rfloor, \; \lfloor q_{\max} \cdot |\mathcal{V}| \rfloor \right)
+    \pi_t(p) = P(\text{Vehicle} \mid a_t(p)) = \frac{w_{\text{fg}} \mathcal{N}\left(\log a_t(p); \mu_{\text{fg}}, \sigma_{\text{fg}}^2\right)}{(1 - w_{\text{fg}}) \mathcal{N}\left(\log a_t(p); \mu_{\text{bg}}, \sigma_{\text{bg}}^2\right) + w_{\text{fg}} \mathcal{N}\left(\log a_t(p); \mu_{\text{fg}}, \sigma_{\text{fg}}^2\right)}
 \end{equation}
-với $\phi = 0.5$ là hệ số ưu tiên phương tiện, $q_{\max} = 0.6$ là tỷ lệ che tối đa trên diện tích xe để tránh hiện tượng mất dấu hoàn toàn thông tin hình thái, và $\mathcal{V} = \{p \mid \pi_t(p) \ge 0.5\}$ là tập hợp các patch được xác định là phương tiện. Số patch nền cần che bổ sung là $M_s = M - M_v$.
-Tập hợp các patch bị che được lấy mẫu không hoàn lại dựa trên phân phối xác suất Gumbel Top-K:
-\begin{equation}
-    g(p) = \log \pi_t(p) - \log(-\log U_p), \quad U_p \sim \operatorname{Uniform}(0, 1)
-\end{equation}
-Cơ chế này ép buộc mạng nơ-ron phải học cách tái tạo cấu trúc phương tiện bị che khuất dựa trên ngữ cảnh xung quanh và ngược lại.
+với $\pi_t(p) \approx 0$ biểu thị chắc chắn là nền đường tĩnh và $\pi_t(p) \approx 1$ biểu thị chắc chắn là phương tiện di động. Toàn bộ quá trình này vận hành tự động, hoàn toàn không cần con người gắn nhãn pixel.
 
-\subsection{Toán Tử Hoán Đổi Vùng Tĩnh Phản Thực Nghiệm SRS}
-Để triệt tiêu hoàn toàn sự phụ thuộc giả tạo giữa hình ảnh phương tiện và kết cấu nền đường đặc thù của từng camera, toán tử hoán đổi vùng tĩnh SRS tạo ra các mẫu huấn luyện phản thực nghiệm (Counterfactual Data Augmentation).
-Xét hai khung hình $x_1$ và $x_2$ chụp từ cùng một camera tại hai ngày khác nhau $t_1 \ne t_2$ (khác biệt về điều kiện thời tiết, bóng đổ hoặc độ ẩm mặt đường). Mặt nạ vùng tĩnh chung được xác định bởi:
+\subsection{Giai Đoạn 2: Tăng Cường Dữ Liệu Có Hướng Dẫn Xe Cộ (Data Augmentation)}
+Sau khi sở hữu bản đồ xác suất $\pi_t(p)$, hai kỹ thuật tăng cường dữ liệu đặc thù được kích hoạt nhằm ép mạng nơ-ron học đặc trưng bất biến:
+
+\paragraph{1. Toán tử hoán đổi nền phản thực nghiệm SRS (Static-Region Swap):}
+Trong dữ liệu camera giám sát cố định, mạng nơ-ron dễ mắc bẫy ``học vẹt'' tương quan nền (Background Shortcut): nhận diện xe dựa vào vệt bóng đổ cố định trên mặt đường hoặc màu nhựa đường xung quanh xe.
+Để triệt tiêu tương quan giả này, toán tử SRS lấy ngẫu nhiên hai khung hình $x_1$ (ngày $d_1$) và $x_2$ (ngày $d_2$) của cùng một camera. Mặt nạ vùng tĩnh chung được xác định bởi những vị trí không có xe ở cả hai ngày:
 \begin{equation}
-    M_{\text{static}}(p) = \mathbb{I}\left(\pi_{x_1}(p) < 0.2 \;\land\; \pi_{x_2}(p) < 0.2\right)
+    M_{\text{static}}(p) = \mathbb{I}\left(\pi_{x_1}(p) < 0.2 \;\land\; \pi_{x_2}(p) < 0.2\right) \;\land\; (\neg \operatorname{Dilate}(M_{\text{vehicle}}, r=1))
 \end{equation}
-Mặt nạ này được chuyển đổi sang kích thước điểm ảnh và làm mượt biên bằng bộ lọc Gauss $\mathbf{G}_\sigma$ ($\sigma = 4.0\text{ pixel}$):
-\begin{equation}
-    M_{\text{feather}} = \mathbf{G}_\sigma * \operatorname{Upsample}(M_{\text{static}})
-\end{equation}
-Khung hình phản thực nghiệm tổng hợp $x_{\text{srs}}$ được tạo ra bằng phép kết hợp lồi:
+trong đó phép giãn nở $\operatorname{Dilate}$ với bán kính 1 patch ngăn chặn việc cắt xén dính mép xe. Mặt nạ patch được phóng to lên độ phân giải pixel ($256 \times 448$) và làm mượt biên bằng bộ lọc Gauss $\mathbf{G}_\sigma$ ($\sigma = 4.0\text{ pixels}$) để triệt tiêu các vết cắt sắc nhọn:
 \begin{equation}
     x_{\text{srs}} = M_{\text{feather}} \odot x_2 + (1 - M_{\text{feather}}) \odot x_1
 \end{equation}
-Trong ảnh $x_{\text{srs}}$, toàn bộ các phương tiện giao thông của ngày thứ nhất được đặt nguyên vẹn trên nền đường và bối cảnh ánh sáng của ngày thứ hai. Mạng nơ-ron khi xử lý $x_{\text{srs}}$ buộc phải phân tách thuộc tính hình thái xe ra khỏi các đặc trưng kết cấu nền đường bên dưới.
+Khung hình phản thực nghiệm $x_{\text{srs}}$ giữ nguyên vẹn toàn bộ hình thái phương tiện của ngày $d_1$ nhưng được đặt trên nền đường, ánh sáng và độ ẩm của ngày $d_2$.
 
-\subsection{Hàm Mất Mát Chưng Cất Tự Thân Đa Tầng}
-Hàm mất mát tổng thể kết hợp tối ưu hóa toàn cục trên token phân loại và tối ưu hóa cục bộ trên các patch điểm ảnh:
+\paragraph{2. Che phân tầng có kiểm soát AGM (Atypicality-Guided Masking) qua DINOv3 Mask Token:}
+Mô hình che tự giám sát truyền thống che ngẫu nhiên đồng đều (Uniform Masking), dẫn đến việc che mất các vùng nhựa đường vô nghĩa hoặc che kín toàn bộ chiếc xe khiến mô hình mất dấu ngữ cảnh. 
+Thuật toán AGM phân bổ ngân sách $M = \lfloor 0.35 \cdot N \rfloor \approx 156\text{ patches}$ bị che theo tỷ lệ thông minh:
 \begin{equation}
-    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}^{[\text{CLS}]} + \lambda_{\text{ibot}} \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi) + \lambda_{\text{koleo}} \mathcal{L}_{\text{KoLeo}}
+    M_v = \min\left( \lfloor \phi \cdot M \rfloor, \; \lfloor q_{\max} \cdot |\mathcal{V}| \rfloor \right)
 \end{equation}
-Trong đó, thành phần mất mát chưng cất patch iBOT được điều tiết trực tiếp bởi xác suất phương tiện $\pi(p)$ nhằm tập trung mật độ lan truyền đạo hàm vào các vùng chứa xe cộ:
+với hệ số ưu tiên xe $\phi = 0.5$, trần che tối đa $q_{\max} = 0.6$ (luôn giữ lại ít nhất $40\%$ diện tích xe làm manh mối trực quan), và $\mathcal{V} = \{p \mid \pi_t(p) \ge 0.5\}$. Vị trí các patch bị che được lấy mẫu không hoàn lại qua cơ chế Gumbel Top-K:
 \begin{equation}
-    \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi) = - \frac{1}{\sum_{p \in \mathcal{M}} \pi(p)} \sum_{p \in \mathcal{M}} \pi(p) \sum_{k=1}^K P_{\text{teacher}}\big(h_{x_1}(p)\big)^{(k)} \log P_{\text{student}}\big(h_{x_{\text{srs}}}(p)\big)^{(k)}
+    g(p) = \log \pi_t(p) - \log(-\log U_p), \quad U_p \sim \operatorname{Uniform}(0, 1)
 \end{equation}
-với $\mathcal{M}$ là tập hợp các patch bị che bởi thuật toán AGM. Để ngăn chặn hiện tượng sụp đổ không gian biểu diễn (Representation Collapse), thành phần entropy KoLeo (Kozachenko-Leonenko) được bổ sung nhằm phân tán đều các vector đặc trưng trên mặt cầu đơn vị:
+Các patch được chọn sẽ được thay thế bằng một vector tham số học được gọi là \textbf{DINOv3 Mask Token} trước khi đưa vào mô hình Student.
+
+\subsection{Giai Đoạn 3: Kiến Trúc Chưng Cất \& Bản Chất Các Hàm Mất Mát DINO}
+
+\paragraph{Tại sao hàm mất mát DINO không tính trực tiếp trên không gian đặc trưng 768 chiều?}
+Một câu hỏi mang tính nguyên lý cốt lõi: Khi Vision Transformer backbone xuất ra vector biểu diễn `[CLS]` có số chiều $D = 768$ (hoặc $384$), tại sao DINO không tính hàm mất mát khoảng cách trực tiếp trên không gian 768 chiều này?
+\begin{itemize}
+    \item \textbf{Nguy cơ sụp đổ biểu diễn (Representation Collapse):} Nếu tối ưu hóa trực tiếp khoảng cách Euclid hoặc Cosine giữa hai mạng nơ-ron không có nhãn giám sát, nghiệm tầm thường dễ nhất của hệ thống là ép toàn bộ mọi vector đầu ra hội tụ về một hằng số duy nhất $\mathbf{0}$ hoặc một vector bất biến.
+    \item \textbf{Bản chất phân loại nguyên mẫu (Cluster Prototypes):} DINO diễn giải quá trình học tự giám sát như một bài toán phân cụm xác suất liên tục. Cả Student và Teacher đều được trang bị một đầu chiếu đa lớp `DINOHead` gồm mạng MLP 3 tầng ($768 \to 2048 \to 2048 \to 256$) kết thúc bằng một ma trận chiếu chuẩn hóa trọng số gồm $K_{\text{proto}} = 16,384$ vector nguyên mẫu (Prototypes) đại diện cho 16,384 cụm ngữ nghĩa trừu tượng trong không gian thị giác.
+    \item Đầu ra của `DINOHead` là một phân phối xác suất mềm $16,384$ chiều:
+    \begin{equation}
+        P_s(x)^{(k)} = \frac{\exp\left(g_s(x)^{(k)} / \tau_s\right)}{\sum_{j=1}^{K_{\text{proto}}} \exp\left(g_s(x)^{(j)} / \tau_s\right)}, \quad P_t(x)^{(k)} = \frac{\exp\left((g_t(x)^{(k)} - c^{(k)}) / \tau_t\right)}{\sum_{j=1}^{K_{\text{proto}}} \exp\left((g_t(x)^{(j)} - c^{(j)}) / \tau_t\right)}
+    \end{equation}
+    trong đó $\tau_s = 0.1$ và $\tau_t \in [0.04, 0.07]$ là nhiệt độ điều tiết độ sắc nhọn (Sharpening), $c \in \mathbb{R}^{16384}$ là tâm trung bình động tích lũy (Centering) của Teacher. Cơ chế Centering ngăn một cụm áp đảo tất cả các mẫu, trong khi Sharpening ngăn phân phối rơi vào trạng thái đều đồng nhất.
+\end{itemize}
+
+\paragraph{Hàm mất mát toàn cục DINO Cross-Entropy:}
+Mô hình Student (nhận ảnh $x_{\text{srs}}$ bị che AGM) học cách tái hiện phân phối xác suất toàn cục $16,384$ chiều của mô hình Teacher (nhận ảnh gốc $x_1$ không che) thông qua độ phân kỳ Cross-Entropy trên token phân loại `[CLS]`:
 \begin{equation}
-    \mathcal{L}_{\text{KoLeo}} = - \frac{1}{B} \sum_{i=1}^B \log \min_{j \ne i} \|z_i - z_j\|_2
+    \mathcal{L}_{\text{DINO}}^{[\text{CLS}]} = - \sum_{k=1}^{K_{\text{proto}}} P_t([CLS]_{x_1})^{(k)} \log P_s([CLS]_{x_{\text{srs}}})^{(k)}
 \end{equation}
+
+\paragraph{Hàm mất mát patch iBOT có trọng số tiền cảnh $\pi(p)$:}
+Tại các vị trí patch bị che bởi DINOv3 Mask Token ($\mathcal{M}$), Student phải suy đoán phân phối nguyên mẫu $16,384$ chiều mà Teacher quan sát thấy trên ảnh nguyên bản. Để buộc mạng nơ-ron tập trung tái tạo hình thái xe thay vì giải bài toán tái tạo nhựa đường vô nghĩa, hàm mất mát được điều tiết bởi trọng số $\pi(p)$:
+\begin{equation}
+    \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi) = - \frac{1}{\sum_{p \in \mathcal{M}} \pi(p)} \sum_{p \in \mathcal{M}} \pi(p) \sum_{k=1}^{K_{\text{proto}}} P_t(h_{x_1}(p))^{(k)} \log P_s(h_{x_{\text{srs}}}(p))^{(k)}
+\end{equation}
+
+\paragraph{Hàm điều chuẩn Entropy phân tán KoLeo (Kozachenko-Leonenko):}
+Để giải quyết triệt để vấn đề các mẫu ảnh trong cùng một lô huấn luyện có thể bị co cụm cục bộ trên không gian đặc trưng biểu diễn, DINOv2 và DINOv3 tích hợp thành phần ước lượng vi phân Entropy KoLeo. Không giống như DINO loss tính trên đầu chiếu 16,384 chiều, hàm KoLeo được tính toán trực tiếp trên khoảng cách Euclid giữa các vector `[CLS]` (đã chuẩn hóa L2 trên mặt cầu đơn vị $\mathbb{S}^{D-1}$ của backbone ViT) tới láng giềng gần nhất trong cùng lô $B$:
+\begin{equation}
+    \mathcal{L}_{\text{KoLeo}} = - \frac{1}{B} \sum_{i=1}^B \log \left( \min_{j \ne i} \|z_i - z_j\|_2 \right)
+\end{equation}
+Hàm KoLeo đóng vai trò lực đẩy tĩnh điện, ép các vector biểu diễn phân tán đều khắp bề mặt mặt cầu, triệt tiêu nguy cơ suy biến đặc trưng khi xử lý chuỗi ảnh giao thông có bối cảnh tương đồng. Tổng hàm mất mát tối ưu hóa cho toàn bộ kiến trúc là:
+\begin{equation}
+    \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}^{[\text{CLS}]} + 1.0 \cdot \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi) + 0.02 \cdot \mathcal{L}_{\text{KoLeo}}
+\end{equation}
+
 
 \begin{figure}[t!]
 \centering
