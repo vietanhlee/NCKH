@@ -37,6 +37,9 @@ với $\{I_{t_k}\}_{k=1}^K$ là tập hợp các khung hình thu thập được
 - **Nhiễu loạn quang học nhiệt đới**: Ánh nắng nhiệt đới gay gắt tạo ra bóng đổ sắc nét di chuyển liên tục theo góc phương vị mặt trời. Khi có mưa rào, vũng nước trên mặt đường nhựa phản chiếu hình ảnh phương tiện và bầu trời, làm sai lệch phép trừ điểm ảnh thô $\Delta(u, v) = |I(u, v) - B_{\text{median}}(u, v)|$. Vào ban đêm, hiện tượng chói lóa từ đèn pha xe tải và xe máy làm bão hòa cảm biến CMOS.
 - **Cạm bẫy đường tắt bối cảnh (Background Shortcut Trap)**: Trong ảnh chụp từ camera tĩnh, diện tích vùng tĩnh (mặt đường, vỉa hè, nhà cửa, dải phân cách) chiếm từ 70% đến 85% tổng số điểm ảnh. Khi huấn luyện các mô hình học tự giám sát tiêu chuẩn như DINO hay MAE trên tập dữ liệu này, mạng nơ-ron có xu hướng tối ưu hóa hàm mất mát bằng cách ghi nhớ kết cấu bối cảnh tĩnh và góc đặt camera thay vì học các đặc trưng hình học của phương tiện. Hệ quả là biểu diễn trích xuất bị phụ thuộc chặt vào camera cụ thể và mất hoàn toàn khả năng khái quát hóa khi áp dụng sang camera mới.
 
+![Các thách thức quang học và hình thái học thực tế tại mạng lưới camera giao thông TP.HCM](direction_data_article/paper/figures/fig4_sample_snapshots.png)
+*Hình 1: Các thách thức quang học và hình thái học thực tế tại mạng lưới camera giao thông TP.HCM: Dòng xe máy mật độ dày đặc, góc quan sát xiên cao, mưa nhiệt đới phản chiếu mặt đường, bóng đổ nắng gắt, chói lóa đèn xe ban đêm và hiện tượng bóng ma phương tiện (Ghost Vehicles).*
+
 ### 1.3. Tiến Trình Phát Triển Phương Pháp Luận Trong Hệ Sinh Thái
 Nhằm giải quyết triệt để các hạn chế trên, hệ sinh thái DINO Traffic Suite được thiết lập dựa trên nguyên lý tiến hóa khoa học gồm hai trường phái tiếp cận:
 1. **Trường phái khai thác tiền nghiệm nền mốc có kiểm soát độ bất định (Hướng 1 Cũ và Hướng 2 Cũ)**: Tận dụng ảnh nền trung vị sẵn có để hướng dẫn không gian biểu diễn nhưng được trang bị các cơ chế bù trừ sai số (van điều tiết độ tin cậy vùng tĩnh $r_i$ và bản đồ độ bất định Laplace $\sigma$). Nhóm phương pháp này đóng vai trò là hệ thống đối chuẩn nền tảng.
@@ -125,6 +128,29 @@ $$\mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi) = - \frac{1}{\sum_{p \in \math
 với $\mathcal{M}$ là tập hợp các patch bị che bởi thuật toán AGM. Để ngăn chặn hiện tượng sụp đổ không gian biểu diễn (Representation Collapse), thành phần entropy KoLeo (Kozachenko-Leonenko) được bổ sung nhằm phân tán đều các vector đặc trưng trên mặt cầu đơn vị:
 $$\mathcal{L}_{\text{KoLeo}} = - \frac{1}{B} \sum_{i=1}^B \log \min_{j \ne i} \|z_i - z_j\|_2$$
 
+```mermaid
+flowchart TD
+    subgraph S1["1. Khối Đầu Vào & Trích Xuất"]
+        Input["Khung hình hiện trường I_t<br>(Ảnh thưa chu kỳ 3-5 phút)"] --> ViT["Vision Transformer Backbone<br>Patch Tokens u_t(p) in S^63<br>(N = 16 x 28 = 448 patches)"]
+    end
+    
+    subgraph S2["2. Bản Đồ Dị Biệt TAM"]
+        ViT --> TAM["Duy trì K=4 cụm quang học tĩnh C_k(p)<br>Đo khoảng cách Cosine d_t(p)<br>Mô hình GMM -> Xác suất xe pi_t(p) in [0, 1]"]
+    end
+    
+    subgraph S3["3. Che Phân Tầng AGM & Hoán Đổi Phản Thực Nghiệm SRS"]
+        TAM --> AGM["Che phân tầng thích ứng AGM<br>Ngân sách M = 268 patches<br>Vùng xe M_v (Gumbel Top-K) + Vùng nền M_s"]
+        TAM --> SRS["Toán tử hoán đổi vùng tĩnh SRS<br>Ghép xe ngày t1 lên nền ngày t2<br>-> Mẫu phản thực nghiệm x_srs"]
+    end
+    
+    subgraph S4["4. Chưng Cất Tự Thân Đa Tầng Teacher-Student"]
+        SRS --> Student["Mô hình Student ViT<br>(Nhận x_srs với mặt nạ che AGM)"]
+        Input --> Teacher["Mô hình Teacher ViT<br>(Nhận ảnh gốc x_1 toàn cục, EMA)"]
+        Student & Teacher --> Loss["Hàm mất mát liên hợp:<br>L_total = L_DINO + L_iBOT(pi) + L_KoLeo"]
+    end
+```
+*Hình 2: Sơ đồ kiến trúc tổng thể Hướng 1 Mới (Prior-Free Vehicle-Centric SSL).*
+
 ---
 
 ## 4. HƯỚNG 2 MỚI: PHÂN RÃ CẢNH GIAO THÔNG ĐỘC LẬP KHÔNG DÙNG ẢNH NỀN (PRIOR-FREE SCENE DECOMPOSITION)
@@ -168,6 +194,23 @@ $$\mathcal{L}_{\text{Laplace}} = \frac{1}{HW} \sum_{u, v} \left[ \frac{|I(u, v) 
 Ràng buộc triệt tiêu gradient giao thoa (Gradient Exclusion) ngăn chặn hiện tượng rò rỉ kết cấu mặt đường vào bề mặt phương tiện:
 $$\mathcal{L}_{\text{excl}} = \frac{1}{HW} \sum_{u, v} \tanh\big(\|\nabla \hat{F}(u, v)\|\big) \odot \tanh\big(\|\nabla \hat{B}(u, v)\|\big)$$
 kết hợp số hạng điều hòa tổng biến thiên (Total Variation) $\mathcal{L}_{\text{tv}}(\alpha)$ để bảo đảm tính liền khối và độ sắc nét tại đường biên của mặt nạ phương tiện.
+
+```mermaid
+flowchart TD
+    subgraph G1["GIAI ĐOẠN 1: Học Đa Tạp Ánh Sáng Nền SceneBasis (Ngoại Tuyến)"]
+        Unlabeled["Chuỗi ảnh đa ngày {I_t}<br>(Không nhãn, mỗi camera cố định)"] --> RobustIRLS["Khởi tạo Robust SVD + Tối ưu lặp Huber-IRLS<br>(Bóc tách triệt để phương tiện & bóng ma)"]
+        RobustIRLS --> Basis["Hệ cơ sở đa ánh sáng SceneBasis:<br>Cảnh tĩnh E_0(u, v) + Cơ sở biến thiên {E_1, E_2, E_3}"]
+    end
+    
+    subgraph G2["GIAI ĐOẠN 2: Mạng Phân Rã Sâu & Thích Ứng Chiếu Sáng Trực Tuyến"]
+        OnlineImg["Khung hình hiện trường I(u, v)"] --> DeepNet["Mạng nơ-ron phân rã sâu Phi<br>(ViT Backbone + DPT Decoder)<br>Dự đoán đồng thời F_hat, alpha, sigma"]
+        DeepNet --> OnlineSolver["Bộ giải trực tuyến Huber-IRLS<br>Trọng số vùng nền W = (1 - alpha)^2<br>-> Nghiệm giải tích hệ số ánh sáng ell*(t)"]
+        Basis -.-> OnlineSolver
+        OnlineSolver --> Synth["Tổng hợp nền thực: B_hat(t) = E_0 + sum ell_j E_j<br>Tái tạo quang học: I_hat = alpha*F_hat + (1-alpha)*B_hat"]
+        Synth --> Loss["Hàm mất mát Laplace NLL tự học độ bất định sigma<br>+ Ràng buộc triệt tiêu gradient giao thoa L_excl"]
+    end
+```
+*Hình 3: Quy trình phân rã cảnh hai giai đoạn của Hướng 2 Mới (Prior-Free Scene Decomposition).*
 
 ---
 
@@ -220,6 +263,20 @@ với $\Omega_{\text{road}}$ là mặt nạ không gian lòng đường được
 - Nếu $s_{\text{road}} > \tau_{\text{road}}$ và $s_{\text{static}} \le \tau_{\text{static}}$: Sự bất thường chỉ khu trú trong phạm vi mặt đường, hệ thống kích hoạt cảnh báo sự cố giao thông.
 
 Để dập tắt hoàn toàn các dao động ngẫu nhiên, cảnh báo chỉ được xác nhận chính thức khi sự cố duy trì liên tục qua $N \ge 3$ cửa sổ trượt liên tiếp, khống chế tỷ lệ báo động giả ở mức cực thấp trên toàn mạng lưới.
+
+```mermaid
+flowchart TD
+    Seq["Chuỗi $W$ khung hình thời gian<br>Trích xuất patch token ViT"] --> Filter["Lọc trung vị patch thời gian F_tilde_t(p)<br>(Triệt tiêu chuyển động xe thoáng qua)"]
+    Filter --> Bank["Ngân hàng Coreset Memory Bank<br>K-Center Greedy nén 90% dung lượng<br>-> Điểm dị biệt cực tiểu a_t(p)"]
+    Bank --> Split["Phân tách không gian hai vùng:<br>Lòng đường s_road = TopK(a_t in Omega_road)<br>Vùng tĩnh s_static = TopK(a_t ngoài Omega_road)"]
+    
+    Split --> CondStatic{"s_static > tau_static ?"}
+    CondStatic -- "ĐÚNG" --> CamAlert["CẢNH BÁO LỖI CAMERA<br>(Trôi góc quay / Rung lắc / Bám bẩn)<br>=> Khóa báo động giả sự cố"]
+    CondStatic -- "SAI" --> CondRoad{"s_road > tau_road ?"}
+    CondRoad -- "ĐÚNG (Duy trì N >= 3 cửa sổ)" --> TrafficAlert["XÁC NHẬN SỰ CỐ GIAO THÔNG KÉO DÀI<br>(Ngập úng / Rào chắn / Ùn ứ cực đoan)<br>=> Phát cảnh báo Trung tâm Điều hành"]
+    CondRoad -- "SAI" --> Normal["Lưu thông bình thường"]
+```
+*Hình 4: Cơ chế phát hiện bất thường giao thông kéo dài và phân tách lỗi camera của Hướng 4.*
 
 ---
 
@@ -282,6 +339,15 @@ Toàn bộ hệ thống phương pháp luận trong DINO Traffic Suite được 
 - **Cấu trúc đồ thị không gian mạng lưới đường bộ (OSRM Graph):** Bao gồm 2,450 liên kết có hướng (directed edges) nối giữa 608 nút camera.
 - **Tính bất đối xứng cự ly thực tế:** Đồ thị ghi nhận 690 cặp tuyến hai chiều và 1,070 tuyến một chiều. Trong 690 cặp hai chiều, có đúng 238 cặp liên kết bất đối xứng cự ly ($|d_{ij} - d_{ji}| \ge 50\text{ m}$, chiếm 34.49%) xuất phát từ đặc thù dải phân cách cứng, cầu vượt và các điểm quay đầu xe (U-turn) phân bố không đối xứng trên hệ thống kênh rạch sông Sài Gòn.
 - **Hệ số uốn khúc mạng lưới (Network Tortuosity):** Tỷ số giữa cự ly di chuyển thực tế theo mạng đường OSRM và khoảng cách trắc địa đường chim bay Haversine đạt trung bình $\tau = 1.25 \pm 0.61$, phản ánh chính xác cấu trúc mạng lưới giao thông phân mảnh của một đô thị sông nước Đông Nam Á.
+
+![Bản đồ phân bố không gian 608 trạm camera tại TP.HCM](direction_data_article/paper/figures/fig1_camera_spatial_map.png)
+*Hình 5: Bản đồ phân bố không gian của mạng lưới 608 trạm camera giám sát giao thông tại TP.HCM.*
+
+![Cấu trúc tô-pô đồ thị OSRM và phân tích bất đối xứng cự ly](direction_data_article/paper/figures/fig3_graph_topology.png)
+*Hình 6: Đặc trưng tô-pô đồ thị mạng lưới đường bộ OSRM trên mạng lưới 608 camera.*
+
+![Phân bố chu kỳ lấy mẫu thời gian và trắc quang độ sáng](direction_data_article/paper/figures/fig2_temporal_and_photometric.png)
+*Hình 7: Phân bố chu kỳ lấy mẫu thời gian $\Delta t$ và biến thiên trắc quang quang học theo giờ trong ngày.*
 
 ### 9.2. Kiểm Toán An Toàn Bảo Mật PII Theo Chuẩn Mực Sub-Nyquist
 Do dữ liệu thu thập từ các tuyến phố công cộng, việc bảo vệ quyền riêng tư cá nhân (Personally Identifiable Information -- PII) là một yêu cầu pháp lý và đạo đức khoa học bắt buộc. Tập dữ liệu IC4SD-TrafficSnap được thiết kế theo nguyên lý Bảo Mật Vật Lý Tự Thân (Physical Privacy by Design):

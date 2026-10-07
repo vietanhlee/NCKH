@@ -19,6 +19,8 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{microtype}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, fit, backgrounds}
 
 % Định dạng màu sắc liên kết khoa học
 \hypersetup{
@@ -84,6 +86,13 @@ với $\{I_{t_k}\}_{k=1}^K$ là tập hợp các khung hình thu thập được
     \item \textbf{Cạm bẫy đường tắt bối cảnh (Background Shortcut Trap):} Trong ảnh chụp từ camera tĩnh, diện tích vùng tĩnh (mặt đường, vỉa hè, nhà cửa, dải phân cách) chiếm từ 70\% đến 85\% tổng số điểm ảnh. Khi huấn luyện các mô hình học tự giám sát tiêu chuẩn như DINO hay MAE trên tập dữ liệu này, mạng nơ-ron có xu hướng tối ưu hóa hàm mất mát bằng cách ghi nhớ kết cấu bối cảnh tĩnh và góc đặt camera thay vì học các đặc trưng hình học của phương tiện. Hệ quả là biểu diễn trích xuất bị phụ thuộc chặt vào camera cụ thể và mất hoàn toàn khả năng khái quát hóa khi áp dụng sang camera mới.
 \end{itemize}
 
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{direction_data_article/paper/figures/fig4_sample_snapshots.png}
+    \caption{\textbf{Các thách thức quang học và hình thái học thực tế tại mạng lưới camera giao thông TP.HCM.} Hình ảnh hiện trường thể hiện rõ: (a) Dòng xe máy mật độ dày đặc với khoảng cách di chuyển sát nhau gây che khuất liên tục; (b) Góc quan sát xiên cao và rung chấn cơ học làm trôi dạt tọa độ; (c) Hiện tượng phản chiếu vũng nước trên mặt đường khi trời mưa nhiệt đới; (d) Bóng đổ di chuyển nhanh khi nắng gắt; (e) Hiện tượng chói lóa và bão hòa cảm biến CMOS từ đèn pha xe tải vào ban đêm; và (f) Ùn tắc kéo dài tạo ra hiện tượng bóng ma phương tiện (Ghost Vehicles) làm sai lệch phép ước lượng ảnh nền trung vị cổ điển.}
+    \label{fig:snapshots_challenges}
+\end{figure}
+
 \subsection{Tiến Trình Phát Triển Phương Pháp Luận Trong Hệ Sinh Thái}
 Nhằm giải quyết triệt để các hạn chế trên, hệ sinh thái DINO Traffic Suite được thiết lập dựa trên nguyên lý tiến hóa khoa học gồm hai trường phái tiếp cận:
 \begin{enumerate}
@@ -133,6 +142,7 @@ Hướng 1 Mới giải quyết triệt để vấn đề này bằng cách tự
     \item \textbf{Không đòi hỏi luồng video dày (No Optical Flow):} Hoạt động ổn định trên chuỗi ảnh chụp ngắt quãng với chu kỳ 3--5 phút mỗi khung hình.
     \item \textbf{Bảo đảm tính bất biến bối cảnh tĩnh (Context Invariance):} Triệt tiêu tương quan giả tạo giữa hình dáng xe cộ và kết cấu mặt đường đặc thù của từng camera.
 \end{enumerate}
+Toàn bộ kiến trúc và quy trình tính toán của Hướng 1 Mới được mô tả trực quan trên Hình~\ref{fig:pipeline_direction1_new}.
 
 \subsection{Khung Lý Thuyết Bản Đồ Dị Biệt Thời Gian TAM}
 Khung hình đầu vào $I_t \in \mathbb{R}^{3 \times H \times W}$ (tỷ lệ chuẩn 16:9, kích thước $256 \times 448$) được phân chia thành $N = 16 \times 28 = 448$ mảng điểm ảnh (patches) không chồng lấn kích thước $16 \times 16$. Vector đặc trưng của từng patch được trích xuất qua bộ mã hóa Vision Transformer đóng băng và chiếu giảm chiều tuyến tính xuống không gian $d = 64$:
@@ -204,6 +214,52 @@ với $\mathcal{M}$ là tập hợp các patch bị che bởi thuật toán AGM.
     \mathcal{L}_{\text{KoLeo}} = - \frac{1}{B} \sum_{i=1}^B \log \min_{j \ne i} \|z_i - z_j\|_2
 \end{equation}
 
+\begin{figure}[t!]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
+    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
+    arr/.style={-{Latex[length=3mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=3mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=3mm]}, thick, draw=red!85!black},
+    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+]
+    % Hàng 1: Khối trích xuất & TAM & AGM
+    \node[box] (input) at (0, 4) {\textbf{Khung Hình Hiện Trường}\\$I_t \in \mathbb{R}^{3 \times 256 \times 448}$\\(Ảnh thưa $\Delta t \approx 3$--$5$ phút)};
+    
+    \node[box] (vit) at (4.8, 4) {\textbf{Mã Hóa Patch ViT}\\$u_t(p) \in \mathbb{S}^{63}$\\$N = 16 \times 28 = 448$ patches};
+    
+    \node[proc] (tam) at (9.6, 4) {\textbf{Bản Đồ Dị Biệt TAM}\\Duy trì $K=4$ cụm tĩnh $\mathcal{C}_k(p)$\\Khoảng cách Cosine $d_t(p)$\\Mô hình GMM $\to \pi_t(p) \in [0, 1]$};
+    
+    \node[proc] (agm) at (14.4, 4) {\textbf{Che Phân Tầng AGM}\\Ngân sách $M = 268$ patches\\Vùng xe $M_v$ (Gumbel Top-K)\\Vùng nền $M_s = M - M_v$};
+    
+    % Hàng 2: Hoán đổi phản thực nghiệm SRS & Chưng cất Teacher/Student & Hàm mất mát
+    \node[proc] (srs) at (14.4, 0.5) {\textbf{Hoán Đổi Vùng Tĩnh SRS}\\Hai khung hình $x_1, x_2$ khác ngày\\$M_{\text{static}} \to M_{\text{feather}}$ (Gauss filter)\\Mẫu phản thực nghiệm $x_{\text{srs}}$};
+    
+    \node[box] (student) at (9.6, 0.5) {\textbf{Mô Hình Student ViT}\\Tiếp nhận ảnh biến đổi $x_{\text{srs}}$\\với mặt nạ che phân tầng AGM\\Đặc trưng patch $h_{x_{\text{srs}}}(p)$};
+    
+    \node[box] (teacher) at (4.8, 0.5) {\textbf{Mô Hình Teacher ViT}\\Tiếp nhận ảnh gốc $x_1$ toàn cục\\Cập nhật trọng số theo EMA\\Đặc trưng patch $h_{x_1}(p)$};
+    
+    \node[loss] (loss) at (0, 0.5) {\textbf{Hàm Mất Mát Đa Tầng}\\\vspace{2pt}$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}^{[\text{CLS}]}$\\$+ \lambda_{\text{ibot}} \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi)$\\$+ \lambda_{\text{koleo}} \mathcal{L}_{\text{KoLeo}}$};
+
+    % Mũi tên kết nối
+    \draw[arr] (input) -- (vit);
+    \draw[arr] (vit) -- (tam);
+    \draw[arr_teal] (tam) -- (agm);
+    \draw[arr_teal] (agm) -- (srs);
+    \draw[arr_teal] (srs) -- (student);
+    \draw[arr] (student) -- (loss);
+    \draw[arr] (teacher) -- (loss);
+    \draw[arr, dashed] (student) to[bend left=15] node[above, note] {EMA Update} (teacher);
+    \draw[arr_teal, dashed] (tam) to[bend right=25] node[above, note] {Trọng số $\pi(p)$} (loss);
+\end{tikzpicture}
+}
+\caption{\textbf{Kiến trúc tổng thể của Hướng 1 Mới (Prior-Free Vehicle-Centric SSL).} Quy trình khép kín tự học biểu diễn không cần ảnh nền mốc sạch: (1) Trích xuất patch tokens trên mặt cầu đơn vị $\mathbb{S}^{63}$; (2) Bản đồ TAM duy trì trực tuyến $K=4$ cụm trạng thái quang học tĩnh trên từng tọa độ, ước lượng xác suất phương tiện $\pi_t(p)$ qua mô hình hỗn hợp Gauss (GMM); (3) Thuật toán AGM phân bổ ngân sách che $M=268$ mảng ảnh với cơ chế lấy mẫu Gumbel Top-K; (4) Toán tử SRS kết hợp thông tin tĩnh giữa hai ngày khác nhau tạo mẫu phản thực nghiệm $x_{\text{srs}}$ triệt tiêu bẫy đường tắt bối cảnh; (5) Khung chưng cất tự thân Student--Teacher tối ưu hóa đồng thời hàm mất mát patch iBOT có trọng số $\pi(p)$, mất mát toàn cục DINO và thành phần chống sụp đổ biểu diễn KoLeo.}
+\label{fig:pipeline_direction1_new}
+\end{figure}
+
 \section{HƯỚNG 2 MỚI: PHÂN RÃ CẢNH GIAO THÔNG ĐỘC LẬP KHÔNG DÙNG ẢNH NỀN (PRIOR-FREE SCENE DECOMPOSITION)}
 
 \subsection{Khuyết Tật Của Mô Hình Phụ Thuộc Nền Cũ và Đột Phá Hướng 2 Mới}
@@ -212,7 +268,7 @@ Trong mô hình phân rã cảnh giao thông cũ, hàm mất mát nhánh nền b
     \mathcal{L}_{\text{bg\_old}} = \|\hat{B} - B_{\text{median}}\|_1
 \end{equation}
 Cách tiếp cận này gặp phải sai số nghiêm trọng: khi xe cộ dừng đỗ kéo dài trong giờ cao điểm, ảnh nền median bị dính bóng ma phương tiện; mạng nơ-ron học theo median sẽ bị ép phải tái tạo bóng ma vào lớp nền, biến lỗi của median thành lỗi vĩnh viễn của mô hình.
-Hướng 2 Mới loại bỏ hoàn toàn giả định về sự tồn tại của ảnh nền mốc. Dựa trên bản chất vật lý rằng nền đường của camera cố định là một cảnh vật tĩnh duy nhất chỉ biến thiên quang học theo góc chiếu mặt trời, bóng râm và độ ẩm, các biến động này nằm trên một đa tạp tham số hóa ít chiều (Low-dimensional Lighting Manifold). Quy trình được thực hiện qua hai giai đoạn chặt chẽ:
+Hướng 2 Mới loại bỏ hoàn toàn giả định về sự tồn tại của ảnh nền mốc. Dựa trên bản chất vật lý rằng nền đường của camera cố định là một cảnh vật tĩnh duy nhất chỉ biến thiên quang học theo góc chiếu mặt trời, bóng râm và độ ẩm, các biến động này nằm trên một đa tạp tham số hóa ít chiều (Low-dimensional Lighting Manifold). Quy trình phân rã cảnh hai giai đoạn độc lập hoàn toàn với ảnh nền mẫu được sơ đồ hóa chi tiết trên Hình~\ref{fig:pipeline_direction2_new}.
 
 \subsection{Giai Đoạn 1: Học Đa Tạp Ánh Sáng Nền SceneBasis Bằng Thuật Toán Lặp Huber-IRLS}
 Từ chuỗi ảnh không nhãn thu thập qua nhiều ngày của mỗi camera, nền đường được biểu diễn dưới dạng một không gian con affine $J$ chiều:
@@ -260,6 +316,62 @@ Ràng buộc triệt tiêu gradient giao thoa (Gradient Exclusion) ngăn chặn 
     \mathcal{L}_{\text{excl}} = \frac{1}{HW} \sum_{u, v} \tanh\big(\|\nabla \hat{F}(u, v)\|\big) \odot \tanh\big(\|\nabla \hat{B}(u, v)\|\big)
 \end{equation}
 kết hợp số hạng điều hòa tổng biến thiên (Total Variation) $\mathcal{L}_{\text{tv}}(\alpha)$ để bảo đảm tính liền khối và độ sắc nét tại đường biên của mặt nạ phương tiện.
+
+\begin{figure}[t!]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[
+    stage/.style={rectangle, draw=blue!80!black, fill=blue!3, rounded corners=6pt, inner sep=8pt},
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
+    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
+    arr/.style={-{Latex[length=2.8mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=2.8mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=2.8mm]}, thick, draw=red!85!black},
+    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+]
+    % --- GIAI ĐOẠN 1: NGOẠI TUYẾN ---
+    \node[box] (unlabeled) at (0, 4.4) {\textbf{Chuỗi Ảnh Đa Ngày}\\$\{I_t\}_{t=1}^T$ không nhãn\\(Mỗi camera cố định)};
+    
+    \node[proc] (svd_irls) at (4.5, 4.4) {\textbf{Robust SVD + Huber-IRLS}\\Khởi tạo không gian con affine\\Lặp loại bỏ ngoại lai xe cộ};
+    
+    \node[proc] (basis) at (9.0, 4.4) {\textbf{Hệ Cơ Sở SceneBasis}\\Cảnh tĩnh $E_0(u, v) \in \mathbb{R}^{H \times W \times 3}$\\Cơ sở ánh sáng $\{E_1, E_2, E_3\}$};
+    
+    \draw[arr] (unlabeled) -- (svd_irls);
+    \draw[arr_teal] (svd_irls) -- (basis);
+
+    % Khung bao Giai đoạn 1
+    \begin{scope}[on background layer]
+        \node[stage, fit=(unlabeled) (svd_irls) (basis), label={[anchor=north west, font=\small\bfseries, text=blue!85!black]north west:\textbf{Giai Đoạn 1: Học Đa Tạp Ánh Sáng Nền SceneBasis (Ngoại Tuyến, Không Cần Nhãn)}}] (g1) {};
+    \end{scope}
+
+    % --- GIAI ĐOẠN 2: TRỰC TUYẾN ---
+    \node[box] (input_online) at (0, 0.5) {\textbf{Khung Hình Hiện Trường}\\$I(u, v)$ tại thời điểm $t$};
+    
+    \node[box] (deep_net) at (4.5, 0.5) {\textbf{Mạng Phân Rã Sâu $\Phi$}\\ViT + DPT Decoder\\Dự đoán $\hat{F}, \alpha, \sigma$};
+    
+    \node[proc] (solver) at (9.0, 0.5) {\textbf{Bộ Giải Hệ Số Ánh Sáng}\\Trọng số nền $W = (1-\alpha)^2$\\Giải tích Huber-IRLS qua Gram\\$\implies \bm{\ell}^*(t) = [\ell_1, \ell_2, \ell_3]^\top$};
+    
+    \node[proc] (recon) at (13.5, 0.5) {\textbf{Tổng Hợp Quang Học}\\Nền: $\hat{B}(t) = E_0 + \sum \ell_j E_j$\\Tái tạo: $\hat{I} = \alpha \hat{F} + (1-\alpha)\hat{B}$};
+    
+    \node[loss] (loss2) at (13.5, 4.4) {\textbf{Hàm Mất Mát Laplace NLL}\\\vspace{2pt}$\mathcal{L}_{\text{Laplace}}(\sigma) + \lambda_{\text{excl}} \mathcal{L}_{\text{excl}}$\\$+ \lambda_{\text{tv}} \mathcal{L}_{\text{tv}}(\alpha) + \lambda_\alpha \|\alpha\|_1$};
+
+    \draw[arr] (input_online) -- (deep_net);
+    \draw[arr] (deep_net) -- node[above, note] {$\alpha, \hat{F}, \sigma$} (solver);
+    \draw[arr_teal] (basis) -- node[right, note] {$\{E_j\}$ cố định} (solver);
+    \draw[arr_teal] (solver) -- node[above, note] {$\bm{\ell}^*(t)$} (recon);
+    \draw[arr_red] (recon) -- (loss2);
+    \draw[arr_red, dashed] (deep_net) to[bend left=25] node[above, note] {$\sigma, \alpha$} (loss2);
+
+    % Khung bao Giai đoạn 2
+    \begin{scope}[on background layer]
+        \node[stage, fit=(input_online) (deep_net) (solver) (recon), label={[anchor=north west, font=\small\bfseries, text=blue!85!black]north west:\textbf{Giai Đoạn 2: Mạng Phân Rã Sâu \& Thích Ứng Chiếu Sáng Trực Tuyến (Online Inference \& Learning)}}] (g2) {};
+    \end{scope}
+\end{tikzpicture}
+}
+\caption{\textbf{Quy trình phân rã cảnh hai giai đoạn của Hướng 2 Mới (Prior-Free Scene Decomposition).} Đột phá loại bỏ hoàn toàn ảnh nền mốc sạch: Giai đoạn 1 trích xuất không gian con đa tạp chiếu sáng affine $\{E_0, E_1, E_2, E_3\}$ từ chuỗi ảnh thưa đa ngày bằng thuật toán lặp Huber-IRLS kháng bóng ma xe dừng đỗ. Giai đoạn 2 vận hành mạng nơ-ron phân rã sâu kết hợp bộ giải giải tích trực tuyến Huber-IRLS để tìm bộ hệ số ánh sáng tối ưu $\bm{\ell}^*(t)$ trên vùng nền $W=(1-\alpha)^2$, tổng hợp nền thực $\hat{B}(t)$ và tối ưu hóa thông qua hàm mất mát Laplace NLL tự học độ bất định $\sigma(u, v)$ cùng ràng buộc triệt tiêu gradient giao thoa $\mathcal{L}_{\text{excl}}$.}
+\label{fig:pipeline_direction2_new}
+\end{figure}
 
 \section{HƯỚNG 3: HỌC GIÁM SÁT YẾU THÍCH ỨNG THEO NGỮ CẢNH ĐÔ THỊ}
 
@@ -319,7 +431,54 @@ với $\Omega_{\text{road}}$ là mặt nạ không gian lòng đường được
     \item Nếu $s_{\text{static}} > \tau_{\text{static}}$: Toàn bộ khung cảnh bị biến dạng quang học, hệ thống phát cảnh báo lỗi phần cứng hoặc lệch góc camera, ngăn chặn việc báo động sai sự cố giao thông.
     \item Nếu $s_{\text{road}} > \tau_{\text{road}}$ và $s_{\text{static}} \le \tau_{\text{static}}$: Sự bất thường chỉ khu trú trong phạm vi mặt đường, hệ thống kích hoạt cảnh báo sự cố giao thông.
 \end{itemize}
-Để dập tắt hoàn toàn các dao động ngẫu nhiên, cảnh báo chỉ được xác nhận chính thức khi sự cố duy trì liên tục qua $N \ge 3$ cửa sổ trượt liên tiếp, khống chế tỷ lệ báo động giả ở mức cực thấp trên toàn mạng lưới.
+Để dập tắt hoàn toàn các dao động ngẫu nhiên, cảnh báo chỉ được xác nhận chính thức khi sự cố duy trì liên tục qua $N \ge 3$ cửa sổ trượt liên tiếp, khống chế tỷ lệ báo động giả ở mức cực thấp trên toàn mạng lưới. Sơ đồ quy trình phát hiện bất thường giao thông kéo dài kết hợp cơ chế phân tách lỗi camera được minh họa chi tiết trên Hình~\ref{fig:pipeline_direction4}.
+
+\begin{figure}[t!]
+\centering
+\begin{tikzpicture}[
+    scale=0.80, transform shape,
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.3cm, minimum height=1.3cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.3cm, minimum height=1.3cm},
+    decision/.style={diamond, draw=orange!85!black, fill=orange!8, aspect=1.8, align=center, inner sep=3pt, font=\small\bfseries},
+    alert_cam/.style={rectangle, draw=red!75!black, fill=red!10, rounded corners=4pt, align=center, inner sep=6pt, font=\small\bfseries, text=red!80!black},
+    alert_traffic/.style={rectangle, draw=green!70!black, fill=green!10, rounded corners=4pt, align=center, inner sep=6pt, font=\small\bfseries, text=green!60!black},
+    arr/.style={-{Latex[length=2.8mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=2.8mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=2.8mm]}, thick, draw=red!85!black},
+    arr_green/.style={-{Latex[length=2.8mm]}, thick, draw=green!60!black},
+    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+]
+    % Hàng 1: Đầu vào cửa sổ trượt, lọc trung vị patch, so khớp coreset
+    \node[box] (input_seq) at (0, 3.8) {\textbf{Cửa Sổ Trượt Thời Gian}\\Chuỗi $W$ khung hình $\{I_{t-w}\}$\\Trích xuất patch token ViT};
+    
+    \node[proc] (median_filter) at (4.6, 3.8) {\textbf{Lọc Trung Vị Patch}\\$\tilde{F}_t(p) = \operatorname{median}_{w}\{F_{t-w}(p)\}$\\\textit{Triệt tiêu chuyển động xe thoáng qua}};
+    
+    \node[proc] (coreset_bank) at (9.4, 3.8) {\textbf{Ngân Hàng Coreset Bank}\\Chọn mẫu chuẩn K-Center Greedy\\Điểm dị biệt $a_t(p) = \min_{m} \|\tilde{F}_t - m\|$};
+    
+    \node[box] (split_zone) at (14.2, 3.8) {\textbf{Phân Tách Không Gian}\\$s_{\text{road}} = \operatorname{TopK}_{p \in \Omega_{\text{road}}}(a_t(p))$\\$s_{\text{static}} = \operatorname{TopK}_{p \notin \Omega_{\text{road}}}(a_t(p))$};
+
+    \draw[arr] (input_seq) -- (median_filter);
+    \draw[arr_teal] (median_filter) -- (coreset_bank);
+    \draw[arr_teal] (coreset_bank) -- (split_zone);
+
+    % Hàng 2: Bộ quyết định phân tầng logic
+    \node[decision] (check_static) at (14.2, 0.5) {$s_{\text{static}} > \tau_{\text{static}}$};
+    
+    \node[alert_cam] (cam_error) at (9.4, 0.5) {\textbf{CẢNH BÁO LỖI CAMERA}\\Trôi góc quay / Rung lắc\\Ống kính bám bẩn hoặc nước mưa\\\textit{(Vô hiệu hóa báo động sai)}};
+    
+    \node[decision] (check_road) at (4.6, 0.5) {$s_{\text{road}} > \tau_{\text{road}}$};
+    
+    \node[alert_traffic] (traffic_anomaly) at (0, 0.5) {\textbf{XÁC NHẬN SỰ CỐ GIAO THÔNG}\\Duy trì liên tục $N \ge 3$ cửa sổ\\Ngập úng / Rào chắn / Ùn ứ cực đoan\\\textit{(Phát cảnh báo Trung tâm Điều hành)}};
+
+    \draw[arr] (split_zone) -- (check_static);
+    \draw[arr_red] (check_static) -- node[above, font=\footnotesize] {Bất thường} (cam_error);
+    \draw[arr_teal] (check_static) -- node[above, font=\footnotesize] {Bình thường} (check_road);
+    \draw[arr_green] (check_road) -- node[above, font=\footnotesize] {Bền vững} (traffic_anomaly);
+    \draw[arr, dashed] (check_road) to[bend left=25] node[below, note] {Ổn định} (input_seq);
+\end{tikzpicture}
+\caption{\textbf{Cơ chế phát hiện bất thường giao thông kéo dài và phân tách lỗi camera của Hướng 4.} Quy trình xử lý gồm 4 tầng: (1) Phép lọc trung vị thời gian trên cửa sổ trượt $W$ trong không gian patch-token ViT loại bỏ hoàn toàn các thay đổi thoáng qua của phương tiện lưu thông; (2) Ngân hàng Coreset Memory Bank nén 90\% dung lượng mẫu chuẩn bằng thuật toán K-Center Greedy; (3) Phân tách không gian hai vùng mặt đường $\Omega_{\text{road}}$ và kiến trúc cố định $\Omega_{\text{static}}$; (4) Cơ chế chẩn đoán phân tầng kiểm tra biến dạng vùng tĩnh $s_{\text{static}}$ để phát hiện lỗi phần cứng/trôi góc camera và kiểm tra độ bền vững qua $N \ge 3$ cửa sổ trượt để xác nhận sự cố lòng đường thực tế.}
+\label{fig:pipeline_direction4}
+\end{figure}
 
 \section{HƯỚNG 1 CŨ: HỌC TỰ GIÁM SÁT LIÊN TỤC VỚI TIỀN NGHIỆM ẢNH NỀN (BACKGROUND-GUIDED CONTINUAL SSL)}
 
@@ -396,6 +555,29 @@ Toàn bộ hệ thống phương pháp luận trong DINO Traffic Suite được 
     \item \textbf{Tính bất đối xứng cự ly thực tế:} Đồ thị ghi nhận 690 cặp tuyến hai chiều và 1,070 tuyến một chiều. Trong 690 cặp hai chiều, có đúng 238 cặp liên kết bất đối xứng cự ly ($|d_{ij} - d_{ji}| \ge 50\text{ m}$, chiếm 34.49\%) xuất phát từ đặc thù dải phân cách cứng, cầu vượt và các điểm quay đầu xe (U-turn) phân bố không đối xứng trên hệ thống kênh rạch sông Sài Gòn.
     \item \textbf{Hệ số uốn khúc mạng lưới (Network Tortuosity):} Tỷ số giữa cự ly di chuyển thực tế theo mạng đường OSRM và khoảng cách trắc địa đường chim bay Haversine đạt trung bình $\tau = 1.25 \pm 0.61$, phản ánh chính xác cấu trúc mạng lưới giao thông phân mảnh của một đô thị sông nước Đông Nam Á.
 \end{itemize}
+
+Đặc tính phân bố không gian của mạng lưới trạm camera được thể hiện trên Hình~\ref{fig:camera_spatial_map}. Cấu trúc tô-pô đồ thị mạng lưới đường bộ OSRM và phân tích cự ly di chuyển được thể hiện trên Hình~\ref{fig:graph_topology}. Phân bố chu kỳ làm mới thời gian và trắc quang quang học được biểu diễn trên Hình~\ref{fig:temporal_photometric}.
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.88\textwidth]{direction_data_article/paper/figures/fig1_camera_spatial_map.png}
+    \caption{\textbf{Bản đồ phân bố không gian của mạng lưới 608 trạm camera giám sát giao thông tại TP.HCM.} Hệ thống trạm quan sát bao phủ toàn diện các quận nội đô và vành đai đô thị, tập trung với mật độ cao tại các trục xuyên tâm, vòng xoay trọng điểm khu vực trung tâm và trải rộng dọc theo các tuyến cửa ngõ giao thương liên vùng.}
+    \label{fig:camera_spatial_map}
+\end{figure}
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{direction_data_article/paper/figures/fig3_graph_topology.png}
+    \caption{\textbf{Đặc trưng tô-pô đồ thị mạng lưới đường bộ OSRM trên mạng lưới 608 camera.} Phân tích 2,450 liên kết có hướng: (a) Phân bố cự ly di chuyển thực tế theo mạng đường giao thông; (b) Phân bố hệ số uốn khúc mạng lưới $\tau$ so với khoảng cách chim bay Haversine (trung bình $\tau = 1.25$); và (c) Phân bố độ lệch khoảng cách hai chiều $|d_{ij} - d_{ji}|$, làm nổi bật 238 cặp liên kết bất đối xứng cự ly $(\ge 50\text{ m})$ do mạng lưới sông ngòi chia cắt và hệ thống dải phân cách quay đầu xe đặc thù tại TP.HCM.}
+    \label{fig:graph_topology}
+\end{figure}
+
+\begin{figure}[t!]
+    \centering
+    \includegraphics[width=0.95\textwidth]{direction_data_article/paper/figures/fig2_temporal_and_photometric.png}
+    \caption{\textbf{Phân bố chu kỳ lấy mẫu thời gian và biến thiên trắc quang quang học.} (a) Phân bố chu kỳ làm mới khung hình $\Delta t$ phản ánh tính ngắt quãng đặc trưng với trung vị 240--270 giây và phân bố đuôi dài do giới hạn đường truyền diện rộng; (b) Phân bố độ sáng trung bình của ảnh hiện trường theo từng khung giờ trong ngày, thể hiện sự tương phản quang học sâu sắc giữa điều kiện ban ngày nhiệt đới và ban đêm đô thị.}
+    \label{fig:temporal_photometric}
+\end{figure}
 
 \subsection{Kiểm Toán An Toàn Bảo Mật PII Theo Chuẩn Mực Sub-Nyquist}
 Do dữ liệu thu thập từ các tuyến phố công cộng, việc bảo vệ quyền riêng tư cá nhân (Personally Identifiable Information -- PII) là một yêu cầu pháp lý và đạo đức khoa học bắt buộc. Tập dữ liệu IC4SD-TrafficSnap được thiết kế theo nguyên lý Bảo Mật Vật Lý Tự Thân (Physical Privacy by Design):
