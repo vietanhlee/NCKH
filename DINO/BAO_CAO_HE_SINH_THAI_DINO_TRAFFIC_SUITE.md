@@ -15,9 +15,11 @@
 4. [Bài báo Hướng 2 Mới: Phân Rã Cảnh Không Cần Nền (Direction 2 New)](#4-bài-báo-hướng-2-mới-phân-rã-cảnh-không-cần-nền-direction-2-new)
 5. [Bài báo Hướng 1 Cũ (Baseline): BG-Guided DINO Continual SSL Pre-training](#5-bài-báo-hướng-1-cũ-baseline-bg-guided-dino-continual-ssl-pre-training)
 6. [Bài báo Hướng 2 Cũ (Baseline): Noise-Aware Traffic Scene Decomposition](#6-bài-báo-hướng-2-cũ-baseline-noise-aware-traffic-scene-decomposition)
-7. [Bài báo Dữ liệu: IC4SD-TrafficSnap (Elsevier Data in Brief)](#7-bài-báo-dữ-liệu-ic4sd-trafficsnap-elsevier-data-in-brief)
-8. [Giao thức Thực nghiệm, Phân chia Dữ liệu và Kiểm soát Rò rỉ](#8-giao-thức-thực-nghiệm-phân-chia-dữ-liệu-và-kiểm-soát-rò-rỉ)
-9. [Tổng kết và Kết quả Kiểm thử Hệ thống](#9-tổng-kết-và-kết-quả-kiểm-thử-hệ-thống)
+7. [Bài báo Hướng 5: Context-Aware Weak Supervision (Direction 5)](#7-bài-báo-hướng-5-context-aware-weak-supervision-direction-5)
+8. [Bài báo Hướng 6: Persistence Anomaly Detection & Camera Fault (Direction 6)](#8-bài-báo-hướng-6-persistence-anomaly-detection--camera-fault-direction-6)
+9. [Bài báo Dữ liệu: IC4SD-TrafficSnap (Elsevier Data in Brief)](#9-bài-báo-dữ-liệu-ic4sd-trafficsnap-elsevier-data-in-brief)
+10. [Giao thức Thực nghiệm, Phân chia Dữ liệu và Kiểm soát Rò rỉ](#10-giao-thức-thực-nghiệm-phân-chia-dữ-liệu-và-kiểm-soát-rò-rỉ)
+11. [Tổng kết và Kết quả Kiểm thử Hệ thống](#11-tổng-kết-và-kết-quả-kiểm-thử-hệ-thống)
 
 ---
 
@@ -35,29 +37,29 @@ Trong các nghiên cứu trừ nền cổ điển, ảnh nền median thường 
 - **Cạm bẫy đường tắt nền (Background Shortcut Trap):** Trong ảnh camera cố định, 75%–80% diện tích là vỉa hè và mặt đường tĩnh. Các mô hình tự học chuẩn (DINO, MAE) dễ đi "đường tắt", học nhận diện camera ID và góc chụp thay vì học bản chất nhận dạng xe cộ, làm suy sụp khả năng thích ứng sang camera mới.
 
 ### 1.3. Định vị Triết lý Tinh gọn Cho Hệ Thống
-Hệ sinh thái DINO Suite tập trung toàn diện nguồn lực vào hai hướng mũi nhọn tự học không cần nền và hai baseline có nền:
+Hệ sinh thái DINO Suite định hình cấu trúc nghiên cứu đa tầng hoàn chỉnh:
 
 ```
-+-----------------------------------------------------------------------------------------------+
-|                             DINO TRAFFIC SUITE CORE ARCHITECTURE                              |
-+-----------------------------------------------------------------------------------------------+
-|                                                                                               |
-|   +---------------------------------------------------------------------------------------+   |
-|   |                      COMMON FOUNDATION & VERIFICATION LAYER                           |   |
-|   |  - Static Reliability Estimator (r_i)        - Phase Correlation Camera Alignment    |   |
-|   |  - Background Degradation Benchmark (BDB)    - Frame Corruption Suite (FCS)           |   |
-|   |  - Multi-GPU Smart Resume & Checkpointing     - Road-Aware Subtraction Engine         |   |
-|   +---------------------------------------------------------------------------------------+   |
-|                                              │                                                |
-|       ┌──────────────────────────────────────┴───────────────────────────────────────┐        |
-|       ▼                                                                             ▼        |
-|   [NHÓM SSL MŨI NHỌN KHÔNG CẦN NỀN (PRIOR-FREE)]                 [NHÓM BASELINE & DỮ LIỆU ĐÔ THỊ]     |
-|   1. Hướng 1 Mới (direction1_new):                               3. Hướng 1 Cũ (direction1_bg):       |
-|      Vehicle-Centric SSL (TAM + AGM + SRS)                          Continual SSL với FAM-Δ           |
-|   2. Hướng 2 Mới (direction2_new):                               4. Hướng 2 Cũ (direction2_decomp):   |
-|      Prior-Free Scene Decomposition (SceneBasis + σ)                Scene Decomposition Median Prior  |
-|                                                                  5. Data Article: IC4SD-TrafficSnap   |
-+-----------------------------------------------------------------------------------------------+
++-------------------------------------------------------------------------------------------------------+
+|                                 DINO TRAFFIC SUITE CORE ARCHITECTURE                                  |
++-------------------------------------------------------------------------------------------------------+
+|                                                                                                       |
+|   +-----------------------------------------------------------------------------------------------+   |
+|   |                              COMMON FOUNDATION & VERIFICATION LAYER                           |   |
+|   |  - Static Reliability Estimator (r_i)            - Phase Correlation Camera Alignment         |   |
+|   |  - Background Degradation Benchmark (BDB)        - Frame Corruption Suite (FCS)               |   |
+|   |  - Multi-GPU Smart Resume & Checkpointing         - Road-Aware Subtraction Engine             |   |
+|   +-----------------------------------------------------------------------------------------------+   |
+|                                                  │                                                    |
+|       ┌──────────────────────────────────────────┼────────────────────────────────────────────┐       |
+|       ▼                                          ▼                                            ▼       |
+|   [SSL MŨI NHỌN (PRIOR-FREE)]         [WEAK SUPERVISION & ANOMALY]                [BASELINES & DATA]  |
+|   1. Hướng 1 Mới (direction1_new):    3. Hướng 5 (direction5_weak):               5. Hướng 1 Cũ (H1): |
+|      Vehicle-Centric SSL                 Context-Aware Markov Label Aggregation      Continual FAM-Δ  |
+|   2. Hướng 2 Mới (direction2_new):    4. Hướng 6 (direction6_anomaly):            6. Hướng 2 Cũ (H2): |
+|      Prior-Free Scene Decomposition      Persistence Traffic Anomaly Detection       Noise-Aware Decomp|
+|                                                                                   7. Data Article Q1  |
++-------------------------------------------------------------------------------------------------------+
 ```
 
 ---
@@ -147,7 +149,53 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 7. BÀI BÁO DỮ LIỆU: IC4SD-TRAFFICSAP (ELSEVIER DATA IN BRIEF)
+## 7. BÀI BÁO HƯỚNG 5: CONTEXT-AWARE WEAK SUPERVISION (DIRECTION 5)
+
+> **Tên bài báo:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*  
+> **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / NeurIPS  
+> **Mã nguồn:** `direction5_weak_supervision/`
+
+### 7.1. Động lực & Bài toán
+Trong hệ thống camera giao thông đô thị quy mô lớn (>600 camera), việc gán nhãn thủ công (Ground Truth) mức độ ùn tắc 24/7 là bất khả thi. Thay vào đó, ta có sẵn 5 hàm nhãn yếu (Labeling Functions - LFs):
+1. **LF1 (Detector Bounding Box Area):** Tỷ lệ diện tích phát hiện xe so với mặt đường.
+2. **LF2 (Background Difference Ratio):** Chênh lệch tuyệt đối trung bình so với ảnh nền có cổng độ tin cậy $r_i$.
+3. **LF3 (Temporal Frame Differencing):** Sai khác giữa các khung hình liên tiếp $|\mathbf{I}_t - \mathbf{I}_{t-1}|$.
+4. **LF4 (Historical Peak Profile):** Hồ sơ mật độ lịch sử theo khung giờ trong tuần.
+5. **LF5 (Multimodal VLM):** Đánh giá ngữ nghĩa qua Gemini / Qwen2.5-VL kèm giao thức kiêng cữ (abstention).
+
+### 7.2. Đột phá Phương pháp
+- **Phân loại 54 Ngữ cảnh Đô thị (Context Extraction):** Kết hợp Ánh sáng (Ngày/Tối/Đêm), Khung giờ (Cao điểm/Thấp điểm), Cấp đường (Trục lộ/Đường hẹp), và Độ tin cậy camera $r_i$.
+- **Context-Aware Markov Label Model:** Mô hình đồ thị xác suất biến ẩn $y_t \in \{0, 1, 2, 3\}$ (Thông thoáng $\to$ Kẹt xe nghiêm trọng) kết hợp ma trận chuyển trạng thái Markov $\mathbf{A}$ và hàm phát xạ theo ngữ cảnh $\pi_j^{(c)}(\lambda_j \mid y)$. Huấn luyện bằng thuật toán EM với Forward-Backward trong không gian log-sum-exp triệt tiêu hoàn toàn tràn số underflow.
+- **End Model Tự chủ (DINOv3 + Causal GRU):** Huấn luyện trên phân phối nhãn mềm $q(y_t)$ thông qua Soft Cross-Entropy. Khi triển khai thực tế, End Model hoạt động độc lập 100%, không cần bất kỳ LF hay background nào.
+
+---
+
+## 8. BÀI BÁO HƯỚNG 6: PERSISTENCE ANOMALY DETECTION & CAMERA FAULT (DIRECTION 6)
+
+> **Tên bài báo:** *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*  
+> **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / Transportation Research Part C  
+> **Mã nguồn:** `direction6_anomaly_detection/`
+
+### 8.1. Động lực & Bài toán
+Dữ liệu camera chụp thưa (1 frame mỗi 10–60 giây) gây khó khăn lớn cho việc phát hiện sự cố giao thông vì không thể bám vết quỹ đạo (tracking). Cần phân biệt rõ:
+1. *Xe cộ di chuyển bình thường* (chỉ lướt qua 1–2 frame $\implies$ hiện tượng thoáng qua).
+2. *Sự cố giao thông thực sự* (ngập lụt triều cường/mưa giông, tai nạn dừng đỗ, rào chắn công trình).
+3. *Lỗi kỹ thuật camera* (camera bị gió thổi lệch góc quay, ống kính bị bám bẩn hoặc che mờ).
+
+### 8.2. Đột phá Phương pháp
+- **Temporal Median Feature Pooling:** Gộp đặc trưng qua cửa sổ trượt $W$ khung hình trong không gian patch-token DINOv3:
+  $$\tilde{F}_t(p) = \operatorname{median}_{w=0}^{W-1} f_{t-w}(p)$$
+  Triệt tiêu hoàn toàn xe cộ di chuyển thoáng qua, bảo toàn và làm sắc nét các biến đổi kéo dài (sự cố bất thường).
+- **Coreset Normal Memory Bank:** Nén 90% bộ nhớ đặc trưng chuẩn bằng thuật toán K-Center Greedy (PatchCore-style), phân vùng theo camera và khung giờ trong ngày.
+- **Tách Lỗi Camera và Sự Cố Mặt Đường:** 
+  + $s_{\text{road}}$: Điểm bất thường trung bình Top 5% patch trong lòng đường (Road Mask).
+  + $s_{\text{static}}$: Điểm bất thường trung bình Top 5% patch vùng tĩnh ngoài lòng đường (cột đèn, tòa nhà).
+  + Nếu $s_{\text{static}}$ tăng vọt $\implies$ Cảnh báo `CAMERA_FAULT`. Nếu chỉ $s_{\text{road}}$ tăng vọt $\implies$ Cảnh báo `TRAFFIC_INCIDENT`.
+- **Persistence Filtering:** Chỉ kích hoạt cảnh báo sự cố khi điểm bất thường vượt ngưỡng phân vị 99.5% liên tục trong $N \ge 3$ cửa sổ trượt, đảm bảo tỷ lệ báo động sai cực thấp (< 1 lần/camera/ngày).
+
+---
+
+## 9. BÀI BÁO DỮ LIỆU: IC4SD-TRAFFICSAP (ELSEVIER DATA IN BRIEF)
 
 > **Tên bài báo:** *IC4SD-TrafficSnap: A Multi-Modal Dataset of Sparse Surveillance Imagery and Road Network Topology for Urban Traffic Analysis in Ho Chi Minh City*  
 > **Target:** Elsevier Data in Brief  
@@ -159,14 +207,14 @@ Tự động dọn sạch tiền tố `module.` khi huấn luyện phân tán `D
 
 ---
 
-## 8. GIAO THỨC THỰC NGHIỆM, PHÂN CHIA DỮ LIỆU VÀ KIỂM SOÁT RÒ RỈ
+## 10. GIAO THỨC THỰC NGHIỆM, PHÂN CHIA DỮ LIỆU VÀ KIỂM SOÁT RÒ RỈ
 
 - **Phân chia theo Cụm Camera (Spatial Disjoint Splitting):** Các camera thuộc cùng một ngã tư hoặc nút giao bắt buộc phải nằm chung một tập phân chia (70% Train, 10% Val, 20% Test) để triệt tiêu hiện tượng rò rỉ bối cảnh tĩnh.
 - **Quy chuẩn kích thước khung hình:** Chuẩn hóa $256 \times 448$ (tỷ lệ chuẩn $16:9$) để không làm méo mó hình học của các dòng xe máy nhỏ ở xa.
 
 ---
 
-## 9. TỔNG KẾT VÀ KẾT QUẢ KIỂM THỬ HỆ THỐNG
+## 11. TỔNG KẾT VÀ KẾT QUẢ KIỂM THỬ HỆ THỐNG
 
 Bộ kiểm thử tự động tại `tests/test_all_directions.py` đã vượt qua 100% các bài test:
 1. `[TEST 1]` Common Utilities (TrafficPairMatcher & BackgroundSubtractor) $\rightarrow$ **PASSED**
@@ -174,5 +222,7 @@ Bộ kiểm thử tự động tại `tests/test_all_directions.py` đã vượt
 3. `[TEST 3]` Direction 2 Cũ (Scene Decomposition Baseline) $\rightarrow$ **PASSED**
 4. `[TEST 6]` Multi-GPU Smart Checkpointing Interoperability $\rightarrow$ **PASSED**
 5. `[TEST 7]` Common Advanced (Reliability $r_i$, BDB Degradation & FCS Frame Corruptions) $\rightarrow$ **PASSED**
-6. `[TEST 12]` Direction 1 Mới (Vehicle-Centric SSL Pretraining TAM + AGM + SRS) $\rightarrow$ **PASSED**
-7. `[TEST 13]` Direction 2 Mới (Prior-Free Scene Decomposition SceneBasis + Huber-IRLS + Loss V2) $\rightarrow$ **PASSED**
+6. `[TEST 8]` Direction 5 (Context-Aware Weak Supervision) $\rightarrow$ **PASSED**
+7. `[TEST 9]` Direction 6 (Persistence Anomaly Detection) $\rightarrow$ **PASSED**
+8. `[TEST 12]` Direction 1 Mới (Vehicle-Centric SSL Pretraining TAM + AGM + SRS) $\rightarrow$ **PASSED**
+9. `[TEST 13]` Direction 2 Mới (Prior-Free Scene Decomposition SceneBasis + Huber-IRLS + Loss V2) $\rightarrow$ **PASSED**

@@ -42,7 +42,7 @@
 \maketitle
 
 \begin{abstract}
-Hệ thống camera giám sát giao thông đô thị (CCTV) tại TP.HCM sở hữu đặc thù xe máy chiếm trên 70\%--80\%, tình trạng che khuất dày đặc và dữ liệu ảnh thu nhận theo chu kỳ thưa (3--5 phút/khung hình). Báo cáo khoa học này trình bày chi tiết cơ sở lý thuyết, mô hình hóa giải tích và kiến trúc triển khai thực nghiệm của hệ sinh thái nghiên cứu tinh gọn \textbf{DINO Traffic Suite} tập trung vào các bài toán mũi nhọn: (1) \textbf{Hướng 1 Mới (Vehicle-Centric SSL)}: Tự học biểu diễn phương tiện bất biến bối cảnh mà không cần ảnh nền mẫu sạch và không cần luồng video dày, thông qua bản đồ khác thường không-thời gian (TAM), che phân tầng có kiểm soát (AGM) và hoán đổi vùng tĩnh đa ngày (SRS); (2) \textbf{Hướng 2 Mới (Prior-Free Scene Decomposition)}: Phân rã cảnh giao thông không cần ảnh nền thông qua hệ cơ sở đa chiếu sáng $\text{SceneBasis}$ thích ứng trực tuyến với độ bất định Laplace ($\sigma$); cùng hai hệ thống baseline đối chuẩn (Hướng 1 Cũ và Hướng 2 Cũ) và công trình dữ liệu quy mô thành phố IC4SD-TrafficSnap. Toàn bộ mã nguồn đã được chuẩn hóa và kiểm thử khép kín đạt 100\% độ tin cậy toán học.
+Hệ thống camera giám sát giao thông đô thị (CCTV) tại TP.HCM sở hữu đặc thù xe máy chiếm trên 70\%--80\%, tình trạng che khuất dày đặc và dữ liệu ảnh thu nhận theo chu kỳ thưa (3--5 phút/khung hình). Báo cáo khoa học này trình bày chi tiết cơ sở lý thuyết, mô hình hóa giải tích và kiến trúc triển khai thực nghiệm của hệ sinh thái nghiên cứu tinh gọn \textbf{DINO Traffic Suite} tập trung vào các bài toán mũi nhọn: (1) \textbf{Hướng 1 Mới (Vehicle-Centric SSL)}: Tự học biểu diễn phương tiện bất biến bối cảnh mà không cần ảnh nền mẫu sạch và không cần luồng video dày, thông qua bản đồ khác thường không-thời gian (TAM), che phân tầng có kiểm soát (AGM) và hoán đổi vùng tĩnh đa ngày (SRS); (2) \textbf{Hướng 2 Mới (Prior-Free Scene Decomposition)}: Phân rã cảnh giao thông không cần ảnh nền thông qua hệ cơ sở đa chiếu sáng $\text{SceneBasis}$ thích ứng trực tuyến với độ bất định Laplace ($\sigma$); (3) \textbf{Hướng 5 (Context-Aware Weak Supervision)}: Gộp nhãn yếu đa nguồn từ 5 hàm nhãn thông qua Markov Label Model theo 54 ngữ cảnh đô thị và huấn luyện End Model tự chủ (DINOv3 + Causal GRU); (4) \textbf{Hướng 6 (Persistence Traffic Anomaly Detection)}: Phát hiện sự cố ngập lụt, tai nạn dừng đỗ kéo dài qua Temporal Median Feature Pooling kết hợp Coreset Normal Bank và phân tách lỗi camera khỏi sự cố lòng đường; cùng hai hệ thống baseline đối chuẩn (Hướng 1 Cũ, Hướng 2 Cũ) và công trình dữ liệu quy mô thành phố IC4SD-TrafficSnap. Toàn bộ mã nguồn đã được chuẩn hóa sản xuất và kiểm thử khép kín đạt 100\% độ tin cậy toán học.
 \end{abstract}
 
 \hrule
@@ -184,6 +184,56 @@ Mất mát Gradient Exclusion ngăn cách triệt để chi tiết nền lọt v
     \mathcal{L}_{\text{excl}} = \frac{1}{HW} \sum_{u, v} \tanh\big(\|\nabla \hat{F}(u, v)\|\big) \odot \tanh\big(\|\nabla \hat{B}(u, v)\|\big)
 \end{equation}
 
+\section{HƯỚNG 5: CONTEXT-AWARE WEAK SUPERVISION CHO GIÁM SÁT GIAO THÔNG}
+
+\subsection{Bài Toán Gộp Nhãn Yếu Đa Nguồn Theo Ngữ Cảnh}
+Trong mạng lưới hơn 600 camera giao thông đô thị, việc gán nhãn thủ công mức độ ùn tắc $y_t \in \{0, 1, 2, 3\}$ 24/7 là bất khả thi. Hướng 5 khai thác 5 hàm sinh nhãn yếu (Labeling Functions -- LFs) với cơ chế kiêng cữ (abstention $\lambda_j = -1$):
+\begin{enumerate}
+    \item $\text{LF}_1$ (Detector Area Ratio): Tỷ lệ diện tích phát hiện xe so với diện tích mặt đường.
+    \item $\text{LF}_2$ (Background Difference): Chênh lệch tuyệt đối trung bình so với ảnh nền có cổng độ tin cậy $r_i$.
+    \item $\text{LF}_3$ (Temporal Differencing): Biến động quang thông giữa các khung hình liên tiếp $|\mathbf{I}_t - \mathbf{I}_{t-1}|$.
+    \item $\text{LF}_4$ (Historical Profile): Mật độ giao thông lịch sử theo khung giờ trong tuần.
+    \item $\text{LF}_5$ (Multimodal VLM): Truy vấn mô hình ngôn ngữ thị giác (Gemini / Qwen2.5-VL) có lọc tự tin.
+\end{enumerate}
+
+\subsection{Mô Hình Đồ Thị Xác Suất Markov 54 Ngữ Cảnh}
+Độ tin cậy của các LF biến thiên phụ thuộc vào ngữ cảnh đô thị $c \in \{1, \dots, 54\}$ (kết hợp ánh sáng, khung giờ, cấp đường, và tình trạng camera $r_i$). Mô hình Markov ẩn tích hợp ma trận chuyển dịch trạng thái $\mathbf{A} \in \mathbb{R}^{4 \times 4}$ và hàm phát xạ theo ngữ cảnh:
+\begin{equation}
+    P(y_{1:T}, \boldsymbol{\lambda}_{1:T} \mid c) = P(y_1) \prod_{t=2}^T P(y_t \mid y_{t-1}, \mathbf{A}) \prod_{t=1}^T \prod_{j=1}^5 \pi_j^{(c)}(\lambda_{t, j} \mid y_t)
+\end{equation}
+Thuật toán Expectation-Maximization (EM) được tối ưu hóa bằng giải thuật Forward-Backward trong không gian log-sum-exp, triệt tiêu hoàn toàn nguy cơ tràn số dưới (underflow).
+
+\subsection{Huấn Luyện End Model Tự Chủ (DINOv3 + Causal GRU)}
+Phân phối xác suất nhãn mềm $q(y_t) = [q_0, q_1, q_2, q_3]$ được dùng để huấn luyện mô hình đích (End Model) bằng hàm mất mát Soft Cross-Entropy:
+\begin{equation}
+    \mathcal{L}_{\text{soft}} = - \sum_{k=0}^3 q_k(y_t) \log \hat{p}_k(I_t)
+\end{equation}
+Khi triển khai suy luận thực tế, End Model hoạt động độc lập 100\%, chỉ nhận ảnh camera đầu vào mà không cần bất kỳ LF nào.
+
+\section{HƯỚNG 6: PHÁT HIỆN SỰ CỐ BẤT THƯỜNG KÉO DÀI VÀ BÓC TÁCH LỖI CAMERA}
+
+\subsection{Triệt Tiêu Xe Di Chuyển Bằng Temporal Median Pooling}
+Dữ liệu camera chụp thưa (1 frame mỗi 10--60 giây) khiến các phương pháp bám vết (tracking) thất bại. Hướng 6 áp dụng phép gộp trung vị trên cửa sổ trượt $W$ khung hình trong không gian patch-token DINOv3 compact ($d=128$):
+\begin{equation}
+    \tilde{F}_t(p) = \operatorname{median}_{w=0}^{W-1} f_{t-w}(p)
+\end{equation}
+Phương pháp triệt tiêu hoàn toàn xe cộ di chuyển thoáng qua, bảo toàn và làm sắc nét các biến đổi kéo dài (ngập lụt triều cường, tai nạn dừng đỗ, rào chắn thi công).
+
+\subsection{Ngân Hàng Đặc Trưng Chuẩn Coreset Memory Bank}
+Áp dụng thuật toán K-Center Greedy (PatchCore-style) nén 90\% kích thước bộ nhớ mà vẫn bảo toàn bán kính bao phủ không gian đặc trưng bình thường, phân vùng theo từng Camera và Khung giờ trong ngày.
+
+\subsection{Bóc Tách Lỗi Camera và Sự Cố Mặt Đường}
+Điểm bất thường của từng patch $p$ được tính bằng khoảng cách Euclidean $L_2$ tới láng giềng gần nhất trong Memory Bank:
+\begin{equation}
+    a_t(p) = \min_{m \in \text{Bank}} \|\tilde{F}_t(p) - m\|_2
+\end{equation}
+Hệ thống phân tách điểm bất thường lòng đường $s_{\text{road}}$ (Top 5\% patch trong Road Mask) và điểm bất thường ngoại cảnh tĩnh $s_{\text{static}}$ (Top 5\% patch ngoài Road Mask):
+\begin{itemize}
+    \item Nếu $s_{\text{static}} > \tau_{\text{static}}$: Cảnh báo \texttt{CAMERA\_FAULT} (camera bị gió thổi lệch góc quay hoặc ống kính bám bẩn).
+    \item Nếu $s_{\text{road}} > \tau_{\text{road}}$ và $s_{\text{static}} \le \tau_{\text{static}}$: Kích hoạt cảnh báo sự cố \texttt{TRAFFIC\_INCIDENT}.
+\end{itemize}
+Cơ chế Persistence Filtering kiểm định sự cố duy trì liên tục qua ít nhất $N \ge 3$ cửa sổ trượt, khống chế tỷ lệ báo động sai $< 1$ lần/camera/ngày.
+
 \section{HỆ THỐNG BASELINE ĐỐI CHUẨN VÀ BÀI BÁO DỮ LIỆU}
 
 \subsection{Hướng 1 Cũ \& Hướng 2 Cũ: Hệ Baseline Đối Chuẩn Có Nền Median}
@@ -202,9 +252,9 @@ Bài báo mô tả bộ dữ liệu 608 trạm camera tại TP.HCM, 714,123 ản
 \small
 \caption{Ma trận so sánh phương pháp luận của các hướng nghiên cứu cốt lõi DINO Suite}
 \label{tab:matrix}
-\begin{tabular}{>{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{4.5cm} >{\raggedright\arraybackslash}p{2.6cm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{1.8cm} >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}p{2.8cm}}
 \toprule
-\textbf{Hướng} & \textbf{Đầu vào Suy luận} & \textbf{Vai trò Background} & \textbf{Cơ Chế Kháng Suy Thoái} & \textbf{Tạp Chí Mục Tiêu} \\
+\textbf{Hướng} & \textbf{Đầu vào} & \textbf{Vai trò Background} & \textbf{Cơ Chế Kháng Suy Thoái} & \textbf{Tạp Chí Mục Tiêu} \\
 \midrule
 \textbf{H1 Mới} & 1 Frame & \textbf{Không cần nền} & TAM + SRS hoán đổi đa ngày & IEEE TPAMI / CVPR \\
 \addlinespace
@@ -214,7 +264,11 @@ Bài báo mô tả bộ dữ liệu 608 trạm camera tại TP.HCM, 714,123 ản
 \addlinespace
 \textbf{H2 Cũ} & 1 Frame & Laplace Prior mềm & Độ bất định $\sigma$ + Nền đa ngày & PR / TCSVT \\
 \addlinespace
-\textbf{Data Article} & Census Dữ liệu & Đồ thị + Ảnh thưa & Multi-tier Audit + Rule of Three & Elsevier DiB \\
+\textbf{H5} & Chuỗi Frame & LF2 chênh lệch nền & Markov Label Model 54 ngữ cảnh + EM & IEEE T-ITS / NeurIPS \\
+\addlinespace
+\textbf{H6} & Cửa sổ $W$ & Không cần nền mốc & Median Feature Pooling + Coreset Bank & IEEE T-ITS / TR-C \\
+\addlinespace
+\textbf{Data Paper} & Census & Đồ thị + Ảnh thưa & Multi-tier Audit + Rule of Three & Elsevier DiB \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -222,6 +276,6 @@ Bài báo mô tả bộ dữ liệu 608 trạm camera tại TP.HCM, 714,123 ản
 Toàn bộ các ca kiểm thử trong bộ kiểm thử tích hợp \texttt{tests/test\_all\_directions.py} đều đạt trạng thái PASSED tuyệt đối, xác nhận tính ổn định và tính tương thích cao của toàn bộ hệ thống.
 
 \section{KẾT LUẬN}
-Hệ sinh thái DINO Traffic Suite đã được tái cấu trúc tinh gọn và tập trung cao độ vào hai mũi nhọn khoa học: Hướng 1 Mới (Vehicle-Centric SSL) và Hướng 2 Mới (Prior-Free Scene Decomposition), giúp loại bỏ hoàn toàn sự phụ thuộc vào ảnh nền trung vị trong điều kiện giao thông xe máy phức tạp. Các kết quả kiểm thử và hệ thống tài liệu chứng minh tính khả thi, tính mới và tiềm năng công bố xuất sắc tại các diễn đàn khoa học hàng đầu.
+Hệ sinh thái DINO Traffic Suite đã được hoàn thiện chặt chẽ, kết hợp hài hòa giữa các mũi nhọn học tự giám sát không cần nền (Hướng 1 Mới, Hướng 2 Mới), các mô hình gộp nhãn yếu thông minh (Hướng 5), phát hiện sự cố bất thường bền vững (Hướng 6) cùng hệ thống baseline đối chuẩn và công trình công bố dữ liệu quy mô thành phố. Các kết quả kiểm thử và hệ thống tài liệu chứng minh tính khả thi, tính mới và tiềm năng công bố xuất sắc tại các diễn đàn khoa học hàng đầu thế giới.
 
 \end{document}

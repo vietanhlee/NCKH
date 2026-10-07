@@ -47,6 +47,25 @@ DINO/
 │   ├── infer.py                            # Inpainting tự động: Xóa xe, tách nền đường sạch
 │   └── README.md
 │
+├── direction5_weak_supervision/            # [HƯỚNG 5 - TIÊN PHONG] Context-Aware Weak Supervision (Gộp nhãn yếu đa nguồn)
+│   ├── lfs/                                # Các hàm sinh nhãn yếu (Detector Area, Bg Diff, Temporal Diff, History, VLM)
+│   ├── context.py                          # Phân loại 54 ngữ cảnh đô thị (Ánh sáng x Khung giờ x Cấp đường x Độ tin cậy r_i)
+│   ├── label_model.py                      # Context-Aware Markov Label Model (Thuật toán EM + Forward-Backward log-sum-exp)
+│   ├── end_model.py                        # Mô hình đích: DINOv3 ViT + Causal GRU (Tự chủ 100%, không cần LF hay nền)
+│   ├── evaluate.py                         # Đánh giá đối chuẩn với Majority Vote và Dawid-Skene
+│   └── README.md                           # Tài liệu kỹ thuật chi tiết
+│
+├── direction6_anomaly_detection/           # [HƯỚNG 6 - THỰC TIỄN] Persistence Traffic Anomaly & Camera Fault Disentanglement
+│   ├── features.py                         # Trích xuất patch token DINOv3 + Mặt nạ lòng đường Road-Aware Mask
+│   ├── pooling.py                          # Temporal Median Pooling triệt tiêu xe cộ thoáng qua, giữ biến đổi kéo dài
+│   ├── bank.py                             # Coreset Normal Memory Bank (Thuật toán K-Center Greedy nén 90%)
+│   ├── score.py                            # Chấm điểm bất thường Top 5% khoảng cách Euclidean L2 tới Memory Bank
+│   ├── camera_fault.py                     # Tách lỗi camera (s_static) và sự cố giao thông mặt đường (s_road)
+│   ├── events.py                           # Persistence Filtering & Theo dõi vòng đời sự kiện (Ngưỡng phân vị 99.5%)
+│   ├── synth_events.py                     # Trình giả lập sự cố ngập lụt, tai nạn dừng đỗ, rào chắn công trình
+│   ├── evaluate.py                         # Đánh giá F1-score, False Alarm Rate, Lead Time
+│   └── README.md                           # Tài liệu kỹ thuật chi tiết
+│
 ├── direction_data_article/                 # [BÀI BÁO DỮ LIỆU Q1] IC4SD-TrafficSnap (Elsevier Data in Brief)
 │   ├── paper/                              # Bản thảo bài báo LaTeX (main.tex), các bảng tables/ và hình figures/
 │   ├── dual_agents/                        # Hệ thống 2 tác tử phản biện độc lập & kiểm toán dữ liệu thực nghiệm
@@ -70,6 +89,8 @@ DINO/
 | **H2 Mới** ⭐ | **Prior-Free Scene Decomposition** | `direction2_new/` | Bóc tách cảnh không cần ảnh nền qua SceneBasis đa chiếu sáng + Mạng nơ-ron Laplace $\sigma$ | **Không cần nền** | CVPR, IEEE TIP |
 | **H1 Cũ** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | Tiền nghiệm che FAM | IEEE T-ITS |
 | **H2 Cũ** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh có giám sát ảnh nền mốc (Cross-day Background Prior) | Laplace Prior mềm | Pattern Recognition |
+| **H5** | **Context-Aware Weak Supervision** | `direction5_weak_supervision/` | Gộp nhãn yếu từ 5 LFs qua Markov Label Model (54 ngữ cảnh) + Huấn luyện End Model (DINOv3 + Causal GRU) | LF2 chênh lệch nền | IEEE T-ITS, NeurIPS |
+| **H6** | **Persistence Anomaly Detection** | `direction6_anomaly_detection/` | Temporal Feature Pooling triệt tiêu xe chạy + Coreset Normal Bank + Bóc tách lỗi camera vs Sự cố ngập lụt/tai nạn | Không cần nền mốc | IEEE T-ITS, TR-C |
 | **Data Article** | **IC4SD-TrafficSnap Data Article** | `direction_data_article/` | Mô tả bộ dữ liệu 608 trạm camera, 714,123 ảnh, đồ thị OSRM 2,450 cạnh có hướng | Dữ liệu nền tảng | Elsevier Data in Brief |
 
 ---

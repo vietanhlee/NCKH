@@ -23,15 +23,14 @@ Hệ sinh thái DINO Traffic Suite được tái cấu trúc tinh gọn, tập t
 |   |  - Multi-GPU Smart Checkpointing                 - PyTorch DDP / DataParallel Pipeline     |   |
 |   +--------------------------------------------------------------------------------------------+   |
 |                                                 │                                                  |
-|         ┌───────────────────────────────────────┴───────────────────────────────────────┐          |
-|         ▼                                                                               ▼          |
-|   [NHÓM SSL MŨI NHỌN KHÔNG CẦN NỀN (PRIOR-FREE)]               [NHÓM BASELINE & DỮ LIỆU ĐÔ THỊ]    |
-|   1. Hướng 1 Mới (direction1_new):                             3. Hướng 1 Cũ (direction1_bg):       |
-|      Vehicle-Centric SSL (TAM + AGM + SRS)                        Continual SSL với FAM-Δ           |
-|   2. Hướng 2 Mới (direction2_new):                             4. Hướng 2 Cũ (direction2_decomp):   |
-|      Prior-Free Scene Decomposition (SceneBasis + σ)              Scene Decomposition Median Prior  |
-|                                                                5. Data Article (data_article/):     |
-|                                                                   IC4SD-TrafficSnap (Elsevier DiB)  |
+|         ┌───────────────────────────────────────┼───────────────────────────────────────┐          |
+|         ▼                                       ▼                                       ▼          |
+|   [SSL MŨI NHỌN (PRIOR-FREE)]         [WEAK SUPERVISION & ANOMALY]          [BASELINES & DỮ LIỆU]  |
+|   1. Hướng 1 Mới (direction1_new):    3. Hướng 5 (direction5_weak):         5. Hướng 1 Cũ (H1):    |
+|      Vehicle-Centric SSL                 Context-Aware Markov Label Agg        Continual FAM-Δ     |
+|   2. Hướng 2 Mới (direction2_new):    4. Hướng 6 (direction6_anomaly):      6. Hướng 2 Cũ (H2):    |
+|      Prior-Free Scene Decomposition      Persistence Anomaly & Camera Fault    Noise-Aware Decomp  |
+|                                                                             7. Data Article Q1     |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -59,19 +58,39 @@ Hệ sinh thái DINO Traffic Suite được tái cấu trúc tinh gọn, tập t
   3. Mạng phân rã bóc tách đồng thời: $(\hat{I}_{\text{recon}}, \hat{B}, \hat{F}, \alpha, \sigma, \boldsymbol{\ell})$.
   4. Hàm mất mát Laplace Negative Log-Likelihood với bản đồ độ bất định $\sigma(u, v)$ tự học, chịu đựng hoàn hảo lóa đèn ban đêm và vùng giao cắt phức tạp.
 
-### 2.3 Hướng 1 Cũ (Baseline): Continual SSL với Foreground-Aware Masking (`direction1_bg_guided_dino/`)
+### 2.3 Hướng 5: Context-Aware Weak Supervision Cho Giám Sát Giao Thông (`direction5_weak_supervision/`)
+- **Tên khoa học:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*
+- **Độ mới:** ⭐⭐⭐⭐⭐ (5/5)
+- **Tạp chí mục tiêu:** IEEE T-ITS / NeurIPS / CVPR
+- **Đóng góp:**
+  1. Khai thác 5 hàm sinh nhãn yếu (Detector Bounding Box, Background Difference, Temporal Differencing, Historical Peak Profile, Multimodal VLM).
+  2. Phân loại 54 ngữ cảnh đô thị (Ánh sáng x Khung giờ x Cấp đường x Độ tin cậy camera $r_i$).
+  3. Mô hình đồ thị xác suất Markov ẩn với thuật toán EM trong không gian log-sum-exp, triệt tiêu hoàn toàn tràn số underflow.
+  4. Huấn luyện mô hình đích (DINOv3 ViT + Causal GRU) qua Soft Cross-Entropy; khi suy luận hoạt động độc lập 100%, không cần LF hay nền.
+
+### 2.4 Hướng 6: Phát Hiện Sự Cố Bất Thường Kéo Dài & Bóc Tách Lỗi Camera (`direction6_anomaly_detection/`)
+- **Tên khoa học:** *Persistence-Aware, Camera-Conditioned Anomaly Detection for City-Scale Traffic Surveillance under Sparse Sampling*
+- **Độ mới:** ⭐⭐⭐⭐⭐ (5/5)
+- **Tạp chí mục tiêu:** IEEE T-ITS / Transportation Research Part C / Pattern Recognition
+- **Đóng góp:**
+  1. Temporal Median Feature Pooling qua cửa sổ trượt $W$ khung hình trên patch tokens DINOv3 ($d=128$), triệt tiêu hoàn toàn xe di chuyển thoáng qua, bảo toàn sự cố kéo dài (ngập lụt, tai nạn, rào chắn).
+  2. Coreset Normal Memory Bank nén 90% bằng K-Center Greedy (PatchCore-style), phân vùng theo camera và khung giờ.
+  3. Bóc tách lỗi kỹ thuật camera ($s_{\text{static}}$ ngoài đường) và sự cố giao thông ($s_{\text{road}}$ trong lòng đường).
+  4. Persistence Filtering với ngưỡng phân vị 99.5% khống chế báo động sai $< 1$ lần/camera/ngày.
+
+### 2.5 Hướng 1 Cũ (Baseline): Continual SSL với Foreground-Aware Masking (`direction1_bg_guided_dino/`)
 - **Tên khoa học:** *Background-Guided Self-Supervised Vision Transformer Pre-training for Dense Urban Traffic Surveillance*
 - **Độ mới:** ⭐⭐⭐⭐ (4/5)
 - **Tạp chí mục tiêu:** IEEE T-ITS
 - **Đóng góp:** FAM-$\Delta$ chuẩn hóa thứ bậc kết hợp cổng tin cậy thích ứng $r_i$ làm mỏ neo chuyển mượt về Uniform Masking khi nền xấu; làm baseline đối sánh trực tiếp với Hướng 1 Mới.
 
-### 2.4 Hướng 2 Cũ (Baseline): Phân Rã Cảnh Dùng Median Prior (`direction2_scene_decomposition/`)
+### 2.6 Hướng 2 Cũ (Baseline): Phân Rã Cảnh Dùng Median Prior (`direction2_scene_decomposition/`)
 - **Tên khoa học:** *Noise-Aware Traffic Scene Decomposition with Imperfect Background Priors on City-Scale Camera Networks*
 - **Độ mới:** ⭐⭐⭐⭐ (4/5)
 - **Tạp chí mục tiêu:** Pattern Recognition / IEEE TCSVT
 - **Đóng góp:** Mô hình hóa Alpha Compositing với Laplace Prior trên ảnh nền median và cơ chế phạt $\log \sigma$, kết hợp ràng buộc nền dùng chung giữa các ngày khác nhau $\mathcal{L}_{\text{shared}}$.
 
-### 2.5 Bài Báo Dữ Liệu: IC4SD-TrafficSnap (`direction_data_article/`)
+### 2.7 Bài Báo Dữ Liệu: IC4SD-TrafficSnap (`direction_data_article/`)
 - **Tên bài báo:** *IC4SD-TrafficSnap: A Multi-Modal Dataset of Sparse Surveillance Imagery and Road Network Topology for Urban Traffic Analysis in Ho Chi Minh City*
 - **Mục tiêu tạp chí:** Elsevier Data in Brief
 - **Quy mô:** 608 trạm camera, 714,123 ảnh JPEG, 44.38 GiB, đồ thị OSRM 2,450 cạnh có hướng, kiểm toán bảo mật PII chuẩn mực Rule of Three ($p \le 0.30\%$).
@@ -86,6 +105,8 @@ Hệ sinh thái DINO Traffic Suite được tái cấu trúc tinh gọn, tập t
 | **H2 Mới** | `direction2_new/` | 1 Frame | **Không cần nền** | SceneBasis đa chiếu sáng + $\sigma$ | IEEE TIP / PR |
 | **H1 Cũ** | `direction1_bg_guided_dino/` | 1 Frame | Tiền nghiệm che FAM | Cổng tin cậy thích ứng $r_i$ | IEEE T-ITS |
 | **H2 Cũ** | `direction2_scene_decomposition/`| 1 Frame | Laplace Prior mềm | Bản đồ bất định $\sigma$ + Nền đa ngày | PR / TCSVT |
+| **H5** | `direction5_weak_supervision/` | Chuỗi Frame | LF2 chênh lệch nền | Markov Label Model 54 ngữ cảnh + EM | IEEE T-ITS / NeurIPS |
+| **H6** | `direction6_anomaly_detection/` | Cửa sổ $W$ | Không cần nền mốc | Median Feature Pooling + Coreset Bank | IEEE T-ITS / TR-C |
 | **Data Article** | `direction_data_article/` | Census Dữ liệu | Đồ thị + Ảnh thưa | Multi-tier Audit + Rule of Three | Elsevier DiB |
 
 ---
@@ -98,6 +119,8 @@ Hệ sinh thái DINO Traffic Suite được tái cấu trúc tinh gọn, tập t
    - Test 3: Direction 2 Cũ (Scene Decomposition Baseline)
    - Test 6: Multi-GPU Smart Checkpointing Interoperability
    - Test 7: Common Advanced (Reliability $r_i$, BDB Degradation & FCS Frame Corruptions)
+   - Test 8: Direction 5 (Context-Aware Weak Supervision)
+   - Test 9: Direction 6 (Persistence Anomaly Detection)
    - Test 12: Direction 1 Mới (Vehicle-Centric SSL Pretraining TAM + AGM + SRS)
    - Test 13: Direction 2 Mới (Prior-Free Scene Decomposition SceneBasis + Huber IRLS + Loss V2)
 2. **Tuân thủ tuyệt đối quy chuẩn:** 

@@ -25,7 +25,7 @@ data/
 
 # Media & Docs exclusions if needed
 *.pdf
-!DINO/Bao_Cao_8_Huong_Nghien_Cuu_DINO.pdf
+!DINO/Bao_Cao_He_Sinh_Thai_DINO_Traffic_Suite.pdf
 !DINO/direction_data_article/**/*.pdf
 !DINO/direction_data_article/hcmc_trafficsnap_article.pdf
 *.png
