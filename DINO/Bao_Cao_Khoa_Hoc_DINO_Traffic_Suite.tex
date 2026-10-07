@@ -216,46 +216,52 @@ với $\mathcal{M}$ là tập hợp các patch bị che bởi thuật toán AGM.
 
 \begin{figure}[t!]
 \centering
-\resizebox{0.96\textwidth}{!}{%
 \begin{tikzpicture}[
-    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
-    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
-    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=5pt, align=center, inner sep=6pt, font=\small, minimum width=3.4cm, minimum height=1.5cm},
-    arr/.style={-{Latex[length=3mm]}, thick, draw=blue!85!black},
-    arr_teal/.style={-{Latex[length=3mm]}, thick, draw=teal!85!black},
-    arr_red/.style={-{Latex[length=3mm]}, thick, draw=red!85!black},
-    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.2cm, minimum height=1.35cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.2cm, minimum height=1.35cm},
+    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.2cm, minimum height=1.35cm},
+    arr/.style={-{Latex[length=2.5mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=2.5mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=2.5mm]}, thick, draw=red!85!black}
 ]
-    % Hàng 1: Khối trích xuất & TAM & AGM
-    \node[box] (input) at (0, 4) {\textbf{Khung Hình Hiện Trường}\\$I_t \in \mathbb{R}^{3 \times 256 \times 448}$\\(Ảnh thưa $\Delta t \approx 3$--$5$ phút)};
+    % Hàng 1 (y = 4.0): Khối trích xuất, TAM và AGM
+    \node[box] (input) at (0.0, 4.0) {\textbf{Khung Hình Hiện Trường}\\$I_t \in \mathbb{R}^{3 \times 256 \times 448}$\\(Chu kỳ $\Delta t \approx 3$--$5$ phút)};
     
-    \node[box] (vit) at (4.8, 4) {\textbf{Mã Hóa Patch ViT}\\$u_t(p) \in \mathbb{S}^{63}$\\$N = 16 \times 28 = 448$ patches};
+    \node[box] (vit) at (4.1, 4.0) {\textbf{Mã Hóa Patch ViT}\\$u_t(p) \in \mathbb{S}^{63}$\\$N = 448$ patches};
     
-    \node[proc] (tam) at (9.6, 4) {\textbf{Bản Đồ Dị Biệt TAM}\\Duy trì $K=4$ cụm tĩnh $\mathcal{C}_k(p)$\\Khoảng cách Cosine $d_t(p)$\\Mô hình GMM $\to \pi_t(p) \in [0, 1]$};
+    \node[proc] (tam) at (8.2, 4.0) {\textbf{Bản Đồ Dị Biệt TAM}\\Duy trì $K=4$ cụm tĩnh $\mathcal{C}_k(p)$\\Khoảng cách $d_t(p) \to$ GMM\\Xác suất xe $\pi_t(p) \in [0, 1]$};
     
-    \node[proc] (agm) at (14.4, 4) {\textbf{Che Phân Tầng AGM}\\Ngân sách $M = 268$ patches\\Vùng xe $M_v$ (Gumbel Top-K)\\Vùng nền $M_s = M - M_v$};
+    \node[proc] (agm) at (12.3, 4.0) {\textbf{Che Phân Tầng AGM}\\Ngân sách $M = 268$ patches\\Vùng xe $M_v$ (Gumbel Top-K)\\Vùng nền $M_s = M - M_v$};
     
-    % Hàng 2: Hoán đổi phản thực nghiệm SRS & Chưng cất Teacher/Student & Hàm mất mát
-    \node[proc] (srs) at (14.4, 0.5) {\textbf{Hoán Đổi Vùng Tĩnh SRS}\\Hai khung hình $x_1, x_2$ khác ngày\\$M_{\text{static}} \to M_{\text{feather}}$ (Gauss filter)\\Mẫu phản thực nghiệm $x_{\text{srs}}$};
+    % Hàng 2 (y = 0.0): Hoán đổi SRS, Student, Teacher và Hàm mất mát
+    \node[loss] (loss) at (0.0, 0.0) {\textbf{Hàm Mất Mát Đa Tầng}\\$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}^{[\text{CLS}]}$\\$+ \lambda_{\text{ibot}} \mathcal{L}_{\text{iBOT}}(\pi) + \lambda_{\text{koleo}} \mathcal{L}_{\text{KoLeo}}$};
     
-    \node[box] (student) at (9.6, 0.5) {\textbf{Mô Hình Student ViT}\\Tiếp nhận ảnh biến đổi $x_{\text{srs}}$\\với mặt nạ che phân tầng AGM\\Đặc trưng patch $h_{x_{\text{srs}}}(p)$};
+    \node[box] (teacher) at (4.1, 0.0) {\textbf{Mô Hình Teacher ViT}\\Ảnh gốc $x_1$ toàn cục\\Không áp dụng mặt nạ\\Đặc trưng $h_{x_1}(p)$};
     
-    \node[box] (teacher) at (4.8, 0.5) {\textbf{Mô Hình Teacher ViT}\\Tiếp nhận ảnh gốc $x_1$ toàn cục\\Cập nhật trọng số theo EMA\\Đặc trưng patch $h_{x_1}(p)$};
+    \node[box] (student) at (8.2, 0.0) {\textbf{Mô Hình Student ViT}\\Tiếp nhận ảnh $x_{\text{srs}}$\\Che phân tầng bởi AGM\\Đặc trưng $h_{x_{\text{srs}}}(p)$};
     
-    \node[loss] (loss) at (0, 0.5) {\textbf{Hàm Mất Mát Đa Tầng}\\\vspace{2pt}$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}}^{[\text{CLS}]}$\\$+ \lambda_{\text{ibot}} \mathcal{L}_{\text{iBOT}}^{[\text{Patch}]}(\pi)$\\$+ \lambda_{\text{koleo}} \mathcal{L}_{\text{KoLeo}}$};
+    \node[proc] (srs) at (12.3, 0.0) {\textbf{Hoán Đổi Vùng Tĩnh SRS}\\Hai khung hình $x_1, x_2$ khác ngày\\Mặt nạ mượt $M_{\text{feather}}$\\Mẫu phản thực nghiệm $x_{\text{srs}}$};
 
-    % Mũi tên kết nối
+    % Đường nối Hàng 1 (trái sang phải)
     \draw[arr] (input) -- (vit);
     \draw[arr] (vit) -- (tam);
     \draw[arr_teal] (tam) -- (agm);
-    \draw[arr_teal] (agm) -- (srs);
+
+    % Chuyển từ Hàng 1 xuống Hàng 2 (đường thẳng đứng thông thoáng)
+    \draw[arr_teal] (agm.south) -- node[right, font=\scriptsize, text=teal!80!black] {Mặt nạ AGM} (srs.north);
+
+    % Đường nối Hàng 2 (phải sang trái)
     \draw[arr_teal] (srs) -- (student);
-    \draw[arr] (student) -- (loss);
+    \draw[arr] (student) -- (teacher);
     \draw[arr] (teacher) -- (loss);
-    \draw[arr, dashed] (student) to[bend left=15] node[above, note] {EMA Update} (teacher);
-    \draw[arr_teal, dashed] (tam) to[bend right=25] node[above, note] {Trọng số $\pi(p)$} (loss);
+
+    % Cập nhật EMA (đi vòng dưới đáy)
+    \draw[arr, dashed] (student.south) -- ++(0, -0.5) -| node[pos=0.25, below, font=\scriptsize, text=blue!80!black] {Cập nhật trọng số EMA} (teacher.south);
+
+    % Trọng số pi(p) từ TAM về Loss: đi từ mép trái TAM qua khoảng trống x=6.15, hạ xuống y=2.15, đi ngang sang x=0 rồi cắm xuống đỉnh loss
+    \draw[arr_teal, dashed] (tam.west) -- ++(-0.45, 0) -- ++(0, -1.85) -- (0.0, 2.15) -- (loss.north);
+    \node[above, font=\scriptsize, text=teal!80!black] at (3.1, 2.18) {Trọng số điều tiết $\pi(p)$};
 \end{tikzpicture}
-}
 \caption{\textbf{Kiến trúc tổng thể của Hướng 1 Mới (Prior-Free Vehicle-Centric SSL).} Quy trình khép kín tự học biểu diễn không cần ảnh nền mốc sạch: (1) Trích xuất patch tokens trên mặt cầu đơn vị $\mathbb{S}^{63}$; (2) Bản đồ TAM duy trì trực tuyến $K=4$ cụm trạng thái quang học tĩnh trên từng tọa độ, ước lượng xác suất phương tiện $\pi_t(p)$ qua mô hình hỗn hợp Gauss (GMM); (3) Thuật toán AGM phân bổ ngân sách che $M=268$ mảng ảnh với cơ chế lấy mẫu Gumbel Top-K; (4) Toán tử SRS kết hợp thông tin tĩnh giữa hai ngày khác nhau tạo mẫu phản thực nghiệm $x_{\text{srs}}$ triệt tiêu bẫy đường tắt bối cảnh; (5) Khung chưng cất tự thân Student--Teacher tối ưu hóa đồng thời hàm mất mát patch iBOT có trọng số $\pi(p)$, mất mát toàn cục DINO và thành phần chống sụp đổ biểu diễn KoLeo.}
 \label{fig:pipeline_direction1_new}
 \end{figure}
@@ -319,56 +325,49 @@ kết hợp số hạng điều hòa tổng biến thiên (Total Variation) $\ma
 
 \begin{figure}[t!]
 \centering
-\resizebox{0.96\textwidth}{!}{%
 \begin{tikzpicture}[
-    stage/.style={rectangle, draw=blue!80!black, fill=blue!3, rounded corners=6pt, inner sep=8pt},
-    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
-    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
-    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.2cm, minimum height=1.3cm},
-    arr/.style={-{Latex[length=2.8mm]}, thick, draw=blue!85!black},
-    arr_teal/.style={-{Latex[length=2.8mm]}, thick, draw=teal!85!black},
-    arr_red/.style={-{Latex[length=2.8mm]}, thick, draw=red!85!black},
-    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.0cm, minimum height=1.35cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.0cm, minimum height=1.35cm},
+    loss/.style={rectangle, draw=red!75!black, fill=red!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.1cm, minimum height=1.35cm},
+    arr/.style={-{Latex[length=2.5mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=2.5mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=2.5mm]}, thick, draw=red!85!black}
 ]
-    % --- GIAI ĐOẠN 1: NGOẠI TUYẾN ---
-    \node[box] (unlabeled) at (0, 4.4) {\textbf{Chuỗi Ảnh Đa Ngày}\\$\{I_t\}_{t=1}^T$ không nhãn\\(Mỗi camera cố định)};
+    % Khung bao viền cho Giai đoạn 1 (y từ 1.9 đến 5.2)
+    \draw[dashed, draw=blue!50, fill=blue!2, rounded corners=6pt] (-1.8, 1.9) rectangle (14.0, 5.2);
+    \node[font=\footnotesize\bfseries, text=blue!85!black, anchor=west] at (-1.5, 4.85) {GIAI ĐOẠN 1: Học Đa Tạp Ánh Sáng Nền SceneBasis (Ngoại Tuyến)};
+
+    % Giai đoạn 1 (y = 3.1)
+    \node[box] (unlabeled) at (0.0, 3.1) {\textbf{Chuỗi Ảnh Đa Ngày}\\$\{I_t\}_{t=1}^T$ không nhãn\\(Mỗi camera cố định)};
     
-    \node[proc] (svd_irls) at (4.5, 4.4) {\textbf{Robust SVD + Huber-IRLS}\\Khởi tạo không gian con affine\\Lặp loại bỏ ngoại lai xe cộ};
+    \node[proc] (svd_irls) at (5.2, 3.1) {\textbf{Robust SVD + Huber-IRLS}\\Khởi tạo không gian con affine\\Lặp loại bỏ ngoại lai xe cộ};
     
-    \node[proc] (basis) at (9.0, 4.4) {\textbf{Hệ Cơ Sở SceneBasis}\\Cảnh tĩnh $E_0(u, v) \in \mathbb{R}^{H \times W \times 3}$\\Cơ sở ánh sáng $\{E_1, E_2, E_3\}$};
-    
+    \node[proc] (basis) at (10.5, 3.1) {\textbf{Hệ Cơ Sở SceneBasis}\\Cảnh tĩnh $E_0(u, v) \in \mathbb{R}^{H \times W \times 3}$\\Cơ sở ánh sáng $\{E_1, E_2, E_3\}$};
+
     \draw[arr] (unlabeled) -- (svd_irls);
     \draw[arr_teal] (svd_irls) -- (basis);
 
-    % Khung bao Giai đoạn 1
-    \begin{scope}[on background layer]
-        \node[stage, fit=(unlabeled) (svd_irls) (basis), label={[anchor=north west, font=\small\bfseries, text=blue!85!black]north west:\textbf{Giai Đoạn 1: Học Đa Tạp Ánh Sáng Nền SceneBasis (Ngoại Tuyến, Không Cần Nhãn)}}] (g1) {};
-    \end{scope}
+    % Khung bao viền cho Giai đoạn 2 (y từ -2.4 đến 0.6)
+    \draw[dashed, draw=teal!50, fill=teal!2, rounded corners=6pt] (-1.8, -2.4) rectangle (14.0, 0.6);
+    \node[font=\footnotesize\bfseries, text=teal!85!black, anchor=west] at (-1.5, 0.3) {GIAI ĐOẠN 2: Mạng Phân Rã Sâu Trực Tuyến};
 
-    % --- GIAI ĐOẠN 2: TRỰC TUYẾN ---
-    \node[box] (input_online) at (0, 0.5) {\textbf{Khung Hình Hiện Trường}\\$I(u, v)$ tại thời điểm $t$};
+    % Giai đoạn 2 (y = -1.0)
+    \node[box] (input_online) at (-0.2, -1.0) {\textbf{Khung Hình Hiện Trường}\\$I(u, v)$ tại thời điểm $t$\\Ảnh chụp thưa thực địa};
     
-    \node[box] (deep_net) at (4.5, 0.5) {\textbf{Mạng Phân Rã Sâu $\Phi$}\\ViT + DPT Decoder\\Dự đoán $\hat{F}, \alpha, \sigma$};
+    \node[box] (deep_net) at (3.9, -1.0) {\textbf{Mạng Phân Rã Sâu $\Phi$}\\ViT Backbone + DPT\\Dự đoán $\hat{F}, \alpha, \sigma$};
     
-    \node[proc] (solver) at (9.0, 0.5) {\textbf{Bộ Giải Hệ Số Ánh Sáng}\\Trọng số nền $W = (1-\alpha)^2$\\Giải tích Huber-IRLS qua Gram\\$\implies \bm{\ell}^*(t) = [\ell_1, \ell_2, \ell_3]^\top$};
+    \node[proc] (solver) at (8.0, -1.0) {\textbf{Bộ Giải Chiếu Sáng}\\$W = (1-\alpha)^2 \to$ Huber-IRLS\\Hệ số tức thời $\bm{\ell}^*(t)$};
     
-    \node[proc] (recon) at (13.5, 0.5) {\textbf{Tổng Hợp Quang Học}\\Nền: $\hat{B}(t) = E_0 + \sum \ell_j E_j$\\Tái tạo: $\hat{I} = \alpha \hat{F} + (1-\alpha)\hat{B}$};
-    
-    \node[loss] (loss2) at (13.5, 4.4) {\textbf{Hàm Mất Mát Laplace NLL}\\\vspace{2pt}$\mathcal{L}_{\text{Laplace}}(\sigma) + \lambda_{\text{excl}} \mathcal{L}_{\text{excl}}$\\$+ \lambda_{\text{tv}} \mathcal{L}_{\text{tv}}(\alpha) + \lambda_\alpha \|\alpha\|_1$};
+    \node[loss] (recon_loss) at (12.2, -1.0) {\textbf{Tái Tạo \& Laplace NLL}\\$\hat{B} = E_0 + \sum \ell_j E_j$\\$\hat{I} = \alpha \hat{F} + (1-\alpha)\hat{B}$\\Mất mát $\mathcal{L}_{\text{Laplace}}(\sigma) + \mathcal{L}_{\text{excl}}$};
 
     \draw[arr] (input_online) -- (deep_net);
-    \draw[arr] (deep_net) -- node[above, note] {$\alpha, \hat{F}, \sigma$} (solver);
-    \draw[arr_teal] (basis) -- node[right, note] {$\{E_j\}$ cố định} (solver);
-    \draw[arr_teal] (solver) -- node[above, note] {$\bm{\ell}^*(t)$} (recon);
-    \draw[arr_red] (recon) -- (loss2);
-    \draw[arr_red, dashed] (deep_net) to[bend left=25] node[above, note] {$\sigma, \alpha$} (loss2);
+    \draw[arr] (deep_net) -- node[above, font=\scriptsize, text=blue!80!black] {$\alpha, \hat{F}, \sigma$} (solver);
+    \draw[arr_teal] (solver) -- node[above, font=\scriptsize, text=teal!80!black] {$\bm{\ell}^*(t)$} (recon_loss);
 
-    % Khung bao Giai đoạn 2
-    \begin{scope}[on background layer]
-        \node[stage, fit=(input_online) (deep_net) (solver) (recon), label={[anchor=north west, font=\small\bfseries, text=blue!85!black]north west:\textbf{Giai Đoạn 2: Mạng Phân Rã Sâu \& Thích Ứng Chiếu Sáng Trực Tuyến (Online Inference \& Learning)}}] (g2) {};
-    \end{scope}
+    % Truyền cơ sở SceneBasis từ Giai đoạn 1 xuống Giai đoạn 2: nằm hoàn toàn trong hành lang trống y in [0.5, 1.9]
+    \draw[arr_teal] (basis.south) -- (10.5, 1.1) -- (8.0, 1.1) -- (solver.north);
+    \node[above=2pt, font=\scriptsize, text=teal!80!black] at (9.25, 1.1) {Hệ cơ sở $\{E_j\}$ cố định};
 \end{tikzpicture}
-}
 \caption{\textbf{Quy trình phân rã cảnh hai giai đoạn của Hướng 2 Mới (Prior-Free Scene Decomposition).} Đột phá loại bỏ hoàn toàn ảnh nền mốc sạch: Giai đoạn 1 trích xuất không gian con đa tạp chiếu sáng affine $\{E_0, E_1, E_2, E_3\}$ từ chuỗi ảnh thưa đa ngày bằng thuật toán lặp Huber-IRLS kháng bóng ma xe dừng đỗ. Giai đoạn 2 vận hành mạng nơ-ron phân rã sâu kết hợp bộ giải giải tích trực tuyến Huber-IRLS để tìm bộ hệ số ánh sáng tối ưu $\bm{\ell}^*(t)$ trên vùng nền $W=(1-\alpha)^2$, tổng hợp nền thực $\hat{B}(t)$ và tối ưu hóa thông qua hàm mất mát Laplace NLL tự học độ bất định $\sigma(u, v)$ cùng ràng buộc triệt tiêu gradient giao thoa $\mathcal{L}_{\text{excl}}$.}
 \label{fig:pipeline_direction2_new}
 \end{figure}
@@ -436,45 +435,50 @@ với $\Omega_{\text{road}}$ là mặt nạ không gian lòng đường được
 \begin{figure}[t!]
 \centering
 \begin{tikzpicture}[
-    scale=0.80, transform shape,
-    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.3cm, minimum height=1.3cm},
-    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=5pt, font=\small, minimum width=3.3cm, minimum height=1.3cm},
-    decision/.style={diamond, draw=orange!85!black, fill=orange!8, aspect=1.8, align=center, inner sep=3pt, font=\small\bfseries},
-    alert_cam/.style={rectangle, draw=red!75!black, fill=red!10, rounded corners=4pt, align=center, inner sep=6pt, font=\small\bfseries, text=red!80!black},
-    alert_traffic/.style={rectangle, draw=green!70!black, fill=green!10, rounded corners=4pt, align=center, inner sep=6pt, font=\small\bfseries, text=green!60!black},
-    arr/.style={-{Latex[length=2.8mm]}, thick, draw=blue!85!black},
-    arr_teal/.style={-{Latex[length=2.8mm]}, thick, draw=teal!85!black},
-    arr_red/.style={-{Latex[length=2.8mm]}, thick, draw=red!85!black},
-    arr_green/.style={-{Latex[length=2.8mm]}, thick, draw=green!60!black},
-    note/.style={font=\footnotesize\itshape, text=gray!80!black}
+    box/.style={rectangle, draw=blue!75!black, fill=blue!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.0cm, minimum height=1.25cm},
+    proc/.style={rectangle, draw=teal!75!black, fill=teal!6, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize, text width=3.0cm, minimum height=1.25cm},
+    decision/.style={rectangle, draw=orange!90!black, fill=orange!10, rounded corners=3pt, align=center, inner sep=4pt, font=\scriptsize\bfseries, text width=2.8cm, minimum height=1.15cm},
+    alert_cam/.style={rectangle, draw=red!75!black, fill=red!10, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize\bfseries, text=red!80!black, text width=3.0cm, minimum height=1.25cm},
+    alert_traffic/.style={rectangle, draw=green!70!black, fill=green!10, rounded corners=4pt, align=center, inner sep=4pt, font=\scriptsize\bfseries, text=green!60!black, text width=3.0cm, minimum height=1.25cm},
+    arr/.style={-{Latex[length=2.5mm]}, thick, draw=blue!85!black},
+    arr_teal/.style={-{Latex[length=2.5mm]}, thick, draw=teal!85!black},
+    arr_red/.style={-{Latex[length=2.5mm]}, thick, draw=red!85!black},
+    arr_green/.style={-{Latex[length=2.5mm]}, thick, draw=green!60!black}
 ]
-    % Hàng 1: Đầu vào cửa sổ trượt, lọc trung vị patch, so khớp coreset
-    \node[box] (input_seq) at (0, 3.8) {\textbf{Cửa Sổ Trượt Thời Gian}\\Chuỗi $W$ khung hình $\{I_{t-w}\}$\\Trích xuất patch token ViT};
+    % Tầng 1 (y = 6.2): Xử lý chuỗi thời gian & Phân tách không gian (trái sang phải)
+    \node[box] (input_seq) at (0.2, 6.2) {\textbf{Cửa Sổ Trượt Thời Gian}\\Chuỗi $W$ khung hình $\{I_{t-w}\}$\\Trích xuất patch ViT};
     
-    \node[proc] (median_filter) at (4.6, 3.8) {\textbf{Lọc Trung Vị Patch}\\$\tilde{F}_t(p) = \operatorname{median}_{w}\{F_{t-w}(p)\}$\\\textit{Triệt tiêu chuyển động xe thoáng qua}};
+    \node[proc] (median_filter) at (4.2, 6.2) {\textbf{Lọc Trung Vị Patch}\\$\tilde{F}_t(p) = \operatorname{median}_{w}\{F_{t-w}(p)\}$\\\textit{Triệt tiêu xe thoáng qua}};
     
-    \node[proc] (coreset_bank) at (9.4, 3.8) {\textbf{Ngân Hàng Coreset Bank}\\Chọn mẫu chuẩn K-Center Greedy\\Điểm dị biệt $a_t(p) = \min_{m} \|\tilde{F}_t - m\|$};
+    \node[proc] (coreset_bank) at (8.2, 6.2) {\textbf{Ngân Hàng Coreset Bank}\\K-Center Greedy nén 90\%\\Điểm dị biệt $a_t(p) = \min_m \|\tilde{F}_t - m\|$};
     
-    \node[box] (split_zone) at (14.2, 3.8) {\textbf{Phân Tách Không Gian}\\$s_{\text{road}} = \operatorname{TopK}_{p \in \Omega_{\text{road}}}(a_t(p))$\\$s_{\text{static}} = \operatorname{TopK}_{p \notin \Omega_{\text{road}}}(a_t(p))$};
+    \node[box] (split_zone) at (12.2, 6.2) {\textbf{Phân Tách Không Gian}\\Lòng đường $s_{\text{road}} = \operatorname{TopK}(a_t)$\\Vùng tĩnh $s_{\text{static}} = \operatorname{TopK}(a_t)$};
 
     \draw[arr] (input_seq) -- (median_filter);
     \draw[arr_teal] (median_filter) -- (coreset_bank);
     \draw[arr_teal] (coreset_bank) -- (split_zone);
 
-    % Hàng 2: Bộ quyết định phân tầng logic
-    \node[decision] (check_static) at (14.2, 0.5) {$s_{\text{static}} > \tau_{\text{static}}$};
+    % Tầng 2 (y = 3.0): Kiểm định phân tầng (từ phải sang trái)
+    \node[decision] (check_static) at (12.2, 3.0) {\textbf{Kiểm Tra Vùng Tĩnh}\\$s_{\text{static}} > \tau_{\text{static}}$ ?};
     
-    \node[alert_cam] (cam_error) at (9.4, 0.5) {\textbf{CẢNH BÁO LỖI CAMERA}\\Trôi góc quay / Rung lắc\\Ống kính bám bẩn hoặc nước mưa\\\textit{(Vô hiệu hóa báo động sai)}};
+    \node[decision] (check_road) at (6.2, 3.0) {\textbf{Kiểm Tra Mặt Đường}\\$s_{\text{road}} > \tau_{\text{road}}$ ?};
     
-    \node[decision] (check_road) at (4.6, 0.5) {$s_{\text{road}} > \tau_{\text{road}}$};
-    
-    \node[alert_traffic] (traffic_anomaly) at (0, 0.5) {\textbf{XÁC NHẬN SỰ CỐ GIAO THÔNG}\\Duy trì liên tục $N \ge 3$ cửa sổ\\Ngập úng / Rào chắn / Ùn ứ cực đoan\\\textit{(Phát cảnh báo Trung tâm Điều hành)}};
+    \node[alert_traffic] (traffic_anomaly) at (0.2, 3.0) {\textbf{XÁC NHẬN SỰ CỐ}\\Bền vững $N \ge 3$ cửa sổ\\(Ngập / Tai nạn / Rào chắn)};
 
-    \draw[arr] (split_zone) -- (check_static);
-    \draw[arr_red] (check_static) -- node[above, font=\footnotesize] {Bất thường} (cam_error);
-    \draw[arr_teal] (check_static) -- node[above, font=\footnotesize] {Bình thường} (check_road);
-    \draw[arr_green] (check_road) -- node[above, font=\footnotesize] {Bền vững} (traffic_anomaly);
-    \draw[arr, dashed] (check_road) to[bend left=25] node[below, note] {Ổn định} (input_seq);
+    % Nối từ Tầng 1 xuống Tầng 2 (đường thẳng đứng từ split_zone xuống check_static)
+    \draw[arr] (split_zone.south) -- (check_static.north);
+
+    % Luồng Tầng 2 (đi ngang sang trái)
+    \draw[arr_teal] (check_static.west) -- node[above, font=\scriptsize, text=teal!80!black] {Sai (Tĩnh ổn định)} (check_road.east);
+    \draw[arr_green] (check_road.west) -- node[above, font=\scriptsize, text=green!60!black] {Đúng ($N \ge 3$)} (traffic_anomaly.east);
+
+    % Tầng 3 (y = 0.0): Kết luận phân nhánh (đi thẳng đứng xuống từ Tầng 2)
+    \node[alert_cam] (cam_error) at (12.2, 0.0) {\textbf{CẢNH BÁO LỖI CAMERA}\\Lệch trục / Rung lắc / Bám bẩn\\(Khóa báo động giả)};
+    
+    \node[box] (normal) at (6.2, 0.0) {\textbf{LƯU THÔNG BÌNH THƯỜNG}\\Không phát hiện dị biệt\\Duy trì trạng thái giám sát};
+
+    \draw[arr_red] (check_static.south) -- node[right=2pt, font=\scriptsize, text=red!80!black] {Đúng (Lệch khung)} (cam_error.north);
+    \draw[arr] (check_road.south) -- node[right=2pt, font=\scriptsize, text=blue!80!black] {Sai (Bình thường)} (normal.north);
 \end{tikzpicture}
 \caption{\textbf{Cơ chế phát hiện bất thường giao thông kéo dài và phân tách lỗi camera của Hướng 4.} Quy trình xử lý gồm 4 tầng: (1) Phép lọc trung vị thời gian trên cửa sổ trượt $W$ trong không gian patch-token ViT loại bỏ hoàn toàn các thay đổi thoáng qua của phương tiện lưu thông; (2) Ngân hàng Coreset Memory Bank nén 90\% dung lượng mẫu chuẩn bằng thuật toán K-Center Greedy; (3) Phân tách không gian hai vùng mặt đường $\Omega_{\text{road}}$ và kiến trúc cố định $\Omega_{\text{static}}$; (4) Cơ chế chẩn đoán phân tầng kiểm tra biến dạng vùng tĩnh $s_{\text{static}}$ để phát hiện lỗi phần cứng/trôi góc camera và kiểm tra độ bền vững qua $N \ge 3$ cửa sổ trượt để xác nhận sự cố lòng đường thực tế.}
 \label{fig:pipeline_direction4}
