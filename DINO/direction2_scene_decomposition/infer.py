@@ -23,6 +23,7 @@ if sys.platform == "win32":
         pass
 
 from typing import Dict, List, Optional, Tuple, Union
+import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -49,16 +50,22 @@ from models import TrafficDecompositionNet
 def create_segmentation_overlay(
     origin_pil: Image.Image,
     mask_arr: np.ndarray,
-    threshold: float = 0.30,
-    color: Tuple[int, int, int] = (0, 230, 118),  # Màu xanh lục bảo dạ quang rực rỡ
-    alpha: float = 0.50,
+    threshold: float = 0.18,
+    mode: str = "multi",  # 'multi' (mỗi xe một màu rực rỡ như YOLO/Mask R-CNN) hoặc 'single'
+    single_color: Tuple[int, int, int] = (0, 230, 118),
+    draw_contours: bool = True,
+    contour_color: Tuple[int, int, int] = (255, 255, 255),  # Viền trắng nét thanh dạ quang
+    contour_thickness: int = 1,
+    min_area: int = 25,
 ) -> Tuple[Image.Image, Image.Image]:
     """
-    Tạo:
-      1. overlay_img: Ảnh phủ phân đoạn màu bán trong suốt lên ảnh gốc (Vehicle Segmentation Overlay)
-      2. binary_mask_img: Mặt nạ phân đoạn nhị phân trắng-đen (0 hoặc 255)
+    Tạo ảnh phân đoạn phương tiện vẽ trực tiếp lên ảnh gốc chuẩn Mask R-CNN / YOLO-Seg:
+      - Ngưỡng mềm (Soft Ramp) kết hợp Gaussian filter khử cạnh sắc cứng
+      - Tô màu bán trong suốt chuyển tiếp mượt mà theo giá trị alpha từng pixel
+      - Phân cụm đối tượng đa sắc (Multi-color instance-like) hoặc đơn sắc
+      - Vẽ đường bao (Contour borders) ôm khít từng phương tiện
     """
-    orig_np = np.array(origin_pil).astype(np.float32)
+    orig_np = np.array(origin_pil)  # uint8 (H, W, 3)
     orig_h, orig_w = orig_np.shape[:2]
 
     # Đồng bộ kích thước mask với ảnh gốc
@@ -68,18 +75,63 @@ def create_segmentation_overlay(
     else:
         norm_mask = np.clip(mask_arr, 0.0, 1.0).astype(np.float32)
 
-    bin_mask = (norm_mask > threshold).astype(np.float32)
+    # 1. Làm mượt bằng Gaussian Blur để triệt tiêu răng cưa viền cắt
+    mask_blur = cv2.GaussianBlur(norm_mask, (7, 7), 1.8)
 
-    # Lớp phủ màu phân đoạn xe
-    color_layer = np.zeros_like(orig_np)
-    color_layer[:, :] = color
-    weight = bin_mask[:, :, None] * alpha
-    blended = orig_np * (1.0 - weight) + color_layer * weight
-    blended = np.clip(blended, 0, 255).astype(np.uint8)
-    overlay_img = Image.fromarray(blended)
+    # 2. Xử lý nhị phân và lọc hình thái học để tìm cụm phương tiện
+    bin_mask = ((mask_blur > threshold) * 255).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    bin_clean = cv2.morphologyEx(bin_mask, cv2.MORPH_OPEN, kernel)
+    bin_clean = cv2.morphologyEx(bin_clean, cv2.MORPH_CLOSE, kernel)
 
-    # Mặt nạ nhị phân
-    binary_img = Image.fromarray((bin_mask * 255).astype(np.uint8))
+    # 3. Phân cụm đối tượng và tô màu
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bin_clean)
+
+    # Bảng màu rực rỡ phong cách Instance Segmentation (YOLO-Seg / SAM)
+    palette = [
+        (0, 230, 118),   # Xanh ngọc lục bảo (Emerald Green)
+        (255, 112, 67),  # Cam san hô (Coral Orange)
+        (41, 182, 246),  # Xanh dương sáng (Light Blue)
+        (255, 64, 129),  # Hồng dạ quang (Rose Pink)
+        (171, 71, 188),  # Tím tử đinh hương (Purple)
+        (255, 238, 88),  # Vàng chanh (Bright Yellow)
+        (38, 198, 218),  # Xanh ngọc lam (Cyan)
+        (255, 87, 34),   # Đỏ cam (Deep Orange)
+        (102, 187, 106), # Xanh lá tươi (Lime)
+    ]
+
+    overlay_canvas = orig_np.astype(np.float32).copy()
+
+    if mode == "multi" and num_labels > 1:
+        for lbl in range(1, num_labels):
+            area = stats[lbl, cv2.CC_STAT_AREA]
+            if area < min_area:
+                continue
+            comp_mask = (labels == lbl).astype(np.float32)
+            # Ngưỡng mềm (Soft ramp): độ đậm tăng dần từ mép (threshold) vào tâm
+            soft_ramp = np.clip((mask_blur - (threshold * 0.7)) / (threshold * 1.5 + 1e-4), 0.25, 1.0)
+            alpha_layer = (comp_mask * soft_ramp * 0.45)[:, :, None]
+
+            color_np = np.array(palette[(lbl - 1) % len(palette)], dtype=np.float32)
+            overlay_canvas = overlay_canvas * (1.0 - alpha_layer) + color_np * alpha_layer
+    else:
+        # Chế độ đơn sắc đồng nhất
+        soft_ramp = np.clip((mask_blur - (threshold * 0.7)) / (threshold * 1.5 + 1e-4), 0.0, 1.0)
+        bin_f = (bin_clean > 0).astype(np.float32)
+        alpha_layer = (bin_f * soft_ramp * 0.48)[:, :, None]
+        color_np = np.array(single_color, dtype=np.float32)
+        overlay_canvas = overlay_canvas * (1.0 - alpha_layer) + color_np * alpha_layer
+
+    overlay_final = np.clip(overlay_canvas, 0, 255).astype(np.uint8)
+
+    # 4. Vẽ đường viền biên dạng (Contours) thanh mảnh ôm khít từng xe
+    if draw_contours:
+        contours, _ = cv2.findContours(bin_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= min_area]
+        cv2.drawContours(overlay_final, valid_contours, -1, contour_color, contour_thickness, cv2.LINE_AA)
+
+    overlay_img = Image.fromarray(overlay_final)
+    binary_img = Image.fromarray(bin_clean)
     return overlay_img, binary_img
 
 
@@ -287,6 +339,7 @@ def run_inference(args):
             origin_pil=pil_img,
             mask_arr=pred_mask_arr,
             threshold=args.seg_thresh,
+            mode=args.seg_mode,
         )
 
         recon_pil_img = None
@@ -337,7 +390,8 @@ def parse_args():
     parser.add_argument("--match_strategy", type=str, default="route_hourly", help="Chiến lược đối sánh background: route_hourly, camera_id, etc.")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
     parser.add_argument("--img_size", type=int, default=256, help="Kích thước ảnh xử lý")
-    parser.add_argument("--seg_thresh", type=float, default=0.30, help="Ngưỡng nhị phân hóa phân đoạn phương tiện (mặc định: 0.30)")
+    parser.add_argument("--seg_thresh", type=float, default=0.18, help="Ngưỡng lọc phân đoạn phương tiện mềm mại (mặc định: 0.18)")
+    parser.add_argument("--seg_mode", type=str, default="multi", choices=["multi", "single"], help="Chế độ màu phân đoạn: 'multi' (đa sắc từng xe kiểu YOLO/Mask R-CNN) hoặc 'single' (đơn sắc)")
     parser.add_argument("--save_composite", action="store_true", default=True, help="Lưu thêm ảnh ghép so sánh trực quan đa bảng (composite)")
     parser.add_argument("--no_composite", action="store_false", dest="save_composite", help="Không lưu ảnh composite")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị ('cuda' hoặc 'cpu')")
