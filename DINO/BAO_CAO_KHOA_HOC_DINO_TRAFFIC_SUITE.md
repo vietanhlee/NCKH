@@ -9,13 +9,15 @@
 
 Mạng lưới camera giám sát giao thông đô thị tại TP.HCM vận hành trong môi trường thực địa vô cùng phức tạp: xe máy chiếm ưu thế vượt trội (75%–85% lưu lượng), mật độ dòng phương tiện hỗn hợp dày đặc gây che khuất liên tục, góc quay camera xiên cao và dữ liệu ảnh chỉ được cập nhật ngắt quãng theo chu kỳ 3–5 phút do giới hạn hạ tầng truyền dẫn diện rộng. Trong điều kiện này, các giả định cổ điển về dòng quang học liên tục (Optical Flow) hay ảnh nền trung vị tĩnh hoàn toàn bị phá vỡ bởi hiện tượng bóng ma phương tiện dừng đỗ (Ghost Vehicles) và biến thiên quang học nhiệt đới.
 
-Báo cáo khoa học này trình bày chi tiết nền tảng toán học, phân tích giải tích và kiến trúc của hệ sinh thái nghiên cứu **DINO Traffic Suite**, tập trung làm rõ hai hướng nghiên cứu mũi nhọn đột phá hoàn toàn không phụ thuộc ảnh nền mẫu (Prior-Free) cùng hai hướng nghiên cứu suy luận ứng dụng và hệ thống đối chuẩn:
-1. **Hướng 1 Mới (Vehicle-Centric Representation Learning)**: Tự học biểu diễn đặc trưng phương tiện bất biến bối cảnh độc lập với ảnh nền mẫu thông qua bản đồ dị biệt thời gian TAM, cơ chế che phân tầng thích ứng AGM và toán tử hoán đổi vùng tĩnh phản thực nghiệm SRS.
+Báo cáo khoa học này trình bày chi tiết nền tảng toán học, phân tích giải tích và kiến trúc của toàn bộ hệ sinh thái nghiên cứu **DINO Traffic Suite**, phản ánh bức tranh toàn cảnh về tiến trình phát triển phương pháp luận từ các mô hình khai thác tiền nghiệm nền mốc cổ điển đến các mô hình đột phá độc lập không cần nền (Prior-Free):
+1. **Hướng 1 Mới (Vehicle-Centric Representation Learning)**: Tự học biểu diễn đặc trưng phương tiện bất biến bối cảnh độc lập hoàn toàn với ảnh nền mẫu thông qua bản đồ dị biệt thời gian TAM, cơ chế che phân tầng thích ứng AGM và toán tử hoán đổi vùng tĩnh phản thực nghiệm SRS.
 2. **Hướng 2 Mới (Prior-Free Traffic Scene Decomposition)**: Phân rã cấu trúc cảnh giao thông hai giai đoạn không cần ảnh nền mốc thông qua hệ cơ sở đa chiếu sáng SceneBasis thích ứng trực tuyến với độ bất định Laplace.
 3. **Hướng 3 (Context-Aware Weak Supervision)**: Mô hình hóa đồ thị xác suất Markov ẩn thích ứng 54 ngữ cảnh đô thị nhằm tổng hợp nhãn yếu đa nguồn từ các bộ suy diễn kiêng cữ và chưng cất tri thức sang mạng nơ-ron chuỗi thời gian Causal GRU.
 4. **Hướng 4 (Persistence Traffic Anomaly Detection)**: Phát hiện sự cố giao thông kéo dài bằng phép lọc trung vị thời gian trên không gian đặc trưng patch DINOv3, kết hợp ngân hàng mẫu chuẩn Coreset Bank và cơ chế phân tách lỗi dịch chuyển camera khỏi bất thường lòng đường.
+5. **Hướng 1 Cũ (Background-Guided Continual SSL)**: Học biểu diễn có hướng dẫn tiền nghiệm nền thông qua cơ chế che khuất vùng xe FAM-$\Delta$, chuẩn hóa thứ bậc Rank Normalization và van điều tiết độ tin cậy vùng tĩnh $r_i$.
+6. **Hướng 2 Cũ (Noise-Aware Scene Decomposition)**: Phân rã cảnh có giám sát ảnh nền trung vị thông qua mô hình hòa trộn quang học 3 nhánh, hàm mất mát Laplace Prior mềm và ràng buộc tính nhất quán nền đa ngày.
 
-Hệ sinh thái đi kèm hệ thống mô hình đối chuẩn nền trung vị (Baseline Hướng 1 FAM-$\Delta$, Baseline Hướng 2 Median Prior) và công trình dữ liệu quy mô thành phố IC4SD-TrafficSnap. Toàn bộ phương pháp luận được thiết kế gắn liền với các ràng buộc vật lý thực địa và kiểm chứng định lượng trên mạng lưới camera thực tế quy mô thành phố.
+Hệ thống đi kèm công trình công bố dữ liệu quy mô thành phố IC4SD-TrafficSnap. Toàn bộ phương pháp luận được thiết kế gắn liền với các ràng buộc vật lý thực địa và kiểm chứng định lượng trên mạng lưới camera thực tế quy mô thành phố.
 
 ---
 
@@ -35,11 +37,11 @@ với $\{I_{t_k}\}_{k=1}^K$ là tập hợp các khung hình thu thập được
 - **Nhiễu loạn quang học nhiệt đới**: Ánh nắng nhiệt đới gay gắt tạo ra bóng đổ sắc nét di chuyển liên tục theo góc phương vị mặt trời. Khi có mưa rào, vũng nước trên mặt đường nhựa phản chiếu hình ảnh phương tiện và bầu trời, làm sai lệch phép trừ điểm ảnh thô $\Delta(u, v) = |I(u, v) - B_{\text{median}}(u, v)|$. Vào ban đêm, hiện tượng chói lóa từ đèn pha xe tải và xe máy làm bão hòa cảm biến CMOS.
 - **Cạm bẫy đường tắt bối cảnh (Background Shortcut Trap)**: Trong ảnh chụp từ camera tĩnh, diện tích vùng tĩnh (mặt đường, vỉa hè, nhà cửa, dải phân cách) chiếm từ 70% đến 85% tổng số điểm ảnh. Khi huấn luyện các mô hình học tự giám sát tiêu chuẩn như DINO hay MAE trên tập dữ liệu này, mạng nơ-ron có xu hướng tối ưu hóa hàm mất mát bằng cách ghi nhớ kết cấu bối cảnh tĩnh và góc đặt camera thay vì học các đặc trưng hình học của phương tiện. Hệ quả là biểu diễn trích xuất bị phụ thuộc chặt vào camera cụ thể và mất hoàn toàn khả năng khái quát hóa khi áp dụng sang camera mới.
 
-### 1.3. Định Vị Phương Pháp Luận Của Hệ Sinh Thái
-Nhằm giải quyết triệt để các hạn chế trên, hệ sinh thái DINO Traffic Suite được thiết lập dựa trên nguyên lý phân tầng:
-1. **Nhóm mô hình độc lập hoàn toàn với ảnh nền mẫu (Prior-Free)**: Trích xuất đặc trưng phương tiện và phân rã cấu trúc cảnh trực tiếp từ dòng dữ liệu ảnh đơn hoặc chuỗi ảnh đa ngày mà không cần sử dụng bất kỳ ảnh nền trung vị tham chiếu nào (**Hướng 1 Mới** và **Hướng 2 Mới**).
-2. **Nhóm mô hình giám sát thông minh và phát hiện sự cố (Context-Aware \& Anomaly)**: Tự động thích ứng với sự thay đổi của ngữ cảnh đô thị để sinh nhãn huấn luyện (**Hướng 3**) và phát hiện các biến cố giao thông bất thường kéo dài bằng cách phân tách rõ ràng sai lệch quang học khỏi sự cố mặt đường (**Hướng 4**).
-3. **Hệ thống đối chuẩn có kiểm soát độ bất định (Baselines)**: Duy trì các mô hình sử dụng ảnh nền trung vị truyền thống nhưng được trang bị cơ chế tự động điều chỉnh độ tin cậy để so sánh đối đầu trực tiếp về mặt học thuật.
+### 1.3. Tiến Trình Phát Triển Phương Pháp Luận Trong Hệ Sinh Thái
+Nhằm giải quyết triệt để các hạn chế trên, hệ sinh thái DINO Traffic Suite được thiết lập dựa trên nguyên lý tiến hóa khoa học gồm hai trường phái tiếp cận:
+1. **Trường phái khai thác tiền nghiệm nền mốc có kiểm soát độ bất định (Hướng 1 Cũ và Hướng 2 Cũ)**: Tận dụng ảnh nền trung vị sẵn có để hướng dẫn không gian biểu diễn nhưng được trang bị các cơ chế bù trừ sai số (van điều tiết độ tin cậy vùng tĩnh $r_i$ và bản đồ độ bất định Laplace $\sigma$). Nhóm phương pháp này đóng vai trò là hệ thống đối chuẩn nền tảng.
+2. **Trường phái đột phá độc lập hoàn toàn với ảnh nền mẫu (Hướng 1 Mới và Hướng 2 Mới)**: Loại bỏ hoàn toàn sự phụ thuộc vào ảnh nền mẫu sạch, trích xuất thuộc tính phương tiện và đa tạp chiếu sáng trực tiếp từ chuỗi ảnh thưa đa ngày mà không cần bất kỳ ảnh nền tham chiếu nào.
+3. **Trường phái suy luận ứng dụng hạ tầng đô thị (Hướng 3 và Hướng 4)**: Tự động hóa việc sinh nhãn mức độ ùn tắc thích ứng 54 ngữ cảnh đô thị và phát hiện sự cố giao thông kéo dài kết hợp bóc tách lỗi phần cứng camera.
 
 ---
 
@@ -69,7 +71,7 @@ kết hợp kỹ thuật khởi động mềm tốc độ học (Warmup Cosine S
 ## 3. HƯỚNG 1 MỚI: TỰ HỌC BIỂU DIỄN PHƯƠNG TIỆN BẤT BIẾN BỐI CẢNH (PRIOR-FREE VEHICLE-CENTRIC SSL)
 
 ### 3.1. Đặt Vấn Đề Khoa Học và Sự Đột Phá Của Hướng 1 Mới
-Trong các giải pháp học tự giám sát truyền thống, việc che ngẫu nhiên các patch ảnh (Uniform Masking) khiến phần lớn năng lực học của mạng nơ-ron bị lãng phí vào việc tái tạo mặt đường và kiến trúc xung quanh. Khi áp dụng ảnh nền trung vị để hướng dẫn cơ chế che khuất (như trong mô hình đối chuẩn cũ), mô hình lại bị nhiễm độc bởi hiện tượng bóng ma phương tiện và phụ thuộc vào sự tồn tại của ảnh nền mẫu sạch.
+Trong các giải pháp học tự giám sát truyền thống, việc che ngẫu nhiên các patch ảnh (Uniform Masking) khiến phần lớn năng lực học của mạng nơ-ron bị lãng phí vào việc tái tạo mặt đường và kiến trúc xung quanh. Khi áp dụng ảnh nền trung vị để hướng dẫn cơ chế che khuất (như trong mô hình đối chuẩn Hướng 1 Cũ), mô hình lại bị nhiễm độc bởi hiện tượng bóng ma phương tiện và phụ thuộc vào sự tồn tại của ảnh nền mẫu sạch.
 
 Hướng 1 Mới giải quyết triệt để vấn đề này bằng cách tự học biểu diễn tập trung hoàn toàn vào phương tiện giao thông chỉ từ chuỗi ảnh thưa của camera cố định với ba nguyên tắc:
 1. **Hoàn toàn không cần ảnh nền mẫu sạch (Prior-Free):** Trích xuất quy luật xuất hiện của phương tiện trực tiếp qua độ dị biệt thống kê không-thời gian.
@@ -154,7 +156,8 @@ $$\bm{\ell}^* = \arg\min_{\bm{\ell}} \sum_{u, v} W(u, v) \left\| I(u, v) - E_0(u
 Hàm trọng số Huber được cập nhật lặp:
 $$w^{(k)}(u, v) = W(u, v) \cdot \psi_{\text{Huber}}\left( \|r^{(k-1)}(u, v)\|_2 \right), \quad \psi_{\text{Huber}}(e) = \begin{cases} 1, & \text{nếu } e \le \delta \\ \frac{\delta}{e}, & \text{nếu } e > \delta \end{cases}$$
 Nghiệm giải tích đóng tại mỗi bước lặp thông qua ma trận Gram:
-$$\bm{\ell}^{(k)} = \left( \sum_{u, v} w^{(k)}(u, v) \mathbf{A}(u, v)^\top \mathbf{A}(u, v) \right)^{-1} \left( \sum_{u, v} w^{(k)}(u, v) \mathbf{A}(u, v)^\top \mathbf{r}_0(u, v) \right)$$
+$$\bm{\ell}^{(k)} = \left( \sum_{u, v} w^{(k)}(u, v) \mathbf{A}(u, v)^\top \mathbf{A}(u, v) \right)^{-1} \left( \sum_{u, v} w^{(k)}(u, v) \mathbf{A}(u, v)^\top \mathbf{r}_0(u, v) \right)
+$$
 trong đó $\mathbf{A}(u, v) = [E_1(u, v), \dots, E_J(u, v)] \in \mathbb{R}^{3 \times J}$ và $\mathbf{r}_0(u, v) = I(u, v) - E_0(u, v)$.
 
 ### 4.4. Hàm Mất Mát Laplace Negative Log-Likelihood
@@ -220,24 +223,76 @@ với $\Omega_{\text{road}}$ là mặt nạ không gian lòng đường được
 
 ---
 
-## 7. HỆ THỐNG MÔ HÌNH ĐỐI CHUẨN VÀ CÔNG BỐ DỮ LIỆU
+## 7. HƯỚNG 1 CŨ: HỌC TỰ GIÁM SÁT LIÊN TỤC VỚI TIỀN NGHIỆM ẢNH NỀN (BACKGROUND-GUIDED CONTINUAL SSL)
 
-### 7.1. Hệ Thống Mô Hình Đối Chuẩn Nền Trung Vị
-Để kiểm chứng một cách khách quan tính ưu việt của cách tiếp cận độc lập với ảnh nền (Prior-Free), hệ sinh thái duy trì hai mô hình đối chuẩn có sử dụng ảnh nền trung vị truyền thống:
-1. **Mô hình đối chuẩn FAM-$\Delta$ (Baseline Hướng 1)**: Tận dụng ảnh nền trung vị để hướng dẫn cơ chế che khuất patch trong học tự giám sát. Xác suất che từng patch tỷ lệ thuận với chênh lệch cường độ quang học thô $\Delta = |I - B_{\text{median}}|$, đồng thời được điều tiết bởi hệ số tin cậy vùng tĩnh $r_i$:
-   $$w(p) = r_i \cdot \operatorname{RankNorm}(\bar{\Delta}_p) + (1 - r_i) \cdot \frac{1}{N}$$
-   Khi ảnh nền bị suy thoái ($r_i \to 0$), mô hình tự động chuyển dịch về phép che ngẫu nhiên đều để hạn chế rủi ro lan truyền sai số.
-2. **Mô hình đối chuẩn phân rã cảnh có tiên nghiệm Laplace (Baseline Hướng 2)**: Sử dụng ảnh nền trung vị làm điều kiện ràng buộc mềm thông qua hàm mất mát Laplace Prior:
-   $$\mathcal{L}_{\text{prior}} = \frac{1}{HW} \sum_{u, v} \left[ \frac{|\hat{B}(u, v) - B_{\text{median}}(u, v)|}{\sigma(u, v)} + \log \sigma(u, v) \right]$$
-   kết hợp ràng buộc tính nhất quán của nền qua nhiều ngày quan sát. Mô hình cho phép hấp thụ các sai lệch nhỏ của nền median thông qua việc nâng cao độ bất định $\sigma$.
+### 7.1. Nguyên Lý Che Khuất Hướng Tiền Cảnh FAM
+Trong phiên bản khởi thủy của Hướng 1, mục tiêu là khắc phục hạn chế của cơ chế che ngẫu nhiên đều (Uniform Masking) bằng cách tận dụng sự sai khác giữa khung hình hiện trường $I_{\text{origin}}$ và ảnh nền trung vị tương ứng $B_{\text{median}}$.
 
-### 7.2. Công Trình Dữ Liệu IC4SD-TrafficSnap
-Toàn bộ phương pháp luận được xây dựng dựa trên tập dữ liệu giám sát quy mô lớn IC4SD-TrafficSnap bao gồm 608 trạm camera tại TP.HCM với 714,123 khung hình độ phân giải cao và đồ thị mạng lưới đường bộ OSRM gồm 2,450 liên kết có hướng (trong đó có 238 cặp liên kết bất đối xứng cự ly do đặc thù đường một chiều và dải phân cách đô thị).
+Bản đồ sai khác cường độ quang học thô $\Delta \in \mathbb{R}^{H \times W}$ được tính toán trên không gian màu RGB:
+$$\Delta(u, v) = \frac{1}{3} \sum_{c \in \{R, G, B\}} |I_{\text{origin}}(u, v, c) - B_{\text{median}}(u, v, c)|$$
+Đối với mỗi patch điểm ảnh $p \in \{1, \dots, N\}$, độ tích cực quang học trung bình $\bar{\Delta}_p$ được xác định:
+$$\bar{\Delta}_p = \frac{1}{|\mathcal{P}|} \sum_{(u, v) \in \text{patch}_p} \Delta(u, v)$$
+Xác suất che khuất $w_{\text{fam}}(p)$ được phân bổ ưu tiên cho các patch có chênh lệch quang học lớn, đồng thời chịu sự kiểm soát của hệ số độ tin cậy vùng tĩnh $r_i$:
+$$w_{\text{fam}}(p) = r_i \cdot \operatorname{RankNorm}(\bar{\Delta}_p) + (1 - r_i) \cdot \frac{1}{N}$$
+trong đó $\operatorname{RankNorm}(\cdot)$ chuẩn hóa thứ hạng các giá trị $\bar{\Delta}_p$ về đoạn $[0, 1]$. Khi nền ổn định ($r_i \approx 1$), mạng nơ-ron tập trung gần như toàn bộ ngân sách che vào các vùng xuất hiện phương tiện. Ngược lại, khi xảy ra biến động chiếu sáng bất thường hoặc camera bị rung lắc ($r_i \to 0$), xác suất che tự động thoái biến mượt mà về phân phối đều $\frac{1}{N}$, ngăn chặn hiện tượng gradient bị sai lệch do nhiễu nền.
 
-Bộ dữ liệu vượt qua quy trình kiểm toán bảo mật thông tin định danh cá nhân (PII) dựa trên giới hạn quang học vật lý Sub-Nyquist (độ phân giải mặt đất GSD $\ge 2.73\text{ cm/pixel}$, nét chữ biển số xe $< 2\text{ pixel}$) kết hợp quy tắc thống kê Rule of Three, bảo đảm tỷ lệ vi phạm bảo mật thực tế $< 0.00042\%$ với độ tin cậy 95%.
+### 7.2. Kiến Trúc Chưng Cất Tự Thân Teacher-Student Đa Tỷ Lệ
+Mô hình triển khai kiến trúc chưng cất tự thân bao gồm hai mạng nơ-ron Student và Teacher cùng chia sẻ cấu trúc Vision Transformer. Từ mỗi khung hình gốc $I$, hệ thống trích xuất tập hợp các góc nhìn đa tỷ lệ (Multi-crop):
+- 2 góc nhìn toàn cục (Global views, kích thước $224 \times 224$): Bao quát toàn bộ trường quan sát của camera.
+- 4 hoặc 6 góc nhìn cục bộ (Local views, kích thước $96 \times 96$): Tập trung vào các chi tiết hình học cục bộ của phương tiện.
+
+Mạng Student nhận các góc nhìn cục bộ và các góc nhìn toàn cục bị che khuất theo xác suất $w_{\text{fam}}(p)$, trong khi mạng Teacher chỉ nhận các góc nhìn toàn cục nguyên vẹn. Trọng số của Teacher $\theta_t$ được cập nhật từ trọng số của Student $\theta_s$ theo cơ chế trung bình trượt hàm mũ:
+$$\theta_t \leftarrow \lambda \theta_t + (1 - \lambda) \theta_s, \quad \lambda \in [0.996, 1.000]$$
+Hàm mất mát chưng cất tự thân sử dụng độ đo Cross-Entropy kết hợp kỹ thuật làm sắc nét (Sharpening) và định tâm (Centering) vector phân phối xác suất nhằm triệt tiêu hoàn toàn nguy cơ sụp đổ biểu diễn (Mode Collapse):
+$$\mathcal{L}_{\text{DINO}} = - \sum_{k} P_{\text{teacher}}(x)^{(k)} \log P_{\text{student}}(x)^{(k)}$$
+Mô hình Hướng 1 Cũ chứng minh hiệu quả vượt bậc so với DINO nguyên bản khi huấn luyện trên camera cố định, đóng vai trò là mỏ neo so sánh vững chắc cho Hướng 1 Mới.
 
 ---
 
-## 8. KẾT LUẬN
+## 8. HƯỚNG 2 CŨ: PHÂN RÃ CẢNH GIAO THÔNG CÓ TIỀN NGHIỆM ẢNH NỀN MỐC (NOISE-AWARE SCENE DECOMPOSITION)
 
-Hệ sinh thái DINO Traffic Suite đã thiết lập một hệ thống phương pháp luận hoàn chỉnh và chặt chẽ, giải quyết tận gốc các thách thức thị giác máy tính trong mạng lưới camera giao thông đô thị đặc thù. Bằng việc kết hợp hài hòa giữa các mô hình tự học biểu diễn độc lập với ảnh nền (Hướng 1 Mới và Hướng 2 Mới), mô hình học giám sát yếu thích ứng ngữ cảnh (Hướng 3) và cơ chế phát hiện sự cố bền vững chống báo động sai (Hướng 4), hệ thống mở ra tiềm năng ứng dụng to lớn trong quản trị giao thông đô thị thông minh và đặt nền móng vững chắc cho các công bố khoa học tại các diễn đàn quốc tế uy tín.
+### 8.1. Mô Hình Phân Rã Quang Học 3 Nhánh Có Hướng Dẫn Nền
+Trong cấu trúc ban đầu của Hướng 2, bài toán bóc tách dòng giao thông đô thị được giải quyết thông qua mạng nơ-ron tích hợp bộ mã hóa Vision Transformer và bộ giải mã đa tỷ lệ DPT (Dense Prediction Transformer). Mạng nơ-ron tiếp nhận duy nhất khung hình hiện trường $I_{\text{origin}}$ và phân rã thành 3 thực thể quang học:
+1. Lớp nền đường tái tạo $\hat{B} \in \mathbb{R}^{H \times W \times 3}$: Đại diện cho mặt đường sạch bóng phương tiện (Unsupervised Road Inpainting).
+2. Lớp tiền cảnh cô lập $\hat{F} \in \mathbb{R}^{H \times W \times 3}$: Chỉ chứa các phương tiện giao thông nổi.
+3. Mặt nạ phân đoạn phương tiện $\hat{\alpha} \in [0, 1]^{H \times W \times 1}$: Xác suất hiện diện của xe cộ tại từng điểm ảnh.
+
+Khung hình tái tạo $\hat{I}_{\text{recon}}$ tuân theo phương trình hòa trộn lồi (Alpha Compositing):
+$$\hat{I}_{\text{recon}}(u, v) = \hat{\alpha}(u, v) \hat{F}(u, v) + \big(1 - \hat{\alpha}(u, v)\big) \hat{B}(u, v)$$
+
+### 8.2. Tiền Nghiệm Nền Laplace Mềm Và Ràng Buộc Nhất Quán Đa Ngày
+Để giải bài toán ngược vốn có vô số nghiệm suy biến, Hướng 2 Cũ khai thác ảnh nền trung vị $B_{\text{median}}$ làm tín hiệu giám sát mềm. Thay vì ép buộc cứng bằng chuẩn $L_1$ thông thường, mô hình áp dụng hàm mất mát Laplace Prior có tính đến độ bất định quan sát $\sigma(u, v)$:
+$$\mathcal{L}_{\text{prior}} = \frac{1}{HW} \sum_{u, v} \left[ \frac{|\hat{B}(u, v) - B_{\text{median}}(u, v)|}{\sigma(u, v)} + \log \sigma(u, v) \right]$$
+Cơ chế này cho phép mạng nơ-ron "tha thứ" cho các vùng nền trung vị bị dính bóng ma phương tiện: tại các điểm ảnh chứa bóng ma xe buýt hoặc xe máy dừng đỗ lâu, mạng nơ-ron tự động nâng cao giá trị $\sigma(u, v)$, giảm bớt ảnh hưởng tiêu cực của nhãn giả lên nhánh nền.
+
+Đồng thời, mạng áp dụng ràng buộc tính nhất quán nền dùng chung giữa hai ngày quan sát khác nhau $d_1 \ne d_2$ của cùng một camera:
+$$\mathcal{L}_{\text{shared}} = \frac{1}{HW} \sum_{u, v} |\hat{B}_{d_1}(u, v) - \hat{B}_{d_2}(u, v)|$$
+Hàm mất mát tổng thể kết hợp điều hòa độ thưa của mặt nạ xe $\|\hat{\alpha}\|_1$ và độ trơn nhẵn đường biên xe thông qua số hạng Total Variation $\operatorname{TV}(\hat{\alpha})$:
+$$\mathcal{L}_{\text{total}} = \|\hat{I}_{\text{recon}} - I_{\text{origin}}\|_1 + \lambda_{\text{prior}} \mathcal{L}_{\text{prior}} + \lambda_{\text{shared}} \mathcal{L}_{\text{shared}} + \lambda_{\text{sparse}} \|\hat{\alpha}\|_1 + \lambda_{\text{tv}} \operatorname{TV}(\hat{\alpha})$$
+Mô hình Hướng 2 Cũ cung cấp khả năng tự động xóa xe và phục hồi mặt đường phục vụ khảo sát hư hỏng hạ tầng, tạo tiền đề lý thuyết trực tiếp để phát triển lên Hướng 2 Mới độc lập hoàn toàn với ảnh nền.
+
+---
+
+## 9. CÔNG TRÌNH DỮ LIỆU GIAO THÔNG QUY MÔ THÀNH PHỐ IC4SD-TrafficSnap
+
+### 9.1. Quy Mô Thu Thập Thực Địa và Cấu Trúc Đồ Thị Không Gian
+Toàn bộ hệ thống phương pháp luận trong DINO Traffic Suite được xây dựng và kiểm chứng trên tập dữ liệu giám sát giao thông quy mô lớn IC4SD-TrafficSnap, thu thập từ mạng lưới 608 trạm camera công cộng tại TP.HCM.
+Đặc tả thông số dữ liệu bao gồm:
+- **Khối lượng hình ảnh:** 714,123 khung hình JPEG độ phân giải cao ($1280 \times 720$ và $1920 \times 1080$), tổng dung lượng lưu trữ 44.38 GiB (47.66 GB).
+- **Cấu trúc đồ thị không gian mạng lưới đường bộ (OSRM Graph):** Bao gồm 2,450 liên kết có hướng (directed edges) nối giữa 608 nút camera.
+- **Tính bất đối xứng cự ly thực tế:** Đồ thị ghi nhận 690 cặp tuyến hai chiều và 1,070 tuyến một chiều. Trong 690 cặp hai chiều, có đúng 238 cặp liên kết bất đối xứng cự ly ($|d_{ij} - d_{ji}| \ge 50\text{ m}$, chiếm 34.49%) xuất phát từ đặc thù dải phân cách cứng, cầu vượt và các điểm quay đầu xe (U-turn) phân bố không đối xứng trên hệ thống kênh rạch sông Sài Gòn.
+- **Hệ số uốn khúc mạng lưới (Network Tortuosity):** Tỷ số giữa cự ly di chuyển thực tế theo mạng đường OSRM và khoảng cách trắc địa đường chim bay Haversine đạt trung bình $\tau = 1.25 \pm 0.61$, phản ánh chính xác cấu trúc mạng lưới giao thông phân mảnh của một đô thị sông nước Đông Nam Á.
+
+### 9.2. Kiểm Toán An Toàn Bảo Mật PII Theo Chuẩn Mực Sub-Nyquist
+Do dữ liệu thu thập từ các tuyến phố công cộng, việc bảo vệ quyền riêng tư cá nhân (Personally Identifiable Information -- PII) là một yêu cầu pháp lý và đạo đức khoa học bắt buộc. Tập dữ liệu IC4SD-TrafficSnap được thiết kế theo nguyên lý Bảo Mật Vật Lý Tự Thân (Physical Privacy by Design):
+1. **Giới hạn quang học Sub-Nyquist:** Với độ cao lắp đặt camera 6--15 m và cự ly quan sát 15--60 m, khoảng cách lấy mẫu mặt đất (Ground Sample Distance -- GSD) đạt mức $\text{GSD} \ge 2.73\text{ cm/pixel}$. Nét chữ trên biển số xe máy có bề rộng thực tế khoảng 0.5--1.0 cm, tương đương dưới $2\text{ pixel}$ trên ảnh cảm biến. Giới hạn này thấp hơn rất nhiều so với ngưỡng định lý lấy mẫu Nyquist cần thiết để nhận dạng ký tự quang học (OCR đòi hỏi tối thiểu $\ge 16\text{ pixel}$ cho mỗi ký tự).
+2. **Đặc thù văn hóa lưu thông:** Trên 85\% người điều khiển xe hai bánh tại TP.HCM sử dụng mũ bảo hiểm che kín trán và khẩu trang chống bụi, triệt tiêu hoàn toàn khả năng trích xuất đặc trưng sinh trắc học khuôn mặt.
+3. **Kiểm toán thống kê Rule of Three:** Quy trình kiểm toán ngẫu nhiên 200,000 khung hình độc lập và kiểm toán toàn bộ 714,123 khung hình ghi nhận 0 trường hợp vi phạm nhận dạng PII. Theo Quy tắc Thống kê Ba (Rule of Three), chặn trên khoảng tin cậy 95\% đối với tỷ lệ rủi ro nhận dạng PII trên toàn bộ tập dữ liệu là:
+$$p_{95\%} \le \frac{3}{N} = \frac{3}{714,123} \approx 4.2 \times 10^{-6} \; (0.00042\%)$$
+bảo đảm tính an toàn pháp lý tuyệt đối để công bố dữ liệu mở cho cộng đồng nghiên cứu quốc tế.
+
+---
+
+## 10. KẾT LUẬN
+
+Hệ sinh thái DINO Traffic Suite đã thiết lập một hệ thống phương pháp luận hoàn chỉnh và chặt chẽ, phản ánh đầy đủ bức tranh tiến hóa từ các giải pháp khai thác tiền nghiệm nền trung vị truyền thống (Hướng 1 Cũ và Hướng 2 Cũ) đến các mũi nhọn tự học biểu diễn độc lập không cần nền (Hướng 1 Mới và Hướng 2 Mới), kết hợp cùng các mô hình suy luận phân tầng thích ứng ngữ cảnh đô thị (Hướng 3 và Hướng 4). Toàn bộ các công trình giải tích toán học, thuật toán lặp và cơ chế điều hòa đều bắt nguồn trực tiếp từ bản chất vật lý của dòng giao thông đô thị TP.HCM, đặt nền móng lý thuyết và thực nghiệm vững chắc cho các công bố khoa học quốc tế uy tín.
