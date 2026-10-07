@@ -22,7 +22,7 @@ Hướng nghiên cứu này đóng vai trò là **Công trình Công bố Dữ l
   2. **Thông tin Bản đồ Địa không gian & Đồ thị Dẫn xuất (Geospatial Road Network & Derived Graph):**
      - Tọa độ GPS trắc địa, độ cao cột (6--15m), phân loại tuyến đường của 608 trạm (`metadata/routes.csv`).
      - Ma trận cự ly lái xe thực tế đo bằng OSRM qua bản đồ OpenStreetMap (`metadata/road_network_distance.csv`).
-     - **Đồ thị không gian có hướng dẫn xuất toán học (Derived Representation):** Thiết lập qua nguyên tắc kề cận hành lang giao thông tuyến tính (sequential corridor adjacency) trong bán kính $\le 6.0\text{ km}$, tổng hợp thành các tensor machine-learning (`graph/distance_km.npy`, `graph/direction.npy`, `graph/edges.csv`) gồm **2,450 hành lang có hướng**, ghi nhận 1,070 liên kết một chiều không có cạnh ngược và 232 cặp bất đối xứng $>50\text{ m}$ (cùng 458 cặp đối xứng trong 690 cặp có liên kết hai chiều).
+      - **Đồ thị không gian có hướng dẫn xuất toán học (Derived Representation):** Thiết lập qua nguyên tắc kề cận hành lang giao thông tuyến tính (sequential corridor adjacency) trong bán kính $\le 6.0\text{ km}$, tổng hợp thành các tensor machine-learning (`graph/distance_km.npy`, `graph/direction.npy`, `graph/edges.csv`) gồm **2,450 hành lang có hướng**, ghi nhận 1,070 liên kết một chiều không có cạnh ngược và 238 cặp bất đối xứng $\ge 50\text{ m}$ (cùng 452 cặp đối xứng trong 690 cặp có liên kết hai chiều).
 - **Phục vụ trực tiếp cho các hướng trong thư mục `DINO/`**:
   - **Hướng H1 & HG** (`direction1_bg_guided_dino`, `directionG_camera_ssl`): Học tự giám sát bất biến camera (TAM + AGM + SRS).
   - **Hướng H2** (`direction2_scene_decomposition`): Tự bóc tách nền đường tĩnh và tiền cảnh xe cộ động.
@@ -36,7 +36,7 @@ Hướng nghiên cứu này đóng vai trò là **Công trình Công bố Dữ l
 
 | Mục Tiêu | Tạp Chí | Phân Hạng | Tình Trạng Hiện Tại |
 | :--- | :--- | :--- | :--- |
-| **Đề xuất Chính** | **Data in Brief** (Elsevier) | Scopus Q1/Q2, Gold Open Access | **ĐÃ HOÀN TẤT & BIÊN DỊCH PDF THÀNH CÔNG** (16 trang camera-ready, Bảng 1 thiết kế chuẩn mực vừa khít 1 trang) |
+| **Đề xuất Chính** | **Data in Brief** (Elsevier) | Scopus Q1/Q2, Gold Open Access | **ĐÃ HOÀN TẤT & BIÊN DỊCH PDF THÀNH CÔNG** (26 trang camera-ready, đầy đủ 6 Bảng và 7 Hình) |
 | **Đề xuất Dự phòng** | **Scientific Data** (Nature Portfolio) | Q1, Impact Factor ~9.8 | Đầy đủ nội dung theo chuẩn *Data Descriptor* |
 
 ### Thông tin Tác giả:
@@ -52,8 +52,9 @@ Hướng nghiên cứu này đóng vai trò là **Công trình Công bố Dữ l
 - 📊 **Bảng Thống kê thực nghiệm (Table 3)**: [`paper/tables/tab_summary_stats.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_summary_stats.tex)
 - 🌐 **Bảng Topo đồ thị (Table 4)**: [`paper/tables/tab_graph_metrics.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_graph_metrics.tex)
 - 🔒 **Bảng Kiểm định PII (Table 5)**: [`paper/tables/tab_pii_audit.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_pii_audit.tex)
+- 🔮 **Bảng Baseline Forecasting Benchmark (Table 6)**: Nhúng trực tiếp tại Section 4.6 (`paper/main.tex`)
 - 🖼️ **Thư mục hình vẽ chất lượng xuất bản (300 DPI)**: [`paper/figures/`](file:///g:/nckh/DINO/direction_data_article/paper/figures/)
-- 📕 **Tệp PDF bài báo hoàn chỉnh (16 trang)**: [`paper/main.pdf`](file:///g:/nckh/DINO/direction_data_article/paper/main.pdf)
+- 📕 **Tệp PDF bài báo hoàn chỉnh (26 trang)**: [`paper/main_clean.pdf`](file:///g:/nckh/DINO/direction_data_article/paper/main_clean.pdf)
 
 ---
 
@@ -89,11 +90,32 @@ DINO/direction_data_article/zenodo_bundle/
 
 ---
 
-## ⚡ 4. BIÊN DỊCH BÀI BÁO LATEX
+## ⚡ 4. BIÊN DỊCH BÀI BÁO LATEX & CHẠY BỘ KIỂM ĐỊNH VALIDATION
 
+### 4.1 Biên dịch PDF bài báo (26 trang)
 ```powershell
 cd G:\nckh\DINO\direction_data_article\paper
 pdflatex -interaction=nonstopmode main.tex
 bibtex main
 pdflatex -interaction=nonstopmode main.tex
 ```
+
+### 4.2 Chạy bộ công cụ kiểm toán kỹ thuật (Technical Validation Suite)
+Các script độc lập nằm trong thư mục [`validation/`](file:///g:/nckh/DINO/direction_data_article/validation):
+1. **Kiểm chứng tương quan động học không-thời gian mạng lưới (§4.6):**
+   ```powershell
+   python validation/validate_baseline_forecasting_and_correlation.py
+   ```
+2. **Kiểm toán quyền riêng tư thị giác & Quy tắc ba mức thống kê (§4.5 & Bảng 5):**
+   ```powershell
+   python validation/verify_pii_anonymity.py
+   ```
+3. **Kiểm định cấu trúc topo đồ thị và ma trận chuyển tiếp (§4.3 & Bảng 4):**
+   ```powershell
+   python validation/validate_graph_topology.py
+   ```
+4. **Kiểm tra tính toàn vẹn và phân bố chuỗi thời gian (§4.1 - §4.2):**
+   ```powershell
+   python validation/validate_temporal_coverage.py
+   ```
+

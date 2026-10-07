@@ -19,8 +19,8 @@ As a direct derived representation based on physical road network geometry and s
 - **Surveillance Stations:** 608 indexed municipal stations spanning arterial corridors and intersections across former urban districts in Ho Chi Minh City, fully mapped to geospatial coordinates and network topology.
 - **Visual Image Time-Series:** Discrete $512 \times 288$ pixel JPEG snapshots ($65.17 \pm 13.36$~KB) acquired over 93.6 continuous hours (spanning 5 calendar days: Oct 2 to Oct 6, 2026) at an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s; nominal target: $300$~s / 5.0 min).
 - **Geospatial Road Network:** Camera GPS coordinates, mounting elevations, and pairwise shortest driving distance matrix ($608 \times 608$) derived via OSRM (v5.27.1) from OpenStreetMap.
-- **Derived Directed Spatial Graph:** 2,450 valid directed corridors ($\le 6.0$~km), capturing 1,070 unidirectional links without reverse edges and 232 distance-asymmetric bidirectional pairs (alongside 458 symmetric pairs across 690 two-way connected dyads).
-- **Quantified Negligible Privacy Risk:** Elevated mounting ($>6$~m) and downward oblique viewing geometry physically guarantee zero legible human faces or vehicle license plates (95\% CI upper bound $\le 4.2 \times 10^{-6}$ via Rule of Three across the complete census of 714,123 audited frames).
+- **Derived Directed Spatial Graph:** 2,450 valid directed corridors ($\le 6.0$~km), capturing 1,070 unidirectional links without reverse edges and 238 distance-asymmetric bidirectional pairs (alongside 452 symmetric pairs across 690 two-way connected dyads).
+- **Quantified Negligible Privacy Risk:** Elevated mounting ($>6$~m) and downward oblique viewing geometry physically guarantee zero legible human faces or vehicle license plates (95\% CI upper bound $p \le 0.15\%$ on stratified random sampling, $p \le 0.30\%$ on worst-case stress audit, and $\le 4.2 \times 10^{-6}$ across the complete census of 714,123 frames via Rule of Three).
 
 ---
 
@@ -100,6 +100,22 @@ Pf, Pb, W = load_directed_graph_operators(
 )
 print("Diffusion operators ready. Pf shape:", Pf.shape)
 ```
+
+### Ingestion of Scaled Chebyshev Graph Laplacian (STGCN / ChebNet)
+```python
+from code.graph_utils import compute_chebyshev_laplacian
+
+# Computes normalized Chebyshev Laplacian L_tilde = L_sym - I_N (lambda_max = 2.0)
+L_tilde = compute_chebyshev_laplacian(W, lambda_max=2.0)
+print("Chebyshev Laplacian ready. Shape:", L_tilde.shape, "Range:", [float(L_tilde.min()), float(L_tilde.max())])
+```
+
+### Technical Validation
+To run the automated technical validation suite reproducing the network spatial-temporal autocorrelation dynamics (Section 4.6 of the paper):
+```bash
+python validation/validate_baseline_forecasting_and_correlation.py
+```
+Outputs are archived in `output/baseline_forecasting_benchmark.json`.
 
 ---
 

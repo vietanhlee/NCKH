@@ -1,23 +1,44 @@
-% Bảng kiểm định định lượng PII và giới hạn quang học Nyquist (Tự động sinh bởi pipeline)
-\begin{table}[tbp]
+% Table 5: Quantitative Visual Privacy Audit and Optical Nyquist Resolution Limits
+\begin{table*}[!htbp]
 \centering
-\caption{Quantitative privacy audit and optical Nyquist-Shannon resolution limits for HCMC-TrafficSnap.}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.18}
+\caption{Quantitative visual privacy parameters, optical Nyquist-Shannon resolution limits, and empirical multi-tiered audit results for IC4SD-TrafficSnap.}
 \label{tab:pii_audit}
-\small
-\begin{tabular}{lll}
-\hline
-\textbf{Parameter / Audit Criterion} & \textbf{Observed / Calculated Value} & \textbf{Regulatory / Optical Threshold} \\
-\hline
-Sampled test snapshots & $714,123$ images & Stratified across all 24 diurnal hours \\
-Camera mounting height ($H$) & $6.0 - 15.0$~m & High-angle urban traffic mast \\
-Camera pitch angle ($\theta$) & $15^\circ - 40^\circ$ & Oblique downward traffic viewing \\
-Observation distance ($D$) & $15.0 - 60.0$~m & Distance to moving traffic flow \\
-Sensor ground sampling distance (GSD) & $2.73 - 3.25$~cm/pixel & Resolution at typical road surface \\
-Motorcycle plate projection & $\approx 7 \times 5$ pixels & Standard plate dimensions ($19 \times 14$~cm) \\
-Plate character stroke height & $\approx 1.8$ pixels & Nyquist OCR limit: $\geq 16.0$ pixels \\
-Biometric face area & $< 8 \times 8$ pixels & Occluded by helmets ($100\%$) and face masks ($>85\%$) \\
-Facial / Plate recognition rate & $0.00\%$ & Zero PII violation across full audit \\
-Regulatory compliance status & Full compliance & Privacy by Design / Decree 13/2023/ND-CP and Law 91/2025/QH15 \\
-\hline
-\end{tabular}
-\end{table}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
+\toprule
+\textbf{Audit Dimension / Parameter} & \textbf{Empirical Measurement} & \textbf{Regulatory / Optical Threshold \& Empirical Context} \\
+\midrule
+Automated snapshot screening census & $\mathbf{714,123\text{ frames}}$ & Full multi-camera archive ($608$ stations, $93.6$ hours) evaluated via automated detector pre-screening \\
+\addlinespace[1.5pt]
+Automated candidate screening & $\mathbf{0\text{ readable candidates}}$ & YOLOv8x-face \& YOLOv8x/LPRNet ($\tau=0.25$): $1,420$ raw candidate boxes flagged; $0$ readable after manual review (acknowledged low recall on $512\times288$ px) \\
+\addlinespace[1.5pt]
+Targeted high-risk stress audit & $\mathbf{1,000\text{ frames}}$ & Worst-case optical geometry: lowest gantries ($H \approx 6.0$~m, $D < 20$~m) during peak midday illumination ($11:00$--$13:00$ ICT) \\
+\addlinespace[1.5pt]
+Stratified random census audit & $\mathbf{2,000\text{ frames}}$ & Uniformly drawn across all $608$ stations and $24$ diurnal hours; $0$ identifiable plates or faces detected \\
+\addlinespace[1.5pt]
+Multi-rater blind inspection & $\mathbf{0\text{ readable plates / faces}}$ & Evaluated by three independent human raters ($100\%$ unanimous agreement, $P_o = 1.0$ across $3,000$ total audited frames) \\
+\addlinespace[1.5pt]
+Positive control rater calibration & $\mathbf{100.0\%\text{ sensitivity}}$ & $50$ close-up ground photos ($<5$~m) with legible text; verified $100\%$ detection recall across all $3$ raters \\
+\addlinespace[1.5pt]
+Camera mounting elevation ($H$) & $\mathbf{6.0 - 15.0\text{ m}}$ & Municipal overhead gantries cataloged from official technical metadata in \path{metadata/routes.csv} \\
+\addlinespace[1.5pt]
+Camera downward pitch angle ($\theta$) & $\mathbf{15^\circ - 40^\circ}$ & Oblique downward viewports monitoring arterial lane queues \\
+\addlinespace[1.5pt]
+Nominal observation standoff ($D$) & $\mathbf{15.0 - 60.0\text{ m}}$ & Line-of-sight distance from elevated sensor to circulating traffic streams \\
+\addlinespace[1.5pt]
+Nominal mid-road GSD & $\mathbf{2.73 - 3.25\text{ cm/pixel}}$ & Mid-road viewports ($25$--$35$~m), degrading to $>5.0$~cm/px in background \\
+\addlinespace[1.5pt]
+Worst-case foreground geometry ($D_{\min} \approx 15.0$~m) & $\mathbf{\text{GSD} \approx 1.85 - 2.10\text{ cm/px}}$ & Foreground lane plate projection $\approx 9 \times 7$ px, stroke height $\approx 2.5 - 2.8$ px (sub-Nyquist; OCR requires $\ge 16.0$ px) \\
+\addlinespace[1.5pt]
+Motorcycle plate sensor projection & $\mathbf{\approx 7 \times 5\text{ pixels}}$ & Nominal mid-road projection for Vietnamese plates ($19.0 \times 14.0$~cm); character stroke height $< 2.0$~px \\
+\addlinespace[1.5pt]
+Facial biometric region & $\mathbf{< 8 \times 8\text{ pixels}}$ & Physical occlusion: statutory mandatory helmets (Decree 100/2019/ND-CP) and multi-layer fabric sun/dust masks ($>85\%$) \\
+\addlinespace[1.5pt]
+Statistical Rule of Three ($95\%$ CI) & $\mathbf{p \le 0.30\%}$ (Stress sample) \newline $\mathbf{p \le 0.15\%}$ (Random sample) & Upper risk bound for zero violations: $3/1,000 = 0.30\%$ on worst-case stress sample, and $3/2,000 = 0.15\%$ on stratified random sample \\
+\addlinespace[1.5pt]
+Regulatory compliance alignment & $\mathbf{Aligned}$ & Conforms to Vietnamese Decree 13/2023/ND-CP, Decree 47/2020/ND-CP, and Law 91/2025/QH15 \\
+\bottomrule
+\end{tabularx}
+\end{table*}

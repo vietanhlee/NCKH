@@ -1,0 +1,25 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+
+# Test suite directory
+tests/
+test/
+
+# Weights & checkpoints
+checkpoints/
+*.pth
+*.pt
+
+# Visual outputs & temporary artifacts
+*.png
+!direction_data_article/**/*.png
+temp/
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+

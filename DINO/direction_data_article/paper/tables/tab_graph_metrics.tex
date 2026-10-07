@@ -2,52 +2,54 @@
 \begin{table*}[!htbp]
 \centering
 \footnotesize
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.28}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.18}
 \caption{Quantitative topological properties and directional asymmetry metrics of the derived road routing graph ($R_{\text{cutoff}} = 6.0$~km).}
 \label{tab:graph_metrics}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.5cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Topological Metric / Parameter} & \textbf{Empirical Measurement} & \textbf{Physical / Methodological Interpretation} \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{A. Network Scale \& Spatial Reachability ($R_{\text{cutoff}} = 6.0$~km)}} \\
-\addlinespace[2.5pt]
-Total indexed graph nodes ($N$) & $\mathbf{608\text{ nodes}}$ & Active physical surveillance camera stations in metropolitan core \\
-\addlinespace[3.5pt]
+\addlinespace[1.5pt]
+Total indexed graph nodes ($N$) & $\mathbf{608\text{ nodes}}$ & Active physical surveillance camera stations across urban and peri-urban corridors \\
+\addlinespace[2pt]
 Valid directed corridor links ($|E|$) & $\mathbf{2,450\text{ edges}}$ & Sequential corridor links with driving distance $d_{ij} \le 6.0$~km \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Connected camera station pairs & $\mathbf{1,760\text{ pairs}}$ & Unique station pairs connected by $\ge 1$ directed corridor \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Adjacency matrix sparsity ratio & $\mathbf{99.34\%}$ (Density: $\mathbf{0.66\%}$) & Compact sparse graph tensor for spatial GNN convolutions \\
-\addlinespace[3.5pt]
-Inter-station routing distance & $\mathbf{1159.6 \pm 1088.9\text{ m}}$ & Median: $823.0$~m (Range: $[3.0, 6,000.0]$~m; IQR: $[384.0, 1,560.0]$~m) \\
+\addlinespace[2pt]
+Inter-station routing distance & $\mathbf{1159.6 \pm 1088.9\text{ m}}$ & Median: $823.0$~m (Range: $[3.0, 6,000.0]$~m; IQR: $[384.0, 1,560.0]$~m; $p_{90}: 2,681.0$~m; $58.98\% \le 1.0$~km) \\
+\addlinespace[2pt]
+Network tortuosity index ($\tau$) & $\mathbf{1.25 \pm 0.61}$ & Median: $1.12$ (IQR: $[1.01, 1.33]$; $d_{ij} \ge 100$~m); route circuitousness \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{B. Directional Asymmetry \& Corridor Taxonomy}} \\
-\addlinespace[2.5pt]
+\addlinespace[1.5pt]
 Unidirectional corridor pairs (no reverse edge) & $\mathbf{1,070\text{ pairs}}$ ($\mathbf{60.80\%}$) & Arterial one-way rules (OSM oneway) and corridor pruning asymmetry \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Bidirectional corridor pairs & $\mathbf{690\text{ pairs}}$ ($\mathbf{39.20\%}$) & Two-way arterials mutually accessible in both traffic directions \\
-\addlinespace[3.5pt]
-Significant distance asymmetry \newline ($|d_{ij} - d_{ji}| \ge 50$~m) & $\mathbf{232\text{ pairs}}$ ($\mathbf{33.62\%}$) & Physical median barriers, grade-separated flyovers, U-turns \\
-\addlinespace[3.5pt]
-Metric symmetric corridor pairs \newline ($|d_{ij} - d_{ji}| < 50$~m) & $\mathbf{458\text{ pairs}}$ ($\mathbf{66.38\%}$) & Divided road corridors with immediate median openings \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
+Significant distance asymmetry \newline ($|d_{ij} - d_{ji}| \ge 50$~m) & $\mathbf{238\text{ pairs}}$ ($\mathbf{34.49\%}$) & Physical median barriers, grade-separated flyovers, U-turns ($231$ pairs $>50$m, $243$ pairs $\ge 50$m) \\
+\addlinespace[2pt]
+Metric symmetric corridor pairs \newline ($|d_{ij} - d_{ji}| < 50$~m) & $\mathbf{452\text{ pairs}}$ ($\mathbf{65.51\%}$) & Divided road corridors with immediate median openings \\
+\addlinespace[2pt]
 Directional distance discrepancy & $\mathbf{115.9 \pm 266.2\text{ m}}$ & Median: $24.0$~m; Maximum divergence: $\mathbf{2,780.0\text{ m}}$ ($2.78$~km) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{C. Structural Degree Distributions \& Graph Connectivity}} \\
-\addlinespace[2.5pt]
+\addlinespace[1.5pt]
 Average node in-degree / out-degree & $\mathbf{4.03 \pm 2.16}$ / $\mathbf{4.03 \pm 2.58}$ & In-degree median: $4.0$ (max: $14$); Out-degree median: $3.0$ (max: $17$) \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Standard interconnected stations & $\mathbf{598\text{ stations}}$ & Regular multi-leg intersections and connected arterial segments \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Topological sink stations (out-deg = 0) & $\mathbf{5\text{ stations}}$ & Stations 212, 284, 443, 446, 516 (directional arterial terminuses) \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Topological source stations (in-deg = 0) & $\mathbf{3\text{ stations}}$ & Stations 215, 498, 557 (outbound arterial origins) \\
-\addlinespace[3.5pt]
-Geodetically isolated stations & $\mathbf{2\text{ stations}}$ & Stations 141 and 489 ($d_{ij} > 6.0$~km to all other camera nodes) \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
+Geodetically isolated stations & $\mathbf{2\text{ stations}}$ & Stations 141, 489 ($d_{ij} > 6.0$~km to all other camera nodes) \\
+\addlinespace[2pt]
 Weakly connected components & $\mathbf{6\text{ components}}$ & Giant component: 599 nodes (98.5\%); 5 subgraphs: 3, 2, 2, 1, 1 \\
-\addlinespace[3.5pt]
+\addlinespace[2pt]
 Strongly connected components & $\mathbf{19\text{ components}}$ & Strongly connected directed sub-networks and cyclic loops \\
 \bottomrule
 \end{tabularx}

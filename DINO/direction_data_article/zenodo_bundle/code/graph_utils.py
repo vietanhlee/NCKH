@@ -118,21 +118,30 @@ def calculate_normalized_laplacian(adj: np.ndarray, symmetrize: bool = True) -> 
     return L_norm
 
 
-def compute_chebyshev_laplacian(adj: np.ndarray, lambda_max: Optional[float] = None) -> np.ndarray:
+def compute_chebyshev_laplacian(adj: np.ndarray, lambda_max: Optional[float] = 2.0) -> np.ndarray:
     """
-    Tính Scaled Chebyshev Graph Laplacian cho xấp xỉ đa thức Chebyshev (ChebNet / STGCN):
-        L_tilde = (2 / lambda_max) * L - I
+    Tính toán Scaled Chebyshev Graph Laplacian cho các mô hình Spatio-Temporal Graph ConvNet (STGCN / ChebNet):
+        L_tilde = (2 / lambda_max) * L_sym - I_N
+
+    Theo lý thuyết phổ đồ thị (Spectral Graph Theory - Chung, 1997) và Equation (5) của bài báo IC4SD-TrafficSnap:
+    Trên toàn bộ mạng lưới N = 608 trạm (chứa các thành phần phân tách K_2 có cạnh đối xứng), trị riêng lớn nhất
+    toàn cục là lambda_max = 2.0. Việc thiết lập lambda_max = 2.0 theo lý thuyết chặn trên đảm bảo:
+        L_tilde = L_sym - I_N
+    với phổ giá trị nằm nghiêm ngặt trong đoạn [-1, 1], triệt tiêu hoàn toàn nguy cơ phân kỳ số học
+    trong chuỗi đệ quy đa thức Chebyshev T_k(L_tilde).
 
     Args:
-        adj (np.ndarray): Ma trận kề trọng số [N, N].
-        lambda_max (float, optional): Trị riêng lớn nhất của ma trận Laplacian L. Nếu None, sẽ tự tính.
+        adj (np.ndarray): Ma trận kề trọng số mạng lưới [N, N].
+        lambda_max (float, optional): Trị riêng lớn nhất của Laplacian L_sym. Mặc định là 2.0 (chuẩn lý thuyết).
+                                      Nếu truyền None, hàm sẽ tự động tính trị riêng lớn nhất thực nghiệm từ eigvalsh.
 
     Returns:
-        np.ndarray: Scaled Laplacian [N, N] có phổ giá trị nằm trong đoạn [-1, 1].
+        np.ndarray: Ma trận Chebyshev Scaled Laplacian [N, N] (kiểu float32).
     """
     L_norm = calculate_normalized_laplacian(adj, symmetrize=True)
     N = adj.shape[0]
 
+    # Nếu người dùng yêu cầu tính động hoặc lambda_max là None
     if lambda_max is None:
         try:
             eigenvalues = np.linalg.eigvalsh(L_norm)

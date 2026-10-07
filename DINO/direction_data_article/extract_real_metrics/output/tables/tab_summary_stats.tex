@@ -2,53 +2,61 @@
 \begin{table*}[!htbp]
 \centering
 \footnotesize
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.18}
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.10}
 \caption{Empirical characteristics, acquisition timeline, and photometric descriptors of the visual snapshot corpus.}
 \label{tab:summary_stats}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.5cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Characteristic / Descriptor} & \textbf{Empirical Measurement} & \textbf{Technical Specification / Dataset Context} \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{A. Ingestion Timeline \& Quantitative Volume}} \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Observation duration & $\mathbf{93.6\text{ hours}}$ ($3.90$ days) & Spanning 5 calendar days: Oct 2 (17:37) to Oct 6 (15:12 ICT) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Total valid snapshots collected & $\mathbf{714,123\text{ frames}}$ & Time-lapse surveillance image bank \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Monitored surveillance endpoints & $\mathbf{608\text{ stations}}$ & Integrated active municipal camera network across urban corridors; mean: $1,174.5$ frames/station (up to $1,268$) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Total archive storage volume & $\mathbf{44.38\text{ GiB}}$ ($\mathbf{47.66\text{ GB}}$) & 3-channel RGB JPEG stream archive (Quality factor $\approx 75$--$80$) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Native snapshot frame resolution & $\mathbf{512 \times 288\text{ pixels}}$ & $16:9$ streaming aspect ratio ($100\%$ uniform) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Average snapshot file size & $\mathbf{65.17 \pm 13.36\text{ KB}}$ & Median: $64.8$~KB (Empirical range: $[31.2, 118.4]$~KB) \\
-\addlinespace[1.5pt]
-Empirical sampling interval ($\Delta T$) & $\mathbf{269.0 \pm 239.7\text{ s}}$ & Median: $263.0$~s (Nominal target: $300$~s / 5.0 min); $p_{50} = 263.0$~s, $p_{90} = 300.0$~s, $p_{95} = 520.0$~s, $p_{99} \approx 1,200.0$~s, $\max = 4.12$~h \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
+Active pairwise interval ($\Delta T < 3,600$~s) & $\mathbf{269.0 \pm 239.7\text{ s}}$ & Median: $263.0$~s ($88.4\% \le 300$~s; $p_{90} \approx 312.0$~s, $p_{95} \approx 520.0$~s, $p_{99} \approx 1,200.0$~s) \\
+\addlinespace[1pt]
+Global fleet interval range & $[2.0\text{ s}, 4.12\text{ h}]$ & Empirical extremes (max: $14,832$~s during peripheral link disruption) \\
+\addlinespace[1pt]
+Station-wise wall-clock interval & $\mathbf{286.9\text{ s/frame/station}}$ & $93.6\text{h} \times 3,600\text{s} / 1,174.5$ mean snapshots across fleet \\
+\addlinespace[1pt]
+Fleet-wide aggregate throughput & $\mathbf{0.47\text{ s/frame}}$ & Overall fleet ingestion rate ($\approx 2.12$ frames/s received across all 608 stations) \\
+\addlinespace[1pt]
+Camera station continuity profile & \textbf{512 / 82 / 14 stations} & High: $\ge 1,100$ frames ($84.2\%$); Moderate: $600$--$1,099$ ($13.5\%$); Intermittent: $<600$ ($2.3\%$) (Nominal baseline: $1,123$ frames at 300~s polling) \\
+\addlinespace[1pt]
 Clock-based day / night schedule & $\mathbf{48.8\% \;/\; 51.2\%}$ & Daytime ($06:00$--$18:00$: $348,464$) vs. Nighttime ($365,659$ frames) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Client ingestion time latency ($\Delta t_{\text{lag}}$) & $\mathbf{15.0 \pm 4.2\text{ s}}$ & Buffer-to-disk offset on NTP-synchronized stations ($1.8\%$ un-synchronized) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{B. Photometric Diversity \& Optical Descriptors}} \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Perceived mean luminance ($Y$) & $\mathbf{98.23 \pm 16.35}$ & ITU-R BT.601 8-bit grayscale range $[0, 255]$ \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Root-mean-square (RMS) contrast & $\mathbf{45.70}$ & Textural intensity variation between asphalt and vehicles \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Shannon spatial entropy & $\mathbf{7.28 \pm 0.33\text{ bits}}$ & Pixel spatial information density (theoretical maximum: 8.0) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Laplacian edge sharpness & $\mathbf{3015.71 \pm 1499.86}$ & High empirical focus variance $\text{Var}(\nabla^2 I)$ confirming adequate optical focus \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{C. Motion Dynamics \& Visual Privacy Safeguards}} \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Consecutive frame difference (MAD) & Median: $\mathbf{9.45}$ ($\mu = 10.82 \pm 3.65$) & Mean Absolute Difference across 5-min consecutive pairs (8-bit grayscale) \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Active pixel displacement ratio & Median: $\mathbf{15.82\%}$ ($\mu = 18.41 \pm 6.20\%$) & Fraction of pixels with $|I_t - I_{t-1}| > 15$ reflecting moving vehicular flow \\
-\addlinespace[1.5pt]
+\addlinespace[1pt]
 Inter-frame duplicate screening & $\mathbf{\text{Filtered}}$ & Stream buffer duplicates ($\text{MAD} < 0.5$) removed by deduplication; 1st percentile of inter-frame MAD is $2.80$ \\
-\addlinespace[1.5pt]
-Personal data identification (PII) & $\mathbf{0.00\%}$ ($N = 714,123	ext{ frames}$) & Quantified negligible risk; 95\% CI upper bound $\le 0.0015\%$ (Rule of Three) \\
+\addlinespace[1pt]
+Personal data identification (PII) & $\mathbf{0\text{ violations}}$ ($N_{\text{audit}} = 1,000$) & Multi-tiered audit; 95\% CI upper bound $p \le 0.30\%$ on targeted manual audit ($3/N_{\text{audit}}$); zero legible biometrics across census \\
 \bottomrule
 \end{tabularx}
 \end{table*}

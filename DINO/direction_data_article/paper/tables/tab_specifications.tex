@@ -1,12 +1,12 @@
 % Table 1: Specifications Table (Elsevier Data in Brief Standard Template)
 \begin{table*}[!htbp]
 \centering
-\small
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.15}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.08}
 \caption{Specifications Table of the IC4SD-TrafficSnap Dataset.}
 \label{tab:specifications}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash\bfseries}p{4.2cm} >{\raggedright\arraybackslash}X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash\bfseries}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 Subject & Computer Science \\
 \midrule
@@ -21,14 +21,14 @@ Geospatial metadata: Tabular CSV (\path{routes.csv}, \path{stations.csv}, \path{
 Graph tensors: NumPy binary arrays (\path{distance_km.npy}, \path{direction.npy}) and tabular edge list (\path{edges.csv}); \newline
 Code: Python source files (\path{code/}). \\
 \midrule
-Description of data collection & Snapshots were collected across $608$ indexed surveillance stations in Ho Chi Minh City over $93.6$ continuous hours (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) with an empirical sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s, $p_{90}=300.0$~s, $p_{95}=520.0$~s, $p_{99}\approx 1,200.0$~s; heavy right tail driven by 14 peripheral stations with link interruptions). Camera positions are mapped to OpenStreetMap road geometry via a three-stage sequential corridor pruning pipeline, yielding a derived directed spatial graph with $2,450$ corridor links within a $6.0$~km driving search horizon ($1,070$ unidirectional links and $232$ distance-asymmetric pairs, alongside $458$ metric-symmetric pairs). \\
+Description of data collection & Snapshots were collected across $608$ indexed surveillance stations in Ho Chi Minh City over $93.6$ continuous hours (October 2, 2026, 17:37 to October 6, 2026, 15:12 ICT) with an empirical pairwise active sampling interval of $\Delta T = 269.0 \pm 239.7$~s (median: $263.0$~s, $88.4\% \le 300$~s, $p_{90} \approx 312.0$~s, $p_{95} \approx 520.0$~s, $p_{99} \approx 1,200.0$~s; station-wise wall-clock interval: $286.9$~s/frame/station; fleet aggregate throughput: $0.47$~s/frame; global interval range: $[2.0\text{ s}, 4.12\text{ h}]$ reflecting distributed upstream network latency alongside prolonged link outages at 14 peripheral stations). Camera positions are mapped to OpenStreetMap road geometry via a three-stage sequential corridor pruning pipeline, yielding a derived directed spatial graph with $2,450$ corridor links within a $6.0$~km driving search horizon ($1,070$ unidirectional links and $238$ distance-asymmetric pairs, alongside $452$ metric-symmetric pairs; network tortuosity $\tau = 1.25 \pm 0.61$). \\
 \midrule
 Data source location & Region: Ho Chi Minh City, Vietnam (metropolitan urban core and peri-urban corridors including Thu Duc City, District 12, Binh Chanh, and Hoc Mon); \newline
-Coordinates: $[10.64^\circ\text{N} - 10.99^\circ\text{N}, 106.45^\circ\text{E} - 106.85^\circ\text{E}]$ (dense urban core: $[10.70^\circ\text{N} - 10.88^\circ\text{N}, 106.60^\circ\text{E} - 106.78^\circ\text{E}]$). \\
+Coordinates: $[10.642472^\circ\text{N} - 10.988295^\circ\text{N}, 106.452713^\circ\text{E} - 106.850624^\circ\text{E}]$ (dense urban core: $[10.70^\circ\text{N} - 10.88^\circ\text{N}, 106.60^\circ\text{E} - 106.78^\circ\text{E}]$). \\
 \midrule
 Data accessibility & Repository name: Zenodo; \newline
-Direct URL: \url{https://doi.org/10.5281/zenodo.22929940} (Release v2.0); \newline
-Licensing: Surveillance imagery is released under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) for academic research; derived road network graph is licensed under the Open Database License (ODbL); Python software utilities are distributed under the MIT License. \\
+Direct URL: \url{https://doi.org/10.5281/zenodo.22929940} (Dataset evolution: expands upon the initial pilot labeled subset IC4SD-Traffic-HCM into Release v2.0 comprising the 714,123-snapshot corpus, $608 \times 608$ directed road graph, and PyTorch ingestion toolchain); \newline
+Licensing: Surveillance camera imagery is provided under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) for non-commercial academic research; derived road network graph is licensed under the Open Database License (ODbL); Python software utilities are distributed under the MIT License. \\
 \midrule
 Related research article & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
 \bottomrule

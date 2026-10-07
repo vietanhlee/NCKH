@@ -13,20 +13,44 @@ DINO/
 │   ├── corrupt.py                          # Bộ hư hao khung hình FCS (8 loại hư hao ngoại cảnh thực tế)
 │   └── gpu_utils.py                        # Quản lý DataParallel, auto-scaling, unwrap checkpoint
 │
-├── direction1_bg_guided_dino/              # [HƯỚNG 1] BG-Guided DINO Continual SSL Pre-training
+├── direction1_bg_guided_dino/              # [HƯỚNG 1 CŨ] BG-Guided DINO Continual SSL Pre-training (Cần ảnh nền)
 │   ├── dataset.py                          # Multi-Crop + Foreground-Aware Masking (FAM)
 │   ├── models.py                           # Student, Teacher EMA, DINOHead Prototype Projection
 │   ├── losses.py                           # DINO [CLS] + iBOT [Patch] Multi-Crop Loss
 │   ├── train.py                            # CLI huấn luyện Continual SSL
 │   └── README.md
 │
-├── direction2_scene_decomposition/         # [HƯỚNG 2] Noise-Aware Scene Decomposition (Laplace σ Prior)
-│   ├── dataset.py                          # Dataset đồng bộ không gian Origin & Background (K ngày khác nhau)
+├── direction1_new/                         # [HƯỚNG 1 MỚI - ĐỘT PHÁ] Camera-Invariant SSL Pretraining (Không cần ảnh nền)
+│   ├── features.py                         # Trích xuất patch tokens DINOv3 đóng băng và chiếu PCA 64 chiều
+│   ├── tam.py                              # Temporal Atypicality Map & PositionStats (K=4 cụm trạng thái)
+│   ├── masking.py                          # Atypicality-Guided Masking (AGM) Gumbel Top-K
+│   ├── srs.py                              # Static Region Swap giữa 2 frame khác ngày cùng camera
+│   ├── losses.py                           # DINO [CLS] + iBOT [Patch] + KoLeo Differential Entropy Loss
+│   ├── train.py                            # Pipeline huấn luyện tự giám sát không cần ảnh nền
+│   └── README.md                           # Tài liệu kỹ thuật chi tiết
+│
+├── direction2_scene_decomposition/         # [HƯỚNG 2 CŨ] Noise-Aware Scene Decomposition (Cần background prior)
+│   ├── dataset.py                          # Dataset đồng bộ không gian Origin & Background
 │   ├── models.py                           # Multi-scale ViT + DPT Head (M_alpha, F, B_hat, sigma)
-│   ├── losses.py                           # Reconstruction + Laplace Prior + Cross-Day Shared Bg + Exclusion Loss
+│   ├── losses.py                           # Reconstruction + Laplace Prior + Cross-Day Shared Bg
 │   ├── train.py                            # Pipeline huấn luyện phân rã cảnh
 │   ├── infer.py                            # Inpainting tự động: Xóa xe, tách nền đường sạch
 │   └── README.md
+│
+├── direction2_new/                         # [HƯỚNG 2 MỚI - ĐỘT PHÁ] Prior-Free Traffic Scene Decomposition (Không cần ảnh nền)
+│   ├── scene_fit.py                        # Giai đoạn 1: Khớp SceneBasis đa chiếu sáng (E0, Ej, ell) bằng Robust IRLS
+│   ├── solve_ell.py                        # Solver giải tích Weighted Least Squares cho mã ánh sáng ell
+│   ├── models.py                           # TrafficDecompositionNet (5 đầu ra: M, Fg, Bg, log_sigma, ell)
+│   ├── losses.py                           # SceneDecompositionLossV2 (Laplace NLL, Sparsity, Total Variation)
+│   ├── dataset.py                          # Nạp cặp ảnh và pseudo-backgrounds tự sinh
+│   ├── train.py                            # Pipeline huấn luyện mạng phân rã sâu
+│   ├── infer.py                            # Suy luận phân rã cảnh và xóa xe trên ảnh thực tế
+│   └── README.md                           # Tài liệu kỹ thuật chi tiết
+│
+├── tests/                                  # Thư mục kiểm thử tự động (được cấu hình trong .gitignore)
+│   ├── test_direction1_new.py              # Unit tests Hướng 1 Mới (TAM, SRS, AGM, Losses)
+│   ├── test_direction2_new.py              # Unit tests Hướng 2 Mới (SceneBasis, solve_ell, LossV2)
+│   └── test_all_directions.py              # Test suite toàn diện 13 kịch bản cho toàn bộ hệ thống
 │
 ├── direction3_foreground_enhanced_counting/# [HƯỚNG 3] Foreground-Enhanced Counting (Stage 1 Upgrade)
 │   ├── dataset.py                          # Nạp CSV nhãn, tính Δ map, tạo tensor 4 kênh (RGB + Δ)
@@ -83,9 +107,10 @@ DINO/
 
 | Hướng | Tên Nghiên Cứu | Thư Mục | Cơ Chế Cốt Lõi | Venue Đề Xuất |
 |:---|:---|:---|:---|:---|
-| **H1** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS, CVPR |
-| **HG** | **Camera-Invariant SSL (Không Cần Nền)** | `directionG_camera_ssl/` | TAM (Temporal Atypicality Map) + AGM Masking + Hoán đổi vùng tĩnh SRS đa ngày | IEEE T-PAMI, CVPR |
-| **H2** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh tự giám sát 2 giai đoạn (Robust IRLS Scene Basis + TrafficDecompositionNet) | IEEE TIP, Pattern Recognition |
+| **H1 Mới** ⭐ | **Camera-Invariant SSL (Không Cần Nền)** | `direction1_new/` | TAM (Temporal Atypicality Map) + AGM Masking + Hoán đổi vùng tĩnh SRS đa ngày | IEEE T-PAMI, CVPR |
+| **H2 Mới** ⭐ | **Prior-Free Scene Decomposition** | `direction2_new/` | Bóc tách cảnh không cần ảnh nền qua SceneBasis đa chiếu sáng + Mạng nơ-ron Laplace $\sigma$ | CVPR, IEEE TIP |
+| **H1 Cũ** | **BG-Guided DINO Continual SSL** | `direction1_bg_guided_dino/` | Foreground-Aware Masking (FAM) ép ViT học biểu diễn xe cộ thay vì nền vô nghĩa | IEEE T-ITS |
+| **H2 Cũ** | **Noise-Aware Scene Decomposition** | `direction2_scene_decomposition/` | Bóc tách cảnh có giám sát ảnh nền mốc (Cross-day Background Prior) | Pattern Recognition |
 | **H3** | **Foreground-Enhanced Counting** | `direction3_foreground_enhanced_counting/` | Mở rộng Patch Embed 4 kênh (RGB+$\Delta$) kết hợp Zero-init & $\Delta$-Dropout | IEEE T-ITS, EAAI |
 | **H4** | **Road-Space Occupancy & Causal Onset** | `direction4_temporal_density/` | Định lượng chiếm dụng strictly trên Road Mask + Causal GRU cảnh báo sớm kẹt xe | TR-Part C, IEEE T-ITS |
 | **H6** | **Persistence Anomaly Detection** | `direction6_anomaly_detection/` | Temporal Feature Median Pooling + Phân tách lỗi camera vs sự cố đường | TR-Part C, Pattern Recognition |
@@ -96,17 +121,24 @@ DINO/
 
 ## ⚡ Cơ Chế Tự Động Nhận Diện & Huấn Luyện Đa GPU (Multi-GPU Engine)
 
-Tất cả các pipeline huấn luyện đều được tích hợp module `common/gpu_utils.py` tự động tối ưu hóa phần cứng:
+Tất cả các pipeline huấn luyện đều được tích hợp module `common/gpu_utils.py` tự động tối ưu hóa phần hardware:
 - **Tự động đếm GPU (`torch.cuda.device_count()`)**: Nếu môi trường có 2x T4 (Kaggle) hoặc 4x/8x GPU (Server), hệ thống sẽ tự động bọc `nn.DataParallel` để phân phối tính toán song song trên TẤT CẢ các GPU cùng lúc.
 - **Tự động mở rộng Batch Size (Linear Batch Scaling)**: $\text{Total Batch Size} = \text{batch\_size\_per\_gpu} \times N_{\text{gpus}}$.
 - **Tự động điều chỉnh Tốc độ học (Linear LR Scaling Rule)**: $\text{Effective LR} = \text{base\_lr} \times N_{\text{gpus}}$.
 - **Lưu Checkpoint an toàn**: Tự động giải phóng lớp bọc `module.` qua hàm `unwrap_model()`, giúp weights tương thích hoàn toàn khi load lại ở môi trường 1 GPU hoặc CPU.
-- **Resume Training đầy đủ**: Tải lại trọn vẹn trạng thái huấn luyện cũ (`model`, `optimizer`, `scaler`, `epoch`, `best_metric`) qua cờ `--resume_checkpoint <path>` để tiếp tục train không bị gián đoạn.
+- **Resume Training đầy đủ**: Tải lại trọn vẹn trạng thái huấn luyện cũ (`model`, `optimizer`, `scaler`, `epoch`, `best_metric`) qua cờ `--resume <path>` để tiếp tục train không bị gián đoạn.
 
 ---
 
-## 🧪 Kiểm Thử Toàn Bộ 8 Hướng Trọng Tâm (Smoke Test Runner)
+## 🧪 Kiểm Thử Toàn Bộ Hệ Thống (Unit Tests & Smoke Test Suite)
 Chạy script kiểm thử tự động toàn diện với dữ liệu mô phỏng trong vòng 10 giây:
 ```bash
-python DINO/test_all_directions.py
+# Chạy toàn bộ 13 bài test tích hợp các hướng nghiên cứu
+python tests/test_all_directions.py
+
+# Chạy unit test riêng biệt cho Hướng 1 Mới
+python -m unittest tests/test_direction1_new.py
+
+# Chạy unit test riêng biệt cho Hướng 2 Mới
+python -m unittest tests/test_direction2_new.py
 ```

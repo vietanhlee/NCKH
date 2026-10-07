@@ -78,7 +78,7 @@ def generate_fig1_spatial_map():
         ("District 12 (North Gate) ↑", 10.880, 106.675, "center")
     ]
     # Subtle dashed boundary circle for historic CBD core
-    cbd_circle = plt.Circle((106.695, 10.775), 0.035, color='#c0392b', fill=False, linestyle='--', linewidth=1.2, alpha=0.75, label='Metropolitan Core Area')
+    cbd_circle = plt.Circle((106.695, 10.775), 0.035, color='#c0392b', fill=False, linestyle='--', linewidth=1.2, alpha=0.75, label='Central Business District (CBD)')
     ax.add_patch(cbd_circle)
     ax.text(106.695, 10.735, "CBD Core Area", fontsize=8.5, fontweight='bold', color='#c0392b', ha='center',
             bbox=dict(boxstyle="round,pad=0.2", facecolor="#ffffff", alpha=0.85, edgecolor="#c0392b", lw=0.6))
@@ -95,6 +95,8 @@ def generate_fig1_spatial_map():
     cb = fig.colorbar(hb, ax=ax, orientation='vertical', pad=0.02, shrink=0.82)
     cb.set_label('Camera Station Spatial Density (per Hexbin)', fontsize=9)
 
+    ax.set_xlim(106.43, 106.87)
+    ax.set_ylim(10.63, 11.01)
     ax.legend(loc='lower left', framealpha=0.92, fontsize=8.5)
     fig.tight_layout()
     
@@ -202,9 +204,10 @@ def generate_fig2_temporal_and_photometric():
     # Hardware Lag & Ingestion performance text box placed in airy top-right without touching bars
     info_text = (
         r"$\mathbf{Ingestion\;Performance:}$" + "\n"
-        r"$\bullet$ Mean: $\Delta T = 269.0 \pm 239.7$~s" + "\n"
+        r"$\bullet$ Active Mean: $\Delta T = 269.0 \pm 239.7$~s" + "\n"
         r"$\bullet$ Median: $263.0$~s (Mode: $240$--$270$~s)" + "\n"
-        r"$\bullet$ $\leq 300$~s: $\mathbf{88.4\%}$ | $300$--$600$~s: $\mathbf{7.8\%}$" + "\n"
+        r"$\bullet$ $\leq 300$~s: $\mathbf{88.4\%}$ | $p_{90} \approx 312.0$~s" + "\n"
+        r"$\bullet$ $300$--$600$~s: $\mathbf{7.8\%}$ | $>600$~s: $\mathbf{3.8\%}$" + "\n"
         r"$\bullet$ Hardware lag: $\Delta t_{\mathrm{lag}} = 15.0 \pm 4.2$~s"
     )
     ax2.text(0.97, 0.95, info_text, transform=ax2.transAxes, verticalalignment='top', horizontalalignment='right',
@@ -225,13 +228,13 @@ def generate_fig3_graph_topology():
     
     # Subplot A: Donut chart for directionality
     oneway = 1070
-    bidi_asym = 232
-    bidi_sym = 458
+    bidi_asym = 238
+    bidi_sym = 452
     
     labels = [
         f'Unidirectional corridors\n(no reverse edge)\n{oneway:,} pairs (60.8%)',
-        f'Two-way asymmetric\n(>50m divergence)\n{bidi_asym:,} pairs (13.2%)',
-        f'Two-way symmetric\n(<=50m divergence)\n{bidi_sym:,} pairs (26.0%)'
+        f'Two-way asymmetric\n($|d_{{ij}} - d_{{ji}}| \\geq 50$ m)\n{bidi_asym:,} pairs (13.5%)',
+        f'Two-way symmetric\n($|d_{{ij}} - d_{{ji}}| < 50$m)\n{bidi_sym:,} pairs (25.7%)'
     ]
     sizes = [oneway, bidi_asym, bidi_sym]
     colors = ['#e67e22', '#c0392b', '#27ae60']

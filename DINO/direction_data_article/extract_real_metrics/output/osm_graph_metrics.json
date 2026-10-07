@@ -1,5 +1,5 @@
 {
-  "dataset_name": "HCMC-TrafficSnap",
+  "dataset_name": "IC4SD-TrafficSnap",
   "num_nodes": 608,
   "num_directed_edges": 2450,
   "cutoff_radius_meters": 6000.0,
@@ -20,9 +20,10 @@
     "oneway_only_pairs_pct": 60.8,
     "bidirectional_pairs": 690,
     "bidirectional_pairs_pct": 39.2,
-    "bidirectional_asymmetric_pairs_over_50m": 232,
-    "bidirectional_asymmetric_pct": 33.62,
-    "bidirectional_symmetric_pairs": 458,
+    "bidirectional_asymmetric_pairs_over_50m": 238,
+    "bidirectional_asymmetric_pct": 34.49,
+    "bidirectional_symmetric_pairs": 452,
+    "bidirectional_symmetric_pct": 65.51,
     "mean_bidi_distance_delta_meters": 115.95,
     "max_bidi_distance_delta_meters": 2780.0
   },

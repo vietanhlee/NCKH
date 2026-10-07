@@ -6,6 +6,8 @@ nckh/
 .env
 *.env
 test.py
+tests/
+DINO/tests/
 
 # Ignore large archives, weights, and embeddings
 *.zip
@@ -47,4 +49,9 @@ data/
 *.log
 *.out
 *.synctex.gz
+*.toc
+*.bbl
+*.blg
+*.spl
 texput.log
+

@@ -1,0 +1,90 @@
+{
+  "dataset_name": "IC4SD-TrafficSnap",
+  "validation_module": "validate_baseline_forecasting_and_correlation.py",
+  "num_stations": 608,
+  "num_directed_edges": 2450,
+  "spatial_temporal_autocorrelation": {
+    "total_directed_edges": 2450,
+    "gaussian_rbf_sigma_km": 1.09,
+    "mean_rbf_weight": 0.5175741052043616,
+    "immediate_proximal_corridors": {
+      "distance_range": "<= 1.0 km",
+      "edge_count": 1445,
+      "pct_edges": 58.97959183673469,
+      "pearson_r_mean": 0.72,
+      "pearson_r_std": 0.13,
+      "interpretation": "Strong spatial co-movement and coherent vehicular progression"
+    },
+    "mid_range_arterial_corridors": {
+      "distance_range": "1.0 < d <= 2.5 km",
+      "edge_count": 736,
+      "pct_edges": 30.04081632653061,
+      "pearson_r_mean": 0.45,
+      "pearson_r_std": 0.17,
+      "interpretation": "Moderate corridor coupling attenuated by intermediate traffic signals"
+    },
+    "long_distance_network_corridors": {
+      "distance_range": "> 3.0 km",
+      "edge_count": 192,
+      "pct_edges": 7.836734693877551,
+      "pearson_r_mean": 0.18,
+      "pearson_r_std": 0.11,
+      "interpretation": "Diffuse network-level background correlation"
+    }
+  },
+  "forecasting_benchmark": [
+    {
+      "model_architecture": "Historical Average (HA)",
+      "graph_topology": "None",
+      "mae": 4.18,
+      "rmse": 6.25,
+      "mape_pct": 38.6,
+      "is_graph_based": false
+    },
+    {
+      "model_architecture": "Vector Auto-Regression (VAR)",
+      "graph_topology": "Fully Connected",
+      "mae": 3.82,
+      "rmse": 5.64,
+      "mape_pct": 35.1,
+      "is_graph_based": false
+    },
+    {
+      "model_architecture": "Temporal GRU",
+      "graph_topology": "None",
+      "mae": 3.45,
+      "rmse": 5.12,
+      "mape_pct": 31.7,
+      "is_graph_based": false
+    },
+    {
+      "model_architecture": "DCRNN (Random Euclidean Graph)",
+      "graph_topology": "Randomized Euclidean W",
+      "mae": 3.21,
+      "rmse": 4.81,
+      "mape_pct": 29.4,
+      "is_graph_based": true
+    },
+    {
+      "model_architecture": "STGCN (Yu et al., 2018)",
+      "graph_topology": "Symmetrized Laplacian (L_tilde)",
+      "mae": 2.84,
+      "rmse": 4.26,
+      "mape_pct": 25.8,
+      "is_graph_based": true
+    },
+    {
+      "model_architecture": "DCRNN (Li et al., 2018)",
+      "graph_topology": "OSRM Directed Diffusion (Pf, Pb)",
+      "mae": 2.61,
+      "rmse": 3.95,
+      "mape_pct": 23.2,
+      "is_graph_based": true
+    }
+  ],
+  "performance_margins": {
+    "mae_reduction_vs_gru_pct": 24.3,
+    "mae_reduction_vs_ha_pct": 37.6,
+    "mae_reduction_vs_random_graph_pct": 18.7
+  }
+}
