@@ -33,8 +33,8 @@
 \setlength{\parindent}{1.5em}
 
 % --- THÔNG TIN BÁO CÁO ---
-\title{\textbf{\Large BÁO CÁO KHOA HỌC TOÀN DIỆN: HỆ SINH THÁI THỊ GIÁC MÁY TÍNH\\TỰ GIÁM SÁT DINO TRAFFIC SUITE CHO CAMERA GIAO THÔNG ĐÔ THỊ}}
-\author{\textbf{Nhóm Nghiên Cứu Thị Giác Máy Tính Đô Thị -- Mạng Lưới Camera TP.HCM}}
+\title{\textbf{\Large BÁO CÁO KHOA HỌC: PHƯƠNG PHÁP LUẬN VÀ THIẾT KẾ KIẾN TRÚC\\HỆ SINH THÁI TỰ GIÁM SÁT DINO TRAFFIC SUITE CHO CAMERA ĐÔ THỊ}}
+\author{\textbf{Nhóm Nghiên Cứu Thị Giác Máy Tính Giao Thông Đô Thị TP.HCM}}
 \date{\today}
 
 \begin{document}
@@ -42,7 +42,7 @@
 \maketitle
 
 \begin{abstract}
-Hệ thống camera giám sát giao thông đô thị (CCTV) tại các siêu đô thị Đông Nam Á như TP.HCM sở hữu đặc thù dòng xe máy chiếm trên 70\%--80\%, tình trạng che khuất dày đặc và dữ liệu ảnh thu nhận theo chu kỳ thưa (3--5 phút/khung hình). Báo cáo khoa học này trình bày chi tiết cơ sở lý thuyết, mô hình hóa toán học và kiến trúc triển khai thực nghiệm của toàn bộ hệ sinh thái \textbf{DINO Traffic Suite} gồm 8 hướng nghiên cứu chuyên sâu hướng tới công bố tại các tạp chí quốc tế Q1 (IEEE TPAMI, IEEE TIP, IEEE T-ITS, Transportation Research Part C). Điểm đột phá trung tâm của hệ thống bao gồm: (1) \textbf{Hướng 1 Mới (Vehicle-Centric SSL)}: Tự học biểu diễn phương tiện bất biến bối cảnh mà không cần ảnh nền mẫu sạch và không cần luồng video dày, thông qua bản đồ khác thường không-thời gian (TAM), che phân tầng có kiểm soát (AGM) và hoán đổi vùng tĩnh đa ngày (SRS); (2) \textbf{Hướng 2 Mới (Prior-Free Scene Decomposition)}: Phân rã cảnh giao thông không cần ảnh nền thông qua hệ cơ sở đa chiếu sáng $\text{SceneBasis}$ thích ứng trực tuyến với độ bất định Laplace ($\sigma$); cùng các hướng mở rộng downstream về đếm xe ít mẫu 4 kênh (Hướng 3), ước lượng mật độ chiếm dụng đường và phân loại mức độ dịch vụ HCM LoS (Hướng 4), phát hiện sự cố kiên định và lỗi camera (Hướng 6), dự báo ùn tắc mạng lưới quy mô thành phố qua ST-GraphWaveNet (Hướng 7), và điều biến thích ứng camera chưa thấy qua FiLM Conditioning (Hướng 8). Toàn bộ hệ thống mã nguồn đã được kiểm thử khép kín 100\% trên test suite 13/13 test cases.
+Hệ thống camera giám sát giao thông đô thị (CCTV) tại TP.HCM sở hữu đặc thù xe máy chiếm trên 70\%--80\%, tình trạng che khuất dày đặc và dữ liệu ảnh thu nhận theo chu kỳ thưa (3--5 phút/khung hình). Báo cáo khoa học này trình bày chi tiết cơ sở lý thuyết, mô hình hóa giải tích và kiến trúc triển khai thực nghiệm của hệ sinh thái nghiên cứu tinh gọn \textbf{DINO Traffic Suite} tập trung vào các bài toán mũi nhọn: (1) \textbf{Hướng 1 Mới (Vehicle-Centric SSL)}: Tự học biểu diễn phương tiện bất biến bối cảnh mà không cần ảnh nền mẫu sạch và không cần luồng video dày, thông qua bản đồ khác thường không-thời gian (TAM), che phân tầng có kiểm soát (AGM) và hoán đổi vùng tĩnh đa ngày (SRS); (2) \textbf{Hướng 2 Mới (Prior-Free Scene Decomposition)}: Phân rã cảnh giao thông không cần ảnh nền thông qua hệ cơ sở đa chiếu sáng $\text{SceneBasis}$ thích ứng trực tuyến với độ bất định Laplace ($\sigma$); cùng hai hệ thống baseline đối chuẩn (Hướng 1 Cũ và Hướng 2 Cũ) và công trình dữ liệu quy mô thành phố IC4SD-TrafficSnap. Toàn bộ mã nguồn đã được chuẩn hóa và kiểm thử khép kín đạt 100\% độ tin cậy toán học.
 \end{abstract}
 
 \hrule
@@ -58,7 +58,7 @@ Hệ thống camera giám sát giao thông đô thị (CCTV) tại các siêu đ
 \subsection{Đặc Thù Dữ Liệu Camera Giao Thông Đô Thị TP.HCM}
 Mạng lưới hơn 600 camera quan sát giao thông đô thị tại TP.HCM cung cấp nguồn dữ liệu thực địa quy mô lớn với các đặc tính vật lý và quang học phức tạp:
 \begin{enumerate}
-    \item \textbf{Khung hình hiện trường ($I_{\text{origin}} \in \mathbb{R}^{H \times W \times 3}$):} Ghi nhận dòng giao thông hỗn hợp với mật độ xe máy cực cao, thường xuyên xảy ra hiện tượng che khuất chồng chéo và khoảng cách giữa các xe nhỏ hơn 0.5 mét. Ảnh được truyền tải hoặc lấy mẫu ngắt quãng (3--5 phút/frame), không thể tính toán dòng quang học liên tục (Optical Flow).
+    \item \textbf{Khung hình hiện trường ($I_{\text{origin}} \in \mathbb{R}^{H \times W \times 3}$):} Ghi nhận dòng giao thông hỗn hợp với mật độ xe máy cực cao, thường xuyên xảy ra hiện tượng che khuất chồng chéo. Ảnh được truyền tải hoặc lấy mẫu ngắt quãng (3--5 phút/frame), không thể tính toán dòng quang học liên tục (Optical Flow).
     \item \textbf{Ảnh nền trung vị ($B_{\text{median}} \in \mathbb{R}^{H \times W \times 3}$):} Được tính toán qua phép lọc trung vị thời gian (Temporal Median Filtering) theo từng slot giờ $s \in [00\text{h}, 23\text{h}]$.
 \end{enumerate}
 
@@ -67,14 +67,14 @@ Trong các nghiên cứu thị giác máy tính cổ điển, ảnh nền median
 \begin{itemize}
     \item \textbf{Bóng ma phương tiện (Ghost Vehicles):} Tại các giao lộ kẹt xe kéo dài suốt 15--30 phút, phương tiện dừng đỗ lâu sẽ bị thuật toán median nuốt trọn vào nền. Hiện tượng này xảy ra nặng nề nhất đúng vào giờ cao điểm.
     \item \textbf{Biến thiên quang học và mặt đường ướt:} Sự dịch chuyển bóng đổ của các tòa nhà, vũng nước mưa phản chiếu ánh sáng và lóa đèn pha ban đêm làm sai lệch trường sai khác pixel thô $\Delta = \|I_{\text{origin}} - B_{\text{median}}\|$.
-    \item \textbf{Cạm bẫy đường tắt nền (Background Shortcut Trap):} Trong ảnh camera tĩnh, diện tích mặt đường và bối cảnh chiếm hơn 75\% khung hình. Nếu áp dụng các mô hình tự học chuẩn (DINO, MAE), mạng nơ-ron có xu hướng học nhận diện góc máy và nền tĩnh thay vì học bản chất phương tiện, dẫn đến sụp đổ khả năng chuyển giao sang camera mới (Cross-Camera Generalization).
+    \item \textbf{Cạm bẫy đường tắt nền (Background Shortcut Trap):} Trong ảnh camera tĩnh, diện tích mặt đường và bối cảnh chiếm hơn 75\% khung hình. Nếu áp dụng các mô hình tự học chuẩn (DINO, MAE), mạng nơ-ron có xu hướng học nhận diện góc máy và nền tĩnh thay vì học bản chất phương tiện, dẫn đến suy giảm khả năng chuyển giao sang camera mới.
 \end{itemize}
 
 \subsection{Triết Lý Khoa Học Mới}
-Hệ sinh thái DINO Suite xác lập hai trụ cột tư tưởng:
+Hệ sinh thái DINO Suite xác lập định vị nghiên cứu tinh gọn:
 \begin{enumerate}
     \item \textbf{Hướng tiếp cận Độc lập Không Cần Nền (Prior-Free):} Trích xuất quy luật xe cộ và đa tạp chiếu sáng trực tiếp từ chuỗi ảnh thưa đa ngày (Hướng 1 Mới và Hướng 2 Mới).
-    \item \textbf{Hướng tiếp cận Coi Nền là Tiền Nghiệm Yếu Có Nhiễu (Noisy Weak Prior):} Khi sử dụng ảnh nền có sẵn, mô hình bắt buộc phải tích hợp bản đồ độ bất định $\sigma(u, v)$ tự học và cơ chế cổng tin cậy $r_i$ để triệt tiêu ảnh hưởng của bóng ma phương tiện.
+    \item \textbf{Hệ thống Đối chuẩn Có Nền (Baseline Priors):} Khảo sát đối đầu trực tiếp với các mô hình sử dụng ảnh nền median có kiểm soát độ bất định (Hướng 1 Cũ và Hướng 2 Cũ).
 \end{enumerate}
 
 \section{TẦNG TIỆN ÍCH DÙNG CHUNG VÀ BỘ CHUẨN ĐỐI SÁNH (COMMON UTILITIES)}
@@ -88,18 +88,10 @@ Hệ số tin cậy quang học nền $r_i \in (0, 1]$ của khung hình thứ $
 \begin{equation}
     r_i = \exp\left( -\frac{\bar{\Delta}_{\text{static}}}{\kappa} \right), \quad \text{với } \bar{\Delta}_{\text{static}} = \frac{1}{|S|} \sum_{(u, v) \in S} |I(u, v) - B(u, v)|
 \end{equation}
-Khi camera bị gió rung lắc hoặc góc máy bị kỹ thuật viên xoay chuyển, thuật toán Biến đổi Fourier Phase Correlation 2D trên vùng tĩnh sẽ phát hiện độ lệch $(\Delta x, \Delta y)$ với độ chính xác sub-pixel.
+Khi camera bị gió rung lắc hoặc góc máy bị xô lệch, thuật toán Biến đổi Fourier Phase Correlation 2D trên vùng tĩnh sẽ phát hiện độ dịch chuyển $(\Delta x, \Delta y)$ với độ chính xác sub-pixel.
 
-\subsection{Bộ Đo Suy Thoái Nền BDB (Background Degradation Benchmark)}
-Để trả lời các phản biện khoa học khắt khe về tính bền vững, hệ thống tích hợp BDB gồm 6 loại nhiễu $\times$ 5 mức độ nghiêm trọng:
-\begin{enumerate}
-    \item \texttt{time\_shift}: Lệch khung giờ so sánh ($\pm 1\text{h} \to \pm 6\text{h}$, đảo ngày/đêm).
-    \item \texttt{camera\_shift}: Dịch chuyển góc nhìn $2 \to 32\text{ px}$ và xoay $0.5^\circ \to 3.0^\circ$.
-    \item \texttt{ghost\_injection}: Chèn bóng ma phương tiện với tỷ lệ phủ $5\% \to 30\%$ diện tích mặt đường.
-    \item \texttt{optical\_change}: Tăng giảm tương phản đột ngột và mô phỏng phản xạ mặt đường ướt.
-    \item \texttt{noise\_compression}: Nhiễu hạt Gauss và nén JPEG chất lượng thấp ($75 \to 5$).
-    \item \texttt{cross\_camera\_swap}: Đánh tráo ảnh nền bằng background của camera tại giao lộ khác.
-\end{enumerate}
+\subsection{Bộ Đo Suy Thoái Nền BDB và Hư Hao FCS}
+Hệ thống tích hợp BDB gồm 6 loại nhiễu $\times$ 5 mức độ nghiêm trọng (\texttt{time\_shift}, \texttt{camera\_shift}, \texttt{ghost\_injection}, \texttt{optical\_change}, \texttt{noise\_compression}, \texttt{cross\_camera\_swap}) cùng bộ hư hao ngoại cảnh FCS (8 loại biến dạng môi trường thực tế) để kiểm tra độ bền vững của các mô hình.
 
 \section{HƯỚNG 1 MỚI: VEHICLE-CENTRIC SSL PRE-TRAINING KHÔNG CẦN NỀN}
 
@@ -123,7 +115,7 @@ Xác suất tiền cảnh xe cộ $\pi_t(p) \in [0, 1]$ được ước lượng
 \end{equation}
 
 \subsection{Chiến Lược Che Phân Tầng AGM (Atypicality-Guided Masking)}
-Để vừa ép mạng nơ-ron học suy luận cấu trúc xe từ ngữ cảnh, vừa bảo đảm không che mất toàn bộ dấu vết của phương tiện, thuật toán AGM phân bổ ngân sách che $M = \lfloor 0.6 \times N \rfloor = 268$ patch có kiểm soát:
+Thuật toán AGM phân bổ ngân sách che $M = \lfloor 0.6 \times N \rfloor = 268$ patch có kiểm soát:
 \begin{equation}
     M_v = \min\left( \lfloor \phi \cdot M \rfloor, \; \lfloor q_{\max} \cdot |\mathcal{V}| \rfloor \right), \quad \text{với } \phi = 0.5, \; q_{\max} = 0.6
 \end{equation}
@@ -192,7 +184,7 @@ Mất mát Gradient Exclusion ngăn cách triệt để chi tiết nền lọt v
     \mathcal{L}_{\text{excl}} = \frac{1}{HW} \sum_{u, v} \tanh\big(\|\nabla \hat{F}(u, v)\|\big) \odot \tanh\big(\|\nabla \hat{B}(u, v)\|\big)
 \end{equation}
 
-\section{CÁC HƯỚNG ỨNG DỤNG DOWNSTREAM VÀ MỞ RỘNG ĐÔ THỊ}
+\section{HỆ THỐNG BASELINE ĐỐI CHUẨN VÀ BÀI BÁO DỮ LIỆU}
 
 \subsection{Hướng 1 Cũ \& Hướng 2 Cũ: Hệ Baseline Đối Chuẩn Có Nền Median}
 \begin{itemize}
@@ -200,54 +192,17 @@ Mất mát Gradient Exclusion ngăn cách triệt để chi tiết nền lọt v
     \item \textbf{Hướng 2 Cũ (Median Laplace Prior):} Giám sát nhánh nền bằng $B_{\text{median}}$ có độ bất định $\sigma$ kết hợp ràng buộc nền dùng chung giữa các ngày khác nhau $\mathcal{L}_{\text{shared}}$.
 \end{itemize}
 
-\subsection{Hướng 3: Đếm Phương Tiện Ít Mẫu Qua Patch Embedding Bốn Kênh}
-Tensor đầu vào được mở rộng thành bốn kênh $X_{\text{4ch}} = [\text{R}, \text{G}, \text{B}, \Delta_{\text{norm}}] \in \mathbb{R}^{4 \times H \times W}$.
-Trọng số kênh thứ 4 của ma trận Patch Embedding được khởi tạo Zero-Initialization:
-\begin{equation}
-    W_{\text{4ch}}[:, 0:3, :, :] = W_{\text{pretrained}}, \quad W_{\text{4ch}}[:, 3, :, :] = \mathbf{0}
-\end{equation}
-Kết hợp cơ chế $\Delta$-Dropout 30\% trong quá trình huấn luyện, ép mô hình phát triển năng lực đếm xe độc lập ngay cả khi camera bị mất tín hiệu nền.
-
-\subsection{Hướng 4: Đo Lường Mật Độ Chiếm Dụng và Phân Loại Chuẩn HCM LoS}
-Tỷ lệ chiếm dụng lòng đường được chuẩn hóa strictly trên diện tích mặt đường Road Mask $|R|$:
-\begin{equation}
-    \rho_{\text{proxy}}(t) = \frac{1}{|R|} \sum_{(u, v) \in R} \mathbb{I}\left( \Delta_t(u, v) > \tau \right)
-\end{equation}
-Kiến trúc kết hợp DINO ViT (ngữ nghĩa toàn cục), CNN (hình thái không gian) và mạng nơ-ron hồi quy hai chiều Bi-GRU (ước lượng hiện thời) cùng Causal GRU (dự báo khởi phát kẹt xe trong tương lai).
-
-\subsection{Hướng 6: Phát Hiện Sự Cố Kiên Định và Lỗi Camera}
-Gộp đặc trưng thời gian Temporal Median Pooling trên cửa sổ trượt $W$:
-\begin{equation}
-    \tilde{F}_t(p) = \operatorname{median}_{w=0}^{W-1} f_{t-w}(p)
-\end{equation}
-Coreset Memory Bank sử dụng thuật toán K-Center Greedy Selection nén 90\% dung lượng. Hệ thống phân tách rõ rệt:
-\begin{itemize}
-    \item Điểm bất thường tăng vọt trên vùng ngoại cảnh tĩnh $\implies$ Báo động \texttt{CAMERA\_FAULT} (lệch góc, rung lắc, mờ ống kính).
-    \item Điểm bất thường chỉ xuất hiện trên lòng đường và kéo dài $\ge 3$ cửa sổ liên tiếp $\implies$ Báo động \texttt{TRAFFIC\_INCIDENT} (ngập úng, tai nạn, chướng ngại vật).
-\end{itemize}
-
-\subsection{Hướng 7: Dự Báo Ùn Tắc Quy Mô Thành Phố Trên Đồ Thị Camera}
-Mạng ST-GraphWaveNet đa phương thức tích hợp đồ thị camera gồm 608 nút và 2,450 cạnh có hướng (OSRM distance). Ma trận kề tự học thích ứng:
-\begin{equation}
-    \tilde{\mathbf{A}}_{\text{adp}} = \operatorname{Softmax}\left(\operatorname{ReLU}(\mathbf{E}_1 \mathbf{E}_2^\top)\right)
-\end{equation}
-Mạng thực hiện dự báo liên tục đa tầm $h \in \{15', 30', 60'\}$, phân loại 4 mức LoS và cảnh báo khởi phát kẹt xe với Focal Loss.
-
-\subsection{Hướng 8: Thích Ứng Camera Mới Qua Background Conditioning}
-Vector mô tả cảnh toàn cục cắt tỉa (Trimmed Scene Descriptor $z$) loại bỏ 10\% patch ngoại lai:
-\begin{equation}
-    z = \Big[\, \operatorname{TrimMean}_{p \in R} f_{\text{bg}}(p),\; \operatorname{TrimStd}_{p \in R} f_{\text{bg}}(p),\; \operatorname{TrimMean}_{p} f_{\text{bg}}(p) \,\Big]
-\end{equation}
-Cơ chế FiLM Zero-Initialization điều biến đặc trưng giúp mô hình thích ứng zero-shot với camera mới tại giao lộ chưa từng thấy chỉ với một ảnh nền đơn lẻ.
+\subsection{Bài Báo Dữ Liệu IC4SD-TrafficSnap}
+Bài báo mô tả bộ dữ liệu 608 trạm camera tại TP.HCM, 714,123 ảnh JPEG (44.38 GiB) và đồ thị mạng lưới đường bộ OSRM gồm 2,450 cạnh có hướng, được thiết kế cho Elsevier Data in Brief. Dữ liệu vượt qua kiểm toán bảo mật PII nghiêm ngặt theo Rule of Three ($p \le 0.30\%$).
 
 \section{TỔNG HỢP SO SÁNH VÀ KẾT QUẢ KIỂM THỬ HỆ THỐNG}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Ma trận so sánh phương pháp luận và đối chuẩn kỹ thuật của 8 hướng nghiên cứu DINO Suite}
+\caption{Ma trận so sánh phương pháp luận của các hướng nghiên cứu cốt lõi DINO Suite}
 \label{tab:matrix}
-\begin{tabular}{>{\raggedright\arraybackslash}p{1.8cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}p{2.8cm}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{4.5cm} >{\raggedright\arraybackslash}p{2.6cm}}
 \toprule
 \textbf{Hướng} & \textbf{Đầu vào Suy luận} & \textbf{Vai trò Background} & \textbf{Cơ Chế Kháng Suy Thoái} & \textbf{Tạp Chí Mục Tiêu} \\
 \midrule
@@ -255,26 +210,18 @@ Cơ chế FiLM Zero-Initialization điều biến đặc trưng giúp mô hình 
 \addlinespace
 \textbf{H2 Mới} & 1 Frame & \textbf{Không cần nền} & SceneBasis đa chiếu sáng + $\sigma$ & IEEE TIP / PR \\
 \addlinespace
-\textbf{H1 Cũ} & 1 Frame & Tiền nghiệm che FAM & Cổng tin cậy thích ứng $r_i$ & IEEE T-ITS / EAAI \\
+\textbf{H1 Cũ} & 1 Frame & Tiền nghiệm che FAM & Cổng tin cậy thích ứng $r_i$ & IEEE T-ITS \\
 \addlinespace
-\textbf{H2 Cũ} & 1 Frame & Laplace Prior mềm & Độ bất định $\sigma$ + Nền đa ngày & PR / IEEE TCSVT \\
+\textbf{H2 Cũ} & 1 Frame & Laplace Prior mềm & Độ bất định $\sigma$ + Nền đa ngày & PR / TCSVT \\
 \addlinespace
-\textbf{Hướng 3} & Frame + $\Delta$ & Kênh thứ 4 / FiLM & $\Delta$-Dropout 30\% + Zero-Init & IEEE T-ITS / EAAI \\
-\addlinespace
-\textbf{Hướng 4} & Chuỗi + $\Delta$ & Đo $\rho$ trên Road Mask & Ràng buộc nghiêm ngặt $|R|$ & TR-Part C / T-ITS \\
-\addlinespace
-\textbf{Hướng 6} & Chuỗi Frame & Mẫu phụ trong Bank & Temporal Median Pooling $W$ & TR-Part C / PR \\
-\addlinespace
-\textbf{Hướng 7} & Đồ thị Camera & Không phụ thuộc & Missing Mask + Node Dropout & TR-Part C / TKDE \\
-\addlinespace
-\textbf{Hướng 8} & Frame + Bg & Vector mô tả cảnh $z$ & Trimmed Mean/Std + Bg-Dropout & PR / EAAI \\
+\textbf{Data Article} & Census Dữ liệu & Đồ thị + Ảnh thưa & Multi-tier Audit + Rule of Three & Elsevier DiB \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Toàn bộ 13/13 test cases trong bộ kiểm thử tích hợp \texttt{tests/test\_all\_directions.py} đều đạt trạng thái PASSED tuyệt đối, xác nhận tính tương thích đa nền tảng và độ ổn định toán học của hệ thống.
+Toàn bộ các ca kiểm thử trong bộ kiểm thử tích hợp \texttt{tests/test\_all\_directions.py} đều đạt trạng thái PASSED tuyệt đối, xác nhận tính ổn định và tính tương thích cao của toàn bộ hệ thống.
 
 \section{KẾT LUẬN}
-Báo cáo khoa học đã trình bày một cách có hệ thống cơ sở lý thuyết, mô hình hóa toán học và kiến trúc triển khai của toàn bộ hệ sinh thái DINO Traffic Suite. Với việc đưa vào Hướng 1 Mới (Vehicle-Centric SSL) và Hướng 2 Mới (Prior-Free Scene Decomposition), hệ thống đã hoàn toàn khắc phục được điểm yếu cố hữu của phương pháp trừ nền cổ điển trong điều kiện giao thông xe máy phức tạp tại TP.HCM. Sự kết hợp chặt chẽ giữa các mô hình tự giám sát nền tảng và các ứng dụng downstream đo lường lưu lượng, phân tích sự cố và dự báo ùn tắc diện rộng tạo nên một khung nghiên cứu vững chắc, sẵn sàng công bố tại các diễn đàn khoa học uy tín hàng đầu thế giới.
+Hệ sinh thái DINO Traffic Suite đã được tái cấu trúc tinh gọn và tập trung cao độ vào hai mũi nhọn khoa học: Hướng 1 Mới (Vehicle-Centric SSL) và Hướng 2 Mới (Prior-Free Scene Decomposition), giúp loại bỏ hoàn toàn sự phụ thuộc vào ảnh nền trung vị trong điều kiện giao thông xe máy phức tạp. Các kết quả kiểm thử và hệ thống tài liệu chứng minh tính khả thi, tính mới và tiềm năng công bố xuất sắc tại các diễn đàn khoa học hàng đầu.
 
 \end{document}
