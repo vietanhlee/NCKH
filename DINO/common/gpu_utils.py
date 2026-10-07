@@ -295,7 +295,28 @@ def load_checkpoint(
       - Trả về dictionary checkpoint gốc để khôi phục 'epoch', 'metrics', 'extra_dict'.
     """
     if not os.path.isfile(load_path):
-        raise FileNotFoundError(f"Không tìm thấy file checkpoint tại: {load_path}")
+        if os.path.isdir(load_path):
+            candidates = [
+                os.path.join(load_path, "best_decomposition_model.pth"),
+                os.path.join(load_path, "best_checkpoint.pth"),
+                os.path.join(load_path, "last_checkpoint.pth"),
+                os.path.join(load_path, "model.pth"),
+            ]
+            found = False
+            for c in candidates:
+                if os.path.isfile(c):
+                    load_path = c
+                    found = True
+                    break
+            if not found:
+                pths = [os.path.join(load_path, f) for f in os.listdir(load_path) if f.endswith(".pth") and os.path.isfile(os.path.join(load_path, f))]
+                if pths:
+                    load_path = pths[0]
+                    found = True
+            if not found:
+                raise FileNotFoundError(f"Không tìm thấy file checkpoint (.pth) hợp lệ trong thư mục: {load_path}")
+        else:
+            raise FileNotFoundError(f"Không tìm thấy file checkpoint tại: {load_path}")
 
     if verbose:
         print(f"📂 [Checkpoint] Đang nạp checkpoint từ: {load_path}...")

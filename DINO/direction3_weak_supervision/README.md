@@ -1,4 +1,4 @@
-# Hướng 5: Weak Supervision — Gộp Nhãn Yếu Đa Nguồn Cho Giám Sát Giao Thông Đô Thị
+# Hướng 3: Context-Aware Weak Supervision — Gộp Nhãn Yếu Đa Nguồn Cho Giám Sát Giao Thông Đô Thị
 
 > **Paper Title Candidate:** *Context-Aware Markov Label Aggregation: Weakly-Supervised Traffic Congestion Assessment from Imperfect Heuristics on City-Scale Surveillance Networks*  
 > **Target:** IEEE Transactions on Intelligent Transportation Systems (T-ITS) / CVPR / ECCV / NeurIPS  
@@ -47,7 +47,7 @@ Không gian ngữ cảnh được phân nhỏ thành 54 tổ hợp:
 
 ## 3. Cấu trúc Thư mục
 ```
-direction5_weak_supervision/
+direction3_weak_supervision/
 ├── lfs/
 │   ├── lf_detector.py      # LF1: Tỷ lệ diện tích phát hiện xe
 │   ├── lf_background.py    # LF2: Sai khác ảnh nền có cổng tin cậy r_i

@@ -22,13 +22,13 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from direction6_anomaly_detection.features import DINOv3PatchFeatureExtractor
-from direction6_anomaly_detection.pooling import TemporalFeaturePooler
-from direction6_anomaly_detection.bank import NormalMemoryBank
-from direction6_anomaly_detection.score import AnomalyScorer
-from direction6_anomaly_detection.camera_fault import CameraFaultClassifier
-from direction6_anomaly_detection.events import PersistenceEventTracker
-from direction6_anomaly_detection.synth_events import SyntheticAnomalyGenerator
+from direction4_anomaly_detection.features import DINOv3PatchFeatureExtractor
+from direction4_anomaly_detection.pooling import TemporalFeaturePooler
+from direction4_anomaly_detection.bank import NormalMemoryBank
+from direction4_anomaly_detection.score import AnomalyScorer
+from direction4_anomaly_detection.camera_fault import CameraFaultClassifier
+from direction4_anomaly_detection.events import PersistenceEventTracker
+from direction4_anomaly_detection.synth_events import SyntheticAnomalyGenerator
 
 
 def evaluate_anomaly_detection_pipeline(
@@ -39,7 +39,7 @@ def evaluate_anomaly_detection_pipeline(
     gt_frame_labels: np.ndarray,
     window_size: int = 5,
     min_consecutive: int = 3,
-    save_dir: Optional[str] = "checkpoints/direction6_anomaly_detection",
+    save_dir: Optional[str] = "checkpoints/direction4_anomaly_detection",
 ) -> Dict[str, float]:
     """
     Chạy toàn bộ pipeline kiểm thử đánh giá trên một chuỗi video thử nghiệm.
@@ -230,7 +230,7 @@ def evaluate_anomaly_detection_pipeline(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Direction 6 Anomaly Detection Evaluation")
-    parser.add_argument("--save_dir", type=str, default="checkpoints/direction6_anomaly_detection", help="Thư mục lưu báo cáo")
+    parser.add_argument("--save_dir", type=str, default="checkpoints/direction4_anomaly_detection", help="Thư mục lưu báo cáo")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán ('cuda' hoặc 'cpu')")
     cli_args, _ = parser.parse_known_args()
 

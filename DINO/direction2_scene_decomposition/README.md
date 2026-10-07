@@ -66,30 +66,41 @@ python DINO/direction2_scene_decomposition/train.py \
 ---
 
 ### Kịch bản 3: Chạy suy luận tách lớp & Xóa sạch xe (Unsupervised Road Inpainting)
-Sau khi huấn luyện, bạn có thể áp dụng mô hình lên **bất kỳ ảnh giao thông nào** để tự động xuất ra 3 lớp (mặt đường sạch xe, ảnh xe, mặt nạ):
+Sau khi huấn luyện, bạn có thể áp dụng mô hình lên **bất kỳ ảnh giao thông nào** để tự động xuất ra các lớp bóc tách và ảnh composite trực quan:
 
 ```bash
-# Chạy trên 1 file ảnh cụ thể:
+# Cách 1 (Khuyến nghị chuẩn như lúc train): Truyền thêm ảnh background tĩnh (--bg_path):
 python DINO/direction2_scene_decomposition/infer.py \
     --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
     --input_path output/1_1755698811.jpg \
+    --bg_path traffic_backgrounds/route_1/background_slot_12h.jpg \
     --output_dir checkpoints/direction2_scene_decomp/inferred \
     --img_size 256 \
     --device cuda
 
-# Hoặc chạy trên toàn bộ thư mục ảnh mới:
+# Cách 2: Tự động đối sánh background theo thư mục (--bg_dir):
 python DINO/direction2_scene_decomposition/infer.py \
     --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
     --input_path output \
+    --bg_dir traffic_backgrounds \
     --output_dir checkpoints/direction2_scene_decomp/inferred_batch \
     --img_size 256 \
     --device cuda
+
+# Cách 3: Chạy chế độ Single-frame (khi không có ảnh background):
+python DINO/direction2_scene_decomposition/infer.py \
+    --weights checkpoints/direction2_scene_decomp/best_decomposition_model.pth \
+    --input_path output/1_1755698811.jpg \
+    --output_dir checkpoints/direction2_scene_decomp/inferred_single \
+    --device cuda
 ```
 
-*Kết quả đầu ra sinh ra gồm 3 file cho mỗi ảnh:*
+*Kết quả đầu ra sinh ra gồm:*
+- `{stem}_composite.png`: **Ảnh ghép 6 panels trực quan** (giống hệt đồ thị tiến trình lúc training: Input, Background Prior, Recon, Clean Road, Vehicles Only, Vehicle Alpha Mask).
 - `{stem}_clean_road.jpg`: Ảnh mặt đường tĩnh sạch bóng xe (Road Inpainting).
 - `{stem}_vehicles_only.jpg`: Lớp phương tiện được cô lập.
-- `{stem}_density_mask.png`: Mặt nạ mật độ phương tiện liên tục.
+- `{stem}_alpha_mask.png`: Mặt nạ mật độ phương tiện liên tục.
+- `{stem}_uncertainty_sigma.png`: Bản đồ độ bất định (nếu có).
 
 ---
 
