@@ -574,10 +574,11 @@ Khung hình tái tạo $\hat{I}_{\text{recon}}$ tuân theo phương trình hòa 
     \mathcal{L}_{\text{prior}} = \frac{1}{HW} \sum_{u, v} \left[ \frac{|\hat{B}(u, v) - B_{\text{median}}(u, v)|}{\sigma(u, v)} + \log \sigma(u, v) \right]
 \end{equation}
 Cơ chế này cho phép mạng nơ-ron "tha thứ" cho các vùng nền trung vị bị dính bóng ma phương tiện: tại các điểm ảnh chứa bóng ma xe buýt hoặc xe máy dừng đỗ lâu, mạng nơ-ron tự động nâng cao giá trị $\sigma(u, v)$, giảm bớt ảnh hưởng tiêu cực của nhãn giả lên nhánh nền.
-Đồng thời, mạng áp dụng ràng buộc tính nhất quán nền dùng chung giữa hai ngày quan sát khác nhau $d_1 \ne d_2$ của cùng một camera:
+Đồng thời, mạng áp dụng ràng buộc tính nhất quán nền dùng chung giữa hai ngày quan sát khác nhau $d_1 \ne d_2$ của cùng một camera nhưng \textbf{bắt buộc phải trong cùng một khung giờ} $h$ (Same Hourly Time-Slot, ví dụ cùng lúc 09:00 sáng giữa hai ngày khác nhau để đảm bảo tương đồng về góc chiếu mặt trời và cường độ quang thông):
 \begin{equation}
-    \mathcal{L}_{\text{shared}} = \frac{1}{HW} \sum_{u, v} |\hat{B}_{d_1}(u, v) - \hat{B}_{d_2}(u, v)|
+    \mathcal{L}_{\text{shared}} = \frac{1}{HW} \sum_{u, v} |\hat{B}_{d_1, h}(u, v) - \hat{B}_{d_2, h}(u, v)|
 \end{equation}
+Trong mã nguồn thực nghiệm, cơ chế này được đảm bảo thông qua bộ tải dữ liệu phân nhóm theo cặp \texttt{(route\_id, slot\_hour)}. Tuy nhiên, sự gò bó bắt buộc phải đối sánh trong cùng một khung giờ hẹp bộc lộ sự thiếu linh hoạt khi dữ liệu bị khuyết thiếu khung giờ hoặc khi chuyển giao giữa các thời điểm giao thoa ánh sáng (bình minh, hoàng hôn). Đây chính là động lực cốt lõi để nhóm nghiên cứu phát triển lên \textbf{Hướng 2 Mới}, nơi nền đường được mô hình hóa thành đa tạp affine thích ứng $B(t) = E_0 + \sum_{j=1}^J \ell_j(t) E_j$, cho phép vector hệ số ánh sáng $\bm{\ell}(t)$ đóng vai trò là cơ chế bù trừ tự động (thêm bớt cường độ quang học) xuyên suốt mọi khung giờ từ sáng đến đêm mà không cần gượng ép phân nhóm.
 Hàm mất mát tổng thể kết hợp điều hòa độ thưa của mặt nạ xe $\|\hat{\alpha}\|_1$ và độ trơn nhẵn đường biên xe thông qua số hạng Total Variation $\operatorname{TV}(\hat{\alpha})$:
 \begin{equation}
     \mathcal{L}_{\text{total}} = \|\hat{I}_{\text{recon}} - I_{\text{origin}}\|_1 + \lambda_{\text{prior}} \mathcal{L}_{\text{prior}} + \lambda_{\text{shared}} \mathcal{L}_{\text{shared}} + \lambda_{\text{sparse}} \|\hat{\alpha}\|_1 + \lambda_{\text{tv}} \operatorname{TV}(\hat{\alpha})
