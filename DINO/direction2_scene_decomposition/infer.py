@@ -22,6 +22,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+from typing import Dict, List, Optional, Tuple, Union
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -45,71 +46,122 @@ from common.gpu_utils import load_checkpoint
 from models import TrafficDecompositionNet
 
 
+def create_segmentation_overlay(
+    origin_pil: Image.Image,
+    mask_arr: np.ndarray,
+    threshold: float = 0.30,
+    color: Tuple[int, int, int] = (0, 230, 118),  # Màu xanh lục bảo dạ quang rực rỡ
+    alpha: float = 0.50,
+) -> Tuple[Image.Image, Image.Image]:
+    """
+    Tạo:
+      1. overlay_img: Ảnh phủ phân đoạn màu bán trong suốt lên ảnh gốc (Vehicle Segmentation Overlay)
+      2. binary_mask_img: Mặt nạ phân đoạn nhị phân trắng-đen (0 hoặc 255)
+    """
+    orig_np = np.array(origin_pil).astype(np.float32)
+    orig_h, orig_w = orig_np.shape[:2]
+
+    # Đồng bộ kích thước mask với ảnh gốc
+    if mask_arr.shape != (orig_h, orig_w):
+        mask_pil = Image.fromarray((np.clip(mask_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
+        norm_mask = np.array(mask_pil).astype(np.float32) / 255.0
+    else:
+        norm_mask = np.clip(mask_arr, 0.0, 1.0).astype(np.float32)
+
+    bin_mask = (norm_mask > threshold).astype(np.float32)
+
+    # Lớp phủ màu phân đoạn xe
+    color_layer = np.zeros_like(orig_np)
+    color_layer[:, :] = color
+    weight = bin_mask[:, :, None] * alpha
+    blended = orig_np * (1.0 - weight) + color_layer * weight
+    blended = np.clip(blended, 0, 255).astype(np.uint8)
+    overlay_img = Image.fromarray(blended)
+
+    # Mặt nạ nhị phân
+    binary_img = Image.fromarray((bin_mask * 255).astype(np.uint8))
+    return overlay_img, binary_img
+
+
 def save_composite_figure(
     origin_pil: Image.Image,
     pred_bg_pil: Image.Image,
     pred_fg_pil: Image.Image,
     pred_mask_pil: Image.Image,
+    seg_overlay_pil: Image.Image,
+    binary_mask_pil: Image.Image,
     save_path: str,
     prior_bg_pil: Image.Image = None,
     recon_pil: Image.Image = None,
-    title_text: str = "Traffic-Decompose Layer Separation",
+    title_text: str = "Traffic-Decompose Layer Separation & Vehicle Segmentation",
 ):
-    """Xuất ảnh so sánh trực quan đa bảng (chuẩn như đồ thị trong quá trình training)."""
+    """Xuất ảnh so sánh trực quan đa bảng (tích hợp đầy đủ các lớp bóc tách và phân đoạn xe)."""
     has_prior = (prior_bg_pil is not None)
-    cols = 3 if has_prior else 2
-    fig, axes = plt.subplots(2, cols, figsize=(15 if has_prior else 10, 9), dpi=150)
-    plt.subplots_adjust(wspace=0.15, hspace=0.25)
+    cols = 4 if has_prior else 3
+    fig, axes = plt.subplots(2, cols, figsize=(19 if has_prior else 14, 9), dpi=150)
+    plt.subplots_adjust(wspace=0.18, hspace=0.25)
 
     if has_prior:
-        # Bảng 1: Ảnh gốc
+        # Hàng 1: Các góc nhìn bối cảnh và lớp phủ phân đoạn
         axes[0, 0].imshow(origin_pil)
-        axes[0, 0].set_title("Input Origin Image", fontsize=11, fontweight="bold")
+        axes[0, 0].set_title("(a) Input Origin Image", fontsize=10, fontweight="bold")
         axes[0, 0].axis("off")
 
-        # Bảng 2: Ảnh nền Prior
         axes[0, 1].imshow(prior_bg_pil)
-        axes[0, 1].set_title("Background Prior (Reference)", fontsize=11, fontweight="bold")
+        axes[0, 1].set_title("(b) Background Prior (Reference)", fontsize=10, fontweight="bold")
         axes[0, 1].axis("off")
 
-        # Bảng 3: Ảnh tái tạo
         if recon_pil is not None:
             axes[0, 2].imshow(recon_pil)
-            axes[0, 2].set_title("Reconstructed Origin", fontsize=11, fontweight="bold")
+            axes[0, 2].set_title("(c) Reconstructed Origin", fontsize=10, fontweight="bold")
         axes[0, 2].axis("off")
 
-        # Bảng 4: Nền tái tạo sạch xe
+        axes[0, 3].imshow(seg_overlay_pil)
+        axes[0, 3].set_title("(d) Vehicle Segmentation Overlay", fontsize=10, fontweight="bold", color="darkgreen")
+        axes[0, 3].axis("off")
+
+        # Hàng 2: Các lớp thành phần phân rã và mặt nạ
         axes[1, 0].imshow(pred_bg_pil)
-        axes[1, 0].set_title("Decomposed Background Layer (Clean)", fontsize=11, fontweight="bold")
+        axes[1, 0].set_title("(e) Decomposed Clean Road", fontsize=10, fontweight="bold")
         axes[1, 0].axis("off")
 
-        # Bảng 5: Tiền cảnh phương tiện
         axes[1, 1].imshow(pred_fg_pil)
-        axes[1, 1].set_title("Decomposed Foreground Layer", fontsize=11, fontweight="bold")
+        axes[1, 1].set_title("(f) Decomposed Vehicles Layer", fontsize=10, fontweight="bold")
         axes[1, 1].axis("off")
 
-        # Bảng 6: Mặt nạ phân bố xe
         axes[1, 2].imshow(pred_mask_pil, cmap="magma")
-        axes[1, 2].set_title("Predicted Vehicle Alpha Mask", fontsize=11, fontweight="bold")
+        axes[1, 2].set_title("(g) Continuous Alpha Heatmap", fontsize=10, fontweight="bold")
         axes[1, 2].axis("off")
+
+        axes[1, 3].imshow(binary_mask_pil, cmap="gray")
+        axes[1, 3].set_title("(h) Binary Vehicle Mask", fontsize=10, fontweight="bold", color="navy")
+        axes[1, 3].axis("off")
     else:
-        # Chế độ 4 bảng khi không có prior
+        # Chế độ 6 bảng khi chạy Single-frame
         axes[0, 0].imshow(origin_pil)
-        axes[0, 0].set_title("Input Origin Image", fontsize=11, fontweight="bold")
+        axes[0, 0].set_title("(a) Input Origin Image", fontsize=10, fontweight="bold")
         axes[0, 0].axis("off")
 
         if recon_pil is not None:
             axes[0, 1].imshow(recon_pil)
-            axes[0, 1].set_title("Reconstructed Origin", fontsize=11, fontweight="bold")
+            axes[0, 1].set_title("(b) Reconstructed Origin", fontsize=10, fontweight="bold")
         axes[0, 1].axis("off")
 
+        axes[0, 2].imshow(seg_overlay_pil)
+        axes[0, 2].set_title("(c) Vehicle Segmentation Overlay", fontsize=10, fontweight="bold", color="darkgreen")
+        axes[0, 2].axis("off")
+
         axes[1, 0].imshow(pred_bg_pil)
-        axes[1, 0].set_title("Decomposed Background (Inpainted)", fontsize=11, fontweight="bold")
+        axes[1, 0].set_title("(d) Decomposed Clean Road", fontsize=10, fontweight="bold")
         axes[1, 0].axis("off")
 
-        axes[1, 1].imshow(pred_mask_pil, cmap="magma")
-        axes[1, 1].set_title("Predicted Vehicle Alpha Mask", fontsize=11, fontweight="bold")
+        axes[1, 1].imshow(pred_fg_pil)
+        axes[1, 1].set_title("(e) Decomposed Vehicles Layer", fontsize=10, fontweight="bold")
         axes[1, 1].axis("off")
+
+        axes[1, 2].imshow(binary_mask_pil, cmap="gray")
+        axes[1, 2].set_title("(f) Binary Vehicle Mask", fontsize=10, fontweight="bold", color="navy")
+        axes[1, 2].axis("off")
 
     fig.suptitle(title_text, fontsize=14, fontweight="bold", y=0.98)
     plt.tight_layout()
@@ -230,6 +282,13 @@ def run_inference(args):
         pred_fg_img = Image.fromarray((np.clip(pred_fg_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
         pred_mask_img = Image.fromarray((np.clip(pred_mask_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
 
+        # Tạo ảnh Segmentation Overlay (phủ màu trực tiếp lên ảnh gốc) & Mặt nạ nhị phân
+        seg_overlay_img, bin_mask_img = create_segmentation_overlay(
+            origin_pil=pil_img,
+            mask_arr=pred_mask_arr,
+            threshold=args.seg_thresh,
+        )
+
         recon_pil_img = None
         if "recon_origin" in preds:
             recon_arr = preds["recon_origin"].squeeze().cpu().permute(1, 2, 0).numpy()
@@ -239,6 +298,8 @@ def run_inference(args):
         pred_bg_img.save(os.path.join(args.output_dir, f"{stem}_clean_road.jpg"))
         pred_fg_img.save(os.path.join(args.output_dir, f"{stem}_vehicles_only.jpg"))
         pred_mask_img.save(os.path.join(args.output_dir, f"{stem}_alpha_mask.png"))
+        seg_overlay_img.save(os.path.join(args.output_dir, f"{stem}_segmentation_overlay.jpg"))
+        bin_mask_img.save(os.path.join(args.output_dir, f"{stem}_binary_segmentation.png"))
 
         # Bản đồ độ bất định sigma (nếu có)
         if "sigma" in preds:
@@ -246,7 +307,7 @@ def run_inference(args):
             pred_sigma_img = Image.fromarray((np.clip(pred_sigma_arr / 0.50, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
             pred_sigma_img.save(os.path.join(args.output_dir, f"{stem}_uncertainty_sigma.png"))
 
-        # 9. Xuất ảnh composite so sánh trực quan (giống giao diện train)
+        # 9. Xuất ảnh composite so sánh trực quan đa bảng (tích hợp đầy đủ Segmentation)
         if args.save_composite:
             composite_path = os.path.join(args.output_dir, f"{stem}_composite.png")
             prior_resized = prior_pil_img.resize((orig_w, orig_h), Image.BICUBIC) if prior_pil_img else None
@@ -255,13 +316,15 @@ def run_inference(args):
                 pred_bg_pil=pred_bg_img,
                 pred_fg_pil=pred_fg_img,
                 pred_mask_pil=pred_mask_img,
+                seg_overlay_pil=seg_overlay_img,
+                binary_mask_pil=bin_mask_img,
                 save_path=composite_path,
                 prior_bg_pil=prior_resized,
                 recon_pil=recon_pil_img,
                 title_text=f"Traffic-Decompose Inference — {stem}",
             )
 
-    print(f"\n✅ [Hoàn tất] Toàn bộ kết quả phân rã đã được lưu tại: {args.output_dir}")
+    print(f"\n✅ [Hoàn tất] Toàn bộ kết quả phân rã & phân đoạn xe đã được lưu tại: {args.output_dir}")
 
 
 def parse_args():
@@ -274,6 +337,7 @@ def parse_args():
     parser.add_argument("--match_strategy", type=str, default="route_hourly", help="Chiến lược đối sánh background: route_hourly, camera_id, etc.")
     parser.add_argument("--backbone", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
     parser.add_argument("--img_size", type=int, default=256, help="Kích thước ảnh xử lý")
+    parser.add_argument("--seg_thresh", type=float, default=0.30, help="Ngưỡng nhị phân hóa phân đoạn phương tiện (mặc định: 0.30)")
     parser.add_argument("--save_composite", action="store_true", default=True, help="Lưu thêm ảnh ghép so sánh trực quan đa bảng (composite)")
     parser.add_argument("--no_composite", action="store_false", dest="save_composite", help="Không lưu ảnh composite")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị ('cuda' hoặc 'cpu')")

@@ -96,7 +96,9 @@ python DINO/direction2_scene_decomposition/infer.py \
 ```
 
 *Kết quả đầu ra sinh ra gồm:*
-- `{stem}_composite.png`: **Ảnh ghép 6 panels trực quan** (giống hệt đồ thị tiến trình lúc training: Input, Background Prior, Recon, Clean Road, Vehicles Only, Vehicle Alpha Mask).
+- `{stem}_composite.png`: **Ảnh ghép 8 panels trực quan** (Ảnh gốc, Background Prior, Tái tạo, **Vehicle Segmentation Overlay**, Mặt đường sạch xe, Xe cô lập, Alpha Heatmap, **Binary Vehicle Mask**).
+- `{stem}_segmentation_overlay.jpg`: **Ảnh phân đoạn xe phủ màu trực tiếp lên ảnh gốc** (thuận tiện đưa vào bài báo, slide trình chiếu).
+- `{stem}_binary_segmentation.png`: Mặt nạ nhị phân xe cộ (phân đoạn mức pixel).
 - `{stem}_clean_road.jpg`: Ảnh mặt đường tĩnh sạch bóng xe (Road Inpainting).
 - `{stem}_vehicles_only.jpg`: Lớp phương tiện được cô lập.
 - `{stem}_alpha_mask.png`: Mặt nạ mật độ phương tiện liên tục.
