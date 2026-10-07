@@ -36,6 +36,17 @@ class SoftCrossEntropyLoss(nn.Module):
         return loss_per_sample.mean()
 
 
+try:
+    from common.backbone_loader import imagenet_normalize
+except ImportError:
+    def imagenet_normalize(x: torch.Tensor) -> torch.Tensor:
+        if x.min() >= -0.05 and x.max() <= 1.05 and x.shape[1] >= 3:
+            mean = torch.tensor([0.485, 0.456, 0.406], device=x.device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=x.device).view(1, 3, 1, 1)
+            return (x[:, :3] - mean) / std
+        return x
+
+
 class WeakSupervisionEndModel(nn.Module):
     """
     End Model chuẩn Meta DINOv3 + Causal Recurrent Head:
@@ -77,7 +88,9 @@ class WeakSupervisionEndModel(nn.Module):
         )
 
     def extract_cls(self, x: torch.Tensor) -> torch.Tensor:
-        out = self.backbone(x)
+        # Chuẩn hóa ImageNet nếu ảnh nằm trong thang [0, 1]
+        x_norm = imagenet_normalize(x)
+        out = self.backbone(x_norm)
         if isinstance(out, dict):
             cls_token = out.get("x_norm_clstoken", list(out.values())[0])
         elif isinstance(out, torch.Tensor):

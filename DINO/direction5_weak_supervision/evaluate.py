@@ -122,11 +122,20 @@ def evaluate_label_aggregation(
 def evaluate_end_model(
     model: WeakSupervisionEndModel,
     data_loader: torch.utils.data.DataLoader,
-    device: torch.device,
+    device: Optional[torch.device] = None,
 ) -> Dict[str, float]:
     """
     Đánh giá End Model trên tập Gold Test hoàn chỉnh.
+    Tự động xác định GPU nếu device=None.
     """
+    if device is None:
+        try:
+            from common.gpu_utils import get_optimal_device
+            device, _ = get_optimal_device()
+        except ImportError:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = model.to(device)
     model.eval()
     all_preds = []
     all_targets = []
