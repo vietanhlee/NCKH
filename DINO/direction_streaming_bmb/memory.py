@@ -354,10 +354,10 @@ class BackgroundMemoryBank(nn.Module):
             self.long_term_valid = valid.clone()
         else:
             # Tăng tốc tẩy xe: nếu vùng trước đó bị kẹt xe (long_term_valid < 0.5), lập tức nhận nền mới khi valid >= 0.5
-            fast_replace = (self.long_term_valid < 0.5).unsqueeze(-1) & (valid.unsqueeze(-1) >= 0.5)
+            fast_replace = (self.long_term_valid.to(z.device) < 0.5).unsqueeze(-1) & (valid.unsqueeze(-1) >= 0.5)
             effective_beta = torch.where(fast_replace, torch.ones_like(beta), beta)
-            self.long_term_memory = (1.0 - effective_beta) * self.long_term_memory + effective_beta * z
-            self.long_term_valid = torch.maximum(self.long_term_valid, valid)
+            self.long_term_memory = (1.0 - effective_beta) * self.long_term_memory.to(z.device) + effective_beta * z
+            self.long_term_valid = torch.maximum(self.long_term_valid.to(z.device), valid)
 
         # 6. Anchor Selection theo Dual-Slot (Day & Night) loại bỏ bẫy 2 AM:
         # Giờ địa phương Việt Nam (GMT+7: UTC + 7*3600)
@@ -374,15 +374,15 @@ class BackgroundMemoryBank(nn.Module):
                 self.anchor_day_mean_rgb = mean_rgb_tensor.clone()
                 self.anchor_day_alpha_mean = alpha_per_sample.clone()
             else:
-                up_day = is_day_sample & (is_anchor | (alpha_per_sample < self.anchor_day_alpha_mean))
+                up_day = is_day_sample & (is_anchor | (alpha_per_sample < self.anchor_day_alpha_mean.to(z.device)))
                 if up_day.any():
                     u_3d = up_day.view(B, 1, 1)
                     u_2d = up_day.view(B, 1)
-                    self.anchor_day_tokens = torch.where(u_3d, z, self.anchor_day_tokens)
-                    self.anchor_day_valid = torch.where(u_2d, valid, self.anchor_day_valid)
-                    self.anchor_day_timestamp = torch.where(up_day, ts_tensor, self.anchor_day_timestamp)
-                    self.anchor_day_mean_rgb = torch.where(u_2d, mean_rgb_tensor, self.anchor_day_mean_rgb)
-                    self.anchor_day_alpha_mean = torch.where(up_day, alpha_per_sample, self.anchor_day_alpha_mean)
+                    self.anchor_day_tokens = torch.where(u_3d, z, self.anchor_day_tokens.to(z.device))
+                    self.anchor_day_valid = torch.where(u_2d, valid, self.anchor_day_valid.to(z.device))
+                    self.anchor_day_timestamp = torch.where(up_day, ts_tensor, self.anchor_day_timestamp.to(z.device))
+                    self.anchor_day_mean_rgb = torch.where(u_2d, mean_rgb_tensor, self.anchor_day_mean_rgb.to(z.device))
+                    self.anchor_day_alpha_mean = torch.where(up_day, alpha_per_sample, self.anchor_day_alpha_mean.to(z.device))
 
         # B. Cập nhật Slot Ban Đêm (Night Anchor)
         is_night_sample = ~is_day_sample
@@ -394,22 +394,22 @@ class BackgroundMemoryBank(nn.Module):
                 self.anchor_night_mean_rgb = mean_rgb_tensor.clone()
                 self.anchor_night_alpha_mean = alpha_per_sample.clone()
             else:
-                up_night = is_night_sample & (is_anchor | (alpha_per_sample < self.anchor_night_alpha_mean))
+                up_night = is_night_sample & (is_anchor | (alpha_per_sample < self.anchor_night_alpha_mean.to(z.device)))
                 if up_night.any():
                     u_3d = up_night.view(B, 1, 1)
                     u_2d = up_night.view(B, 1)
-                    self.anchor_night_tokens = torch.where(u_3d, z, self.anchor_night_tokens)
-                    self.anchor_night_valid = torch.where(u_2d, valid, self.anchor_night_valid)
-                    self.anchor_night_timestamp = torch.where(up_night, ts_tensor, self.anchor_night_timestamp)
-                    self.anchor_night_mean_rgb = torch.where(u_2d, mean_rgb_tensor, self.anchor_night_mean_rgb)
-                    self.anchor_night_alpha_mean = torch.where(up_night, alpha_per_sample, self.anchor_night_alpha_mean)
+                    self.anchor_night_tokens = torch.where(u_3d, z, self.anchor_night_tokens.to(z.device))
+                    self.anchor_night_valid = torch.where(u_2d, valid, self.anchor_night_valid.to(z.device))
+                    self.anchor_night_timestamp = torch.where(up_night, ts_tensor, self.anchor_night_timestamp.to(z.device))
+                    self.anchor_night_mean_rgb = torch.where(u_2d, mean_rgb_tensor, self.anchor_night_mean_rgb.to(z.device))
+                    self.anchor_night_alpha_mean = torch.where(up_night, alpha_per_sample, self.anchor_night_alpha_mean.to(z.device))
 
         # 7. Ghi vào hàng đợi Recent Frames (chọn lọc theo ánh sáng nếu vượt giới hạn)
         if len(self.recent_tokens) >= self.max_recent_frames:
             evict_idx = 0
             if len(self.recent_mean_rgb) > 0 and mean_rgb is not None:
                 dists = [
-                    float(torch.norm(m - mean_rgb_tensor, dim=-1).mean().item())
+                    float(torch.norm(m.to(z.device) - mean_rgb_tensor, dim=-1).mean().item())
                     for m in self.recent_mean_rgb
                 ]
                 evict_idx = int(torch.tensor(dists).argmax().item())

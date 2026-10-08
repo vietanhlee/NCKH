@@ -221,13 +221,42 @@ def train_streaming_bmb(args):
         ema_eta=args.ema_eta,
     )
 
-    # Thiết lập Multi-GPU
-    model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
-        model=model,
-        batch_size_per_gpu=args.batch_size,
-        base_lr=args.lr,
-        device_arg=args.device,
-    )
+    # Thiết lập Thiết bị & Multi-GPU
+    if args.data_parallel:
+        print("⚠️ [Warning] Bạn đang bật nn.DataParallel cho kiến trúc Streaming Memory Bank.")
+        print("   Lưu ý: nn.DataParallel chia nhỏ batch qua nhiều GPU và có thể gây phân mảnh bộ nhớ giữa các GPU.")
+        model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+            model=model,
+            batch_size_per_gpu=args.batch_size,
+            base_lr=args.lr,
+            device_arg=args.device,
+        )
+    else:
+        # Chế độ Single GPU Chuyên Dụng (Chuẩn mực cho Streaming Memory Bank):
+        # Tránh chia nhỏ luồng bộ nhớ của nn.DataParallel giữa các GPU khác nhau
+        if args.device.lower() == "cpu" or not torch.cuda.is_available():
+            device = torch.device("cpu")
+            num_gpus = 0
+            print("🖥️ [Hardware] Chạy trên CPU.")
+        else:
+            dev_idx = 0
+            if ":" in args.device:
+                try:
+                    dev_idx = int(args.device.split(":")[-1])
+                except ValueError:
+                    dev_idx = 0
+            device = torch.device(f"cuda:{dev_idx}")
+            num_gpus = 1
+            gpu_name = torch.cuda.get_device_name(dev_idx)
+            mem_gb = torch.cuda.get_device_properties(dev_idx).total_memory / (1024 ** 3)
+            print(f"⚡ [Hardware] ST-BMB chạy trên GPU chuyên dụng: {gpu_name} ({device}) | VRAM: {mem_gb:.2f} GB")
+            if torch.cuda.device_count() > 1:
+                print(f"ℹ️ [Multi-GPU Info] Phát hiện {torch.cuda.device_count()} GPUs. ST-BMB tự động vận hành trên GPU đơn ({device}) để duy trì tính toàn vẹn của chuỗi bộ nhớ luồng.")
+
+        model = model.to(device)
+        effective_batch_size = args.batch_size
+        effective_lr = args.lr
+
     raw_model = unwrap_model(model)
     raw_model.set_memory_dropout(args.memory_dropout)
 
@@ -494,6 +523,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Duy trì bộ nhớ liên tục qua các sliding window của cùng camera (Stateful Streaming Training) để thu hẹp khoảng cách phân phối huấn luyện vs suy luận",
+    )
+    parser.add_argument(
+        "--data_parallel",
+        action="store_true",
+        default=False,
+        help="Bật nn.DataParallel nếu muốn chia batch qua nhiều GPU (Mặc định False để bảo toàn chuỗi bộ nhớ Streaming)",
     )
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
