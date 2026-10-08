@@ -180,11 +180,13 @@ def train_decomposition(args):
         if not os.path.exists(args.resume):
             raise FileNotFoundError(f"Không tìm thấy file hoặc thư mục checkpoint resume: {args.resume}")
         print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        # Chú ý quan trọng: Truyền scheduler=None vào load_checkpoint để ngăn chặn bug của PyTorch
+        # CosineAnnealingLR khi last_epoch >= T_max cũ làm mẫu số tiến về 0, khiến LR nổ tung (tăng gấp hàng nghìn lần).
         ckpt_data = load_checkpoint(
             load_path=args.resume,
             model=raw_model,
             optimizer=optimizer,
-            scheduler=scheduler,
+            scheduler=None,
             device=device,
             strict=False,
             verbose=True,
@@ -197,6 +199,26 @@ def train_decomposition(args):
                 print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
                 print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
                 args.epochs = target_epochs
+
+        # Tái cấu hình Scheduler mượt mà cho số epochs còn lại
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        # Nếu LR cũ đã chạm đáy cực tiểu (1e-6) ở cuối session trước, thực hiện Cosine Warm-Restart mượt mà
+        if current_lr <= 5e-6:
+            restart_lr = effective_lr * 0.5  # Bắt đầu chu kỳ gia hạn với 50% base lr để tiếp tục hội tụ sâu
+            for pg in optimizer.param_groups:
+                pg["lr"] = restart_lr
+            current_lr = restart_lr
+            print(f"   🔄 [LR Warm-Restart] LR trước đó đã chạm đáy ({current_lr:.2e}), tự động khởi động mềm với LR = {current_lr:.6e} cho {remaining_epochs} epochs tiếp theo.")
+        else:
+            print(f"   🎯 [LR Continuity] Tiếp tục tốc độ học hiện tại: LR = {current_lr:.6e} cho {remaining_epochs} epochs còn lại.")
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=remaining_epochs,
+            eta_min=1e-6,
+        )
 
         # Khôi phục kỷ lục best_loss trước đó (nếu có)
         if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
@@ -225,6 +247,9 @@ def train_decomposition(args):
         if os.path.isfile(args.weights):
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     # 5. Vòng lặp huấn luyện
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
@@ -248,7 +273,11 @@ def train_decomposition(args):
                 bg = batch["bg"].to(device)
 
             preds = model(origin, prior=bg)
-            loss, loss_dict = loss_fn(preds, origin, bg, epoch=epoch)
+            loss, loss_dict = loss_fn(
+                preds, origin, bg,
+                epoch=epoch,
+                warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
+            )
 
             optimizer.zero_grad()
             loss.backward()
@@ -259,13 +288,16 @@ def train_decomposition(args):
             total_rec += loss_dict.get("loss_rec", 0.0)
             total_prior += loss_dict.get("loss_prior", 0.0)
 
+            cur_lr = optimizer.param_groups[0]["lr"]
             pbar.set_postfix({
                 "loss": f"{loss.item():.4f}",
                 "rec": f"{loss_dict.get('loss_rec', 0.0):.4f}",
                 "prior": f"{loss_dict.get('loss_prior', 0.0):.4f}",
+                "lr": f"{cur_lr:.2e}",
                 "sigma": f"{loss_dict.get('mean_sigma', 0.0):.3f}",
             })
 
+        cur_lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
         avg_loss = total_loss / max(1, len(loader))
         avg_rec = total_rec / max(1, len(loader))
@@ -276,7 +308,7 @@ def train_decomposition(args):
         history["loss_rec"].append(float(avg_rec))
         history["loss_prior"].append(float(avg_prior))
 
-        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
+        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — LR: {cur_lr:.6e} — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
 
         # Xuất ảnh trực quan kiểm tra
         with torch.no_grad():
@@ -385,6 +417,7 @@ def parse_args():
     parser.add_argument("--lambda_sparse", type=float, default=0.001, help="Trọng số mask sparsity (L_sparse)")
     parser.add_argument("--lambda_tv", type=float, default=0.01, help="Trọng số Total Variation (L_tv)")
     parser.add_argument("--lambda_bin", type=float, default=0.05, help="Trọng số nhị phân hóa mặt nạ (L_bin)")
+    parser.add_argument("--warmup_bin_epoch", type=int, default=10, help="Epoch bắt đầu kích hoạt loss nhị phân hóa mặt nạ L_bin (mặc định: 10)")
     parser.add_argument("--group_by_camera_slot", action="store_true", default=False, help="Nhóm K-frame cùng trạm khác ngày để tính L_shared")
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
     parser.add_argument("--num_workers", type=int, default=0)
