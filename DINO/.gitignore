@@ -2,10 +2,6 @@
 __pycache__/
 *.py[cod]
 
-# Test suite directory
-tests/
-test/
-
 # Weights & checkpoints
 checkpoints/
 *.pth

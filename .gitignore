@@ -6,8 +6,9 @@ nckh/
 .env
 *.env
 test.py
-tests/
-DINO/tests/
+/tests/
+!DINO/tests/
+!DINO/tests/**
 
 # Ignore large archives, weights, and embeddings
 *.zip
