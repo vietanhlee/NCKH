@@ -437,7 +437,7 @@ class StreamingDecompositionNet(nn.Module):
         """
         B, W_len, C, H, W = frames.shape
         if reset_memory:
-            self.memory_bank.reset()
+            self.memory_bank.reset(frames.device)
 
         step_outputs: List[Dict[str, torch.Tensor]] = []
         for t in range(W_len):
@@ -494,7 +494,11 @@ class StreamingDecompositionNet(nn.Module):
             return self.forward_sequence(x, timestamps=timestamps, reset_memory=reset_memory)
         elif x.dim() == 4:
             if reset_memory:
-                self.memory_bank.reset()
+                self.memory_bank.reset(x.device)
             return self.forward_single_step(x, update_memory=True, timestamp=timestamps)
         else:
             raise ValueError(f"Tensor đầu vào không hợp lệ: shape={x.shape}. Cần 4D hoặc 5D.")
+
+    def reset_memory(self, device: Optional[Union[torch.device, str, int]] = None):
+        """Xóa sạch bộ nhớ của thiết bị chỉ định hoặc toàn bộ các thiết bị (Thread-Safe & Multi-GPU)."""
+        self.memory_bank.reset(device)

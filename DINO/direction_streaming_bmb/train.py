@@ -150,7 +150,67 @@ def train_streaming_bmb(args):
     vis_dir = os.path.join(args.save_dir, "visualizations")
     os.makedirs(vis_dir, exist_ok=True)
 
-    # 1. Khởi tạo Dataset huấn luyện (và Validation nếu có)
+    # 1. Khởi tạo Backbone
+    print(f"\n🧠 [Backbone] Đang tải mô hình {args.backbone}...")
+    backbone, feat_dim, patch_size = get_dino_backbone(
+        model_name=args.backbone,
+        weights_path=args.weights,
+        freeze=args.freeze_backbone,
+    )
+
+    # 2. Khởi tạo Mô hình StreamingDecompositionNet
+    model = StreamingDecompositionNet(
+        backbone=backbone,
+        backbone_dim=feat_dim,
+        embed_dim=args.embed_dim,
+        patch_size=patch_size,
+        max_recent_frames=args.max_recent,
+        max_anchor_frames=args.max_anchor,
+        freeze_backbone=args.freeze_backbone,
+        unfreeze_last_blocks=args.unfreeze_last_blocks,
+        num_heads=args.num_heads,
+        ema_eta=args.ema_eta,
+    )
+
+    # 3. Thiết lập Thiết bị & Multi-GPU (Thread-Safe Per-Device Memory Bank)
+    if args.data_parallel:
+        print("⚡ [Multi-GPU DataParallel] Kích hoạt nn.DataParallel với Per-Device Memory Bank Isolation.")
+        print("   Hệ thống tự động phân tách độc lập buffer bộ nhớ cho từng GPU để triệt tiêu 100% race condition.")
+        model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+            model=model,
+            batch_size_per_gpu=args.batch_size,
+            base_lr=args.lr,
+            device_arg=args.device,
+        )
+    else:
+        # Chế độ Single GPU Chuyên Dụng
+        if args.device.lower() == "cpu" or not torch.cuda.is_available():
+            device = torch.device("cpu")
+            num_gpus = 0
+            print("🖥️ [Hardware] Chạy trên CPU.")
+        else:
+            dev_idx = 0
+            if ":" in args.device:
+                try:
+                    dev_idx = int(args.device.split(":")[-1])
+                except ValueError:
+                    dev_idx = 0
+            device = torch.device(f"cuda:{dev_idx}")
+            num_gpus = 1
+            gpu_name = torch.cuda.get_device_name(dev_idx)
+            mem_gb = torch.cuda.get_device_properties(dev_idx).total_memory / (1024 ** 3)
+            print(f"⚡ [Hardware] ST-BMB chạy trên GPU chuyên dụng: {gpu_name} ({device}) | VRAM: {mem_gb:.2f} GB")
+            if torch.cuda.device_count() > 1:
+                print(f"ℹ️ [Multi-GPU Info] Phát hiện {torch.cuda.device_count()} GPUs. ST-BMB tự động vận hành trên GPU đơn ({device}) (hoặc dùng --data_parallel để kích hoạt song song {torch.cuda.device_count()} GPUs).")
+
+        model = model.to(device)
+        effective_batch_size = args.batch_size
+        effective_lr = args.lr
+
+    raw_model = unwrap_model(model)
+    raw_model.set_memory_dropout(args.memory_dropout)
+
+    # 4. Khởi tạo Dataset huấn luyện & Validation với effective_batch_size chuẩn
     train_dataset = SlidingWindowTrafficDataset(
         data_dir=args.data_dir,
         window_size=args.window_size,
@@ -165,10 +225,10 @@ def train_streaming_bmb(args):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
+        batch_size=effective_batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        drop_last=(len(train_dataset) > args.batch_size),
+        drop_last=(len(train_dataset) > effective_batch_size),
         pin_memory=torch.cuda.is_available(),
     )
 
@@ -190,7 +250,7 @@ def train_streaming_bmb(args):
             )
             val_loader = DataLoader(
                 val_dataset,
-                batch_size=args.batch_size,
+                batch_size=effective_batch_size,
                 shuffle=False,
                 num_workers=args.num_workers,
                 pin_memory=torch.cuda.is_available(),
@@ -199,68 +259,7 @@ def train_streaming_bmb(args):
         except Exception as e_v:
             print(f"ℹ️ [Validation Note] Bỏ qua val split: {e_v}")
 
-    # 2. Khởi tạo Backbone
-    print(f"\n🧠 [Backbone] Đang tải mô hình {args.backbone}...")
-    backbone, feat_dim, patch_size = get_dino_backbone(
-        model_name=args.backbone,
-        weights_path=args.weights,
-        freeze=args.freeze_backbone,
-    )
-
-    # 3. Khởi tạo Mô hình StreamingDecompositionNet
-    model = StreamingDecompositionNet(
-        backbone=backbone,
-        backbone_dim=feat_dim,
-        embed_dim=args.embed_dim,
-        patch_size=patch_size,
-        max_recent_frames=args.max_recent,
-        max_anchor_frames=args.max_anchor,
-        freeze_backbone=args.freeze_backbone,
-        unfreeze_last_blocks=args.unfreeze_last_blocks,
-        num_heads=args.num_heads,
-        ema_eta=args.ema_eta,
-    )
-
-    # Thiết lập Thiết bị & Multi-GPU
-    if args.data_parallel:
-        print("⚠️ [Warning] Bạn đang bật nn.DataParallel cho kiến trúc Streaming Memory Bank.")
-        print("   Lưu ý: nn.DataParallel chia nhỏ batch qua nhiều GPU và có thể gây phân mảnh bộ nhớ giữa các GPU.")
-        model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
-            model=model,
-            batch_size_per_gpu=args.batch_size,
-            base_lr=args.lr,
-            device_arg=args.device,
-        )
-    else:
-        # Chế độ Single GPU Chuyên Dụng (Chuẩn mực cho Streaming Memory Bank):
-        # Tránh chia nhỏ luồng bộ nhớ của nn.DataParallel giữa các GPU khác nhau
-        if args.device.lower() == "cpu" or not torch.cuda.is_available():
-            device = torch.device("cpu")
-            num_gpus = 0
-            print("🖥️ [Hardware] Chạy trên CPU.")
-        else:
-            dev_idx = 0
-            if ":" in args.device:
-                try:
-                    dev_idx = int(args.device.split(":")[-1])
-                except ValueError:
-                    dev_idx = 0
-            device = torch.device(f"cuda:{dev_idx}")
-            num_gpus = 1
-            gpu_name = torch.cuda.get_device_name(dev_idx)
-            mem_gb = torch.cuda.get_device_properties(dev_idx).total_memory / (1024 ** 3)
-            print(f"⚡ [Hardware] ST-BMB chạy trên GPU chuyên dụng: {gpu_name} ({device}) | VRAM: {mem_gb:.2f} GB")
-            if torch.cuda.device_count() > 1:
-                print(f"ℹ️ [Multi-GPU Info] Phát hiện {torch.cuda.device_count()} GPUs. ST-BMB tự động vận hành trên GPU đơn ({device}) để duy trì tính toàn vẹn của chuỗi bộ nhớ luồng.")
-
-        model = model.to(device)
-        effective_batch_size = args.batch_size
-        effective_lr = args.lr
-
-    raw_model = unwrap_model(model)
-    raw_model.set_memory_dropout(args.memory_dropout)
-
-    # 4. Optimizer & Scheduler
+    # 5. Optimizer & Scheduler
     trainable_params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)

@@ -503,6 +503,51 @@ class TestStreamingBMB(unittest.TestCase):
         # Patch bị kẹt xe hoàn toàn nhận ít ô nhiễm từ bộ nhớ hơn nhiều so với patch sạch
         self.assertLess(diff_p5, diff_p0)
 
+    def test_09_multi_device_memory_isolation_and_dataparallel_safety(self):
+        """Kiểm tra cơ chế Per-Device State cách ly 100% bộ nhớ giữa các GPU khi chạy DataParallel."""
+        import copy
+        bank = BackgroundMemoryBank(
+            embed_dim=self.embed_dim,
+            max_recent_frames=2,
+            max_anchor_frames=1,
+        )
+        B = 2
+        bg_tok = torch.randn(B, self.L, self.embed_dim)
+
+        # 1. Kiểm tra hai thiết bị logic (ví dụ cpu và giả lập device 1) độc lập hoàn toàn
+        state_0 = bank._get_state("cpu")
+        state_1 = bank._get_state("cuda:1")
+        self.assertIsNot(state_0, state_1)
+        self.assertIsNot(state_0.recent_tokens, state_1.recent_tokens)
+
+        # Ghi vào state_0 cho đến khi đầy max_recent_frames (2 frames)
+        bank.write(bg_tok, timestamp=100.0)
+        bank.write(bg_tok, timestamp=400.0)
+        self.assertEqual(len(state_0.recent_tokens), 2)
+        self.assertEqual(len(state_1.recent_tokens), 0)
+
+        # Ghi frame thứ 3 vào state_0 (kích hoạt eviction pop)
+        bank.write(bg_tok, timestamp=700.0)
+        self.assertEqual(len(state_0.recent_tokens), 2)
+        self.assertEqual(len(state_1.recent_tokens), 0)
+
+        # 2. Kiểm tra Shallow Copy (cơ chế PyTorch DataParallel replicate)
+        replica = copy.copy(bank)
+        self.assertIsNot(replica._states, bank._states)
+
+        # 3. Kiểm tra reset theo device
+        state_1.recent_tokens.append(bg_tok)
+        self.assertEqual(len(state_1.recent_tokens), 1)
+        bank.reset("cpu")
+        self.assertEqual(len(state_0.recent_tokens), 0)
+        self.assertEqual(len(state_1.recent_tokens), 1)
+
+        # Reset toàn bộ
+        bank.reset()
+        self.assertEqual(len(state_1.recent_tokens), 0)
+        self.assertTrue(bank.is_empty)
+
 
 if __name__ == "__main__":
     unittest.main()
+
