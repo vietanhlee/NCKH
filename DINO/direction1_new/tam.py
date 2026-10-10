@@ -384,3 +384,26 @@ class GMMCalibrator:
         p_fg = self.pi_weight * torch.exp(log_p_fg.clamp(min=-20.0, max=20.0))
         pi = p_fg / (p_fg + p_bg + 1e-8)
         return pi.clamp(0.0, 1.0)
+
+    def state_dict(self) -> dict:
+        """Xuất trạng thái GMM Calibrator để lưu vào checkpoint."""
+        return {
+            "mu_bg": float(self.mu_bg),
+            "mu_fg": float(self.mu_fg),
+            "std_bg": float(self.std_bg),
+            "std_fg": float(self.std_fg),
+            "pi_weight": float(self.pi_weight),
+            "is_fitted": bool(self.is_fitted),
+        }
+
+    def load_state_dict(self, state: dict):
+        """Khôi phục trạng thái GMM Calibrator từ checkpoint."""
+        if not isinstance(state, dict):
+            return
+        self.mu_bg = float(state.get("mu_bg", -1.0))
+        self.mu_fg = float(state.get("mu_fg", 1.0))
+        self.std_bg = float(state.get("std_bg", 0.8))
+        self.std_fg = float(state.get("std_fg", 0.8))
+        self.pi_weight = float(state.get("pi_weight", 0.3))
+        self.is_fitted = bool(state.get("is_fitted", False))
+

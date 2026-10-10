@@ -369,6 +369,97 @@ class SyntheticTrafficDataset(Dataset):
         return {"x1": x1, "x2": x2, "cid": cid}
 
 
+def resolve_resume_checkpoint(resume_target: str) -> str:
+    """
+    Chuẩn hóa và tìm kiếm file checkpoint an toàn trên cả Local lẫn Kaggle/Colab.
+    Hỗ trợ đường dẫn file trực tiếp, URL Kaggle copy-paste nhầm, hoặc đường dẫn thư mục.
+    """
+    if not resume_target:
+        raise ValueError("Đường dẫn resume không được để trống!")
+
+    # 1. Tự động sửa đường dẫn Kaggle nếu người dùng copy nhầm URL 'models/<user>/<slug>/'
+    if not os.path.exists(resume_target):
+        norm_path = resume_target.replace("\\", "/")
+        if "/kaggle/input/" in norm_path:
+            subparts = norm_path.split("/kaggle/input/")[1].split("/")
+            if len(subparts) >= 3 and subparts[0] == "models":
+                alt_path = os.path.join("/kaggle/input", *subparts[2:])
+                if os.path.exists(alt_path):
+                    print(f"💡 [Smart Path] Tự động chuẩn hóa đường dẫn Kaggle:")
+                    print(f"   Từ: '{resume_target}'")
+                    print(f"   Sang: '{alt_path}'")
+                    resume_target = alt_path
+
+    # 2. Nếu là thư mục, tự động quét tìm file checkpoint bên trong
+    if os.path.isdir(resume_target):
+        found_cand = None
+        for candidate in ["last_checkpoint.pth", "dinov3_direction1_new_latest.pth", "dinov3_directionG_latest.pth", "best_checkpoint.pth"]:
+            cand_path = os.path.join(resume_target, candidate)
+            if os.path.isfile(cand_path):
+                found_cand = cand_path
+                break
+        if found_cand is None:
+            import glob
+            pths = glob.glob(os.path.join(resume_target, "**", "*.pth"), recursive=True)
+            if pths:
+                found_cand = pths[0]
+        if found_cand:
+            print(f"📂 [Smart Path] Đã tìm thấy checkpoint trong thư mục: {found_cand}")
+            resume_target = found_cand
+        else:
+            raise FileNotFoundError(f"❌ [Resume Error] Thư mục '{resume_target}' không chứa bất kỳ file checkpoint (.pth) nào!")
+
+    # 3. Báo lỗi rõ ràng nếu không tìm thấy file
+    if not os.path.isfile(resume_target):
+        import glob
+        pths_found = glob.glob("/kaggle/input/**/*.pth", recursive=True)[:5] if os.path.isdir("/kaggle/input") else []
+        err_msg = (
+            f"\n❌ [LỖI RESUME] Không tìm thấy file checkpoint tại: '{resume_target}'\n"
+            f"   Nguyên nhân: Đường dẫn file không tồn tại trên hệ thống.\n"
+        )
+        if pths_found:
+            err_msg += f"   💡 Gợi ý các file .pth hiện có trong /kaggle/input:\n"
+            for p in pths_found:
+                err_msg += f"      - {p}\n"
+        err_msg += f"   👉 Vui lòng kiểm tra lại đường dẫn file checkpoint.\n"
+        raise FileNotFoundError(err_msg)
+
+    return resume_target
+
+
+def get_cli_specified_args(argv_list: List[str]) -> set:
+    """
+    Xác định tập hợp các tham số được người dùng chỉ định tường minh trên dòng lệnh CLI.
+    Giúp phân biệt giữa tham số người dùng muốn ghi đè và tham số mặc định cần kế thừa từ checkpoint.
+    """
+    specified = set()
+    cli_map = {
+        "--data_dir": "data_dir", "--origin_dir": "data_dir",
+        "--model_name": "model_name", "--backbone": "model_name",
+        "--batch_size": "batch_size",
+        "--epochs": "epochs",
+        "--lr": "lr",
+        "--weight_decay": "weight_decay",
+        "--phi": "phi",
+        "--q_max": "q_max",
+        "--p_srs": "p_srs",
+        "--out_dim": "out_dim",
+        "--output_dir": "output_dir", "--save_dir": "output_dir",
+        "--weights": "weights",
+        "--device": "device",
+        "--num_workers": "num_workers",
+        "--seed": "seed",
+        "--use_amp": "use_amp", "--no_amp": "use_amp",
+        "--resume": "resume",
+        "--hf_token": "hf_token",
+    }
+    for arg in argv_list:
+        clean_arg = arg.split("=")[0].strip()
+        if clean_arg in cli_map:
+            specified.add(cli_map[clean_arg])
+    return specified
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Tự Giám Sát DINOv3 Hướng G (TAM + AGM + SRS)")
     parser.add_argument("--data_dir", "--origin_dir", dest="data_dir", type=str, default=None, help="Thư mục ảnh giao thông thực tế (ví dụ: output)")
@@ -405,6 +496,49 @@ def train_direction_g():
     np.random.seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
+
+    # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
+    preloaded_ckpt = None
+    if args.resume:
+        resolved_resume_path = resolve_resume_checkpoint(args.resume)
+        args.resume = resolved_resume_path
+        print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {resolved_resume_path}")
+        try:
+            preloaded_ckpt = torch.load(resolved_resume_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            preloaded_ckpt = torch.load(resolved_resume_path, map_location="cpu")
+
+        if not isinstance(preloaded_ckpt, dict):
+            raise ValueError(f"❌ Checkpoint file không đúng định dạng dictionary (type={type(preloaded_ckpt)})")
+
+        # Tự động kế thừa Hyperparameters từ checkpoint cũ nếu người dùng không truyền trên CLI
+        if "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+            ckpt_args = preloaded_ckpt["args"]
+            cli_specified = get_cli_specified_args(sys.argv[1:])
+            sync_keys = ["lr", "weight_decay", "phi", "q_max", "p_srs", "out_dim", "batch_size", "model_name", "seed"]
+            restored_info = []
+            override_info = []
+
+            for key in sync_keys:
+                if key in ckpt_args:
+                    if key not in cli_specified:
+                        setattr(args, key, ckpt_args[key])
+                        restored_info.append((key, ckpt_args[key]))
+                    else:
+                        override_info.append((key, getattr(args, key), ckpt_args[key]))
+
+            print("\n" + "=" * 80)
+            print(" ⚙️ [SMART HYPERPARAMETER RESTORATION] ĐỒNG BỘ SIÊU THAM SỐ TỪ CHECKPOINT")
+            print("=" * 80)
+            if restored_info:
+                print("   ✅ Tự động kế thừa các Hyperparameters từ checkpoint cũ:")
+                for k, v in restored_info:
+                    print(f"      - {k:<15}: {v}")
+            if override_info:
+                print("   ⚡ Ưu tiên tham số người dùng chỉ định trên CLI (ghi đè checkpoint cũ):")
+                for k, curr_v, old_v in override_info:
+                    print(f"      - {k:<15}: {curr_v} (thay vì {old_v} từ checkpoint)")
+            print("=" * 80 + "\n")
 
     # 1. Phát hiện phần cứng và thiết lập Multi-GPU tự động
     primary_device, num_gpus, gpu_names = get_available_devices()
@@ -533,60 +667,15 @@ def train_direction_g():
 
     resume_target = args.resume
     if resume_target:
-        # 1. Hỗ trợ tự động sửa đường dẫn Kaggle nếu người dùng copy nhầm URL 'models/<user>/<slug>/'
-        if not os.path.exists(resume_target):
-            norm_path = resume_target.replace("\\", "/")
-            if "/kaggle/input/" in norm_path:
-                subparts = norm_path.split("/kaggle/input/")[1].split("/")
-                # Nếu có dạng 'models/<user>/<slug>/...' -> Thử chuyển thành '/kaggle/input/<slug>/...'
-                if len(subparts) >= 3 and subparts[0] == "models":
-                    alt_path = os.path.join("/kaggle/input", *subparts[2:])
-                    if os.path.exists(alt_path):
-                        print(f"💡 [Smart Path] Tự động chuẩn hóa đường dẫn Kaggle:")
-                        print(f"   Từ: '{resume_target}'")
-                        print(f"   Sang: '{alt_path}'")
-                        resume_target = alt_path
-
-        # 2. Nếu là thư mục, tự động quét tìm file checkpoint bên trong
-        if os.path.isdir(resume_target):
-            found_cand = None
-            for candidate in ["last_checkpoint.pth", "dinov3_direction1_new_latest.pth", "dinov3_directionG_latest.pth", "best_checkpoint.pth"]:
-                cand_path = os.path.join(resume_target, candidate)
-                if os.path.isfile(cand_path):
-                    found_cand = cand_path
-                    break
-            if found_cand is None:
-                import glob
-                pths = glob.glob(os.path.join(resume_target, "**", "*.pth"), recursive=True)
-                if pths:
-                    found_cand = pths[0]
-            if found_cand:
-                print(f"📂 [Smart Path] Đã tìm thấy checkpoint trong thư mục: {found_cand}")
-                resume_target = found_cand
-            else:
-                raise FileNotFoundError(f"❌ [Resume Error] Thư mục '{args.resume}' không chứa bất kỳ file checkpoint (.pth) nào!")
-
-        # 3. Báo lỗi rõ ràng nếu không tìm thấy file thay vì im lặng train mới
-        if not os.path.isfile(resume_target):
-            import glob
-            pths_found = glob.glob("/kaggle/input/**/*.pth", recursive=True)[:5] if os.path.isdir("/kaggle/input") else []
-            err_msg = (
-                f"\n❌ [LỖI RESUME] Không tìm thấy file checkpoint tại: '{resume_target}'\n"
-                f"   Nguyên nhân: Đường dẫn file trên Kaggle không tồn tại.\n"
-            )
-            if pths_found:
-                err_msg += f"   💡 Gợi ý các file .pth hiện có trong /kaggle/input:\n"
-                for p in pths_found:
-                    err_msg += f"      - {p}\n"
-            err_msg += f"   👉 Vui lòng kiểm tra lại đường dẫn bằng lệnh: !ls -R {os.path.dirname(resume_target) if os.path.dirname(resume_target) else '/kaggle/input'}\n"
-            raise FileNotFoundError(err_msg)
-
-        # 4. Tiến hành nạp checkpoint
-        print(f"🔄 [Resume] Đang nạp checkpoint từ: {resume_target}")
-        try:
-            ckpt = torch.load(resume_target, map_location="cpu", weights_only=False)
-        except TypeError:
-            ckpt = torch.load(resume_target, map_location="cpu")
+        if preloaded_ckpt is not None:
+            ckpt = preloaded_ckpt
+        else:
+            resolved_resume_path = resolve_resume_checkpoint(resume_target)
+            print(f"🔄 [Resume] Đang nạp checkpoint từ: {resolved_resume_path}")
+            try:
+                ckpt = torch.load(resolved_resume_path, map_location="cpu", weights_only=False)
+            except TypeError:
+                ckpt = torch.load(resolved_resume_path, map_location="cpu")
 
         if not isinstance(ckpt, dict):
             raise ValueError(f"❌ Checkpoint file không đúng định dạng dictionary (type={type(ckpt)})")
@@ -596,7 +685,7 @@ def train_direction_g():
         available_keys = list(ckpt.keys())
         print(f"   🔑 [Checkpoint Keys] Các trường dữ liệu tìm thấy: {available_keys}")
 
-        # Khôi phục Student Backbone
+        # 1. Khôi phục Student Backbone
         if "student_backbone" in ckpt:
             smart_load_state_dict(raw_curr_s.backbone, ckpt["student_backbone"], strict=False, verbose=True)
         elif "model_state" in ckpt or "state_dict" in ckpt or "model" in ckpt:
@@ -607,16 +696,15 @@ def train_direction_g():
             else:
                 smart_load_state_dict(raw_curr_s.backbone, sd, strict=False, verbose=True)
 
-        # Khôi phục Teacher Backbone
+        # 2. Khôi phục Teacher Backbone
         if "teacher_backbone" in ckpt:
             smart_load_state_dict(raw_curr_t.backbone, ckpt["teacher_backbone"], strict=False, verbose=True)
         else:
-            # Đồng bộ lại teacher từ student nếu checkpoint không lưu riêng teacher
             with torch.no_grad():
                 for ps, pt in zip(raw_curr_s.backbone.parameters(), raw_curr_t.backbone.parameters()):
                     pt.data.copy_(ps.data)
 
-        # Khôi phục Heads
+        # 3. Khôi phục Projection Heads
         if "student_dino_head" in ckpt:
             smart_load_state_dict(raw_curr_s.dino_head, ckpt["student_dino_head"], strict=False, verbose=False)
         if "teacher_dino_head" in ckpt:
@@ -631,6 +719,7 @@ def train_direction_g():
         elif "student_ibot_head" in ckpt:
             smart_load_state_dict(raw_curr_t.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
 
+        # 4. Khôi phục PositionStats (TAM)
         if "pos_stats" in ckpt:
             pos_dict = clean_state_dict(ckpt["pos_stats"])
             if "mu" in pos_dict and pos_dict["mu"].shape[0] != pos_stats.num_cams:
@@ -639,11 +728,34 @@ def train_direction_g():
                 pos_stats.set_cam_capacity(cams_in_ckpt)
             pos_stats.load_state_dict(pos_dict)
             print(f"   ✅ [PositionStats] Khôi phục thành công thống kê vị trí cho {pos_stats.num_cams} camera.")
+
+        # 5. Khôi phục GMMCalibrator (Ước lượng xác suất tiền cảnh pi_t)
+        if "calibrator" in ckpt and ckpt["calibrator"] is not None:
+            calibrator.load_state_dict(ckpt["calibrator"])
+            print(f"   🎯 [GMMCalibrator] Khôi phục phân phối GMM: mu_bg={calibrator.mu_bg:.2f}, mu_fg={calibrator.mu_fg:.2f}, std_bg={calibrator.std_bg:.2f}, std_fg={calibrator.std_fg:.2f}, pi_weight={calibrator.pi_weight:.2f}")
+        else:
+            print("   ℹ️ [GMMCalibrator] Checkpoint trước chưa lưu GMM, hệ thống sẽ tự động hiệu chuẩn sau 20 bước.")
+
+        # 6. Khôi phục FrozenExtractor & PCA components
+        raw_fe = unwrap_model(frozen_extractor)
+        if "frozen_extractor" in ckpt and ckpt["frozen_extractor"] is not None:
+            smart_load_state_dict(raw_fe, ckpt["frozen_extractor"], strict=False, verbose=False)
+            print("   🧊 [FrozenExtractor] Khôi phục toàn bộ đặc trưng và ma trận PCA từ checkpoint.")
+        elif "pca_components" in ckpt and ckpt["pca_components"] is not None:
+            raw_fe.pca_components.copy_(ckpt["pca_components"].to(device))
+            if "pca_mean" in ckpt and ckpt["pca_mean"] is not None:
+                raw_fe.pca_mean.copy_(ckpt["pca_mean"].to(device))
+            if "is_pca_fitted" in ckpt and ckpt["is_pca_fitted"] is not None:
+                raw_fe.is_pca_fitted.copy_(ckpt["is_pca_fitted"].to(device))
+            print("   🧊 [FrozenExtractor] Khôi phục thành công ma trận PCA buffers từ checkpoint.")
+
+        # 7. Khôi phục Loss Centers
         if "dino_center" in ckpt and hasattr(dino_loss_fn, "center"):
             dino_loss_fn.center.copy_(ckpt["dino_center"].to(device))
         if "ibot_center" in ckpt and hasattr(ibot_loss_fn, "center"):
             ibot_loss_fn.center.copy_(ckpt["ibot_center"].to(device))
 
+        # 8. Khôi phục Optimizer
         if "optimizer" in ckpt or "optimizer_state" in ckpt:
             opt_sd = ckpt.get("optimizer", ckpt.get("optimizer_state"))
             try:
@@ -657,24 +769,7 @@ def train_direction_g():
             except Exception as e_opt:
                 print(f"   ⚠️ [Optimizer Notice] {e_opt}")
 
-        if "scheduler" in ckpt and ckpt["scheduler"] is not None:
-            try:
-                scheduler.load_state_dict(ckpt["scheduler"])
-                print("   ✅ [Scheduler] Khôi phục lịch trình Learning Rate (CosineAnnealingLR).")
-            except Exception as e_sched:
-                print(f"   ⚠️ [Scheduler Notice] {e_sched}")
-
-        if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
-            try:
-                scaler.load_state_dict(ckpt["scaler"])
-            except Exception:
-                pass
-
-        if "history" in ckpt and isinstance(ckpt["history"], dict):
-            history = {k: list(v) for k, v in ckpt["history"].items()}
-            print(f"   📊 [History] Khôi phục toàn bộ lịch sử loss ({len(history.get('total', []))} epochs trước).")
-
-        # Xác định epoch tiếp theo
+        # 9. Xác định epoch tiếp theo
         found_epoch = None
         for ep_key in ["epoch", "start_epoch", "last_epoch", "current_epoch"]:
             if ep_key in ckpt and ckpt[ep_key] is not None:
@@ -687,13 +782,69 @@ def train_direction_g():
         else:
             print("   ⚠️ [Epoch Notice] Checkpoint không có thông tin epoch. Bắt đầu từ epoch 1 với trọng số đã nạp.")
 
+        # 10. Tự động gia hạn số epochs nếu đã đạt đích cũ
+        cli_specified = get_cli_specified_args(sys.argv[1:])
+        if start_epoch >= args.epochs:
+            if "epochs" not in cli_specified:
+                extra_epochs = 5
+                if "args" in ckpt and isinstance(ckpt["args"], dict) and "epochs" in ckpt["args"]:
+                    try:
+                        extra_epochs = int(ckpt["args"]["epochs"])
+                    except Exception:
+                        extra_epochs = 5
+                new_total_epochs = start_epoch + extra_epochs
+                print(f"\n⚠️ [Smart Resume Notice] Checkpoint đã hoàn thành {start_epoch} epochs (mục tiêu cũ: {args.epochs}).")
+                print(f"   💡 Tự động gia hạn tổng số epochs: {args.epochs} -> {new_total_epochs} (+{extra_epochs} epochs tiếp theo).")
+                args.epochs = new_total_epochs
+            else:
+                print(f"\n⚠️ [Cảnh Báo Resume] Checkpoint đã hoàn thành {start_epoch}/{args.epochs} epochs.")
+                print(f"   👉 Bạn đã chỉ định --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs > {start_epoch} để tiếp tục train!\n")
+
+        # 11. Tái lập Lịch trình CosineAnnealingLR mượt mà (CHỐNG HIỆN TƯỢNG LOSS BẬT NGƯỢC TĂNG VỌT)
+        # Trong PyTorch, CosineAnnealingLR là hàm tuần hoàn. Nếu gọi load_state_dict() với số epochs mới,
+        # hoặc bước qua T_max cũ, Learning Rate sẽ bật ngược tăng vọt từ 1e-6 lên đỉnh cao nhất (gấp 50 lần),
+        # gây sốc gradient phá vỡ biểu diễn đã học khiến Loss bùng nổ!
+        # Giải pháp: Tính toán và cập nhật LR hiện tại theo đường dốc Cosine Annealing dài hạn,
+        # tái lập CosineAnnealingLR với T_max = args.epochs mới, giúp LR suy giảm êm đềm về eta_min=1e-6.
+        eta_min = 1e-6
+        curr_cosine_lr = eta_min + 0.5 * (effective_lr - eta_min) * (1.0 + np.cos(start_epoch * np.pi / max(1, args.epochs)))
+        for group in optimizer.param_groups:
+            group["initial_lr"] = effective_lr
+            group["lr"] = float(curr_cosine_lr)
+
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=args.epochs,
+            eta_min=eta_min,
+            last_epoch=start_epoch - 1 if start_epoch > 0 else -1,
+        )
+        print(f"   📈 [Scheduler Restored] Tái lập CosineAnnealingLR: Mục tiêu {args.epochs} epochs (còn {remaining_epochs} epochs).")
+        print(f"   🎯 [Current Learning Rate] LR khởi điểm cho epoch {start_epoch + 1}: {curr_cosine_lr:.3e} (suy giảm mượt mà về 1e-6, triệt tiêu gradient shock).")
+
+        # 12. Cập nhật lịch nhiệt độ teacher trong DINOLoss
+        if hasattr(dino_loss_fn, "teacher_temp_schedule"):
+            warmup_epochs = 10
+            dino_loss_fn.teacher_temp_schedule = [
+                0.04 + (0.07 - 0.04) * (i / max(1, warmup_epochs))
+                if i < warmup_epochs else 0.07
+                for i in range(max(args.epochs, len(dino_loss_fn.teacher_temp_schedule)))
+            ]
+
+        # 13. Khôi phục Scaler, History, Best Loss
+        if "scaler" in ckpt and ckpt["scaler"] is not None and hasattr(scaler, "load_state_dict"):
+            try:
+                scaler.load_state_dict(ckpt["scaler"])
+            except Exception:
+                pass
+
+        if "history" in ckpt and isinstance(ckpt["history"], dict):
+            history = {k: list(v) for k, v in ckpt["history"].items()}
+            print(f"   📊 [History] Khôi phục toàn bộ lịch sử loss ({len(history.get('total', []))} epochs trước).")
+
         if "best_loss" in ckpt and ckpt["best_loss"] is not None:
             best_loss = float(ckpt["best_loss"])
-        print("✅ [Resume] Đã khôi phục thành công trạng thái mô hình!")
-
-        if start_epoch >= args.epochs:
-            print(f"\n⚠️ [Cảnh Báo Resume] Checkpoint đã hoàn thành {start_epoch}/{args.epochs} epochs.")
-            print(f"💡 Nếu muốn tiếp tục huấn luyện, vui lòng đặt --epochs lớn hơn {start_epoch} (ví dụ: --epochs {start_epoch + 5}).\n")
+        print("✅ [Resume] Đã khôi phục hoàn chỉnh và an toàn tuyệt đối toàn bộ trạng thái mô hình!")
 
     # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
     if args.data_dir and os.path.isdir(args.data_dir):
@@ -730,6 +881,7 @@ def train_direction_g():
     def save_g_checkpoint(save_path: str, epoch_num: int, is_best: bool = False):
         raw_curr_s = unwrap_model(student_model)
         raw_curr_t = unwrap_model(teacher_model)
+        raw_curr_fe = unwrap_model(frozen_extractor)
         checkpoint_dict = {
             "epoch": epoch_num,
             "student_backbone": clean_state_dict(raw_curr_s.backbone.state_dict()),
@@ -739,6 +891,11 @@ def train_direction_g():
             "student_ibot_head": clean_state_dict(raw_curr_s.ibot_head.state_dict()),
             "teacher_ibot_head": clean_state_dict(raw_curr_t.ibot_head.state_dict()),
             "pos_stats": clean_state_dict(pos_stats.state_dict()),
+            "calibrator": calibrator.state_dict(),
+            "frozen_extractor": clean_state_dict(raw_curr_fe.state_dict()),
+            "pca_components": getattr(raw_curr_fe, "pca_components", None),
+            "pca_mean": getattr(raw_curr_fe, "pca_mean", None),
+            "is_pca_fitted": getattr(raw_curr_fe, "is_pca_fitted", None),
             "dino_center": dino_loss_fn.center.detach().cpu(),
             "ibot_center": ibot_loss_fn.center.detach().cpu(),
             "optimizer": optimizer.state_dict(),
