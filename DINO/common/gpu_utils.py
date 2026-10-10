@@ -6,6 +6,7 @@
 =============================================================================
 """
 
+import glob
 import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -275,6 +276,128 @@ def save_checkpoint(
 save_clean_checkpoint = save_checkpoint
 
 
+def resolve_checkpoint_path(target_path: str) -> str:
+    """
+    Chuẩn hóa và tìm kiếm file checkpoint an toàn trên cả Local, Kaggle và Colab:
+      - Tự động sửa lỗi URL Kaggle copy-paste nhầm: '/kaggle/input/models/<user>/<slug>/...' -> '/kaggle/input/<slug>/...'
+      - Nếu là thư mục: tự động quét tìm các checkpoint phổ biến ('last_checkpoint.pth', 'best_checkpoint.pth', 'model.pth', v.v.)
+      - Báo lỗi rõ ràng và gợi ý các file .pth khả dụng nếu không tìm thấy.
+    """
+    if not target_path:
+        raise ValueError("Đường dẫn checkpoint không được để trống!")
+
+    # 1. Tự động chuẩn hóa đường dẫn Kaggle
+    if not os.path.exists(target_path):
+        norm_path = target_path.replace("\\", "/")
+        if "/kaggle/input/" in norm_path:
+            subparts = norm_path.split("/kaggle/input/")[1].split("/")
+            if len(subparts) >= 3 and subparts[0] == "models":
+                alt_path = os.path.join("/kaggle/input", *subparts[2:])
+                if os.path.exists(alt_path):
+                    print(f"💡 [Smart Path] Tự động chuẩn hóa đường dẫn Kaggle:")
+                    print(f"   Từ: '{target_path}'")
+                    print(f"   Sang: '{alt_path}'")
+                    target_path = alt_path
+
+    # 2. Nếu là thư mục, tự động quét tìm checkpoint
+    if os.path.isdir(target_path):
+        candidates = [
+            "last_checkpoint.pth",
+            "best_checkpoint.pth",
+            "best_decomposition_model.pth",
+            "best_streaming_model.pth",
+            "dinov3_direction1_new_latest.pth",
+            "model.pth",
+        ]
+        found_cand = None
+        for cand in candidates:
+            c_path = os.path.join(target_path, cand)
+            if os.path.isfile(c_path):
+                found_cand = c_path
+                break
+        if found_cand is None:
+            pths = glob.glob(os.path.join(target_path, "**", "*.pth"), recursive=True)
+            if pths:
+                found_cand = pths[0]
+        if found_cand:
+            print(f"📂 [Smart Path] Đã tìm thấy checkpoint trong thư mục: {found_cand}")
+            target_path = found_cand
+        else:
+            raise FileNotFoundError(f"❌ [Resume Error] Thư mục '{target_path}' không chứa bất kỳ file checkpoint (.pth) nào!")
+
+    # 3. Báo lỗi rõ ràng nếu file không tồn tại
+    if not os.path.isfile(target_path):
+        pths_found = glob.glob("/kaggle/input/**/*.pth", recursive=True)[:5] if os.path.isdir("/kaggle/input") else []
+        err_msg = (
+            f"\n❌ [LỖI CHECKPOINT] Không tìm thấy file checkpoint tại: '{target_path}'\n"
+            f"   Nguyên nhân: Đường dẫn file không tồn tại trên hệ thống.\n"
+        )
+        if pths_found:
+            err_msg += f"   💡 Gợi ý các file .pth hiện có trong /kaggle/input:\n"
+            for p in pths_found:
+                err_msg += f"      - {p}\n"
+        err_msg += f"   👉 Vui lòng kiểm tra lại đường dẫn file checkpoint.\n"
+        raise FileNotFoundError(err_msg)
+
+    return target_path
+
+
+def get_cli_specified_args(argv_list: List[str], cli_mapping: Optional[Dict[str, str]] = None) -> set:
+    """
+    Xác định tập hợp các tham số được người dùng chỉ định tường minh trên dòng lệnh CLI.
+    """
+    specified = set()
+    for arg in argv_list:
+        clean_arg = arg.split("=")[0].strip()
+        if clean_arg.startswith("--"):
+            clean_name = clean_arg[2:].replace("-", "_")
+            specified.add(clean_name)
+            if cli_mapping and clean_arg in cli_mapping:
+                specified.add(cli_mapping[clean_arg])
+    return specified
+
+
+def smart_inherit_checkpoint_args(
+    args: Any,
+    ckpt_args: Dict[str, Any],
+    sync_keys: List[str],
+    argv_list: Optional[List[str]] = None,
+) -> Tuple[List[Tuple[str, Any]], List[Tuple[str, Any, Any]]]:
+    """
+    Tự động kế thừa các Hyperparameters từ checkpoint cũ nếu người dùng không truyền trên CLI.
+    Ưu tiên tuyệt đối tham số người dùng gõ tường minh trên CLI.
+    """
+    if argv_list is None:
+        argv_list = sys.argv[1:]
+    cli_specified = get_cli_specified_args(argv_list)
+
+    restored_info = []
+    override_info = []
+
+    for key in sync_keys:
+        if key in ckpt_args:
+            if key not in cli_specified:
+                setattr(args, key, ckpt_args[key])
+                restored_info.append((key, ckpt_args[key]))
+            else:
+                override_info.append((key, getattr(args, key), ckpt_args[key]))
+
+    print("\n" + "=" * 80)
+    print(" ⚙️ [SMART HYPERPARAMETER RESTORATION] ĐỒNG BỘ SIÊU THAM SỐ TỪ CHECKPOINT")
+    print("=" * 80)
+    if restored_info:
+        print("   ✅ Tự động kế thừa các Hyperparameters từ checkpoint cũ:")
+        for k, v in restored_info:
+            print(f"      - {k:<18}: {v}")
+    if override_info:
+        print("   ⚡ Ưu tiên tham số người dùng chỉ định trên CLI (ghi đè checkpoint cũ):")
+        for k, curr_v, old_v in override_info:
+            print(f"      - {k:<18}: {curr_v} (thay vì {old_v} từ checkpoint)")
+    print("=" * 80 + "\n")
+
+    return restored_info, override_info
+
+
 def load_checkpoint(
     load_path: str,
     model: nn.Module,
@@ -287,36 +410,15 @@ def load_checkpoint(
 ) -> Dict[str, Any]:
     """
     Nạp Checkpoint thông minh và an toàn từ đĩa:
+      - Tự động chuẩn hóa đường dẫn checkpoint (Kaggle/Colab/Local) qua `resolve_checkpoint_path`.
       - Deserialization luôn thực hiện trên CPU (`map_location="cpu"`) để chống tràn bộ nhớ GPU (OOM).
       - Tự động nhận diện các định dạng lưu trữ phổ biến:
           + Dict chứa key 'model_state', 'state_dict', 'student_state'...
           + Hay là state_dict thuần túy.
       - Tự động đồng bộ optimizer state, scheduler state, scaler state sang thiết bị đích nếu có yêu cầu.
-      - Trả về dictionary checkpoint gốc để khôi phục 'epoch', 'metrics', 'extra_dict'.
+      - Trả về dictionary checkpoint gốc để khôi phục 'epoch', 'metrics', 'extra_dict', 'args'.
     """
-    if not os.path.isfile(load_path):
-        if os.path.isdir(load_path):
-            candidates = [
-                os.path.join(load_path, "best_decomposition_model.pth"),
-                os.path.join(load_path, "best_checkpoint.pth"),
-                os.path.join(load_path, "last_checkpoint.pth"),
-                os.path.join(load_path, "model.pth"),
-            ]
-            found = False
-            for c in candidates:
-                if os.path.isfile(c):
-                    load_path = c
-                    found = True
-                    break
-            if not found:
-                pths = [os.path.join(load_path, f) for f in os.listdir(load_path) if f.endswith(".pth") and os.path.isfile(os.path.join(load_path, f))]
-                if pths:
-                    load_path = pths[0]
-                    found = True
-            if not found:
-                raise FileNotFoundError(f"Không tìm thấy file checkpoint (.pth) hợp lệ trong thư mục: {load_path}")
-        else:
-            raise FileNotFoundError(f"Không tìm thấy file checkpoint tại: {load_path}")
+    load_path = resolve_checkpoint_path(load_path)
 
     if verbose:
         print(f"📂 [Checkpoint] Đang nạp checkpoint từ: {load_path}...")
@@ -356,6 +458,8 @@ def load_checkpoint(
                     for k, v in state.items():
                         if isinstance(v, torch.Tensor):
                             state[k] = v.to(dest_device)
+                for group in optimizer.param_groups:
+                    group.setdefault("initial_lr", group.get("initial_lr", group["lr"]))
                 if verbose:
                     print("   ✅ [Optimizer] Khôi phục thành công toàn bộ trạng thái optimizer.")
             except Exception as e_opt:

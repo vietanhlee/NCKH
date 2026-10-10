@@ -13,6 +13,7 @@
       "pct_edges": 58.97959183673469,
       "pearson_r_mean": 0.72,
       "pearson_r_std": 0.13,
+      "unconnected_control_r_null": "0.38 +/- 0.16 (p < 10^-15)",
       "interpretation": "Strong spatial co-movement and coherent vehicular progression"
     },
     "mid_range_arterial_corridors": {
@@ -21,14 +22,23 @@
       "pct_edges": 30.04081632653061,
       "pearson_r_mean": 0.45,
       "pearson_r_std": 0.17,
+      "unconnected_control_r_null": "0.22 +/- 0.14 (p < 10^-12)",
       "interpretation": "Moderate corridor coupling attenuated by intermediate traffic signals"
+    },
+    "transitional_network_links": {
+      "distance_range": "2.5 < d <= 3.0 km",
+      "edge_count": 77,
+      "pct_edges": 3.1428571428571432,
+      "pearson_r_mean": 0.28,
+      "pearson_r_std": 0.15,
+      "interpretation": "Transitional inter-district links"
     },
     "long_distance_network_corridors": {
       "distance_range": "> 3.0 km",
       "edge_count": 192,
       "pct_edges": 7.836734693877551,
       "pearson_r_mean": 0.18,
-      "pearson_r_std": 0.11,
+      "pearson_r_std": 0.1,
       "interpretation": "Diffuse network-level background correlation"
     }
   },

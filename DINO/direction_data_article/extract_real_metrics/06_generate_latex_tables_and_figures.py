@@ -373,24 +373,29 @@ def generate_figure_1_spatial_map(stations_csv: str, output_paths: List[str]):
     fig, ax = plt.subplots(figsize=(8.5, 7.5), dpi=300)
 
     lats, lngs = [], []
-    if os.path.exists(stations_csv):
-        df = pd.read_csv(stations_csv)
+    # Ưu tiên đọc trực tiếp từ routes.csv chứa tọa độ thật của 608 trạm camera
+    routes_candidates = [
+        stations_csv,
+        Path(stations_csv).parent / "routes.csv",
+        Path(stations_csv).parent.parent / "zenodo_bundle" / "metadata" / "routes.csv",
+        Path(stations_csv).parent / "metadata" / "routes.csv"
+    ]
+    found_path = None
+    for cand in routes_candidates:
+        if cand and os.path.exists(cand):
+            found_path = cand
+            break
+
+    if found_path is not None:
+        df = pd.read_csv(found_path)
         lat_c = [c for c in df.columns if "lat" in c.lower()][0]
         lng_c = [c for c in df.columns if "lng" in c.lower() or "lon" in c.lower()][0]
         lats = df[lat_c].to_numpy()
         lngs = df[lng_c].to_numpy()
+        logger.info(f"Đã nạp tọa độ thật ({len(lats)} trạm) từ: {found_path}")
+        logger.info(f"Giới hạn tọa độ: Longitude [{lngs.min():.6f}, {lngs.max():.6f}], Latitude [{lats.min():.6f}, {lats.max():.6f}]")
     else:
-        bundle_routes = Path(stations_csv).parent / "routes.csv"
-        if bundle_routes.exists():
-            df = pd.read_csv(bundle_routes)
-            lat_c = [c for c in df.columns if "lat" in c.lower()][0]
-            lng_c = [c for c in df.columns if "lng" in c.lower() or "lon" in c.lower()][0]
-            lats = df[lat_c].to_numpy()
-            lngs = df[lng_c].to_numpy()
-        else:
-            np.random.seed(42)
-            lats = 10.7769 + np.random.normal(0, 0.045, 608)
-            lngs = 106.7009 + np.random.normal(0, 0.055, 608)
+        raise FileNotFoundError(f"Không tìm thấy routes.csv từ các ứng viên: {routes_candidates}")
 
     # 1. Nền mật độ Hexbin mượt mà
     hb = ax.hexbin(lngs, lats, gridsize=36, cmap='YlGnBu', mincnt=1, alpha=0.50, edgecolors='none')
@@ -421,6 +426,10 @@ def generate_figure_1_spatial_map(stations_csv: str, output_paths: List[str]):
     ax.set_xlabel("Longitude ($^\\circ$E)", fontsize=10)
     ax.set_ylabel("Latitude ($^\\circ$N)", fontsize=10)
     ax.grid(True, linestyle='--', alpha=0.35)
+
+    # Đặt khung tọa độ bao trùm toàn bộ mạng lưới thực tế: 106.4527°E - 106.8506°E, 10.6425°N - 10.9883°N
+    ax.set_xlim(106.43, 106.87)
+    ax.set_ylim(10.63, 11.01)
 
     cb = fig.colorbar(hb, ax=ax, orientation='vertical', pad=0.02, shrink=0.82)
     cb.set_label('Camera Station Spatial Density (per Hexbin)', fontsize=9)
@@ -695,9 +704,9 @@ def main():
     output_figures_dir = output_dir / "figures"
     output_tables_dir = output_dir / "tables"
     
-    stations_csv = Path(args.stations_csv) if args.stations_csv else project_root / "zenodo_bundle" / "metadata" / "camera_data_608Cam.csv"
+    stations_csv = Path(args.stations_csv) if args.stations_csv else project_root / "zenodo_bundle" / "metadata" / "routes.csv"
     if not stations_csv.exists():
-        stations_csv = project_root / "camera_data_608Cam.csv"
+        stations_csv = project_root / "zenodo_bundle" / "metadata" / "camera_data_608Cam.csv"
 
     edges_csv = project_root / "zenodo_bundle" / "graph" / "edges.csv"
     sample_preview_dir = Path(args.sample_preview_dir) if args.sample_preview_dir else project_root / "zenodo_bundle" / "sample_preview"

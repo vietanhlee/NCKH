@@ -37,7 +37,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, clean_state_dict
+from common.gpu_utils import (
+    setup_multi_gpu,
+    unwrap_model,
+    save_checkpoint,
+    load_checkpoint,
+    clean_state_dict,
+    smart_load_state_dict,
+    resolve_checkpoint_path,
+    smart_inherit_checkpoint_args,
+)
 from dataset import BGGuidedDINODataset
 from models import BGGuidedDINOModel
 from losses import BGGuidedDINOLoss
@@ -52,6 +61,24 @@ def get_cosine_schedule(base_val: float, final_val: float, total_iters: int, war
 
 
 def train_bg_guided_dino(args):
+    # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
+    preloaded_ckpt = None
+    if getattr(args, "resume", None):
+        args.resume = resolve_checkpoint_path(args.resume)
+        print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {args.resume}")
+        try:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        except TypeError:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu")
+
+        if isinstance(preloaded_ckpt, dict) and "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+            sync_keys = [
+                "lr", "batch_size", "backbone", "weights", "match_strategy",
+                "alpha_max", "alpha_fg", "mask_ratio", "size_global", "size_local",
+                "local_crops", "out_dim", "use_amp",
+            ]
+            smart_inherit_checkpoint_args(args, preloaded_ckpt["args"], sync_keys)
+
     # Khởi tạo hạt giống ngẫu nhiên đảm bảo tính tái lập (Reproducibility)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -171,9 +198,11 @@ def train_bg_guided_dino(args):
 
     # 5. Khôi phục trạng thái từ Checkpoint nếu có cờ --resume
     start_epoch = 0
+    best_loss = float("inf")
+    history = {"epochs": [], "loss": [], "entropy": []}
+
     if args.resume:
-        if not os.path.isfile(args.resume):
-            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
+        args.resume = resolve_checkpoint_path(args.resume)
         print(f"\n🔄 [Resume] Đang khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
         ckpt_data = load_checkpoint(
             load_path=args.resume,
@@ -205,24 +234,62 @@ def train_bg_guided_dino(args):
                 print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
                 args.epochs = target_epochs
 
-    total_iters = len(loader) * args.epochs
-    lr_schedule = get_cosine_schedule(effective_lr, 1e-6, total_iters, warmup_iters=len(loader) * 2)
-    momentum_schedule = get_cosine_schedule(0.996, 1.0, total_iters)
-    global_step = start_epoch * len(loader)
+        # Khôi phục kỷ lục best_loss trước đó (nếu có)
+        if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
+            saved_loss = ckpt_data["metrics"].get("loss", None)
+            if saved_loss is not None:
+                best_loss = float(saved_loss)
+                print(f"   🏆 [Best Loss] Khôi phục kỷ lục loss tốt nhất trước đó: {best_loss:.4f}")
+
+        # Khôi phục lịch sử huấn luyện từ metrics JSON nếu có để vẽ biểu đồ liền mạch
+        metrics_candidates = [
+            os.path.join(args.save_dir, "training_metrics.json"),
+            os.path.join(os.path.dirname(args.resume) if os.path.isfile(args.resume) else args.resume, "training_metrics.json"),
+        ]
+        for mc in metrics_candidates:
+            if os.path.isfile(mc):
+                try:
+                    with open(mc, "r", encoding="utf-8") as f_m:
+                        old_data = json.load(f_m)
+                        if "history" in old_data and isinstance(old_data["history"], dict):
+                            history = old_data["history"]
+                            print(f"   📈 [History] Đã khôi phục {len(history.get('epochs', []))} epochs lịch sử để tiếp nối biểu đồ.")
+                            break
+                except Exception:
+                    pass
+
+    # Thiết lập lịch trình LR và Momentum mượt mà cho số epochs còn lại
+    remaining_epochs = max(1, args.epochs - start_epoch)
+    remaining_iters = len(loader) * remaining_epochs
+
+    if start_epoch > 0:
+        current_lr = optimizer.param_groups[0]["lr"]
+        if current_lr <= 5e-6:
+            start_lr = effective_lr * 0.5
+            print(f"   🔄 [LR Warm-Restart] LR trước đó đã chạm đáy ({current_lr:.2e}), khởi động mềm với LR = {start_lr:.6e} cho {remaining_epochs} epochs tiếp theo.")
+        else:
+            start_lr = current_lr
+            print(f"   🎯 [LR Continuity] Tiếp tục tốc độ học mượt mà: LR = {start_lr:.6e} cho {remaining_epochs} epochs còn lại.")
+        for pg in optimizer.param_groups:
+            pg["lr"] = start_lr
+        lr_schedule = get_cosine_schedule(start_lr, 1e-6, remaining_iters, warmup_iters=0)
+        momentum_schedule = get_cosine_schedule(0.996, 1.0, remaining_iters)
+    else:
+        warmup_iters = min(len(loader) * 2, remaining_iters // 4)
+        lr_schedule = get_cosine_schedule(effective_lr, 1e-6, remaining_iters, warmup_iters=warmup_iters)
+        momentum_schedule = get_cosine_schedule(0.996, 1.0, remaining_iters)
 
     # 6. Training Loop
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}] trên {max(1, num_gpus)} thiết bị...")
 
-    best_loss = float("inf")
-    history = {"epochs": [], "loss": [], "entropy": []}
-
+    local_step = 0
     for epoch in range(start_epoch, args.epochs):
         model.train()
         epoch_loss = 0.0
         pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
         for crops, masks in pbar:
-            cur_lr = lr_schedule[min(global_step, total_iters - 1)]
+            cur_lr = lr_schedule[min(local_step, remaining_iters - 1)]
             for pg in optimizer.param_groups:
                 pg["lr"] = cur_lr
 
@@ -276,11 +343,11 @@ def train_bg_guided_dino(args):
                 optimizer.step()
 
             # Cập nhật Teacher EMA đồng bộ
-            cur_momentum = momentum_schedule[min(global_step, total_iters - 1)]
+            cur_momentum = momentum_schedule[min(local_step, remaining_iters - 1)]
             raw_model.update_teacher(cur_momentum)
 
             epoch_loss += loss.item()
-            global_step += 1
+            local_step += 1
             pbar.set_postfix({
                 "loss": f"{loss.item():.4f}",
                 "lr": f"{cur_lr:.2e}",

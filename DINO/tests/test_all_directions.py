@@ -275,6 +275,24 @@ try:
     assert loaded_ckpt["epoch"] == 5, f"Kỳ vọng epoch=5, thực tế: {loaded_ckpt.get('epoch')}"
     assert target_sch.last_epoch == 5, f"Kỳ vọng scheduler last_epoch=5, thực tế: {target_sch.last_epoch}"
     print("   + Khôi phục trọn vẹn Model, Optimizer, Scheduler và Epoch=5 -> PASSED!")
+
+    # Kiểm tra Smart Inherit Checkpoint Args
+    from common.gpu_utils import smart_inherit_checkpoint_args, resolve_checkpoint_path
+    class DummyArgs:
+        def __init__(self):
+            self.lr = 1e-4
+            self.batch_size = 16
+            self.epochs = 10
+            self.lambda_prior = 1.0
+
+    d_args = DummyArgs()
+    ckpt_args = {"lr": 3e-4, "batch_size": 32, "epochs": 20, "lambda_prior": 2.5}
+    # Giả lập người dùng gõ --lr trên CLI, còn batch_size và lambda_prior không gõ
+    smart_inherit_checkpoint_args(d_args, ckpt_args, sync_keys=["lr", "batch_size", "lambda_prior"], argv_list=["--lr", "1e-4"])
+    assert d_args.lr == 1e-4, "Tham số CLI gõ tường minh phải được ưu tiên!"
+    assert d_args.batch_size == 32, "Tham số không gõ trên CLI phải kế thừa từ checkpoint!"
+    assert d_args.lambda_prior == 2.5, "lambda_prior phải kế thừa từ checkpoint!"
+    print("   + Kế thừa Smart Hyperparameters thông minh -> PASSED!")
     print("   ✅ [Checkpointing] Multi-GPU Smart Save, Load & Full Resume pass hoàn hảo!")
 
     # -------------------------------------------------------------

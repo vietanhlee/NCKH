@@ -31,7 +31,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
+from common.gpu_utils import (
+    setup_multi_gpu,
+    unwrap_model,
+    save_checkpoint,
+    load_checkpoint,
+    resolve_checkpoint_path,
+    smart_inherit_checkpoint_args,
+    get_cli_specified_args,
+)
 from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss
@@ -82,6 +90,25 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
 
 def train_decomposition(args):
     torch.manual_seed(args.seed)
+
+    # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
+    preloaded_ckpt = None
+    if args.resume:
+        args.resume = resolve_checkpoint_path(args.resume)
+        print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {args.resume}")
+        try:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        except TypeError:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu")
+
+        if isinstance(preloaded_ckpt, dict) and "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+            sync_keys = [
+                "lr", "batch_size", "img_size", "backbone", "weights", "seed",
+                "lambda_prior", "lambda_bg", "lambda_shared", "lambda_excl",
+                "lambda_sparse", "lambda_tv", "lambda_bin", "freeze_backbone",
+            ]
+            smart_inherit_checkpoint_args(args, preloaded_ckpt["args"], sync_keys)
+
     if "cuda" in args.device.lower() and not torch.cuda.is_available():
         print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
         device = torch.device("cpu")
@@ -172,27 +199,78 @@ def train_decomposition(args):
 
     # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp trọng số --weights
     start_epoch = 0
+    best_loss = float("inf")
+    history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
+
     if args.resume:
-        if not os.path.isfile(args.resume):
-            raise FileNotFoundError(f"Không tìm thấy file checkpoint resume: {args.resume}")
         print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
-        ckpt_data = load_checkpoint(
+        # Chú ý: Truyền scheduler=None vào load_checkpoint để ngăn chặn lỗi PyTorch CosineAnnealingLR
+        # khi last_epoch >= T_max cũ làm LR bật ngược tăng vọt gây sốc gradient.
+        ckpt_data = preloaded_ckpt if preloaded_ckpt is not None else load_checkpoint(
             load_path=args.resume,
             model=raw_model,
             optimizer=optimizer,
-            scheduler=scheduler,
+            scheduler=None,
             device=device,
             strict=False,
             verbose=True,
         )
+        if preloaded_ckpt is not None:
+            from common.gpu_utils import smart_load_state_dict
+            model_sd = ckpt_data.get("model_state", ckpt_data.get("state_dict", ckpt_data))
+            smart_load_state_dict(raw_model, model_sd, strict=False, verbose=True)
+            if "optimizer" in ckpt_data:
+                try:
+                    optimizer.load_state_dict(ckpt_data["optimizer"])
+                    dest_device = torch.device(device)
+                    for state in optimizer.state.values():
+                        for k, v in state.items():
+                            if isinstance(v, torch.Tensor):
+                                state[k] = v.to(dest_device)
+                    print("   ✅ [Optimizer] Khôi phục thành công trạng thái optimizer.")
+                except Exception as e_opt:
+                    print(f"   ⚠️ [Optimizer Notice] {e_opt}")
+
         if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
             start_epoch = int(ckpt_data["epoch"])
             print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            cli_specified = get_cli_specified_args(sys.argv[1:])
             if args.epochs <= start_epoch:
-                target_epochs = start_epoch + args.epochs
-                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
-                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
-                args.epochs = target_epochs
+                if "epochs" not in cli_specified:
+                    extra_epochs = 5
+                    if "args" in ckpt_data and isinstance(ckpt_data["args"], dict) and "epochs" in ckpt_data["args"]:
+                        extra_epochs = int(ckpt_data["args"]["epochs"])
+                    target_epochs = start_epoch + extra_epochs
+                    print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                    print(f"      -> Tự động huấn luyện thêm {extra_epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                    args.epochs = target_epochs
+                else:
+                    print(f"   ⚠️ [Cảnh báo] --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs!")
+
+        # Tái lập CosineAnnealingLR mượt mà (chống loss bùng nổ do gradient shock)
+        eta_min = 1e-6
+        curr_cosine_lr = eta_min + 0.5 * (effective_lr - eta_min) * (1.0 + np.cos(start_epoch * np.pi / max(1, args.epochs)))
+        for group in optimizer.param_groups:
+            group["initial_lr"] = effective_lr
+            group["lr"] = float(curr_cosine_lr)
+
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=args.epochs,
+            eta_min=eta_min,
+            last_epoch=start_epoch - 1 if start_epoch > 0 else -1,
+        )
+        print(f"   📈 [Scheduler Restored] Tái lập CosineAnnealingLR: Mục tiêu {args.epochs} epochs (còn {remaining_epochs} epochs).")
+        print(f"   🎯 [Current Learning Rate] LR khởi điểm cho epoch {start_epoch + 1}: {curr_cosine_lr:.3e} (suy giảm mượt mà về 1e-6, triệt tiêu gradient shock).")
+
+        # Khôi phục kỷ lục best_loss trước đó (nếu có)
+        if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
+            saved_loss = ckpt_data["metrics"].get("loss", None)
+            if saved_loss is not None:
+                best_loss = float(saved_loss)
+                print(f"   🏆 [Best Loss] Khôi phục kỷ lục loss tốt nhất trước đó: {best_loss:.4f}")
+
     elif args.weights:
         if os.path.isfile(args.weights):
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")

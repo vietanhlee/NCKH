@@ -31,9 +31,14 @@ from tqdm.auto import tqdm
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
-from dataset import DecompositionDataset
+from common.gpu_utils import (
+    setup_multi_gpu,
+    unwrap_model,
+    save_checkpoint,
+    load_checkpoint,
+    resolve_checkpoint_path,
+    smart_inherit_checkpoint_args,
+)
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss
 
@@ -82,6 +87,24 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
 
 
 def train_decomposition(args):
+    # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
+    preloaded_ckpt = None
+    if getattr(args, "resume", None):
+        args.resume = resolve_checkpoint_path(args.resume)
+        print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {args.resume}")
+        try:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        except TypeError:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu")
+
+        if isinstance(preloaded_ckpt, dict) and "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+            sync_keys = [
+                "lr", "img_size", "lambda_prior", "lambda_shared", "lambda_excl",
+                "lambda_tv", "lambda_sparse", "lambda_bin", "warmup_bin_epoch",
+                "batch_size", "backbone", "weights", "match_strategy",
+            ]
+            smart_inherit_checkpoint_args(args, preloaded_ckpt["args"], sync_keys)
+
     torch.manual_seed(args.seed)
     if "cuda" in args.device.lower() and not torch.cuda.is_available():
         print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
@@ -169,6 +192,8 @@ def train_decomposition(args):
         lr=effective_lr,
         weight_decay=1e-4,
     )
+    for pg in optimizer.param_groups:
+        pg.setdefault("initial_lr", effective_lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp trọng số --weights
@@ -214,6 +239,8 @@ def train_decomposition(args):
         else:
             print(f"   🎯 [LR Continuity] Tiếp tục tốc độ học hiện tại: LR = {current_lr:.6e} cho {remaining_epochs} epochs còn lại.")
 
+        for pg in optimizer.param_groups:
+            pg["initial_lr"] = current_lr
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
             T_max=remaining_epochs,
@@ -247,8 +274,12 @@ def train_decomposition(args):
         if os.path.isfile(args.weights):
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
+        for pg in optimizer.param_groups:
+            pg.setdefault("initial_lr", effective_lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     else:
+        for pg in optimizer.param_groups:
+            pg.setdefault("initial_lr", effective_lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     # 5. Vòng lặp huấn luyện

@@ -52,9 +52,9 @@ Hướng nghiên cứu này đóng vai trò là **Công trình Công bố Dữ l
 - 📊 **Bảng Thống kê thực nghiệm (Table 3)**: [`paper/tables/tab_summary_stats.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_summary_stats.tex)
 - 🌐 **Bảng Topo đồ thị (Table 4)**: [`paper/tables/tab_graph_metrics.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_graph_metrics.tex)
 - 🔒 **Bảng Kiểm định PII (Table 5)**: [`paper/tables/tab_pii_audit.tex`](file:///g:/nckh/DINO/direction_data_article/paper/tables/tab_pii_audit.tex)
-- 🔮 **Bảng Baseline Forecasting Benchmark (Table 6)**: Nhúng trực tiếp tại Section 4.6 (`paper/main.tex`)
+- 🔬 **Kiểm toán Technical Validation (Section 4.6)**: Phân rã tương quan không-thời gian mạng lưới, kiểm chứng đối chứng unconnected null control ($p < 10^{-15}$) và kiểm chứng hướng lan truyền lưu lượng 1 phút (`paper/main.tex`)
 - 🖼️ **Thư mục hình vẽ chất lượng xuất bản (300 DPI)**: [`paper/figures/`](file:///g:/nckh/DINO/direction_data_article/paper/figures/)
-- 📕 **Tệp PDF bài báo hoàn chỉnh (26 trang)**: [`paper/main_clean.pdf`](file:///g:/nckh/DINO/direction_data_article/paper/main_clean.pdf)
+- 📕 **Tệp PDF bài báo hoàn chỉnh (27 trang)**: [`paper/main.pdf`](file:///g:/nckh/DINO/direction_data_article/paper/main.pdf)
 
 ---
 

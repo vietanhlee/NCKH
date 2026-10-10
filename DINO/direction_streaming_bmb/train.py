@@ -38,7 +38,15 @@ if dino_root not in sys.path:
     sys.path.insert(0, dino_root)
 
 from common.backbone_loader import get_dino_backbone
-from common.gpu_utils import setup_multi_gpu, unwrap_model, save_checkpoint, load_checkpoint
+from common.gpu_utils import (
+    setup_multi_gpu,
+    unwrap_model,
+    save_checkpoint,
+    load_checkpoint,
+    resolve_checkpoint_path,
+    smart_inherit_checkpoint_args,
+    get_cli_specified_args,
+)
 from direction_streaming_bmb.models import StreamingDecompositionNet
 from direction_streaming_bmb.losses import StreamingDecompositionLoss
 from direction_streaming_bmb.dataset import SlidingWindowTrafficDataset
@@ -133,6 +141,26 @@ def save_streaming_visual_sample(
 
 
 def train_streaming_bmb(args):
+    # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
+    preloaded_ckpt = None
+    if getattr(args, "resume", None):
+        args.resume = resolve_checkpoint_path(args.resume)
+        print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {args.resume}")
+        try:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        except TypeError:
+            preloaded_ckpt = torch.load(args.resume, map_location="cpu")
+
+        if isinstance(preloaded_ckpt, dict) and "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+            sync_keys = [
+                "lr", "window_size", "stride", "img_size", "embed_dim", "num_heads",
+                "max_recent", "max_anchor", "ema_eta", "memory_dropout",
+                "lambda_temp", "lambda_cross", "lambda_fam", "lambda_chroma",
+                "lambda_sparse", "lambda_tv", "lambda_excl", "lambda_bin",
+                "warmup_epochs", "batch_size", "backbone", "weights",
+            ]
+            smart_inherit_checkpoint_args(args, preloaded_ckpt["args"], sync_keys)
+
     print("=" * 75)
     print(" 🚀 HUẤN LUYỆN ST-BMB: SPATIO-TEMPORAL BACKGROUND MEMORY BANK")
     print("=" * 75)
@@ -276,7 +304,9 @@ def train_streaming_bmb(args):
         lambda_bin=args.lambda_bin,
     ).to(device)
 
-    # 6. Vòng lặp huấn luyện
+    # 6. Khôi phục từ checkpoint nếu có cờ --resume
+    start_epoch = 0
+    best_loss = float("inf")
     history = {
         "epochs": [],
         "loss_total": [],
@@ -289,10 +319,75 @@ def train_streaming_bmb(args):
         "mean_soft_weight": [],
         "warmup_factor": [],
     }
-    best_loss = float("inf")
+
+    if getattr(args, "resume", None):
+        print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
+        ckpt_data = preloaded_ckpt if preloaded_ckpt is not None else load_checkpoint(
+            load_path=args.resume,
+            model=unwrap_model(model),
+            optimizer=optimizer,
+            scheduler=None,
+            device=device,
+            strict=False,
+            verbose=True,
+        )
+        if preloaded_ckpt is not None:
+            from common.gpu_utils import smart_load_state_dict
+            model_sd = ckpt_data.get("model_state", ckpt_data.get("state_dict", ckpt_data))
+            smart_load_state_dict(unwrap_model(model), model_sd, strict=False, verbose=True)
+            if "optimizer" in ckpt_data:
+                try:
+                    optimizer.load_state_dict(ckpt_data["optimizer"])
+                    dest_device = torch.device(device)
+                    for state in optimizer.state.values():
+                        for k, v in state.items():
+                            if isinstance(v, torch.Tensor):
+                                state[k] = v.to(dest_device)
+                    print("   ✅ [Optimizer] Khôi phục toàn bộ trạng thái optimizer.")
+                except Exception as e_opt:
+                    print(f"   ⚠️ [Optimizer Notice] {e_opt}")
+
+        if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
+            start_epoch = int(ckpt_data["epoch"])
+            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
+            cli_specified = get_cli_specified_args(sys.argv[1:])
+            if args.epochs <= start_epoch:
+                if "epochs" not in cli_specified:
+                    extra_epochs = 5
+                    if "args" in ckpt_data and isinstance(ckpt_data["args"], dict) and "epochs" in ckpt_data["args"]:
+                        extra_epochs = int(ckpt_data["args"]["epochs"])
+                    target_epochs = start_epoch + extra_epochs
+                    print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                    print(f"      -> Tự động huấn luyện thêm {extra_epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                    args.epochs = target_epochs
+                else:
+                    print(f"   ⚠️ [Cảnh báo] --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs!")
+
+        # Tái lập CosineAnnealingLR mượt mà (chống loss bùng nổ do gradient shock)
+        eta_min = 1e-6
+        curr_cosine_lr = eta_min + 0.5 * (effective_lr - eta_min) * (1.0 + np.cos(start_epoch * np.pi / max(1, args.epochs)))
+        for group in optimizer.param_groups:
+            group["initial_lr"] = effective_lr
+            group["lr"] = float(curr_cosine_lr)
+
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=args.epochs,
+            eta_min=eta_min,
+            last_epoch=start_epoch - 1 if start_epoch > 0 else -1,
+        )
+        print(f"   📈 [Scheduler Restored] Tái lập CosineAnnealingLR: Mục tiêu {args.epochs} epochs (còn {remaining_epochs} epochs).")
+        print(f"   🎯 [Current Learning Rate] LR khởi điểm cho epoch {start_epoch + 1}: {curr_cosine_lr:.3e} (suy giảm mượt mà về 1e-6, triệt tiêu gradient shock).")
+
+        if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
+            saved_loss = ckpt_data["metrics"].get("loss", None)
+            if saved_loss is not None:
+                best_loss = float(saved_loss)
+                print(f"   🏆 [Best Loss] Khôi phục kỷ lục loss tốt nhất trước đó: {best_loss:.4f}")
 
     print("\n🚀 Bắt đầu huấn luyện...")
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         model.train()
         # Cập nhật Warm-up Factor cho Cross-Frame Loss và Binarization Loss
         warmup_factor = min(1.0, (epoch + 1) / max(1, args.warmup_epochs))
@@ -528,6 +623,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Bật nn.DataParallel nếu muốn chia batch qua nhiều GPU (Mặc định False để bảo toàn chuỗi bộ nhớ Streaming)",
+    )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện ST-BMB",
     )
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
