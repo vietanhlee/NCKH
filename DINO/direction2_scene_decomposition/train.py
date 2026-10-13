@@ -31,6 +31,7 @@ from tqdm.auto import tqdm
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from common.backbone_loader import get_dino_backbone
 from common.gpu_utils import (
     setup_multi_gpu,
     unwrap_model,
@@ -39,6 +40,7 @@ from common.gpu_utils import (
     resolve_checkpoint_path,
     smart_inherit_checkpoint_args,
 )
+from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss
 

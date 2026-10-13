@@ -277,8 +277,6 @@ def train_decomposition(args):
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
 
     # 5. Vòng lặp huấn luyện
-    best_loss = float("inf")
-    history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
     print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
 
     for epoch in range(start_epoch, args.epochs):
