@@ -50,20 +50,20 @@ from models import TrafficDecompositionNet
 def create_segmentation_overlay(
     origin_pil: Image.Image,
     mask_arr: np.ndarray,
-    threshold: float = 0.18,
+    threshold: float = 0.25,
     mode: str = "multi",  # 'multi' (mỗi xe một màu rực rỡ như YOLO/Mask R-CNN) hoặc 'single'
     single_color: Tuple[int, int, int] = (0, 230, 118),
     draw_contours: bool = True,
     contour_color: Tuple[int, int, int] = (255, 255, 255),  # Viền trắng nét thanh dạ quang
     contour_thickness: int = 1,
-    min_area: int = 25,
+    min_area: int = 36,
 ) -> Tuple[Image.Image, Image.Image]:
     """
     Tạo ảnh phân đoạn phương tiện vẽ trực tiếp lên ảnh gốc chuẩn Mask R-CNN / YOLO-Seg:
       - Ngưỡng mềm (Soft Ramp) kết hợp Gaussian filter khử cạnh sắc cứng
-      - Tô màu bán trong suốt chuyển tiếp mượt mà theo giá trị alpha từng pixel
-      - Phân cụm đối tượng đa sắc (Multi-color instance-like) hoặc đơn sắc
-      - Vẽ đường bao (Contour borders) ôm khít từng phương tiện
+      - Đóng hình thái học (Morphological Closing) lấp đầy lỗ thủng trên thân xe màu xám/bạc
+      - Lọc bỏ dải timestamp camera và các vạch sơn kẻ đường mảnh
+      - Phân cụm đối tượng đa sắc (Multi-color instance-like) và vẽ đường bao ôm khít từng xe
     """
     orig_np = np.array(origin_pil)  # uint8 (H, W, 3)
     orig_h, orig_w = orig_np.shape[:2]
@@ -75,17 +75,47 @@ def create_segmentation_overlay(
     else:
         norm_mask = np.clip(mask_arr, 0.0, 1.0).astype(np.float32)
 
-    # 1. Làm mượt bằng Gaussian Blur để triệt tiêu răng cưa viền cắt
-    mask_blur = cv2.GaussianBlur(norm_mask, (7, 7), 1.8)
+    # Khử vùng banner timestamp trên cùng (thường nằm ở 6% chiều cao đầu ảnh CCTV)
+    banner_h = max(1, int(orig_h * 0.06))
+    norm_mask[:banner_h, :] = 0.0
 
-    # 2. Xử lý nhị phân và lọc hình thái học để tìm cụm phương tiện
+    # 1. Làm mượt bằng Gaussian Blur để triệt tiêu răng cưa viền cắt
+    mask_blur = cv2.GaussianBlur(norm_mask, (7, 7), 1.6)
+
+    # 2. Xử lý nhị phân và lọc hình thái học (Open xóa nhiễu mảnh -> Close lấp đầy thân xe)
     bin_mask = ((mask_blur > threshold) * 255).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    bin_clean = cv2.morphologyEx(bin_mask, cv2.MORPH_OPEN, kernel)
-    bin_clean = cv2.morphologyEx(bin_clean, cv2.MORPH_CLOSE, kernel)
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+    bin_clean = cv2.morphologyEx(bin_mask, cv2.MORPH_OPEN, kernel_open)
+    bin_clean = cv2.morphologyEx(bin_clean, cv2.MORPH_CLOSE, kernel_close)
+
+    # Lấp đầy các lỗ thủng nhỏ bên trong contour phương tiện
+    contours_fill, _ = cv2.findContours(bin_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bin_filled = np.zeros_like(bin_clean)
+    for cnt in contours_fill:
+        area = cv2.contourArea(cnt)
+        if area < min_area:
+            continue
+        # Kiểm tra độ đặc (solidity) và độ mảnh để loại bỏ vạch kẻ đường đứt đoạn
+        hull = cv2.convexHull(cnt)
+        hull_area = max(cv2.contourArea(hull), 1.0)
+        solidity = area / hull_area
+        rect = cv2.minAreaRect(cnt)
+        w_r, h_r = rect[1]
+        short_side = max(min(w_r, h_r), 1.0)
+        long_side = max(w_r, h_r)
+        elongation = long_side / short_side
+        # Vạch kẻ đường thường rất mảnh (short_side < 5px và elongation > 6.5)
+        if elongation > 6.5 and short_side < 6.0:
+            continue
+        if solidity < 0.25 and area < min_area * 2.5:
+            continue
+        cv2.drawContours(bin_filled, [cnt], -1, 255, thickness=cv2.FILLED)
+
+    bin_clean = bin_filled
 
     # 3. Phân cụm đối tượng và tô màu
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(bin_clean)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(bin_clean)
 
     # Bảng màu rực rỡ phong cách Instance Segmentation (YOLO-Seg / SAM)
     palette = [
@@ -108,15 +138,13 @@ def create_segmentation_overlay(
             if area < min_area:
                 continue
             comp_mask = (labels == lbl).astype(np.float32)
-            # Ngưỡng mềm (Soft ramp): độ đậm tăng dần từ mép (threshold) vào tâm
-            soft_ramp = np.clip((mask_blur - (threshold * 0.7)) / (threshold * 1.5 + 1e-4), 0.25, 1.0)
-            alpha_layer = (comp_mask * soft_ramp * 0.45)[:, :, None]
+            soft_ramp = np.clip((mask_blur - (threshold * 0.6)) / (threshold * 1.2 + 1e-4), 0.35, 1.0)
+            alpha_layer = (comp_mask * soft_ramp * 0.46)[:, :, None]
 
             color_np = np.array(palette[(lbl - 1) % len(palette)], dtype=np.float32)
             overlay_canvas = overlay_canvas * (1.0 - alpha_layer) + color_np * alpha_layer
     else:
-        # Chế độ đơn sắc đồng nhất
-        soft_ramp = np.clip((mask_blur - (threshold * 0.7)) / (threshold * 1.5 + 1e-4), 0.0, 1.0)
+        soft_ramp = np.clip((mask_blur - (threshold * 0.6)) / (threshold * 1.2 + 1e-4), 0.30, 1.0)
         bin_f = (bin_clean > 0).astype(np.float32)
         alpha_layer = (bin_f * soft_ramp * 0.48)[:, :, None]
         color_np = np.array(single_color, dtype=np.float32)
@@ -330,17 +358,26 @@ def run_inference(args):
         pred_fg_arr = preds["pred_fg"].squeeze().cpu().permute(1, 2, 0).numpy()
         pred_mask_arr = preds.get("alpha_mask", preds.get("pred_mask")).squeeze().cpu().numpy()
 
-        pred_bg_img = Image.fromarray((np.clip(pred_bg_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
-        pred_fg_img = Image.fromarray((np.clip(pred_fg_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
-        pred_mask_img = Image.fromarray((np.clip(pred_mask_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
-
-        # Tạo ảnh Segmentation Overlay (phủ màu trực tiếp lên ảnh gốc) & Mặt nạ nhị phân
+        # Tạo ảnh Segmentation Overlay (phủ màu trực tiếp lên ảnh gốc) & Mặt nạ nhị phân đã lọc sạch
         seg_overlay_img, bin_mask_img = create_segmentation_overlay(
             origin_pil=pil_img,
             mask_arr=pred_mask_arr,
             threshold=args.seg_thresh,
             mode=args.seg_mode,
         )
+
+        pred_bg_img = Image.fromarray((np.clip(pred_bg_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
+        pred_mask_img = Image.fromarray((np.clip(pred_mask_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
+
+        # Lớp phương tiện tách biệt (Decomposed Vehicles Layer): Chỉ giữ lại các xe trên nền tối sạch
+        fg_full_np = np.array(Image.fromarray((np.clip(pred_fg_arr, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)).astype(np.float32) / 255.0
+        alpha_full_np = np.array(pred_mask_img).astype(np.float32) / 255.0
+        bin_clean_np = (np.array(bin_mask_img).astype(np.float32) / 255.0)
+        # Kết hợp mặt nạ mềm và mặt nạ nhị phân đã khử nhiễu để tách xe sắc nét
+        fg_matte = np.clip(np.maximum(bin_clean_np, alpha_full_np * 1.2) * ((alpha_full_np > (args.seg_thresh * 0.65)).astype(np.float32)), 0.0, 1.0)
+        fg_matte = cv2.GaussianBlur(fg_matte, (5, 5), 1.0)[:, :, None]
+        isolated_fg_np = fg_full_np * fg_matte + 0.05 * (1.0 - fg_matte)
+        pred_fg_img = Image.fromarray((np.clip(isolated_fg_np, 0, 1) * 255).astype(np.uint8))
 
         recon_pil_img = None
         if "recon_origin" in preds:

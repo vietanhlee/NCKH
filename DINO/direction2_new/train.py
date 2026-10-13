@@ -57,6 +57,10 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
         arr = t.squeeze().detach().cpu().numpy()
         return np.clip(arr, 0.0, 1.0)
 
+    fg_img = to_img(pred_fg[0])
+    mask_img = to_mask(pred_mask[0])
+    isolated_fg_img = np.clip(fg_img * mask_img[:, :, None] + 0.05 * (1.0 - mask_img[:, :, None]), 0.0, 1.0)
+
     axes[0, 0].imshow(to_img(origin[0]))
     axes[0, 0].set_title("Input Origin Image", fontsize=11, fontweight="bold")
     axes[0, 0].axis("off")
@@ -70,14 +74,14 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
     axes[0, 2].axis("off")
 
     axes[1, 0].imshow(to_img(pred_bg[0]))
-    axes[1, 0].set_title("Decomposed Background Layer", fontsize=11, fontweight="bold")
+    axes[1, 0].set_title("Decomposed Clean Road", fontsize=11, fontweight="bold")
     axes[1, 0].axis("off")
 
-    axes[1, 1].imshow(to_img(pred_fg[0]))
-    axes[1, 1].set_title("Decomposed Foreground Layer", fontsize=11, fontweight="bold")
+    axes[1, 1].imshow(isolated_fg_img)
+    axes[1, 1].set_title("Decomposed Vehicles Layer", fontsize=11, fontweight="bold")
     axes[1, 1].axis("off")
 
-    axes[1, 2].imshow(to_mask(pred_mask[0]), cmap="inferno")
+    axes[1, 2].imshow(mask_img, cmap="inferno", vmin=0.0, vmax=1.0)
     axes[1, 2].set_title("Predicted Vehicle Alpha Mask", fontsize=11, fontweight="bold")
     axes[1, 2].axis("off")
 

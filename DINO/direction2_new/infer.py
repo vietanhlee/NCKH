@@ -49,7 +49,7 @@ def run_inference(args):
     # 1. Nạp Backbone và Mô hình
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
-        pretrained=False,
+        pretrained=True,
         device=device,
     )
     model = TrafficDecompositionNet(
@@ -100,8 +100,10 @@ def run_inference(args):
         pred_fg = preds["pred_fg"].squeeze().cpu().permute(1, 2, 0).numpy()
         pred_mask = preds.get("alpha_mask", preds.get("pred_mask")).squeeze().cpu().numpy()
 
+        isolated_fg = pred_fg * pred_mask[:, :, None] + 0.05 * (1.0 - pred_mask[:, :, None])
+
         pred_bg_img = Image.fromarray((np.clip(pred_bg, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
-        pred_fg_img = Image.fromarray((np.clip(pred_fg, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
+        pred_fg_img = Image.fromarray((np.clip(isolated_fg, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BICUBIC)
         pred_mask_img = Image.fromarray((np.clip(pred_mask, 0, 1) * 255).astype(np.uint8)).resize((orig_w, orig_h), Image.BILINEAR)
 
         # Lưu kết quả các lớp
