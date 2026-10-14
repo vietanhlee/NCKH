@@ -1,0 +1,207 @@
+\chapter{THU THẬP DỮ LIỆU VÀ XÂY DỰNG ĐỒ THỊ GIAO THÔNG (IC4SD-TRAFFIC-HCM)}
+\label{chap:du_lieu}
+
+Để giải quyết bài toán giao thông hỗn hợp tại các siêu đô thị Đông Nam Á và đánh giá một cách khoa học hiện tượng lan truyền sai số nhận dạng, nghiên cứu đã tiến hành thu thập, chuẩn hóa và công bố bộ dữ liệu chuẩn mực quy mô toàn thành phố mang tên \textbf{IC4SD-Traffic-HCM}. Bộ dữ liệu tích hợp hai thành phần: (1) Bộ dữ liệu thị giác hình ảnh gán nhãn chi tiết phục vụ huấn luyện và kiểm định mô hình đếm xe ở Giai đoạn 1; (2) Bộ dữ liệu chuỗi thời gian liên tục kết hợp đồ thị đường bộ thực tế phục vụ bài toán dự báo ở Giai đoạn 2.
+
+\section{Hạ tầng Camera Giám sát và Hệ thống Thu thập Tự động}
+\subsection{Hạ tầng Camera Giám sát TP. Hồ Chí Minh}
+Thành phố Hồ Chí Minh là trung tâm kinh tế, tài chính lớn nhất của cả nước với diện tích hơn 2.061 $\text{km}^2$ và dân số thực tế hơn 10 triệu người. Mạng lưới đường bộ thành phố chịu áp lực cực lớn từ hơn 8.5 triệu xe máy cá nhân và gần 1 triệu xe ô tô. Để phục vụ công tác điều hành giao thông, Sở Giao thông Vận tải TP.HCM đã lắp đặt hệ thống camera giám sát giao thông (CCTV) phủ kín các tuyến đường huyết mạch, cầu vượt, hầm ngầm và các nút giao thông trọng điểm.
+
+Nguồn cấp hình ảnh từ các camera này được công khai thông qua Cổng thông tin giao thông thành phố Hồ Chí Minh (\url{http://giaothong.hochiminhcity.gov.vn/}) dưới dạng các ảnh tĩnh chụp định kỳ, phục vụ giám sát dân sinh và nghiên cứu khoa học phi thương mại.
+
+\subsection{Hệ thống Thu thập Dữ liệu Đa luồng Tự động}
+Nhóm nghiên cứu đã phát triển một hệ thống thu thập dữ liệu tự động (Automated Ingestion Client) được tối ưu hóa cao độ, vận hành liên tục 24/7 trên máy chủ nghiên cứu chuyên dụng đặt tại Lab IC4SD:
+\begin{enumerate}
+    \item \textbf{Cơ chế Quản lý Phiên và Đa luồng (HTTP Session Pooling \& Multi-Threading):} Để thu thập đồng thời từ hàng trăm camera mà không làm nghẽn đường truyền hoặc bị máy chủ nguồn từ chối dịch vụ (Rate-limiting), chương trình sử dụng thư viện kết nối đa luồng bất đồng bộ kết hợp hàng đợi công việc (Thread Pool Worker). Các phiên kết nối HTTP được tái sử dụng để giảm thiểu độ trễ bắt tay TCP/TLS.
+    \item \textbf{Đồng bộ hóa Chu kỳ Lấy mẫu Tuyệt đối (Strict 60-Second Cycle):} Cứ sau đúng 60 giây, chương trình kích hoạt một đợt quét đồng thời trên toàn bộ các endpoint camera đã đăng ký. Toàn bộ hình ảnh phản hồi từ hơn 600 camera được tải về trong cửa sổ thời gian từ 2 đến 4 giây, đảm bảo tính đồng bộ thời gian (Temporal Alignment) giữa tất cả các nút giao trên toàn thành phố.
+    \item \textbf{Lọc trạm ngoại lệ và Xử lý Gián đoạn Kết nối:} Danh mục ban đầu ghi nhận 657 camera có tọa độ hợp lệ. Trong quá trình vận hành thử nghiệm 14 ngày, hệ thống tự động ghi nhận các mã lỗi phản hồi: mã lỗi 404 (mất tín hiệu), mã lỗi 503 (quá tải máy chủ), các khung hình trả về hình ảnh đen hoàn toàn, hình ảnh thông báo "Camera mất kết nối" hoặc camera bị lệch góc nhìn vào tường nhà dân. Các camera có tỷ lệ mất kết nối tích lũy vượt quá $5\%$ trong thời gian quan sát đã bị loại bỏ. Kết quả sàng lọc giữ lại đúng \textbf{608 trạm camera hoạt động hoàn hảo và liên tục}, tạo thành tập đỉnh không gian chính thức $\mathcal{V}$ ($N = |\mathcal{V}| = 608$).
+\end{enumerate}
+
+Hình \ref{fig:anh_samples_camera_chapter3} minh họa một số mẫu hình ảnh thu thập thực tế từ hệ thống, cho thấy sự đa dạng cao về góc chụp (từ trên cao nhìn xuống, góc chéo ngang mép đường), điều kiện ánh sáng (ban ngày rực rỡ, chạng vạng hoàng hôn, ban đêm dưới ánh đèn cao áp) và mức độ tập trung dày đặc của các luồng xe máy.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{fig/samples_pictures_get_from_api.png}
+\caption{Hình ảnh thực tế thu thập từ hệ thống camera giao thông TP.HCM thể hiện góc nhìn đa dạng và sự tập trung dày đặc của xe máy trong giờ cao điểm.}
+\label{fig:anh_samples_camera_chapter3}
+\end{figure}
+
+\section{Bộ Dữ liệu Hình ảnh IC4SD-Traffic-HCM-Vision}
+Từ kho dữ liệu hàng triệu khung hình thu thập được, nhóm nghiên cứu đã trích xuất một tập con đại diện gồm \textbf{5.012 ảnh chụp độ phân giải cao} ($1920 \times 1080$ hoặc $1280 \times 720$) để xây dựng bộ dữ liệu thị giác IC4SD-Traffic-HCM-Vision.
+
+\subsection{Giao thức Gán nhãn Độc lập Ba Thẩm định viên}
+Để loại bỏ thiên kiến cá nhân và sai số ngẫu nhiên của con người khi đếm các cảnh xe máy chen chúc, quy trình gán nhãn được tổ chức theo quy chuẩn nghiêm ngặt:
+\begin{itemize}
+    \item Ba thẩm định viên nghiên cứu độc lập (được đào tạo thống nhất về định nghĩa phương tiện và quy tắc xác định xe khuất) tiến hành gán nhãn toàn bộ 5.012 ảnh trên phần mềm chuyên dụng. Mỗi ảnh được gắn nhãn độc lập bởi cả ba chuyên viên.
+    \item Định nghĩa hai phân lớp mục tiêu bảo toàn:
+    \begin{enumerate}
+        \item \textbf{Xe ô tô con (Passenger Cars):} Xe ô tô dưới 9 chỗ, xe taxi, xe SUV và xe bán tải đang lưu thông hoặc dừng chờ đèn tín hiệu trên lòng đường quan sát được.
+        \item \textbf{Xe máy (Motorcycles):} Tất cả các loại xe mô tô hai bánh, xe tay ga, xe số và xe máy điện -- phương tiện chủ đạo trong dòng giao thông đô thị Việt Nam.
+    \end{enumerate}
+    \item Các ảnh có độ lệch số đếm giữa ba người vượt quá $5\%$ đối với ô tô hoặc vượt quá $10\%$ đối với xe máy được đưa vào phiên thẩm tra chung (Joint Reconciliation Session). Trong phiên này, cả ba chuyên viên cùng phóng to hình ảnh, rà soát từng cụm xe nghi vấn và thống nhất số đếm mặt đất (Ground Truth) cuối cùng.
+\end{itemize}
+
+\subsection{Đánh giá Độ tin cậy Gán nhãn bằng Hệ số Tương quan Nội lớp (ICC)}
+Để định lượng mức độ tin cậy và sự thống nhất tuyệt đối của dữ liệu nhãn trước khi tiến hành phiên thẩm tra chung, nhóm nghiên cứu đã tính toán Hệ số tương quan nội lớp (Intraclass Correlation Coefficient -- ICC) trên một tập con ngẫu nhiên gồm 500 ảnh (chiếm xấp xỉ $10\%$ dữ liệu). 
+
+Mô hình được áp dụng là $\text{ICC}(3, k)$ -- mô hình hiệu ứng hỗn hợp hai chiều (Two-way mixed-effects model) đánh giá sự đồng thuận tuyệt đối (Absolute Agreement) dựa trên giá trị trung bình của $k$ đánh giá ($k=3$):
+\begin{equation}
+    \text{ICC}(3, k) = \frac{\text{MS}_R - \text{MS}_E}{\text{MS}_R}
+\end{equation}
+trong đó $\text{MS}_R$ là phương sai trung bình giữa các ảnh (Mean Square for Rows) và $\text{MS}_E$ là phương sai trung bình của sai số dư thừa (Mean Square for Error).
+
+\textbf{Kết quả đo đạc thống kê:}
+\begin{itemize}
+    \item Đối với phân lớp xe ô tô con: $\text{ICC} = 0.984$ (khoảng tin cậy 95\%: $0.981 - 0.987, p < 0.001$).
+    \item Đối với phân lớp xe máy: $\text{ICC} = 0.962$ (khoảng tin cậy 95\%: $0.956 - 0.968, p < 0.001$).
+    \item Tổng thể kết hợp cả hai lớp: $\text{ICC} = 0.973$ ($p < 0.001$).
+\end{itemize}
+Theo các tiêu chuẩn đo lường thống kê quốc tế (Koo \& Li, 2016), chỉ số ICC vượt trên $0.90$ phản ánh độ tin cậy "xuất sắc" (Excellent Reliability). Phân tích sâu hơn theo các điều kiện lưu thông chỉ ra rằng ở điều kiện đường vắng vào ban đêm, chỉ số ICC đạt tới $0.995$. Trong điều kiện ùn tắc cực đoan vào giờ cao điểm, chỉ số ICC của xe máy giảm nhẹ xuống $0.941$, phản ánh sự mập mờ thị giác khách quan khi các xe máy bị che khuất sâu trong đám đông chỉ để lộ một phần gương hoặc mũ bảo hiểm.
+
+\subsection{Đặc tính Thống kê và Phân bố Khung giờ Diurnal}
+Dữ liệu nhãn thể hiện tính chất đa dạng cao độ:
+\begin{itemize}
+    \item Trung bình số lượng phương tiện trên một ảnh là $30.28$ xe ($\text{Std} = 25.07$), giá trị trung vị là 24.00 xe, dải phân bố rộng từ 0 xe (đường vắng lúc rạng sáng) lên tới 194 xe (ngã tư giờ cao điểm chiều).
+    \item Phân lớp xe máy áp đảo với trung bình $23.02$ xe/ảnh (cực đại 178 xe máy trong một khung hình), trong khi ô tô con đạt trung bình $7.26$ xe/ảnh (cực đại 50 xe).
+    \item Dữ liệu có phân bố lệch phải mạnh (Right-skewed), phản ánh chính xác quy luật biến động của giao thông đô thị thực tế.
+\end{itemize}
+
+Bảng \ref{tab:thong_ke_vision_chapter3} mô tả chi tiết sự phân bổ của 5.012 ảnh gán nhãn qua 5 khung thời gian sinh hoạt trong ngày (Diurnal time windows), đảm bảo mô hình thị giác được tiếp xúc đồng đều với mọi điều kiện chiếu sáng và bối cảnh vận hành.
+
+\begin{table}[htbp]
+\centering
+\caption{Phân bố các mẫu ảnh gán nhãn IC4SD-Traffic-HCM-Vision theo khung giờ hoạt động.}
+\label{tab:thong_ke_vision_chapter3}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcc}
+\toprule
+\textbf{Khung thời gian} & \textbf{Bối cảnh hoạt động thực tế} & \textbf{Số lượng ảnh} & \textbf{Tỷ lệ (\%)} \\
+\midrule
+00:00 -- 05:59 & Đêm khuya (Lưu lượng cực thấp, đường vắng, đèn vàng) & 1.311 & $26.16\%$ \\
+07:00 -- 10:59 & Giờ cao điểm sáng (Dòng người đi làm, học sinh tới trường) & 964 & $19.23\%$ \\
+14:00 -- 15:59 & Đầu giờ chiều (Dòng lưu thông ổn định, ánh nắng gắt) & 645 & $12.87\%$ \\
+17:00 -- 18:59 & Giờ cao điểm chiều tối (Tắc nghẽn cục bộ, chạng vạng) & 656 & $13.09\%$ \\
+21:00 -- 22:59 & Đêm muộn (Lưu lượng giảm dần, lóa đèn pha phương tiện) & 1.436 & $28.65\%$ \\
+\midrule
+\textbf{Tổng cộng} & \textbf{Tập dữ liệu ảnh chuẩn hóa gán nhãn đầy đủ} & \textbf{5.012} & $\mathbf{100.0\%}$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Kỹ thuật Tăng cường Dữ liệu Bảo toàn Nhãn (Label-Preserving Augmentation)}
+Vì mục tiêu là hồi quy chính xác số lượng phương tiện có trong ảnh, các phương pháp cắt ngẫu nhiên (Random Crop) truyền thống sẽ làm mất một phần phương tiện ở rìa ảnh mà không thể cập nhật nhãn chính xác. Nhóm nghiên cứu thiết kế một đường ống tăng cường dữ liệu bảo toàn nhãn (Label-Preserving Pipeline):
+\begin{enumerate}
+    \item \textbf{Lật ngang ngẫu nhiên (Random Horizontal Flip):} Áp dụng với xác suất $p = 0.5$. Hướng di chuyển của xe bị đảo chiều (tương tự như nhìn qua gương) nhưng tổng số lượng ô tô và xe máy được bảo toàn nguyên vẹn $100\%$.
+    \item \textbf{Biến đổi màu sắc trắc quang (Photometric Color Jittering):} Điều chỉnh ngẫu nhiên 4 thông số: độ sáng (Brightness $\pm 15\%$), độ tương phản (Contrast $\pm 15\%$), độ bão hòa màu (Saturation $\pm 15\%$) và sắc độ (Hue $\pm 15\%$). Phép biến đổi này mô phỏng sự biến thiên của điều kiện thời tiết tự nhiên (trời nắng chang chang, trời mưa râm mát, bóng râm của các tòa nhà cao tầng) mà không làm suy chuyển cấu trúc hình học của xe.
+    \item \textbf{Xóa ngẫu nhiên diện tích nhỏ (Small-scale Random Erasing):} Áp dụng với xác suất $p = 0.2$, tỷ lệ diện tích bị xóa chỉ từ $2\%$ đến $20\%$ bề mặt ảnh. Kỹ thuật này giúp mô hình không bị quá phụ thuộc vào một chi tiết đơn lẻ, rèn luyện khả năng nhận dạng xe ngay cả khi bị cành cây ven đường hoặc biển báo giao thông che khuất một phần.
+\end{enumerate}
+
+\section{Bộ Dữ liệu Chuỗi Thời gian IC4SD-Traffic-HCM-Graph}
+Để phục vụ bài toán dự báo đồ thị ở Giai đoạn 2, mô hình thị giác tối ưu ở Giai đoạn 1 (EfficientNet-B5) được triển khai để suy luận liên tục trên toàn bộ kho ảnh của 608 trạm camera trong suốt \textbf{86 ngày liên tục} (từ ngày 23/06/2025 đến ngày 16/09/2025). 
+
+\subsection{Quy trình Lọc Nhân quả Causal Double-Rolling Filter}
+Dữ liệu suy luận ở tần suất 1 phút phản ánh lưu lượng tức thời tại thời điểm bấm máy. Do góc chụp camera và chuyển động đèn tín hiệu, chuỗi 1 phút xuất hiện các dao động tần số cao (High-frequency jitter). Nhóm nghiên cứu áp dụng quy trình lọc nhân quả hai bước (Causal Double-Rolling Filter):
+\begin{enumerate}
+    \item \textbf{Lọc trung bình trượt hồi quy (Backward Rolling Mean):} Sử dụng cửa sổ trượt 3 phút nhìn ngược về quá khứ ($window_1 = 3$, $center = \text{False}$):
+    \begin{equation}
+        s_{1}(t) = \frac{1}{3} \sum_{k=0}^{2} y(t - k)
+    \end{equation}
+    \item \textbf{Làm mượt hàm mũ xuôi chiều (Forward-in-time EMA):} Áp dụng làm mượt hàm mũ với tham số $span = 5$ (tương đương hệ số làm mượt $\alpha = 2/(5+1) \approx 0.333$):
+    \begin{equation}
+        s_{2}(t) = \alpha s_{1}(t) + (1 - \alpha) s_{2}(t - 1)
+    \end{equation}
+\end{enumerate}
+Chuỗi sau khi làm mượt được lấy mẫu lại định kỳ đúng 5 phút một lần ($\Delta t = 5$ phút). Quy trình này đảm bảo tính nhân quả tuyệt đối: giá trị làm mượt tại thời điểm $t$ hoàn toàn không phụ thuộc vào bất kỳ điểm dữ liệu nào trong tương lai $t+1, t+2, \dots$
+
+Kết quả thu được là một tensor dữ liệu chuỗi thời gian hoàn chỉnh có kích thước:
+\begin{equation}
+    \mathbf{Y}_{\text{total}} \in \mathbb{R}^{24768 \times 608 \times 2}
+\end{equation}
+bao gồm đúng 24.768 bước thời gian liên tục, phủ kín 608 nút giao thông với 2 kênh lưu lượng phương tiện độc lập.
+
+\section{Xây dựng Đồ thị Giao thông và Ma trận Kề RBF dựa trên OpenStreetMap}
+\subsection{Trích xuất Cạnh Đồ thị theo Tuyến đường Thực tế}
+Để đồ thị phản ánh đúng các ràng buộc vật lý của mạng lưới đường bộ thành phố (như các tuyến đường một chiều, dải phân cách cứng, cầu vượt hoặc rào cản tự nhiên như sông Sài Gòn và kênh rạch), nhóm nghiên cứu trích xuất dữ liệu bản đồ OpenStreetMap (OSM) của TP. Hồ Chí Minh.
+
+Một cạnh có hướng $(i, j) \in \mathcal{E}$ chỉ được thiết lập nếu tồn tại một hành lang giao thông đường bộ hợp lệ cho phép phương tiện di chuyển trực tiếp từ vị trí camera $i$ đến vị trí camera $j$ theo đúng chiều quy định của luật giao thông mà không đi qua bất kỳ camera quan trắc trung gian nào khác. Tổng cộng có \textbf{2.452 cạnh có hướng hợp lệ} được thiết lập trên 608 đỉnh.
+
+\subsection{Xác định Trọng số Ma trận Kề RBF}
+Với mỗi cặp nút có kết nối hợp lệ $(i, j) \in \mathcal{E}$, khoảng cách định tuyến đường bộ thực tế ngắn nhất $d_{ij}$ (Network Routing Distance, tính bằng kilomet) được tính toán thông qua thuật toán Dijkstra trên đồ thị đường phố OSM. Trọng số liên kết $W_{ij} \in [0, 1]$ được tính toán bằng hàm cơ sở xuyên tâm (Radial Basis Function -- RBF):
+\begin{equation}
+W_{ij} =
+\begin{cases}
+\exp\left(-\frac{d_{ij}^2}{\sigma_{\mathrm{RBF}}^2}\right), & \text{nếu } (i,j) \in \mathcal{E} \text{ và } d_{ij} \le \tau, \\
+0, & \text{ngược lại.}
+\end{cases}
+\end{equation}
+trong đó:
+\begin{itemize}
+    \item $\sigma_{\mathrm{RBF}} = 1.0887\text{ km}$ là độ lệch chuẩn thực nghiệm của khoảng cách các cạnh kết nối hợp lệ trong mạng lưới đường phố thành phố.
+    \item $\tau = 3.3945\text{ km}$ là ngưỡng bán kính cắt lọc không gian, đảm bảo tính thưa (sparsity) của ma trận kề và loại bỏ các liên kết quá xa vốn có sự tương quan giao thông mờ nhạt.
+\end{itemize}
+
+\subsection{Chuẩn hóa Toán tử Laplacian Chebyshev Có Hướng}
+Ma trận trọng số $W$ được chuẩn hóa bậc hai phía nhằm bảo toàn cấu trúc luồng xe một chiều:
+\begin{equation}
+    L = I_N - D^{-1/2} W D^{-1/2}, \quad \tilde{L} = \frac{2}{\lambda_{\max}} L - I_N
+\end{equation}
+với $D_{ii} = \sum_j W_{ij}$ là ma trận bậc ra và $\lambda_{\max} \approx 2.0$ là giá trị riêng cực đại dùng để co giãn toán tử phục vụ khai triển trực giao Chebyshev.
+
+\section{Chiến lược Phân chia Dữ liệu và Kiểm soát Rò rỉ Thông tin (Zero-Leakage Protocol)}
+Để đảm bảo các kết quả đánh giá thực nghiệm có giá trị khoa học tin cậy và không bị thổi phồng do hiện tượng rò rỉ dữ liệu (Data Leakage), đề tài thiết lập các ranh giới cô lập nghiêm ngặt:
+
+\begin{enumerate}
+    \item \textbf{Phân lập Không gian cho Giai đoạn 1 (Spatial Isolation):} 5.012 ảnh được phân chia theo vị trí camera: 4.010 ảnh huấn luyện được lấy từ một tập các vị trí camera xác định; trong khi 501 ảnh Validation và 501 ảnh Test được lấy từ các camera đặt tại các ngã tư hoàn toàn khác biệt mà mô hình thị giác chưa từng nhìn thấy trong tập Train. Điều này đảm bảo đánh giá chính xác năng lực tổng quát hóa của backbone trước các góc quay mới lạ.
+    \item \textbf{Phân lập Thời gian cho Giai đoạn 2 (Temporal Isolation):} Chuỗi 24.768 bước thời gian được chia tuần tự theo đúng dòng thời gian thực tế: $80\%$ đầu tiên làm tập Train (19.814 bước), $10\%$ tiếp theo làm tập Validation (2.477 bước) và $10\%$ cuối cùng làm tập Test (2.477 bước).
+    \item \textbf{Đóng băng tham số chuẩn hóa Z-score:} Tuyệt đối không tính toán giá trị trung bình $\mu$ hay độ lệch chuẩn $\sigma$ trên toàn bộ tập dữ liệu. Các thông số $\mu_i$ và $\sigma_i$ của từng nút $i$ được tính toán duy nhất trên tập Train (80\% đầu) và đóng băng hoàn toàn khi áp dụng để chuẩn hóa tập Validation và Test.
+\end{enumerate}
+
+\section{Phân tích Định lượng Cấu trúc Tô pô Đồ thị Giao thông}
+Để hiểu rõ các thuộc tính hình học và cấu trúc liên kết của đồ thị IC4SD-Traffic-HCM, Bảng \ref{tab:topo_dothi_chap3} tổng hợp các chỉ số tô pô đồ thị chuẩn mực được tính toán trên 608 đỉnh và 2.452 cạnh có hướng.
+
+\begin{table}[htbp]
+\centering
+\caption{Các chỉ số định lượng đặc trưng tô pô đồ thị IC4SD-Traffic-HCM.}
+\label{tab:topo_dothi_chap3}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llc}
+\toprule
+\textbf{Chỉ số tô pô} & \textbf{Công thức / Ký hiệu} & \textbf{Giá trị Định lượng} \\
+\midrule
+Số lượng đỉnh quan trắc & $N = |\mathcal{V}|$ & 608 nút camera \\
+Số lượng cạnh liên kết có hướng & $|\mathcal{E}|$ & 2.452 cạnh \\
+Bậc nút trung bình & $\langle k \rangle = |\mathcal{E}| / N$ & 4.033 cạnh/nút \\
+Bậc vào cực đại / Bậc ra cực đại & $k_{\text{in}}^{\max} / k_{\text{out}}^{\max}$ & 8 / 9 \\
+Mật độ đồ thị (Graph Density) & $\rho = \frac{|\mathcal{E}|}{N(N-1)}$ & 0.00664 (Độ thưa $99.34\%$) \\
+Hệ số phân cụm trung bình & $C_{\text{avg}} = \frac{1}{N} \sum_i C_i$ & 0.2842 \\
+Khoảng cách địa lý cạnh trung bình & $\bar{d}_{\text{edge}}$ & $1.412 \pm 0.684\text{ km}$ \\
+Đường kính mạng lưới lớn nhất & $D_{\text{network}}$ & $38.64\text{ km}$ \\
+Tham số RBF Bandwidth & $\sigma_{\mathrm{RBF}}$ & $1.0887\text{ km}$ \\
+Ngưỡng bán kính cắt lọc RBF & $\tau$ & $3.3945\text{ km}$ \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\textbf{Phân tích đặc tính cấu trúc mạng lưới:}
+\begin{enumerate}
+    \item \textbf{Cấu trúc Bậc nút tự nhiên:} Bậc nút trung bình $\langle k \rangle \approx 4.03$ phản ánh chính xác cấu trúc hình học của mạng lưới đường phố đô thị thực tế, nơi đa phần các giao lộ trọng điểm là các ngã tư (4 hướng lưu thông) và ngã ba (3 hướng). Bậc cực đại đạt 9 tại các vòng xoay đa nhánh lớn (như Ngã sáu Cộng Hòa, Vòng xoay Cây Gõ và Vòng xoay An Lạc).
+    \item \textbf{Đặc trưng Mạng lưới Thế giới Nhỏ (Small-World Property):} Mật độ cạnh rất thưa ($\rho \approx 0.0066$) kết hợp với hệ số phân cụm tương đối cao ($C_{\text{avg}} = 0.284$) là minh chứng điển hình của mạng lưới Small-World. Điều này khẳng định rằng dù đồ thị có quy mô lớn, thông tin tắc nghẽn giao thông có thể lan truyền nhanh chóng giữa các cụm nút giao thông lân cận thông qua một số ít các trục đại lộ xương sống.
+\end{enumerate}
+
+\section{Đặc tính Chuỗi Thời gian và Biến động Ngoại sinh trong 86 Ngày}
+Chuỗi thời gian liên tục 86 ngày ghi nhận đầy đủ các sắc thái vận động của giao thông TP. Hồ Chí Minh:
+\begin{itemize}
+    \item \textbf{Chu kỳ Ngày đêm (Diurnal Cycle):} Hình thái lưu lượng thể hiện cấu trúc "hai đỉnh nhọn" (Bimodal distribution) rất điển hình:
+    \begin{itemize}
+        \item \textit{Đỉnh cao điểm sáng (07:00 -- 08:30):} Lưu lượng xe máy tăng vọt từ $300\%$ đến $500\%$ so với mức trung bình ban ngày, tập trung đổ dồn từ các khu đô thị vệ tinh (TP. Thủ Đức, Quận 12, Bình Tân) về khu trung tâm Quận 1 và Quận 3.
+        \item \textit{Đỉnh cao điểm chiều (17:00 -- 18:30):} Luồng phương tiện đảo chiều thoát ra các cửa ngõ thành phố với thời gian giải tỏa kéo dài hơn do người dân kết hợp mua sắm và sinh hoạt.
+        \item \textit{Đáy ban đêm (00:00 -- 05:00):} Lưu lượng xe máy giảm xuống dưới $5\%$ công suất đường, trong khi tỷ lệ xe tải nặng và xe container tăng nhẹ trên các trục vành đai.
+    \end{itemize}
+    \item \textbf{Chu kỳ Tuần (Weekly Periodicity):} Lưu lượng các ngày trong tuần (Thứ Hai đến Thứ Sáu) có tính ổn định rất cao với hệ số tương quan chéo ngày-với-ngày đạt $\rho > 0.94$. Vào Thứ Bảy và Chủ Nhật, đỉnh cao điểm sáng biến mất, thay vào đó là sự gia tăng lưu lượng đồng đều từ 10:00 đến 21:00 tại các trục đường thương mại và giải trí.
+    \item \textbf{Biến động Thời tiết Cực đoan (Triều cường và Mưa giông nhiệt đới):} Khoảng thời gian thu thập từ tháng 6 đến tháng 9 trùng với mùa mưa Nam Bộ. Bộ dữ liệu ghi nhận 18 đợt mưa lớn trên diện rộng và 4 đợt triều cường làm ngập sâu nhiều tuyến đường ven sông (đường Nguyễn Hữu Cảnh, Huỳnh Tấn Phát, Trần Xuân Soạn). Trong các thời điểm này, vận tốc dòng xe giảm mạnh, dòng xe máy dồn ứ bất thường và lưu lượng đo được tại các camera lân cận biến động dị thường, tạo thành tập mẫu thử thách khắc nghiệt cho khả năng tự thích ứng của mô hình TA-STGCN.
+\end{itemize}
+

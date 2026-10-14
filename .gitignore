@@ -51,6 +51,10 @@ data/
 *.out
 *.synctex.gz
 *.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
 *.bbl
 *.blg
 *.spl

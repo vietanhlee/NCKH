@@ -1,0 +1,54 @@
+\chapter*{KẾT LUẬN VÀ KIẾN NGHỊ}
+\addcontentsline{toc}{chapter}{Kết luận và Kiến nghị}
+
+\section*{1. Kết luận và Đúc kết Khoa học}
+Đề tài nghiên cứu khoa học \textbf{"Nghiên cứu và phát triển khung mô hình thu nhận hình ảnh và dự báo dòng giao thông đô thị đa bước hai giai đoạn dựa trên mạng đồ thị không -- thời gian từ camera giám sát"} được thực hiện nhằm giải quyết một trong những bài toán hóc búa nhất của đô thị thông minh hiện đại: làm thế nào để tận dụng hạ tầng camera quan sát công cộng giá rẻ nhằm thiết lập mạng lưới giám sát và dự báo lưu lượng giao thông toàn diện, đáng tin cậy dưới điều kiện dòng xe máy hỗn hợp đặc thù của các siêu đô thị Việt Nam.
+
+Trải qua quá trình nghiên cứu lý thuyết, mô hình hóa toán học và thực nghiệm nghiêm ngặt trên quy mô toàn thành phố, đề tài đã hoàn thành xuất sắc toàn bộ các mục tiêu đặt ra, đạt được các kết quả nổi bật sau:
+
+\begin{enumerate}
+    \item \textbf{Xây dựng và công bố bộ dữ liệu chuẩn mực IC4SD-Traffic-HCM:} 
+    Đề tài đã xây dựng thành công bộ dữ liệu giao thông quy mô đô thị mở đầu tiên tại Việt Nam bao gồm \textbf{608 nút camera giám sát thực tế} tại TP. Hồ Chí Minh. Bộ dữ liệu tích hợp:
+    \begin{itemize}
+        \item 5.012 ảnh tĩnh độ phân giải cao được gán nhãn thủ công cẩn trọng theo phân lớp ô tô con và xe máy, đạt hệ số tương quan nội lớp liên thẩm định viên rất cao ($\text{ICC} = 0.973, p < 0.001$), thiết lập độ tin cậy chuẩn mực cho bài toán thị giác.
+        \item Chuỗi thời gian liên tục suốt 86 ngày với 24.768 bước quan sát (chu kỳ 5 phút) bảo toàn phân loại phương tiện, được lọc mượt bởi bộ lọc nhân quả Causal Double-Rolling Filter không gây rò rỉ dữ liệu tương lai.
+        \item Đồ thị mạng lưới đường bộ OpenStreetMap với 2.452 cạnh định hướng liên thông thực tế, phản ánh chính xác cấu trúc hình học và luật giao thông đô thị.
+    \end{itemize}
+    Bộ dữ liệu và toàn bộ mã nguồn cài đặt được công bố công khai, tạo môi trường kiểm chuẩn (benchmark) chuẩn mực cho cộng đồng học thuật trong nước và quốc tế.
+
+    \item \textbf{Đột phá trong kỹ thuật đếm xe hỗn hợp không dùng NMS (Giai đoạn 1):} 
+    Nghiên cứu đã chứng minh tính ưu việt của giải pháp Hồi quy đếm xe trực tiếp (Direct Category-Specific Vehicle Counting) dựa trên mạng xương sống EfficientNet-B5 kết hợp đầu hồi quy MLP đa tầng thống nhất và hàm mất mát Huber Loss. Phương pháp này giải quyết triệt để vấn đề che khuất tương hỗ nghiêm trọng của xe máy đô thị và triệt tiêu hoàn toàn điểm nghẽn tính toán bậc hai $\mathcal{O}(M^2)$ của thuật toán NMS truyền thống, đạt sai số ấn tượng $\text{MAE} = 3.6363$ và tốc độ suy luận siêu nhanh $35.2$ ms/batch, tiết kiệm $43.0\%$ lượng phép tính FLOPs so với ResNet-50. Bản đồ nhiệt Grad-CAM++ khẳng định mô hình tập trung chính xác vào thân xe thay vì ghi nhớ cảnh nền.
+
+    \item \textbf{Đề xuất kiến trúc đồ thị cải tiến TA-STGCN (Giai đoạn 2):} 
+    Đề tài đã phát triển thành công mô hình tích hợp cơ chế Chú ý tự thân theo thời gian đa đầu (Multi-Head Temporal Self-Attention) xen kẽ giữa hai khối ST-Conv trên đồ thị OpenStreetMap thực tế. Mô hình đạt sai số dự báo $\text{MAE} = 3.2401 \pm 0.0108$, duy trì sự ổn định tối đa qua 5 seed ngẫu nhiên ($\text{CV} = 0.33\%$) và kiểm soát xuất sắc độ dốc tích lũy sai số ở tầm nhìn dự báo xa 30 phút ($t+6$).
+
+    \item \textbf{Đóng góp lý thuyết và thực nghiệm về Lan truyền Sai số và Khả năng Chống chịu Nhiễu:} 
+    Đây là đóng góp khoa học cốt lõi của công trình. Đề tài đã chứng minh bằng giải tích toán học và kiểm chứng thực nghiệm rằng cơ chế Attention theo trục thời gian hoạt động như một bộ lọc thông thấp thích ứng dữ liệu, làm giảm phương sai nhiễu tỷ lệ nghịch với độ rộng cửa sổ chú ý hiệu dụng ($\text{Var} = \sigma_\eta^2 / T_{\text{eff}}$). Dưới tác động của nhiễu nhận dạng cảm biến mô phỏng thực tế (phân phối Gamma dị biệt có độ lệch âm do che khuất xe máy), TA-STGCN duy trì độ dốc suy thoái sai số thoải nhất, vượt trội áp đảo các mô hình không có chú ý thời gian (chỉ số Cohen's $d$ lên tới $+5.84$ so với GraphWaveNet ở mức nhiễu cực hạn) và đạt độ bền bỉ ngang ngửa các Transformer khổng lồ nhưng tiết kiệm $25.2\%$ bộ nhớ GPU VRAM và $70.4\%$ tham số.
+
+    \item \textbf{Hiện thực hóa kiến trúc Edge--Cloud ứng dụng thực tế:} 
+    Đề tài đã đề xuất mô hình triển khai phân tán chứng minh khả năng tiết kiệm băng thông truyền thông đô thị tới \textbf{$62.500\times$} (từ 437 GB/ngày xuống chỉ còn 7 MB/ngày) và bảo vệ tuyệt đối quyền riêng tư hình ảnh của người dân theo nguyên tắc Privacy-by-Design, đồng thời tiết kiệm $89.5\%$ tổng chi phí sở hữu 5 năm (TCO) so với vòng từ cảm ứng.
+\end{enumerate}
+
+\section*{2. Kiến nghị và Đề xuất Ứng dụng Thực tiễn}
+Từ các kết quả nghiên cứu khoa học và bài học thực tiễn thu được, nhóm tác giả đề xuất một số kiến nghị nhằm đưa kết quả nghiên cứu vào ứng dụng thực tế:
+
+\subsection*{2.1. Kiến nghị đối với Cơ quan Quản lý Giao thông và Chính quyền Đô thị}
+\begin{enumerate}
+    \item \textbf{Tận dụng hạ tầng camera CCTV hiện hữu thay vì đầu tư mới vòng từ:} 
+    Đề xuất Sở Giao thông Vận tải và các Trung tâm Quản lý Điều hành Giao thông Đô thị tại TP. Hồ Chí Minh, Hà Nội, Đà Nẵng xem xét ứng dụng khung mô hình hai giai đoạn của đề tài để tận dụng hàng nghìn camera giao thông sẵn có, chuyển đổi thành mạng lưới cảm biến đếm xe và dự báo lưu lượng thông minh mà không cần đầu tư hàng trăm tỷ đồng cho cảm biến xẻ đường chôn vòng từ.
+    \item \textbf{Thử nghiệm mô hình điều khiển đèn tín hiệu thích ứng đón đầu:} 
+    Tích hợp luồng dữ liệu dự báo 15--30 phút của mô hình TA-STGCN vào các tủ điều khiển đèn tín hiệu giao thông tại các nút giao trọng điểm để tự động điều chỉnh chu kỳ đèn xanh đón đầu dòng xe, ngăn chặn sự hình thành và lan truyền của các sóng xung kích tắc nghẽn (Shockwaves).
+    \item \textbf{Triển khai kiến trúc Biên -- Đám mây bảo mật:} 
+    Áp dụng quy chuẩn tính toán biên tại camera để vừa tiết kiệm chi phí thuê băng thông truyền dẫn viễn thông hàng tháng, vừa đảm bảo tuân thủ tuyệt đối các quy định của Chính phủ về bảo vệ an toàn dữ liệu cá nhân của công dân (Nghị định 13/2023/NĐ-CP).
+\end{enumerate}
+
+\subsection*{2.2. Kiến nghị đối với Cộng đồng Nghiên cứu Tiếp nối}
+\begin{enumerate}
+    \item \textbf{Mở rộng dữ liệu bằng học bán giám sát và Foundation Models:} 
+    Khuyến khích các nhóm nghiên cứu kế cận áp dụng các kỹ thuật Học bán giám sát (Semi-Supervised Learning) hoặc trích xuất đặc trưng từ các mô hình nền tảng thị giác (Vision Foundation Models như DINOv2) để tự động sinh giả nhãn và mở rộng bộ dữ liệu lên quy mô hàng trăm nghìn ảnh.
+    \item \textbf{Nghiên cứu đồ thị động thích ứng đa phương thức:} 
+    Tích hợp thêm các yếu tố ngoại sinh có ảnh hưởng lớn đến giao thông đô thị Việt Nam như lượng mưa thời gian thực, triều cường gây ngập lụt cục bộ và các sự kiện tập trung đông người vào đồ thị dự báo.
+    \item \textbf{Tối ưu hóa nhúng phần cứng thực địa:} 
+    Tiến hành biên dịch và lượng tử hóa mô hình sang định dạng TensorRT/INT8 để thử nghiệm thực tế trên các bo mạch tính toán biên chuyên dụng như NVIDIA Jetson Orin Nano, Raspberry Pi 5 kết hợp Coral TPU nhằm đánh giá toàn diện các chỉ số FPS, độ trễ và điện năng tiêu thụ trong môi trường vận hành thực địa.
+\end{enumerate}
+

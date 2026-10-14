@@ -1,0 +1,347 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+% ==============================================================================
+% CẤU HÌNH GÓI LỆNH VÀ TƯƠNG THÍCH TRÌNH BIÊN DỊCH (PDFLATEX / XELATEX)
+% ==============================================================================
+\usepackage{iftex}
+\ifXeTeX
+  \usepackage{fontspec}
+  \setmainfont{Cambria}[
+    BoldFont = Cambria Bold,
+    ItalicFont = Cambria Italic,
+    BoldItalicFont = Cambria Bold Italic
+  ]
+\else
+  \usepackage[utf8]{inputenc}
+  \usepackage[vietnamese]{babel}
+  \usepackage[T5]{fontenc}
+  \usepackage{mathptmx} % Font tương thích chuẩn pdfLaTeX
+\fi
+
+% Cấu hình kiểm soát độ co giãn văn bản, triệt tiêu tràn lề phải
+\usepackage{microtype}
+\emergencystretch=3em
+\tolerance=2000
+\hfuzz=1pt
+\hbadness=2000
+
+% Căn lề trang in chuẩn Luận văn / Báo cáo NCKH Học viện Công nghệ Bưu chính Viễn thông
+% Lề trái: 3.5 cm (đóng gáy), Lề phải: 2.0 cm, Lề trên: 2.5 cm, Lề dưới: 2.5 cm
+\usepackage[left=3.5cm,right=2.0cm,top=2.5cm,bottom=2.5cm]{geometry}
+\setlength{\headheight}{25pt}
+\usepackage{setspace}
+\onehalfspacing % Giãn dòng 1.5 lines tiêu chuẩn
+
+% Các gói hỗ trợ toán học và biểu thức đại số
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{mathtools}
+
+% Gói hỗ trợ hình ảnh, bảng biểu và đồ thị
+\usepackage{graphicx}
+\graphicspath{{paper/fig/}{paper/}{fig/}{./}}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{multicol}
+\usepackage{array}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{calc,shapes.geometric,arrows}
+
+% Định dạng tiêu đề chương, mục chuẩn học thuật hiện đại
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\centering}
+  {\fontsize{13}{15}\selectfont\color{blue!80!black}\MakeUppercase{Chương \thechapter}}
+  {0.6ex}
+  {\fontsize{16}{19}\selectfont\color{black}\MakeUppercase}
+  [\vspace{0.8ex}\color{blue!80!black}\rule{0.5\textwidth}{0.8pt}]
+\titlespacing*{\chapter}{0pt}{10pt}{25pt}
+
+\titleformat{\section}
+  {\normalfont\bfseries\fontsize{13}{15}\selectfont\color{blue!90!black}}
+  {\thesection}{1em}{}
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+
+\titleformat{\subsection}
+  {\normalfont\bfseries\fontsize{12}{14}\selectfont\color{black}}
+  {\thesubsection}{1em}{}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\titleformat{\subsubsection}
+  {\normalfont\itshape\bfseries\fontsize{12}{14}\selectfont\color{black}}
+  {\thesubsubsection}{1em}{}
+\titlespacing*{\subsubsection}{0pt}{8pt}{3pt}
+
+% Gói hỗ trợ Header và Footer trang trí chuyên nghiệp, sang trọng
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\fontsize{9}{11}\selectfont\itshape\color{black!80} Báo cáo Đề tài NCKH Cấp Học viện -- PTIT}
+\fancyhead[R]{\fontsize{9}{11}\selectfont\itshape\color{black!80} Khung mô hình TA-STGCN và Lan truyền sai số}
+\fancyfoot[C]{\fontsize{10}{12}\selectfont\thepage}
+\renewcommand{\headrulewidth}{0.5pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{blue!80!black}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+% Cấu hình liên kết Hyperref
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue!80!black,
+    urlcolor=blue!80!black,
+    pdftitle={Báo cáo Đề tài NCKH Cấp Học viện - PTIT},
+    pdfauthor={Lê Việt Anh},
+    pdfsubject={Nghiên cứu dự báo giao thông thông minh}
+}
+
+% Định dạng danh sách liệt kê
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=3pt, leftmargin=1.2cm}
+\setlist[enumerate]{noitemsep, topsep=3pt, leftmargin=1.2cm}
+
+% Định nghĩa môi trường thuật toán sạch đẹp
+\newcounter{algo}
+\newenvironment{algorithm_box}[2]{%
+  \refstepcounter{algo}%
+  \begin{table}[H]
+  \centering
+  \begin{tabularx}{\textwidth}{|X|}
+  \hline
+  \textbf{Thuật toán \thealgo: #1} \\
+  \hline
+  \small #2 \\
+  \hline
+  \end{tabularx}
+  \end{table}
+}{}
+
+% ==============================================================================
+% BẮT ĐẦU TÀI LIỆU
+% ==============================================================================
+\begin{document}
+
+% ------------------------------------------------------------------------------
+% LỜI CẢM ƠN
+% ------------------------------------------------------------------------------
+\pagenumbering{roman}
+\setcounter{page}{1}
+\chapter*{LỜI CẢM ƠN}
+\addcontentsline{toc}{chapter}{Lời cảm ơn}
+
+Trước hết, tôi xin gửi lời cảm ơn tới các thầy cô giảng viên của Học viện Công nghệ Bưu chính Viễn thông, đặc biệt là các thầy cô thuộc Khoa Công nghệ Thông tin I. Trong suốt quá trình học tập, tôi đã được trang bị những kiến thức nền tảng và chuyên môn cần thiết, đồng thời học hỏi được tinh thần làm việc nghiêm túc và trách nhiệm từ thầy cô. Đây là những hành trang quan trọng giúp tôi hoàn thành đề tài nghiên cứu khoa học này.
+
+Tôi xin chân thành cảm ơn giảng viên hướng dẫn, thầy PGS.TS Nguyễn Trọng Khánh, người đã hỗ trợ và góp ý cho tôi trong suốt quá trình thực hiện đề tài. Những nhận xét và hướng dẫn của thầy đã giúp tôi định hướng và hoàn thiện công trình nghiên cứu tốt hơn.
+
+Bên cạnh đó, tôi cũng xin cảm ơn bạn bè và các bạn cùng lớp đã hỗ trợ chia sẻ tài liệu, trao đổi kiến thức và đóng góp ý kiến trong quá trình học tập và thực hiện báo cáo.
+
+Do kiến thức và kinh nghiệm còn hạn chế, bài báo cáo khó tránh khỏi những thiếu sót. Tôi rất mong nhận được những ý kiến đóng góp từ thầy cô và các bạn để có thể tiếp tục hoàn thiện và nâng cao kiến thức của bản thân.
+
+Cuối cùng, tôi xin chân thành cảm ơn tất cả những người đã hỗ trợ và đồng hành cùng tôi trong suốt quá trình thực hiện đề tài nghiên cứu khoa học này.
+
+\vspace{1.5cm}
+\begin{flushright}
+    \textit{Hà Nội, Tháng 05 năm 2026} \\
+    \textbf{SINH VIÊN THỰC HIỆN} \\
+    \vspace{1.5cm}
+    \textbf{Lê Việt Anh}
+\end{flushright}
+
+% ------------------------------------------------------------------------------
+% LỜI CAM ĐOAN
+% ------------------------------------------------------------------------------
+\newpage
+\chapter*{LỜI CAM ĐOAN}
+\addcontentsline{toc}{chapter}{Lời cam đoan}
+
+Tôi xin cam đoan rằng toàn bộ nội dung công trình nghiên cứu được trình bày trong cuốn báo cáo này là kết quả học tập và nghiên cứu khoa học nghiêm túc, độc lập của bản thân tôi dưới sự hướng dẫn khoa học của thầy PGS.TS Nguyễn Trọng Khánh cùng các thành viên nghiên cứu thuộc Phòng thí nghiệm Máy tính thông minh vì sự phát triển bền vững (IC4SD), Khoa Công nghệ Thông tin 1, Học viện Công nghệ Bưu chính Viễn thông.
+
+Toàn bộ các số liệu thống kê thực nghiệm, quy trình thu thập dữ liệu hình ảnh và chuỗi thời gian giao thông từ hệ thống camera công cộng TP. Hồ Chí Minh, mã nguồn cài đặt các mạng nơ-ron học sâu (Deep Learning) và các phân tích định lượng được trình bày trong báo cáo là hoàn toàn trung thực, khách quan và có khả năng kiểm chứng, tái lập độc lập. Các trích dẫn tài liệu tham khảo, bảng biểu đối sánh kế thừa từ các công trình khoa học quốc tế đều được ghi chú xuất xứ tường minh và tuân thủ chặt chẽ liêm chính học thuật. Tôi xin chịu hoàn toàn trách nhiệm trước Hội đồng Khoa học và Ban Giám đốc Học viện về tính xác thực của nội dung cam đoan này.
+
+\vspace{1.5cm}
+\begin{flushright}
+    \textit{Hà Nội, Tháng 05 năm 2026} \\
+    \textbf{Người cam đoan} \\
+    \vspace{1.5cm}
+    \textbf{Lê Việt Anh}
+\end{flushright}
+
+% ------------------------------------------------------------------------------
+% TÓM TẮT ĐỀ TÀI (ABSTRACT TIẾNG VIỆT) - ĐÃ BỎ ABSTRACT TIẾNG ANH THEO YÊU CẦU
+% ------------------------------------------------------------------------------
+\newpage
+\chapter*{TÓM TẮT ĐỀ TÀI}
+\addcontentsline{toc}{chapter}{Tóm tắt đề tài}
+
+Trong bối cảnh đô thị hóa nhanh chóng tại các quốc gia Đông Nam Á, các mạng lưới camera giám sát công cộng (CCTV) cung cấp một nguồn cấp dữ liệu thị giác phong phú, bao phủ rộng khắp với chi phí vận hành thấp hơn đáng kể so với cảm biến vòng từ truyền thống. Tuy nhiên, hiện nay có rất ít bộ dữ liệu chuẩn mực và công trình nghiên cứu đánh giá đồng thời cả hai khía cạnh: (1) nhận dạng lưu lượng phương tiện ở mức độ camera đơn lẻ và (2) dự báo dòng giao thông không -- thời gian trên quy mô toàn thành phố dưới điều kiện giao thông hỗn hợp với xe máy chiếm ưu thế tuyệt đối ($>80\%$). Đóng góp cốt lõi của đề tài này là xây dựng khung mô hình hai giai đoạn hoàn chỉnh dựa hoàn toàn trên dữ liệu camera và thực hiện phân tích có hệ thống về hiện tượng \textbf{lan truyền sai số nhận dạng thị giác (Error Propagation)} từ camera vào các mô hình mạng nơ-ron đồ thị dự báo đa bước dưới các mức nhiễu cảm biến mô phỏng.
+
+Về mặt kỹ thuật, nghiên cứu đề xuất một khung làm việc hai giai đoạn (Two-Stage Pipeline) và kiểm chứng trên \textbf{IC4SD-Traffic-HCM} -- một bộ dữ liệu chuẩn quy mô thành phố bao gồm \textbf{608 nút camera} tại TP. Hồ Chí Minh được xây dựng và công bố:
+\begin{enumerate}
+    \item \textbf{Giai đoạn 1 (Vision Perception):} Sử dụng mạng nơ-ron tích chập EfficientNet-B5 kết hợp đầu hồi quy MLP đa tầng thống nhất để dự đoán trực tiếp số lượng phương tiện theo phân lớp (xe ô tô con và xe máy) từ ảnh tĩnh. Cách tiếp cận này loại bỏ hoàn toàn tầng hậu xử lý triệt tiêu cực đại cục bộ (NMS) vốn có độ phức tạp bậc hai $\mathcal{O}(M^2)$ và giải quyết triệt để hiện tượng che khuất tương hỗ nghiêm trọng giữa các cụm xe máy.
+    \item \textbf{Giai đoạn 2 (Graph Forecasting):} Đánh giá 7 kiến trúc đồ thị và Transformer tiên tiến nhất (STGCN, GraphWaveNet, ASTGCN, MegaCRN, DSTAGNN, STAEformer, iTransformer) cùng với mô hình đề xuất \textbf{TA-STGCN} (Temporal Attention-Guided Spatio-Temporal Graph Convolutional Network) -- một biến thể cải tiến bổ sung cơ chế Chú ý tự thân theo thời gian đa đầu (Multi-Head Temporal Self-Attention) xen kẽ giữa các khối tích chập đồ thị phổ Chebyshev.
+\end{enumerate}
+
+Kết quả thực nghiệm trên 5 seed ngẫu nhiên độc lập khẳng định rằng trên dữ liệu sạch, các mô hình đồ thị đạt độ chính xác gần như tương đương (TA-STGCN đạt sai số MAE $= 3.2401 \pm 0.0108$, chỉ nhỉnh hơn STGCN gốc $\sim 0.9\%$, quy mô ảnh hưởng Cohen's $d = -0.032$). Tuy nhiên, dưới tác động của nhiễu nhận dạng cảm biến mô phỏng thực tế (phân phối Gamma bất đối xứng có phương sai dị biệt tỷ lệ với lưu lượng), khả năng chống chịu nhiễu phân hóa rõ rệt: TA-STGCN vượt trội áp đảo các mô hình không có cơ chế chú ý thời gian (Cohen's $d$ lên tới $+5.84$ so với GraphWaveNet ở mức nhiễu cao nhất), trong khi duy trì sai số tương đương các Transformer khổng lồ nhưng với chi phí tham số chỉ 453K tham số và tiết kiệm $25.2\%$ bộ nhớ GPU đỉnh so với STAEformer. Nghiên cứu mở ra triển vọng triển khai kiến trúc Biên -- Đám mây (Edge--Cloud) truyền vector số đếm bảo mật và tiết kiệm băng thông gấp 62.500 lần cho đô thị thông minh.
+
+\vspace{0.5cm}
+\noindent \textbf{Từ khóa:} Giao thông thông minh (ITS), Dự báo giao thông đô thị, IC4SD-Traffic-HCM, Hồi quy đếm xe trực tiếp, TA-STGCN, Mạng nơ-ron đồ thị không -- thời gian, Lan truyền sai số, Độ bền vững với nhiễu.
+
+% ------------------------------------------------------------------------------
+% MỤC LỤC, DANH MỤC BẢNG, DANH MỤC HÌNH VẼ, DANH MỤC VIẾT TẮT
+% ------------------------------------------------------------------------------
+\newpage
+\tableofcontents
+
+\newpage
+\listoftables
+\addcontentsline{toc}{chapter}{Danh mục bảng biểu}
+
+\newpage
+\listoffigures
+\addcontentsline{toc}{chapter}{Danh mục hình vẽ}
+
+\newpage
+\chapter*{DANH MỤC TỪ VIẾT TẮT}
+\addcontentsline{toc}{chapter}{Danh mục từ viết tắt}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{l p{4.5cm} X}
+\toprule
+\textbf{Viết tắt} & \textbf{Thuật ngữ tiếng Anh} & \textbf{Ý nghĩa học thuật} \\
+\midrule
+ITS & Intelligent Transportation Systems & Hệ thống Giao thông Thông minh \\
+CCTV & Closed-Circuit Television & Hệ thống Camera giám sát công cộng \\
+CNN & Convolutional Neural Network & Mạng nơ-ron tích chập \\
+GCN & Graph Convolutional Network & Mạng tích chập đồ thị \\
+STGNN & Spatio-Temporal Graph Neural Network & Mạng nơ-ron đồ thị không -- thời gian \\
+STGCN & Spatio-Temporal Graph ConvNet & Mạng tích chập đồ thị không -- thời gian \\
+TA-STGCN & Temporal Attention-Guided STGCN & Mạng STGCN điều hướng bởi chú ý thời gian \\
+TCN & Temporal Convolutional Network & Mạng tích chập theo thời gian \\
+GLU & Gated Linear Unit & Đơn vị tuyến tính có cổng \\
+RBF & Radial Basis Function & Hàm cơ sở xuyên tâm \\
+OSM & OpenStreetMap & Nền tảng bản đồ đường phố mở \\
+MAE & Mean Absolute Error & Sai số tuyệt đối trung bình \\
+MAPE & Mean Absolute Percentage Error & Sai số phần trăm tuyệt đối trung bình \\
+RMSE & Root Mean Squared Error & Căn bậc hai sai số toàn phương trung bình \\
+CI & Confidence Interval & Khoảng tin cậy thống kê \\
+CV & Coefficient of Variation & Hệ số biến thiên phương sai \\
+FLOPs & Floating Point Operations & Số phép toán dấu phẩy động \\
+NMS & Non-Maximum Suppression & Thuật toán triệt tiêu cực đại cục bộ \\
+Grad-CAM & Gradient-weighted Class Activation & Trực quan hóa bản đồ kích hoạt đặc trưng \\
+SOTA & State-of-the-Art & Trình độ tiên tiến nhất hiện nay \\
+PCU & Passenger Car Unit & Hệ số xe con quy đổi \\
+VRAM & Video Random Access Memory & Bộ nhớ đồ họa chuyên dụng \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ------------------------------------------------------------------------------
+% NỘI DUNG CHÍNH (MAIN CHAPTERS QUA TỪNG TỆP CHUYÊN SÂU)
+% ------------------------------------------------------------------------------
+\newpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% Phần mở đầu
+\input{chapters/mo_dau.tex}
+
+% Chương 1: Tổng quan và bối cảnh nghiên cứu
+\input{chapters/chuong1_tong_quan.tex}
+
+% Chương 2: Cơ sở lý thuyết và nền tảng toán học
+\input{chapters/chuong2_co_so_ly_thuyet.tex}
+
+% Chương 3: Thu thập dữ liệu và xây dựng đồ thị giao thông
+\input{chapters/chuong3_du_lieu.tex}
+
+% Chương 4: Phương pháp nghiên cứu đề xuất
+\input{chapters/chuong4_phuong_phap.tex}
+
+% Chương 5: Thực nghiệm, kết quả và đánh giá
+\input{chapters/chuong5_thuc_nghiem.tex}
+
+% Chương 6: Thảo luận, mô hình triển khai và hướng phát triển
+\input{chapters/chuong6_thao_luan.tex}
+
+% Kết luận và kiến nghị
+\input{chapters/ket_luan.tex}
+
+% ------------------------------------------------------------------------------
+% TÀI LIỆU THAM KHẢO
+% ------------------------------------------------------------------------------
+\newpage
+\begin{thebibliography}{99}
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+
+\bibitem{stgcn} B. Yu, H. Yin, and Z. Zhu, ``Spatio-temporal graph convolutional networks: A deep learning framework for traffic forecasting,'' in \textit{Proc. Int. Joint Conf. Artif. Intell. (IJCAI)}, 2018, pp. 3634--3640.
+
+\bibitem{wavenet} Z. Wu, S. Pan, G. Long, J. Jiang, and C. Zhang, ``Graph WaveNet for deep spatial-temporal graph modeling,'' in \textit{Proc. Int. Joint Conf. Artif. Intell. (IJCAI)}, 2019, pp. 1907--1913.
+
+\bibitem{astgcn} S. Guo, Y. Lin, N. Feng, C. Song, and H. Wan, ``Attention based spatial-temporal graph convolutional networks for traffic flow forecasting,'' in \textit{Proc. AAAI Conf. Artif. Intell. (AAAI)}, vol. 33, no. 1, 2019, pp. 922--929.
+
+\bibitem{staeformer} H. Liu, Z. Dong, R. Jiang, J. Deng, J. Deng, Q. Chen, and X. Song, ``Spatio-temporal adaptive embedding makes vanilla Transformer state-of-the-art for traffic flow forecasting,'' in \textit{Proc. ACM Int. Conf. Inf. Knowl. Manage. (CIKM)}, 2023, pp. 4125--4129.
+
+\bibitem{itransformer} Y. Liu, T. Hu, H. Zhang, H. Wu, S. Wang, L. Ma, and M. Long, ``iTransformer: Inverted Transformers are effective for time series forecasting,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2024.
+
+\bibitem{megacrn} R. Jiang, D. Yin, Z. Wang, Y. Wang, J. Deng, H. Liu, Z. Cai, J. Deng, and X. Song, ``Spatio-temporal meta-graph learning for traffic flow forecasting,'' in \textit{Proc. AAAI Conf. Artif. Intell. (AAAI)}, 2023, pp. 8078--8086.
+
+\bibitem{dstagnn} S. Lan, Y. Ma, W. Huang, W. Wang, H. Yang, and P. Li, ``DSTAGNN: Dynamic spatial-temporal aware graph neural network for traffic flow forecasting,'' in \textit{Proc. Int. Conf. Mach. Learn. (ICML)}, 2022, pp. 11906--11917.
+
+\bibitem{dcrnn} Y. Li, R. Yu, C. Shahabi, and Y. Liu, ``Diffusion convolutional recurrent neural network: Data-driven traffic forecasting,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2018.
+
+\bibitem{efficientnet} M. Tan and Q. V. Le, ``EfficientNet: Rethinking model scaling for convolutional neural networks,'' in \textit{Proc. Int. Conf. Mach. Learn. (ICML)}, 2019, pp. 6105--6114.
+
+\bibitem{resnet} K. He, X. Zhang, S. Ren, and J. Sun, ``Deep residual learning for image recognition,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2016, pp. 770--778.
+
+\bibitem{mobilenet} A. Howard et al., ``Searching for MobileNetV3,'' in \textit{Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)}, 2019, pp. 1314--1324.
+
+\bibitem{convnext} Z. Liu, H. Mao, C. Y. Wu, C. Feichtenhofer, T. Darrell, and S. Xie, ``A convnet for the 2020s,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2022, pp. 11976--11986.
+
+\bibitem{vit} A. Dosovitskiy et al., ``An image is worth 16x16 words: Transformers for image recognition at scale,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2021.
+
+\bibitem{attention} A. Vaswani et al., ``Attention is all you need,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2017, pp. 5998--6008.
+
+\bibitem{chebnet} M. Defferrard, X. Bresson, and P. Vandergheynst, ``Convolutional neural networks on graphs with fast localized spectral filtering,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)}, 2016, pp. 3828--3836.
+
+\bibitem{gman} C. Zheng, X. Fan, C. Wang, and J. Qi, ``GMAN: A graph multi-attention network for traffic prediction,'' in \textit{Proc. AAAI Conf. Artif. Intell. (AAAI)}, 2020, pp. 1234--1241.
+
+\bibitem{stid} Z. Shao, Z. Zhang, F. Wang, and Y. Xu, ``Spatial-temporal identity: A simple yet effective baseline for spatio-temporal traffic forecasting,'' in \textit{Proc. ACM Int. Conf. Inf. Knowl. Manage. (CIKM)}, 2022, pp. 4485--4489.
+
+\bibitem{tgcn} L. Zhao, Y. Song, C. Zhang, Y. Liu, P. Wang, T. Lin, M. Deng, and H. Li, ``T-GCN: A temporal graph convolutional network for traffic prediction,'' \textit{IEEE Trans. Intell. Transp. Syst.}, vol. 21, no. 9, pp. 3848--3858, 2020.
+
+\bibitem{yolo} J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, ``You only look once: Unified, real-time object detection,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2016, pp. 779--788.
+
+\bibitem{csrnet} Y. Li, X. Zhang, and D. Chen, ``CSRNet: Dilated convolutional neural networks for understanding the highly congested scenes,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2018, pp. 1091--1100.
+
+\bibitem{mcnn} Y. Zhang, D. Zhou, S. Chen, S. Gao, and Y. Ma, ``Single-image crowd counting via multi-column convolutional neural network,'' in \textit{Proc. IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2016, pp. 589--597.
+
+\bibitem{can} S. Bai, Z. He, Y. Wu, and D. Wang, ``Context-aware crowd counting,'' in \textit{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2019, pp. 6909--6918.
+
+\bibitem{huber} P. J. Huber, ``Robust estimation of a location parameter,'' \textit{Ann. Math. Statist.}, vol. 35, no. 1, pp. 73--101, 1964.
+
+\bibitem{signal_control} K.-L. A. Yau, J. Qadir, H. L. Khoo, M. H. Ling, and P. Komisarczuk, ``A survey on reinforcement learning models and algorithms for traffic signal control,'' \textit{ACM Comput. Surv.}, vol. 50, no. 3, pp. 1--38, 2017.
+
+\bibitem{ctm} C. F. Daganzo, ``The cell transmission model: A dynamic representation of highway traffic conforming to the hydrodynamic theory,'' \textit{Transp. Res. Part B: Methodol.}, vol. 28, no. 4, pp. 269--287, 1994.
+
+\bibitem{cao2007} N. Y. Cao and M. Sano, ``A study on motorcycle lane capacity in urban areas of developing countries,'' \textit{J. East. Asia Soc. Transp. Stud.}, vol. 7, pp. 2320--2333, 2007.
+
+\bibitem{lee2009} T.-C. Lee, ``An agent-based model to simulate motorcycle behaviour in mixed traffic flow,'' in \textit{Proc. Int. Conf. Comput. Urban Plann. Urban Manage. (CUPUM)}, 2009.
+
+\bibitem{pdformer} J. Jiang, C. Han, W. X. Zhao, and J. Wang, ``PDFormer: Propagation delay-aware dynamic long-range transformer for traffic flow forecasting,'' in \textit{Proc. AAAI Conf. Artif. Intell. (AAAI)}, 2023, pp. 4365--4373.
+
+\bibitem{stgncde} J. Choi, H. Choi, J. Hwang, and N. Park, ``Graph neural controlled differential equations for traffic forecasting,'' in \textit{Proc. AAAI Conf. Artif. Intell. (AAAI)}, 2022, pp. 6367--6374.
+
+\bibitem{mamba} A. Gu and T. Dao, ``Mamba: Linear-time sequence modeling with selective state spaces,'' \textit{arXiv preprint arXiv:2312.00752}, 2023.
+
+\bibitem{patchtst} Y. Nie, N. H. Nguyen, P. Sinthong, and J. Kalagnanam, ``A time series is worth 64 words: Long-term forecasting with transformers,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2023.
+
+\bibitem{adam} D. P. Kingma and J. Ba, ``Adam: A method for stochastic optimization,'' in \textit{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2015.
+
+\end{thebibliography}
+
+\end{document}

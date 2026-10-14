@@ -1,0 +1,89 @@
+\chapter*{PHẦN MỞ ĐẦU}
+\addcontentsline{toc}{chapter}{Phần Mở đầu}
+
+\section*{1. Bối cảnh và Tính cấp thiết của Đề tài}
+Trong kỷ nguyên hiện đại, tiến trình đô thị hóa diễn ra với tốc độ vũ bão tại các quốc gia đang phát triển, đặc biệt là khu vực Đông Nam Á, đã kéo theo sự bùng nổ chưa từng có của các phương tiện giao thông cơ giới cá nhân. Tình trạng quá tải hạ tầng đường bộ, ùn tắc giao thông kéo dài và ô nhiễm môi trường đã trở thành bài toán hóc búa, đe dọa trực tiếp đến sự phát triển kinh tế bền vững và chất lượng cuộc sống của hàng chục triệu cư dân đô thị. Tại các siêu đô thị như Thành phố Hồ Chí Minh và Thủ đô Hà Nội, thiệt hại kinh tế hàng năm do ùn tắc giao thông ước tính lên tới hàng tỷ USD, chưa kể đến hàng triệu giờ lao động bị lãng phí và những hệ lụy nặng nề về sức khỏe cộng đồng do khí thải phương tiện gây ra.
+
+Để giải quyết vấn đề nan giải này, việc phát triển và ứng dụng các Hệ thống Giao thông Thông minh (Intelligent Transportation Systems -- ITS) được xem là giải pháp mang tính chiến lược và đột phá. Khác với cách tiếp cận truyền thống vốn tập trung mở rộng hạ tầng cầu đường một cách tốn kém và bị giới hạn bởi quỹ đất đô thị, ITS tận dụng sức mạnh của công nghệ thông tin, trí tuệ nhân tạo (AI) và mạng truyền thông không dây để tối ưu hóa năng lực điều hành và phân phối dòng di chuyển. Một hệ thống ITS hoàn chỉnh đòi hỏi sự phối hợp nhịp nhàng giữa hai năng lực công nghệ cốt lõi:
+\begin{enumerate}
+    \item \textbf{Năng lực Giám sát và Thu nhận Trạng thái Giao thông Tức thời (Traffic Perception):} Định lượng chính xác mật độ, số lượng và phân loại các phương tiện giao thông đang hiện diện trên từng nút giao cắt hoặc hành lang tuyến đường tại thời điểm thực.
+    \item \textbf{Năng lực Dự báo Dòng Giao thông Đa bước trên Toàn Mạng lưới (Network-Wide Multi-Horizon Traffic Forecasting):} Dự đoán chính xác xu hướng biến động của lưu lượng phương tiện trên toàn bộ đồ thị mạng lưới đường bộ thành phố trong khoảng thời gian tương lai từ 15 đến 30 phút ($H = 6$ bước thời gian, với chu kỳ lấy mẫu $\Delta t = 5$ phút).
+\end{enumerate}
+
+Tầm nhìn dự báo trong khoảng 15--30 phút (Lookahead Forecasting) giữ vai trò "sống còn" đối với các trung tâm chỉ huy điều hành giao thông đô thị:
+\begin{itemize}
+    \item \textbf{Điều khiển đèn tín hiệu thích ứng đón đầu (Proactive Adaptive Signal Control):} Trong lý thuyết điều khiển giao thông, chu kỳ đèn tín hiệu tại các ngã tư trọng điểm thường dao động từ 90 đến 180 giây. Việc thay đổi pha đèn cần từ 3 đến 5 chu kỳ liên tiếp để dòng xe tự điều chỉnh và tái lập trạng thái cân bằng. Nếu hệ thống chỉ dựa vào số liệu quan trắc tức thời tại thời điểm hiện tại ($t$), thuật toán điều khiển sẽ rơi vào trạng thái trễ pha (Phase-Lag), khiến hàng chờ xe bị dồn ứ trước khi pha đèn kịp kéo dài. Dự báo chính xác trước 15--30 phút cho phép hệ thống tính toán và kích hoạt kế hoạch phân bổ thời lượng đèn xanh đón đầu trước khi đỉnh tắc nghẽn thực sự ập đến.
+    \item \textbf{Kiểm soát sự lan truyền sóng xung kích tắc nghẽn (Shockwave Propagation Control):} Dựa trên Mô hình Truyền sóng Thủy động lực học (Cell Transmission Model -- CTM), khi một nút giao bị tắc nghẽn cục bộ, sóng xung kích tắc nghẽn sẽ lan truyền ngược chiều dòng xe với vận tốc khoảng 15--25 km/h, nhanh chóng làm tê liệt các tuyến đường nhánh thượng lưu. Dự báo trước 30 phút cung cấp "khoảng thời gian vàng" để trung tâm điều hành kịp thời điều chỉnh các biển báo điện tử VMS (Variable Message Signs), cảnh báo người tham gia giao thông trên các ứng dụng bản đồ số và điều động lực lượng cảnh sát giao thông cắm chốt phân luồng từ xa.
+\end{itemize}
+
+Tuy nhiên, việc triển khai các công nghệ cảm biến đo đếm truyền thống như vòng từ cảm ứng (Inductive Loop Detectors) hay cảm biến radar dưới lòng đường bộc lộ những rào cản kỹ thuật và kinh tế không thể vượt qua trong bối cảnh giao thông tại Việt Nam:
+\begin{enumerate}
+    \item \textbf{Đặc thù dòng giao thông hỗn hợp xe máy (Motorcycle-Dominant Mixed Traffic):} Giao thông tại các đô thị Việt Nam mang tính chất hỗn hợp cao độ với tỷ lệ xe máy chiếm từ $75\%$ đến trên $85\%$ tổng lưu lượng. Khác với dòng xe ô tô có tính kỷ luật làn đường cao ở các nước phát triển, xe máy di chuyển tự do, đan xen, liên tục chuyển làn và luồn lách vào mọi khoảng trống trên mặt đường. Cảm biến vòng từ vốn được thiết kế để đếm xe ô tô đi qua một làn cố định sẽ mất hoàn toàn độ chính xác khi nhiều xe máy cùng đi qua một vòng từ hoặc di chuyển chệch giữa hai vòng từ kề nhau.
+    \item \textbf{Chi phí hạ tầng và duy tu bảo dưỡng đắt đỏ:} Để phủ kín toàn bộ hàng nghìn giao lộ, việc xẻ đường chôn vòng từ đòi hỏi kinh phí đầu tư ban đầu khổng lồ, làm gián đoạn giao thông trong quá trình thi công và thường xuyên bị hư hỏng khi mặt đường bị sụt lún hoặc đào bới do sửa chữa hệ thống cấp thoát nước, cáp viễn thông.
+    \item \textbf{Tiềm năng từ mạng lưới camera giám sát (CCTV):} Ngược lại, hầu hết các đô thị lớn hiện nay đều đã đầu tư hạ tầng camera giám sát giao thông công cộng với độ phủ rất cao tại các nút giao trọng điểm. Nguồn cấp hình ảnh từ camera cung cấp thông tin thị giác trực quan, phong phú, chi phí khai thác thấp và hoàn toàn không xâm lấn vào kết cấu mặt đường.
+\end{enumerate}
+
+Mặc dù camera mang lại tiềm năng to lớn, việc ứng dụng luồng dữ liệu hình ảnh vào bài toán dự báo mạng lưới đồ thị đô thị lại đặt ra một thách thức khoa học hoàn toàn mới: \textbf{Hiện tượng Lan truyền Sai số Nhận dạng (Error Propagation).} Số đếm phương tiện thu nhận từ hình ảnh camera thực chất là các giá trị ước lượng mang sai số nhận dạng (\textit{Perception Noise}), bắt nguồn từ hiện tượng che khuất tương hỗ nghiêm trọng giữa các cụm xe máy đông đúc. Sự lan truyền sai số này vào các mô hình mạng nơ-ron đồ thị không -- thời gian đa bước diễn ra như thế nào, và làm thế nào để thiết kế một kiến trúc học sâu có khả năng chống chịu nhiễu bền bỉ là một câu hỏi mở chưa từng được định lượng bài bản trong các nghiên cứu quốc tế.
+
+Xuất phát từ những đòi hỏi cấp bách của thực tiễn quản lý đô thị và khoảng trống nghiên cứu khoa học nêu trên, đề tài \textbf{"Nghiên cứu và phát triển khung mô hình thu nhận hình ảnh và dự báo dòng giao thông đô thị đa bước hai giai đoạn dựa trên mạng đồ thị không -- thời gian từ camera giám sát"} đã được đề xuất và thực hiện.
+
+\section*{2. Mục tiêu Nghiên cứu}
+Đề tài hướng tới việc giải quyết trọn vẹn chuỗi bài toán từ thu nhận hình ảnh thị giác máy tính đến dự báo chuỗi thời gian trên đồ thị giao thông thông qua 4 mục tiêu cụ thể:
+\begin{enumerate}
+    \item \textbf{Xây dựng bộ dữ liệu chuẩn mực IC4SD-Traffic-HCM:} Thu thập dữ liệu thực tế từ hệ thống camera công cộng TP. Hồ Chí Minh, xây dựng bộ dữ liệu ảnh gán nhãn thủ công theo phân lớp (ô tô và xe máy) và chuỗi thời gian giao thông liên tục 86 ngày trên mạng lưới 608 nút camera để làm nền tảng kiểm chứng mở cho cộng đồng nghiên cứu.
+    \item \textbf{Thiết kế khung làm việc hai giai đoạn (Two-Stage Framework):} 
+    \begin{itemize}
+        \item \textit{Giai đoạn 1 (Vision Perception):} Phát triển mô hình hồi quy đếm xe trực tiếp từ ảnh tĩnh độ phân giải cao, giải quyết triệt để vấn đề che khuất nghiêm trọng của xe máy và triệt tiêu điểm nghẽn tính toán NMS.
+        \item \textit{Giai đoạn 2 (Graph Forecasting):} Mô hình hóa mạng lưới đường phố thành đồ thị không gian có hướng dựa trên bản đồ OpenStreetMap và dự báo lưu lượng đa bước thời gian ($t+1$ đến $t+6$).
+    \end{itemize}
+    \item \textbf{Đề xuất kiến trúc cải tiến TA-STGCN:} Tích hợp cơ chế Chú ý tự thân theo thời gian đa đầu (Multi-Head Temporal Self-Attention) vào cấu trúc mạng nơ-ron tích chập đồ thị không -- thời gian, giúp tăng cường khả năng chống chịu nhiễu nhận dạng và kiểm soát tốc độ suy thoái sai số khi dự báo dài hạn.
+    \item \textbf{Định lượng có hệ thống hiện tượng Lan truyền Sai số và Khả năng Chống chịu Nhiễu:} Xây dựng mô hình toán học tiêm nhiễu cảm biến thực tế, thực hiện các kiểm định thống kê chuyên sâu (Friedman, Wilcoxon Signed-Rank, Cohen's $d$) để đánh giá sự phân hóa độ bền vững giữa các dòng kiến trúc đồ thị khác nhau.
+\end{enumerate}
+
+\section*{3. Đối tượng và Phạm vi Nghiên cứu}
+\begin{itemize}
+    \item \textbf{Đối tượng nghiên cứu:}
+    \begin{itemize}
+        \item Các kiến trúc mạng nơ-ron tích chập sâu (CNNs) và Vision Transformers cho bài toán thị giác máy tính.
+        \item Lý thuyết đồ thị phổ (Spectral Graph Theory) và mạng nơ-ron đồ thị không -- thời gian (Spatio-Temporal Graph Neural Networks -- STGNNs).
+        \item Cơ chế Chú ý tự thân (Self-Attention Mechanism) và lý thuyết ước lượng thống kê bền vững (Robust Statistics).
+        \item Các mô hình phân phối sai số nhận dạng thực tế (Heteroscedastic Asymmetric Gamma Distribution).
+    \end{itemize}
+    \item \textbf{Phạm vi nghiên cứu:}
+    \begin{itemize}
+        \item \textit{Không gian:} Mạng lưới 608 trạm camera giám sát phủ kín khu vực nội thành và các cửa ngõ giao thông huyết mạch của Thành phố Hồ Chí Minh.
+        \item \textit{Thời gian:} Dữ liệu chuỗi thời gian liên tục trong 86 ngày, từ ngày 23/06/2025 đến ngày 16/09/2025 (tổng cộng 24.768 bước thời gian với chu kỳ 5 phút).
+        \item \textit{Đối tượng phương tiện:} Tập trung vào hai loại hình phương tiện cơ giới chủ đạo chiếm trên $98\%$ lưu lượng đường bộ đô thị: Xe ô tô con (\textit{Passenger Cars}) và Xe máy (\textit{Motorcycles}).
+    \end{itemize}
+\end{itemize}
+
+\section*{4. Phương pháp Luận Nghiên cứu Khoa học}
+Đề tài tuân thủ phương pháp luận nghiên cứu khoa học thực nghiệm kết hợp với mô hình hóa toán học chặt chẽ:
+\begin{enumerate}
+    \item \textbf{Phương pháp thu thập và xử lý dữ liệu:} Thu thập tự động qua giao diện lập trình của Cổng thông tin giao thông TP.HCM; áp dụng giao thức gán nhãn 3 thẩm định viên độc lập kết hợp kiểm định độ tin cậy bằng Hệ số tương quan nội lớp (Intraclass Correlation Coefficient -- ICC); áp dụng bộ lọc nhân quả Causal Double-Rolling Filter để làm mượt dữ liệu chuỗi mà không gây rò rỉ dữ liệu tương lai.
+    \item \textbf{Phương pháp mô hình hóa toán học:} Biểu diễn mạng lưới đường phố thành đồ thị có hướng $\mathcal{G} = (\mathcal{V}, \mathcal{E}, W)$ dựa trên tô pô đường bộ thực tế trích xuất từ OpenStreetMap; áp dụng phép xấp xỉ bộ lọc phổ ChebNet trên toán tử Laplacian để truyền tin không gian cục bộ; ứng dụng giải tích ma trận để chứng minh hiệu ứng giảm phương sai nhiễu của cơ chế Attention thời gian.
+    \item \textbf{Phương pháp thực nghiệm và kiểm định thống kê chuẩn mực:} Huấn luyện tất cả các mô hình qua 5 seed ngẫu nhiên độc lập; đo đạc sai số trên giá trị đếm xe thực tế sau giải chuẩn hóa; sử dụng kiểm định phi tham số Friedman omnibus và kiểm định cặp Wilcoxon Signed-Rank kèm hiệu chỉnh Holm-Bonferroni; đo lường quy mô ảnh hưởng thực chất bằng chỉ số Cohen's $d$ và khoảng tin cậy Bootstrap 95\%.
+\end{enumerate}
+
+\section*{5. Những Đóng góp Khoa học và Thực tiễn của Đề tài}
+\begin{enumerate}
+    \item \textbf{Đóng góp bộ dữ liệu chuẩn mực IC4SD-Traffic-HCM:} Công bố bộ dữ liệu giao thông quy mô đô thị mở đầu tiên cho khu vực Đông Nam Á bảo toàn thông tin phân loại phương tiện ô tô -- xe máy trên mạng lưới 608 nút camera, tạo môi trường thử nghiệm chuẩn mực cho cộng đồng học thuật quốc tế.
+    \item \textbf{Đột phá trong kỹ thuật đếm xe hỗn hợp:} Đề xuất và kiểm chứng giải pháp hồi quy đếm xe trực tiếp bằng EfficientNet-B5, vượt trội về tốc độ tính toán và độ bền bỉ trước hiện tượng che khuất so với các phương pháp phát hiện và bám vết truyền thống trong điều kiện xe máy dày đặc.
+    \item \textbf{Đề xuất kiến trúc TA-STGCN tối ưu:} Thiết kế thành công mô hình tích hợp cơ chế Chú ý tự thân theo thời gian vào STGCN, đạt được sự cân bằng xuất sắc giữa độ chính xác dự báo, số lượng tham số gọn nhẹ (453K params) và tính kinh tế bộ nhớ GPU (tiết kiệm $25.2\%$ VRAM so với STAEformer).
+    \item \textbf{Luận giải khoa học về Lan truyền sai số và Cơ chế lọc nhiễu:} Đưa ra bằng chứng thực nghiệm và lý thuyết đầu tiên chứng minh cơ chế Attention theo trục thời gian hoạt động như một bộ lọc nhiễu tự nhiên, làm phẳng đường cong suy thoái sai số trước các biến động cảm biến camera, vượt trội áp đảo các mô hình không có chú ý (Cohen's $d$ lên tới $+5.84$).
+    \item \textbf{Hiện thực hóa kiến trúc Edge--Cloud:} Đề xuất mô hình triển khai phân tán giúp tiết kiệm băng thông mạng truyền thông đô thị tới $62.500\times$ và bảo vệ tuyệt đối quyền riêng tư hình ảnh của người dân.
+\end{enumerate}
+
+\section*{6. Bố cục của Cuốn Báo cáo}
+Nội dung cuốn báo cáo NCKH được tổ chức thành 6 chương chuyên sâu, kết luận và tài liệu tham khảo:
+\begin{itemize}
+    \item \textbf{Phần Mở đầu:} Giới thiệu bối cảnh, tính cấp thiết, mục tiêu, đối tượng, phương pháp luận và các đóng góp cốt lõi của đề tài.
+    \item \textbf{Chương 1: Tổng quan và Bối cảnh Nghiên cứu:} Khảo sát toàn diện về ITS, bài toán dự báo dòng giao thông đô thị hỗn hợp, hiện trạng các phương pháp đếm xe, các kiến trúc học sâu không -- thời gian và xác định khoảng trống nghiên cứu.
+    \item \textbf{Chương 2: Cơ sở Lý thuyết và Nền tảng Toán học:} Trình bày chi tiết, tường minh toán học về CNNs, lý thuyết đồ thị phổ, đa thức Chebyshev, tích chập thời gian GLU, cơ chế Multi-Head Attention, hàm mất mát Huber Loss và lý thuyết giảm phương sai nhiễu.
+    \item \textbf{Chương 3: Thu thập Dữ liệu và Xây dựng Đồ thị Giao thông (IC4SD-Traffic-HCM):} Chi tiết quy trình thu thập camera 608 nút, cấu trúc bộ dữ liệu ảnh gán nhãn, chuỗi thời gian, xây dựng đồ thị OSM-RBF và quy trình kiểm soát rò rỉ dữ liệu Zero-Leakage.
+    \item \textbf{Chương 4: Phương pháp Nghiên cứu Đề xuất:} Mô tả chi tiết khung làm việc 2 giai đoạn, mô hình hồi quy EfficientNet-B5 và kiến trúc mạng nơ-ron đồ thị TA-STGCN cùng thuật toán huấn luyện.
+    \item \textbf{Chương 5: Thực nghiệm, Kết quả và Đánh giá:} Trình bày kết quả đo đạc Stage 1, Stage 2 qua 5 seeds ngẫu nhiên, phân tích lan truyền sai số theo mật độ, nghiên cứu độ bền vững với nhiễu Noise Robustness, phân tích ma trận trọng số Attention và Ablation study.
+    \item \textbf{Chương 6: Thảo luận, Mô hình Triển khai và Hướng Phát triển:} Phân tích kiến trúc Edge--Cloud tiết kiệm băng thông $62.500\times$, tính kinh tế tài nguyên GPU, tính công bằng thực nghiệm, giới hạn và hướng mở rộng tương lai.
+    \item \textbf{Kết luận và Kiến nghị:} Tổng kết kết quả nghiên cứu và đề xuất ứng dụng thực tiễn.
+    \item \textbf{Tài liệu tham khảo:} Danh mục các công trình khoa học quốc tế uy tín được trích dẫn.
+\end{itemize}
