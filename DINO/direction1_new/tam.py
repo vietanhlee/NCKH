@@ -130,9 +130,13 @@ class PositionStats(nn.Module):
         # Với mỗi patch p, chạy K-means cosine
         for p in range(P):
             x_p = U[:, p, :]  # (N, d)
-            # Khởi tạo tâm ngẫu nhiên từ chính các mẫu
-            perm = torch.randperm(N, device=device)[:self.num_states]
-            centroids = x_p[perm].clone()  # (K, d)
+            # Khởi tạo tâm: nếu số frame ít hơn số trạng thái K, lặp lại mẫu có bảo vệ
+            if N < self.num_states:
+                repeat_idx = torch.randint(0, N, (self.num_states,), device=device)
+                centroids = x_p[repeat_idx].clone()
+            else:
+                perm = torch.randperm(N, device=device)[:self.num_states]
+                centroids = x_p[perm].clone()  # (K, d)
             centroids = F.normalize(centroids, p=2, dim=-1)
 
             # Lặp K-means cosine
@@ -321,8 +325,8 @@ class GMMCalibrator:
             if len(self.buffer) > self.max_buffer_size:
                 self.buffer = self.buffer[-self.max_buffer_size:]
 
-    def refit(self):
-        """Fit GMM 2 thành phần từ buffer."""
+    def refit(self, max_iters: int = 30):
+        """Fit GMM 2 thành phần từ buffer với số vòng lặp EM tùy biến."""
         if len(self.buffer) < 200:
             return
         data = np.array(self.buffer)
@@ -335,7 +339,7 @@ class GMMCalibrator:
         s2 = np.std(data) * 0.5 + 1e-3
         w = 0.5
 
-        for _ in range(10):
+        for _ in range(max(1, max_iters)):
             # E-step
             p1 = np.exp(-0.5 * ((data - c1) / s1) ** 2) / (s1 + 1e-6)
             p2 = np.exp(-0.5 * ((data - c2) / s2) ** 2) / (s2 + 1e-6)
@@ -345,11 +349,17 @@ class GMMCalibrator:
             # M-step
             n1 = np.sum(gamma1) + 1e-6
             n2 = np.sum(gamma2) + 1e-6
-            c1 = np.sum(gamma1 * data) / n1
-            c2 = np.sum(gamma2 * data) / n2
-            s1 = np.sqrt(np.sum(gamma1 * (data - c1) ** 2) / n1 + 1e-4)
-            s2 = np.sqrt(np.sum(gamma2 * (data - c2) ** 2) / n2 + 1e-4)
-            w = n2 / float(len(data))
+            new_c1 = np.sum(gamma1 * data) / n1
+            new_c2 = np.sum(gamma2 * data) / n2
+            new_s1 = np.sqrt(np.sum(gamma1 * (data - new_c1) ** 2) / n1 + 1e-4)
+            new_s2 = np.sqrt(np.sum(gamma2 * (data - new_c2) ** 2) / n2 + 1e-4)
+            new_w = n2 / float(len(data))
+
+            # Kiểm tra hội tụ sớm
+            if abs(new_c1 - c1) < 1e-4 and abs(new_c2 - c2) < 1e-4:
+                c1, c2, s1, s2, w = new_c1, new_c2, new_s1, new_s2, new_w
+                break
+            c1, c2, s1, s2, w = new_c1, new_c2, new_s1, new_s2, new_w
 
         # Đảm bảo c2 > c1 (c2 là tiền cảnh xe)
         if c2 >= c1:

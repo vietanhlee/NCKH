@@ -257,17 +257,79 @@ def save_direction_g_visuals(
     epoch: int = 1,
 ):
     """
-    Xuất biểu đồ 5 cột trực quan hóa quá trình học Tự Giám Sát Hướng G:
+    Xuất biểu đồ 6 cột trực quan hóa quá trình học Tự Giám Sát Hướng G:
       Cột 1: Ảnh gốc frame x1
       Cột 2: Bản đồ tiền cảnh bất thường TAM pi (Heatmap)
       Cột 3: Mặt nạ che phân tầng AGM (Mask)
       Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS
-      Cột 5: Bản đồ đặc trưng DINOv3 PCA Feature Map (RGB)
+      Cột 5: Standard PCA (Batch-Consistent: màu sắc nhất quán toàn batch)
+      Cột 6: Foreground DINOv2 PCA (Object-Centric: bóc tách phương tiện xe cộ)
     """
     B = min(4, x_orig.shape[0])
-    fig, axes = plt.subplots(B, 5, figsize=(18, 3.2 * B), dpi=150)
+    fig, axes = plt.subplots(B, 6, figsize=(22, 3.2 * B), dpi=150)
     if B == 1:
         axes = np.expand_dims(axes, axis=0)
+
+    # 1. Tiền xử lý PCA toàn batch để màu sắc đồng nhất tuyệt đối giữa các ảnh
+    pca_grid_batch = None
+    fg_grid_batch = None
+
+    if patch_features is not None:
+        # patch_features: (B_total, 448, D)
+        feats_np = patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
+        D_feat = feats_np.shape[-1]
+        all_feats = feats_np.reshape(-1, D_feat)  # (B * 448, D)
+
+        # A. Standard PCA toàn batch: màu của mặt đường, cây cối, xe cộ thống nhất qua mọi ảnh
+        mean_all = all_feats.mean(axis=0, keepdims=True)
+        centered_all = all_feats - mean_all
+        _, _, vt_all = np.linalg.svd(centered_all, full_matrices=False)
+        pca3_all = centered_all @ vt_all[:3].T  # (B * 448, 3)
+
+        # Chuẩn hóa phân vị 1% - 99% chung toàn batch chống bão hòa màu do outlier
+        p_min = np.percentile(pca3_all, 1, axis=0, keepdims=True)
+        p_max = np.percentile(pca3_all, 99, axis=0, keepdims=True)
+        pca3_scaled = np.clip((pca3_all - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
+        pca_grid_batch = pca3_scaled.reshape(B, 16, 28, 3)
+
+        # B. Foreground-focused DINOv2 PCA (Bóc tách chi tiết xe cộ, loại bỏ áp đảo của nền)
+        # Thành phần thứ nhất PC1 phản ánh phân tách nền vs tiền cảnh trong ViT
+        pc1 = pca3_all[:, 0]
+        # Căn chỉnh chiều dấu của PC1: kiểm tra 4 góc ảnh (vốn là nền: vỉa hè / cây cối / góc trời)
+        corners_mask = np.zeros((B, 16, 28), dtype=bool)
+        corners_mask[:, :2, :2] = True
+        corners_mask[:, :2, -2:] = True
+        corners_mask[:, -2:, :2] = True
+        corners_mask[:, -2:, -2:] = True
+        corners_flat = corners_mask.reshape(-1)
+        if pc1[corners_flat].mean() > pc1.mean():
+            pc1 = -pc1
+
+        pi_flat = pi[:B].detach().cpu().numpy().reshape(-1)
+        fg_thresh = np.percentile(pc1, 55)
+        # Điểm thuộc tiền cảnh: PC1 cao hoặc xác suất TAM pi cao
+        is_fg = (pc1 > fg_thresh) | (pi_flat > 0.30)
+
+        fg_grid_batch = np.zeros((B * 448, 3), dtype=np.float32)
+        if np.sum(is_fg) >= 16:
+            fg_feats = all_feats[is_fg]
+            fg_mean = fg_feats.mean(axis=0, keepdims=True)
+            fg_centered = fg_feats - fg_mean
+            _, _, vt_fg = np.linalg.svd(fg_centered, full_matrices=False)
+            fg_pca3 = fg_centered @ vt_fg[:3].T  # (N_fg, 3)
+
+            f_min = np.percentile(fg_pca3, 2, axis=0, keepdims=True)
+            f_max = np.percentile(fg_pca3, 98, axis=0, keepdims=True)
+            fg_scaled = np.clip((fg_pca3 - f_min) / np.maximum(f_max - f_min, 1e-6), 0.0, 1.0)
+
+            # Nền tối dịu nhẹ (dark backdrop) để xe cộ rực rỡ nổi bật
+            fg_grid_batch[~is_fg] = np.array([0.08, 0.08, 0.10], dtype=np.float32)
+            fg_grid_batch[is_fg] = fg_scaled
+        else:
+            # Fallback nếu quá ít patch tiền cảnh
+            fg_grid_batch = pca3_scaled * np.clip(pi_flat[:, None] * 1.5, 0.1, 1.0)
+
+        fg_grid_batch = fg_grid_batch.reshape(B, 16, 28, 3)
 
     for b in range(B):
         # 1. Ảnh gốc
@@ -295,37 +357,38 @@ def save_direction_g_visuals(
         axes[b, 3].set_title("Ảnh Ghép Nền Tĩnh SRS", fontsize=10, fontweight="bold")
         axes[b, 3].axis("off")
 
-        # 5. DINOv3 PCA Feature Map (Nội suy Bilinear mượt mà chuẩn Meta DINOv2/v3)
-        if patch_features is not None:
-            feats = patch_features[b].detach().cpu().numpy()  # (448, D)
-            feats_norm = feats - feats.mean(axis=0, keepdims=True)
-            u, s, vt = np.linalg.svd(feats_norm, full_matrices=False)
-            pca3 = u[:, :3]  # (448, 3)
-            # Chuẩn hóa min-max trên từng kênh thành phần chính
-            p_min = pca3.min(axis=0, keepdims=True)
-            p_max = pca3.max(axis=0, keepdims=True)
-            pca3_scaled = (pca3 - p_min) / np.maximum(p_max - p_min, 1e-6)
-            pca_grid = pca3_scaled.reshape(16, 28, 3)
+        H_orig, W_orig = img_np.shape[0], img_np.shape[1]
 
-            # Nội suy song tuyến tính (Bilinear Interpolation) lên kích thước ảnh thật
-            # Khắc phục hoàn toàn hiện tượng rỗ ô vuông 16x16 thô ráp
-            H_orig, W_orig = img_np.shape[0], img_np.shape[1]
-            pca_tensor = torch.from_numpy(pca_grid).permute(2, 0, 1).unsqueeze(0).float()
+        # 5. Standard PCA Feature Map (Màu sắc đồng bộ toàn batch, nội suy Bilinear mượt mà)
+        if pca_grid_batch is not None:
+            pca_tensor = torch.from_numpy(pca_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
             pca_smooth = F.interpolate(pca_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             pca_smooth_np = pca_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
-
             axes[b, 4].imshow(pca_smooth_np)
-            axes[b, 4].set_title("DINOv3 PCA Representation", fontsize=10, fontweight="bold")
+            axes[b, 4].set_title("Standard PCA (Toàn Cảnh)", fontsize=10, fontweight="bold")
         else:
             axes[b, 4].axis("off")
         axes[b, 4].axis("off")
 
+        # 6. Foreground DINOv2 PCA Feature Map (Object-Centric bóc tách chi tiết phương tiện)
+        if fg_grid_batch is not None:
+            fg_tensor = torch.from_numpy(fg_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
+            fg_smooth = F.interpolate(fg_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            fg_smooth_np = fg_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+            axes[b, 5].imshow(fg_smooth_np)
+            axes[b, 5].set_title("DINOv2 Foreground PCA (Xe Cộ)", fontsize=10, fontweight="bold")
+        else:
+            axes[b, 5].axis("off")
+        axes[b, 5].axis("off")
+
     plt.suptitle(f"Tiến Trình Huấn Luyện SSL Hướng G — Epoch {epoch}", fontsize=14, fontweight="bold", y=1.01)
     plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    save_dir = os.path.dirname(save_path)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
     plt.savefig(save_path, dpi=180, bbox_inches="tight")
     plt.close()
-    print(f"🖼️ [Trực Quan Hóa] Đã xuất biểu đồ học biểu diễn tại: {save_path}")
+    print(f"🖼️ [Trực Quan Hóa] Đã xuất biểu đồ học biểu diễn (6 cột đối chiếu) tại: {save_path}")
 
 
 def save_loss_curves(history: Dict[str, List[float]], save_path: str):
@@ -345,7 +408,9 @@ def save_loss_curves(history: Dict[str, List[float]], save_path: str):
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(fontsize=10)
     plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    save_dir = os.path.dirname(save_path)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
     plt.savefig(save_path, dpi=180, bbox_inches="tight")
     plt.close()
     print(f"📊 [Đồ Thị] Đã lưu đường cong tổn thất tại: {save_path}")
@@ -452,6 +517,11 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--use_amp": "use_amp", "--no_amp": "use_amp",
         "--resume": "resume",
         "--hf_token": "hf_token",
+        "--tam_warmup_frames": "tam_warmup_frames",
+        "--tam_kmeans_iters": "tam_kmeans_iters",
+        "--gmm_refit_steps": "gmm_refit_steps",
+        "--gmm_iters": "gmm_iters",
+        "--skip_tam_warmup": "skip_tam_warmup",
     }
     for arg in argv_list:
         clean_arg = arg.split("=")[0].strip()
@@ -481,6 +551,11 @@ def parse_args():
     parser.add_argument("--no_amp", dest="use_amp", action="store_false", help="Tắt Mixed Precision")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
+    parser.add_argument("--tam_warmup_frames", type=int, default=40, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means)")
+    parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
+    parser.add_argument("--gmm_refit_steps", type=int, default=10, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator")
+    parser.add_argument("--gmm_iters", type=int, default=30, help="Số vòng lặp EM khi fit GMM Calibrator")
+    parser.add_argument("--skip_tam_warmup", action="store_true", default=False, help="Bỏ qua bước khởi động TAM offline")
     parsed, unknown = parser.parse_known_args()
     if unknown:
         print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
@@ -488,6 +563,147 @@ def parse_args():
         os.environ["HF_TOKEN"] = parsed.hf_token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = parsed.hf_token
     return parsed
+
+
+def warmup_tam_offline(
+    frozen_extractor: Union[nn.Module, FrozenExtractor],
+    pos_stats: PositionStats,
+    calibrator: GMMCalibrator,
+    dataset: Dataset,
+    device: torch.device,
+    num_frames_per_cam: int = 40,
+    kmeans_iters: int = 20,
+    gmm_iters: int = 30,
+    batch_size: int = 8,
+):
+    """
+    Khởi động TAM (Temporal Atypicality Map) trước khi bước vào huấn luyện chính thức:
+    1. Trích xuất tokens đa camera để fit ma trận chiếu PCA tối ưu (embed_dim -> 64) cho FrozenExtractor.
+    2. Chạy offline K-means cosine (K=4) cho từng camera để thiết lập tâm cụm mu, trọng số w và độ phân tán s thực tế.
+    3. Thu thập các giá trị atypicality ban đầu và hiệu chuẩn sớm phân phối GMM (mu_bg, mu_fg, std_bg, std_fg).
+    """
+    print("\n" + "=" * 80)
+    print(" 🛠️ [TAM WARMUP] BẮT ĐẦU KHỞI ĐỘNG THỐNG KÊ KHÔNG-THỜI GIAN TAM OFFLINE")
+    print("=" * 80)
+    start_t = time.time()
+    raw_fe = unwrap_model(frozen_extractor)
+
+    # Chuẩn bị danh sách ảnh theo từng camera
+    cam_images = defaultdict(list)
+    if hasattr(dataset, "cam_to_files") and hasattr(dataset, "cam_to_id"):
+        for cam_key, files in dataset.cam_to_files.items():
+            cid = dataset.cam_to_id[cam_key]
+            subset = files[:num_frames_per_cam]
+            cam_images[cid] = subset
+    else:
+        # Trường hợp dataset tổng quát hoặc Synthetic
+        for idx in range(min(len(dataset), num_frames_per_cam * 16)):
+            item = dataset[idx]
+            cid = int(item["cid"])
+            if len(cam_images[cid]) < num_frames_per_cam:
+                cam_images[cid].append(item["x1"])
+
+    num_active_cams = len(cam_images)
+    print(f" 📹 Số camera phát hiện cho Warmup: {num_active_cams} camera (tối đa {num_frames_per_cam} frame/cam)")
+    pos_stats.ensure_cam_capacity(max(cam_images.keys(), default=0))
+
+    # GIAI ĐOẠN 1: FIT PCA CHO FROZENEXTRACTOR
+    # Thu thập patch tokens đa dạng từ tất cả camera để fit ma trận chiếu 64 chiều
+    if not getattr(raw_fe.is_pca_fitted, "item", lambda: False)():
+        print(" 🔍 [Giai Đoạn 1/3] Trích xuất patch tokens để Fit PCA ma trận chiếu 64 chiều...")
+        all_sample_tokens = []
+        raw_fe.backbone.eval()
+
+        for cid, img_list in cam_images.items():
+            # Chọn tối đa 10 ảnh mỗi camera để fit PCA
+            sample_imgs = img_list[:10]
+            tensors = []
+            for item in sample_imgs:
+                if isinstance(item, str):
+                    tensors.append(dataset._load_img(item))
+                else:
+                    tensors.append(item)
+            if not tensors:
+                continue
+
+            batch_x = torch.stack(tensors, dim=0).to(device)
+            target_H = 16 * raw_fe.patch_size
+            target_W = 28 * raw_fe.patch_size
+            if batch_x.shape[-2] != target_H or batch_x.shape[-1] != target_W:
+                batch_x = F.interpolate(batch_x, size=(target_H, target_W), mode="bilinear", align_corners=False)
+
+            with torch.no_grad():
+                x_norm = imagenet_normalize(batch_x)
+                _, patch_spatial = extract_tokens(raw_fe.backbone, x_norm, patch_size=raw_fe.patch_size)
+                # patch_spatial: (B, 16, 28, D)
+                B_cur, Hp, Wp, D_cur = patch_spatial.shape
+                tokens_flat = patch_spatial.reshape(B_cur * Hp * Wp, D_cur)
+                # Lấy mẫu ngẫu nhiên tối đa 1000 tokens mỗi camera
+                if tokens_flat.shape[0] > 1000:
+                    perm = torch.randperm(tokens_flat.shape[0], device=device)[:1000]
+                    tokens_flat = tokens_flat[perm]
+                all_sample_tokens.append(tokens_flat.cpu())
+
+        if all_sample_tokens:
+            collected_tokens = torch.cat(all_sample_tokens, dim=0)
+            if collected_tokens.shape[0] > 30000:
+                perm_all = torch.randperm(collected_tokens.shape[0])[:30000]
+                collected_tokens = collected_tokens[perm_all]
+            print(f"    -> Đã thu thập {collected_tokens.shape[0]} tokens đặc trưng. Đang tính phân rã PCA...")
+            raw_fe.fit_pca(collected_tokens.to(device))
+        else:
+            print("    ⚠️ Không thu thập được tokens, sử dụng ma trận trực giao ban đầu.")
+    else:
+        print(" ⏩ [Giai Đoạn 1/3] Ma trận chiếu PCA đã được fit từ trước -> Bỏ qua.")
+
+    # GIAI ĐOẠN 2: KHỞI TẠO K-MEANS CHO TỪNG CAMERA
+    print(f" 🎯 [Giai Đoạn 2/3] Chạy K-means cosine (K={pos_stats.num_states}, iters={kmeans_iters}) cho từng camera...")
+    cams_initialized = 0
+    for cid, img_list in cam_images.items():
+        if len(img_list) == 0:
+            continue
+
+        # Nạp toàn bộ frame warmup của camera này
+        cam_tensors = []
+        for item in img_list:
+            if isinstance(item, str):
+                cam_tensors.append(dataset._load_img(item))
+            else:
+                cam_tensors.append(item)
+
+        # Trích xuất đặc trưng PCA 64 chiều theo từng batch nhỏ
+        all_u = []
+        with torch.no_grad():
+            for i in range(0, len(cam_tensors), batch_size):
+                sub_batch = torch.stack(cam_tensors[i:i+batch_size], dim=0).to(device)
+                u_sub = raw_fe(sub_batch)  # (B_sub, 448, 64)
+                all_u.append(u_sub)
+        U_cam = torch.cat(all_u, dim=0)  # (N_cam, 448, 64)
+
+        # Chạy K-means cosine cho camera cid
+        pos_stats.init_kmeans(cid, U_cam, n_iters=kmeans_iters)
+        cams_initialized += 1
+
+        # Đưa các điểm khác thường atypicality vào calibrator buffer
+        with torch.no_grad():
+            cids_tensor = torch.full((U_cam.shape[0],), cid, dtype=torch.long, device=device)
+            a_cam, valid_cam = pos_stats.atypicality(cids_tensor, U_cam)
+            calibrator.push(a_cam, valid_cam)
+
+    print(f"    -> Đã khởi tạo thành công K-means trạng thái nền cho {cams_initialized} camera.")
+
+    # GIAI ĐOẠN 3: HIỆU CHUẨN SỚM PHÂN PHỐI GMM
+    print(f" 📊 [Giai Đoạn 3/3] Hiệu chuẩn GMM 2 thành phần (EM iters={gmm_iters}) từ buffer ({len(calibrator.buffer)} mẫu)...")
+    calibrator.refit(max_iters=gmm_iters)
+    if calibrator.is_fitted:
+        print(f"    ✅ GMM Hiệu chuẩn thành công: mu_bg={calibrator.mu_bg:.3f}, mu_fg={calibrator.mu_fg:.3f}, "
+              f"std_bg={calibrator.std_bg:.3f}, std_fg={calibrator.std_fg:.3f}, pi_weight={calibrator.pi_weight:.3f}")
+    else:
+        print("    ℹ️ Cần thêm mẫu atypicality trong quá trình train để hoàn tất GMM.")
+
+    elapsed = time.time() - start_t
+    print(f" ✅ [TAM WARMUP HOÀN TẤT] Thời gian thực thi: {elapsed:.2f}s")
+    print("=" * 80 + "\n")
 
 
 def train_direction_g():
@@ -869,6 +1085,26 @@ def train_direction_g():
         drop_last=False,
     )
 
+    # 6. Tự động khởi động TAM Warmup offline (Fit PCA, K-means đa camera & GMM sơ bộ)
+    raw_fe = unwrap_model(frozen_extractor)
+    need_tam_warmup = not args.skip_tam_warmup and (
+        (not getattr(raw_fe.is_pca_fitted, "item", lambda: False)())
+        or (not pos_stats.is_initialized[:pos_stats.num_cams].all())
+        or (not calibrator.is_fitted)
+    )
+    if need_tam_warmup:
+        warmup_tam_offline(
+            frozen_extractor=frozen_extractor,
+            pos_stats=pos_stats,
+            calibrator=calibrator,
+            dataset=dataset,
+            device=device,
+            num_frames_per_cam=args.tam_warmup_frames,
+            kmeans_iters=args.tam_kmeans_iters,
+            gmm_iters=args.gmm_iters,
+            batch_size=args.batch_size,
+        )
+
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
     step = start_epoch * len(loader) if start_epoch > 0 else 0
     start_time = time.time()
@@ -937,8 +1173,8 @@ def train_direction_g():
                     a2, valid2 = pos_stats.atypicality(cids, u2_f)
 
                     calibrator.push(a1, valid1)
-                    if step % 20 == 0:
-                        calibrator.refit()
+                    if step % args.gmm_refit_steps == 0:
+                        calibrator.refit(max_iters=args.gmm_iters)
                     pi1 = calibrator.posterior(a1).view(B, 16, 28)
                     pi2 = calibrator.posterior(a2).view(B, 16, 28)
 
