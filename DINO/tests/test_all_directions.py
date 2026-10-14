@@ -489,8 +489,27 @@ try:
     assert not torch.isnan(total_loss_2)
     print("   ✅ [Direction 2 New] SceneBasis, solve_ell, LossV2 pass hoàn hảo!")
 
+    # -------------------------------------------------------------
+    # 14. TEST DRIVABLE ROAD MASK EXTRACTOR
+    # -------------------------------------------------------------
+    print("\n--- [TEST 14] Drivable Road Mask Extractor ---")
+    from common.road_extractor import DaytimeFilter, VehicleOccupancyAccumulator, DrivableCorridorReconstructor
+
+    df_test = DaytimeFilter(start_hour=6, end_hour=18)
+    r_id_test, dt_test = df_test.parse_image_time("route_5_20240510_133000.jpg")
+    assert r_id_test == "5" and dt_test.hour == 13, "Parse DaytimeFilter sai"
+
+    reconstructor_test = DrivableCorridorReconstructor(seed_threshold=0.1, horizon_margin_ratio=0.15)
+    mock_heat_test = np.zeros((100, 100), dtype=np.float32)
+    mock_heat_test[40:80, 20:80] = 0.6
+    mask_res_test, stats_test = reconstructor_test.reconstruct_road_mask(mock_heat_test)
+    assert mask_res_test.shape == (100, 100) and stats_test["road_area_pct"] > 0
+    overlay_res_test = reconstructor_test.create_road_overlay(np.full((100, 100, 3), 120, dtype=np.uint8), mask_res_test)
+    assert overlay_res_test.shape == (100, 100, 3)
+    print("   ✅ [Road Mask Extractor] DaytimeFilter, Accumulator & Corridor Reconstructor pass hoàn hảo!")
+
     print("\n" + "=" * 80)
-    print(" 🎉 TOÀN BỘ CÁC HƯỚNG TRỌNG TÂM (H1 NEW, H2 NEW, H1 CŨ, H2 CŨ, COMMON) ĐỀU VƯỢT QUA TEST 100%!")
+    print(" 🎉 TOÀN BỘ CÁC HƯỚNG TRỌNG TÂM (H1 NEW, H2 NEW, H1 CŨ, H2 CŨ, ROAD MASK, COMMON) ĐỀU VƯỢT QUA TEST 100%!")
     print("=" * 80)
 
 except Exception as e:
