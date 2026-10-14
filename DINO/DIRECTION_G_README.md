@@ -130,6 +130,11 @@ Mỗi ô không gian $p$ trên một camera $c$ trong suốt lịch sử nhiều
   - Thành phần 2: Phân phối của phương tiện $\mathcal{N}(\mu_{\text{fg}}, \sigma_{\text{fg}}^2)$.
 - Xác suất hậu nghiệm thuộc về tiền cảnh phương tiện được tính qua định lý Bayes:
   $$\pi_t(p) = P(\text{Vehicle} \mid a_t(p)) \in [0, 1]$$
+- **Cơ chế Khởi động Offline Warmup TAM (`warmup_tam_offline`):**
+  Trước khi bước vào huấn luyện chính thức, pipeline tự động kích hoạt quá trình khởi động:
+  1. *Fit PCA ma trận chiếu:* Trích xuất patch tokens từ các camera để fit ma trận chiếu $384 \to 64$ thích ứng riêng với bối cảnh giao thông.
+  2. *Khởi tạo K-means cosine:* Chạy K-means ($K=4$, $20$ vòng lặp) cho từng camera để thiết lập cụm trạng thái $\mu$, tần suất $w$, và độ phân tán $s$ thực tế.
+  3. *Hiệu chuẩn sớm GMM:* Chạy thuật toán EM ($30$ vòng lặp) để xác định tham số phân phối $(\mu_{\text{bg}}, \mu_{\text{fg}}, \sigma_{\text{bg}}, \sigma_{\text{fg}})$ chuẩn xác ngay từ bước đầu.
 
 ---
 
@@ -182,6 +187,17 @@ Trong đó:
    Với $\beta = 2.0$: Các patch bị che thuộc thân xe ($\pi \approx 1$) được nhân trọng số phạt gấp **3 lần** so với các patch thuộc mặt đường trống ($\pi \approx 0$).
 3. **$\mathcal{L}_{\text{KoLeo}}$ (Kozachenko-Leonenko Entropy Regularizer):** Tối đa hóa khoảng cách giữa các vector biểu diễn trong batch, ngăn ngừa hiện tượng sụp đổ không gian đặc trưng (representation collapse).
 4. **$\mathcal{L}_{\text{RIC}}$ (Regional Instance Contrastive Loss):** Tương phản giữa các cụm patch phương tiện khác nhau trong cùng khung hình để học phân biệt xe máy vs ô tô vs xe buýt.
+
+---
+
+### 3.5. Giao Thức Trực Quan Hóa Học Biểu Diễn 6 Cột Đối Chiếu
+Hệ thống tự động xuất biểu đồ `direction1_new_progress.png` gồm 6 cột đối chiếu trực quan song song:
+1. **Ảnh Gốc $x_1$**: Khung hình camera CCTV ban đầu ($256 \times 448$).
+2. **Bản Đồ TAM $\pi$**: Heatmap màu `jet` thể hiện xác suất tiền cảnh phương tiện tại từng patch.
+3. **Mặt Nạ Che Phân Tầng AGM**: Ma trận nhị phân $16 \times 28$ patch bị che phục vụ iBOT MIM.
+4. **Ảnh Ghép Nền SRS**: Ảnh biến thể sau khi hoán đổi vùng nền tĩnh từ ngày khác.
+5. **Standard PCA (Batch-Consistent)**: Fit SVD toàn cục trên toàn batch, chuẩn hóa phân vị $1\% - 99\%$ giúp màu sắc mặt đường, cây cối đồng nhất qua mọi ảnh.
+6. **Foreground DINOv2 PCA (Object-Centric)**: Dùng $PC_1$ và $\pi$ tách nền, chạy SVD lần 2 trên các patch xe cộ, đặt trên nền tối (`dark backdrop`) giúp phương tiện phát sáng và sắc nét từng chi tiết.
 
 ---
 

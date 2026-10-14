@@ -73,6 +73,11 @@ Hướng 1 Mới kết hợp **3 kỹ thuật cốt lõi** hoạt động ở c�
   với $\mathcal{S} = \{k : w_k \ge 0.15, s_k \le 1.5 \times \text{median}(s)\}$.
 - **Hiệu chuẩn GMM 2 thành phần**:
   Sử dụng mô hình GMM 2 thành phần trên $\log a_t(p)$ để chuyển đổi sang xác suất tiền cảnh phương tiện $\pi_t(p) \in [0, 1]$ hoàn toàn không giám sát.
+- **Cơ chế Khởi động Offline Warmup TAM (`warmup_tam_offline`)**:
+  Để khắc phục triệt để hiện tượng $\mu$ ban đầu bị ngẫu nhiên làm $\pi$ bị nhiễu lốm đốm, hệ thống tự động chạy quy trình khởi động 3 giai đoạn trước Epoch 1:
+  1. *Fit PCA ma trận chiếu*: Trích xuất patch tokens từ các camera để fit ma trận chiếu $384 \to 64$ chiều thích ứng với bối cảnh giao thông.
+  2. *Khởi tạo K-means cosine*: Chạy K-means ($K=4$, $20$ vòng lặp) cho từng camera để thiết lập tâm cụm $\mu$, tần suất $w$, và độ phân tán $s$ thực tế.
+  3. *Hiệu chuẩn sớm GMM*: Thu thập điểm atypicality ban đầu và chạy thuật toán EM ($30$ vòng lặp) để xác định tham số phân phối $(\mu_{\text{bg}}, \mu_{\text{fg}}, \sigma_{\text{bg}}, \sigma_{\text{fg}})$ chuẩn xác trước khi bước vào huấn luyện.
 
 ### 2.2 SRS — Static-Region Swapping
 - **Động cơ**: Nếu nền giữ nguyên, mô hình học vẹt nền. Nếu thay nền bằng ảnh camera khác, phối cảnh và hình học mặt đường sẽ bị sai lệch. Do đó, ta **hoán đổi nền giữa các ngày khác nhau của CHÍNH camera đó**.
@@ -95,14 +100,36 @@ Hướng 1 Mới kết hợp **3 kỹ thuật cốt lõi** hoạt động ở c�
 
 ---
 
-## ⚡ 3. Kiến Trúc Mạng & Hàm Mất Mát
+## 🖼️ 3. Giao Thức Trực Quan Hóa Học Biểu Diễn 6 Cột Đối Chiếu
 
-### 3.1 Cặp mạng Teacher - Student
+Sau mỗi epoch, hệ thống tự động xuất biểu đồ trực quan hóa toàn diện [`direction1_new_progress.png`](file:///g:/nckh/checkpoints/direction1_new/direction1_new_progress.png) gồm **6 cột đối chiếu song song**:
+
+```
+[Cột 1: Ảnh Gốc x1] | [Cột 2: Bản Đồ TAM π] | [Cột 3: Mask AGM] | [Cột 4: Ghép Nền SRS] | [Cột 5: Standard PCA] | [Cột 6: Foreground DINOv2 PCA]
+```
+
+1. **Cột 1: Ảnh Gốc $x_1$**: Khung hình camera CCTV ban đầu (kích thước $256 \times 448$).
+2. **Cột 2: Bản Đồ Tiền Cảnh TAM $\pi$**: Heatmap màu `jet` chồng mờ trên ảnh gốc thể hiện xác suất xuất hiện phương tiện tại từng vị trí patch $16 \times 16$.
+3. **Cột 3: Mặt Nạ Che Phân Tầng AGM**: Ma trận nhị phân $16 \times 28$ thể hiện các patch bị che để huấn luyện nhánh tái tạo iBOT.
+4. **Cột 4: Ảnh Ghép Nền Tĩnh SRS**: Khung hình sau khi hoán đổi vùng tĩnh từ một ngày khác, giữ nguyên 100% xe cộ.
+5. **Cột 5: Standard PCA (Batch-Consistent Representation)**:
+   - Gom toàn bộ patch tokens của cả batch để tính SVD toàn cục.
+   - Chuẩn hóa phân vị $1\% - 99\%$ chung toàn batch: **Mặt đường, cây cối, xe cộ ở mọi ảnh đều có dải màu đồng nhất**, loại bỏ hoàn toàn lỗi lệch màu giữa các ảnh khi tính SVD riêng lẻ.
+6. **Cột 6: Foreground DINOv2 PCA (Object-Centric Representation)**:
+   - Ứng dụng kỹ thuật bóc tách tiền cảnh của Meta AI DINOv2: Dùng thành phần $PC_1$ kết hợp xác suất TAM $\pi > 0.30$ để lọc bỏ mặt đường tĩnh.
+   - Chạy phép phân rã SVD thứ hai **riêng biệt trên tập các patch xe cộ**.
+   - Toàn bộ dải màu RGB được dành trọn vẹn để phân biệt các chi tiết phương tiện (loại xe, đầu xe, thân xe, xe máy vs ô tô) mà không bị diện tích mặt đường áp đảo. Vùng nền được phủ tông tối nhẹ (`dark backdrop`), giúp phương tiện phát sáng và nổi bật sắc nét.
+
+---
+
+## ⚡ 4. Kiến Trúc Mạng & Hàm Mất Mát
+
+### 4.1 Cặp mạng Teacher - Student
 - **Teacher (EMA)**: Nhận frame gốc $x_1$ (không swap, không mask), chạy không gradient. Trọng số cập nhật theo cấp số nhân từ Student:
   $$\theta_{\text{teacher}} \leftarrow 0.996 \, \theta_{\text{teacher}} + 0.004 \, \theta_{\text{student}}$$
 - **Student**: Nhận ảnh $x_{\text{student}}$ (đã qua SRS) và mặt nạ che phân tầng `masks` (từ AGM). Tại các patch bị che, thay thế bằng Mask Token của DINOv3.
 
-### 3.2 Tổ hợp hàm mất mát:
+### 4.2 Tổ hợp hàm mất mát:
 $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}} + 1.0 \times \mathcal{L}_{\text{iBOT}} + 0.02 \times \mathcal{L}_{\text{KoLeo}}$$
 
 1. **$\mathcal{L}_{\text{DINO}}$ (Cross-Entropy Distillation trên `[CLS]` token)**:
@@ -114,42 +141,64 @@ $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}} + 1.0 \times \mathcal{L
 
 ---
 
-## 📁 4. Cấu Trúc Thư Mục [`direction1_new/`](file:///g:/nckh/DINO/direction1_new)
+## 📁 5. Cấu Trúc Thư Mục [`direction1_new/`](file:///g:/nckh/DINO/direction1_new)
 
 ```text
 direction1_new/
 ├── __init__.py          # Khai báo module, xuất khẩu các class cốt lõi
-├── features.py          # Trích xuất patch tokens qua DINOv3 đóng băng và PCA 64 chiều
-├── tam.py               # Lớp PositionStats (K=4 cụm trạng thái) và GMMCalibrator
+├── features.py          # Trích xuất patch tokens qua DINOv3 đóng băng và PCA 64 chiều (hỗ trợ fit_pca)
+├── tam.py               # Lớp PositionStats (K=4 cụm trạng thái) và GMMCalibrator (hỗ trợ max_iters)
 ├── srs.py               # Thuật toán static_region_swap hoán đổi nền tĩnh đa ngày
 ├── masking.py           # Chính sách che phân tầng agm_sample (Gumbel Top-K)
 ├── losses.py            # DINOLoss, iBOTPatchLoss, KoLeoLoss (kèm clamp chống NaN)
 ├── sampler.py           # Lấy mẫu theo cụm camera phục vụ SRS
 ├── toy.py               # Bộ sinh dữ liệu mô phỏng để kiểm thử nhanh
-├── train.py             # Pipeline huấn luyện tự động hỗ trợ Multi-GPU, AMP, Smart Resume
+├── train.py             # Pipeline huấn luyện: Tự động TAM Warmup, Visual 6 cột, Multi-GPU, Smart Resume
 └── README.md            # Tài liệu kỹ thuật chi tiết này
 ```
 
 ---
 
-## 🚀 5. Hướng Dẫn Sử Dụng & Huấn Luyện (CLI)
+## 🚀 6. Hướng Dẫn Sử Dụng & Huấn Luyện (CLI)
 
-### Kịch bản 1: Huấn luyện chính thức trên dữ liệu thực tế (Multi-GPU / Single-GPU)
-Hệ thống **tự động phát hiện toàn bộ GPU**, kích hoạt Mixed Precision (AMP float16) và cơ chế tự động mở rộng buffer camera:
+### Bảng đối số dòng lệnh mở rộng (CLI Arguments)
+
+| Đối số CLI | Kiểu dữ liệu | Mặc định | Mô tả chức năng |
+| :--- | :---: | :---: | :--- |
+| `--data_dir` | `str` | `None` | Thư mục chứa ảnh camera giao thông thực tế. |
+| `--model_name` | `str` | `dinov3_vits16` | Backbone DINOv3 (`dinov3_vits16`, `dinov3_vitb16`, v.v.). |
+| `--batch_size` | `int` | `4` | Kích thước batch trên mỗi GPU (tự động nhân theo số GPU). |
+| `--epochs` | `int` | `5` | Tổng số epochs huấn luyện. |
+| `--lr` | `float` | `5e-5` | Tốc độ học khởi điểm của Student (Cosine Annealing LR). |
+| `--phi` | `float` | `0.5` | Tỷ lệ ngân sách che dành cho vùng có xe trong AGM. |
+| `--q_max` | `float` | `0.6` | Tỷ lệ tối đa patch xe bị che để giữ ngữ cảnh. |
+| `--p_srs` | `float` | `0.5` | Xác suất áp dụng hoán đổi vùng tĩnh SRS trên mỗi mẫu. |
+| `--tam_warmup_frames` | `int` | `40` | Số frame mỗi camera dùng để khởi động TAM (Fit PCA & K-means). |
+| `--tam_kmeans_iters` | `int` | `20` | Số vòng lặp K-means khi khởi tạo cụm trạng thái nền. |
+| `--gmm_refit_steps` | `int` | `10` | Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator. |
+| `--gmm_iters` | `int` | `30` | Số vòng lặp EM khi fit mô hình GMM 2 thành phần. |
+| `--skip_tam_warmup` | `flag` | `False` | Bỏ qua bước khởi động TAM offline nếu muốn train ngay. |
+| `--resume` | `str` | `None` | Đường dẫn checkpoint `.pth` để tiếp tục huấn luyện an toàn. |
+
+### Kịch bản 1: Huấn luyện chính thức từ đầu (Tự động Warmup TAM)
 ```powershell
 python direction1_new/train.py `
   --data_dir output `
-  --batch_size 16 `
+  --batch_size 8 `
   --epochs 20 `
   --lr 5e-5 `
   --phi 0.5 `
   --q_max 0.6 `
   --p_srs 0.5 `
+  --tam_warmup_frames 40 `
+  --tam_kmeans_iters 20 `
+  --gmm_refit_steps 10 `
+  --gmm_iters 30 `
   --output_dir checkpoints/direction1_new
 ```
 
-### Kịch bản 2: Tiếp tục huấn luyện từ Checkpoint (Resume)
-Hệ thống tự động dọn sạch tiền tố `module.`, khôi phục trọn vẹn Model, Optimizer, Scheduler và lịch sử loss:
+### Kịch bản 2: Tiếp tục huấn luyện từ Checkpoint (Smart Resume)
+Hệ thống tự động kế thừa siêu tham số, phục hồi toàn bộ Optimizer, Scheduler mượt mà chống sốc gradient, nạp trạng thái TAM và tự động bỏ qua warmup:
 ```powershell
 python direction1_new/train.py `
   --data_dir output `
@@ -158,9 +207,12 @@ python direction1_new/train.py `
   --output_dir checkpoints/direction1_new
 ```
 
-### Kịch bản 3: Chạy kiểm thử tự động (Unit Test)
-Chạy bộ kiểm thử độc lập trong thư mục `tests/`:
+### Kịch bản 3: Chạy kiểm thử tự động toàn diện
 ```powershell
+# Chạy bộ test riêng cho Hướng 1
 python -m unittest tests/test_direction1_new.py
+
+# Chạy toàn bộ test suite cho cả 4 hướng cốt lõi
+python tests/test_all_directions.py
 ```
-*(Toàn bộ 5 test case xác thực tính toán tensor, cập nhật trực tuyến, GMM calibration, hoán đổi SRS và backward loss đều được kiểm chứng thành công 100%).*
+*(Toàn bộ 25 test cases xác thực tính toán tensor, khởi động TAM, visual 6 cột, hoán đổi SRS và backward loss đều được kiểm chứng thành công 100%).*

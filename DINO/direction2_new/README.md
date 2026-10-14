@@ -143,24 +143,47 @@ python direction2_new/train.py `
   --save_dir checkpoints/direction2_new
 ```
 
-### Bước 3: Suy luận Tách Lớp & Tự Động Xóa Xe (Inference / Road Inpainting)
-Chạy suy luận trên ảnh mới bất kỳ (hoàn toàn không cần ảnh nền lúc test):
+### Bước 3: Suy luận Tách Lớp, Xóa Xe & Phân Đoạn Phương Tiện (Inference & Instance Segmentation)
+Chạy suy luận trên ảnh mới bất kỳ (hoàn toàn không cần ảnh nền lúc test) với cơ chế tự động tách cá thể phương tiện:
 ```powershell
 python direction2_new/infer.py `
   --weights checkpoints/direction2_new/best_model.pth `
   --input_path output `
   --output_dir checkpoints/direction2_new/inferred `
-  --mode S
+  --seg_thresh 0.25 `
+  --split_instances `
+  --watershed_thresh 0.55 `
+  --close_kernel 3 `
+  --open_kernel 3 `
+  --min_area 36 `
+  --seg_mode multi
 ```
+
+#### Bảng tham số phân đoạn đối tượng nâng cao:
+| Tham số CLI | Mặc định | Ý nghĩa & Khuyến nghị điều chỉnh |
+| :--- | :---: | :--- |
+| `--seg_thresh` | `0.25` | Ngưỡng nhị phân hóa mặt nạ (tăng lên 0.30–0.35 nếu xe bị dính bóng râm/shadow phức tạp). |
+| `--split_instances` | `True` | Kích hoạt thuật toán Watershed & Distance Transform tự động tách rời các xe đi sát nhau. |
+| `--watershed_thresh`| `0.55` | Ngưỡng tìm tâm hạt giống phương tiện (tăng lên 0.65–0.75 nếu cần tách gắt các cụm xe máy dính chùm). |
+| `--close_kernel` | `3` | Kernel phép Đóng hình thái học (Morphological Close) để lấp đầy lỗ hổng bên trong thân xe. |
+| `--open_kernel` | `3` | Kernel phép Mở hình thái học (Morphological Open) để bẻ gãy các cầu nối mảnh giữa các xe. |
+| `--min_area` | `36` | Diện tích tối thiểu (pixel) để loại bỏ nhiễu hạt và vệt sơn mặt đường. |
+| `--seg_mode` | `multi`| Bảng màu hiển thị: `multi` (đa sắc phân biệt từng xe kiểu YOLO/SAM) hoặc `single` (đơn sắc). |
+
 Kết quả xuất ra gồm:
 - `*_alpha.png`: Mặt nạ phương tiện mềm (Alpha Matte).
 - `*_fg.png`: Lớp tiền cảnh phương tiện nổi.
 - `*_bg.png`: Mặt đường sạch bóng xe (Road Inpainting).
 - `*_sigma.png`: Bản đồ độ bất định quang học.
+- `*_composite.png`: Ảnh ghép đa bảng đối chiếu trực quan (Ảnh gốc, Nền xóa xe, Mask phân đoạn tách từng xe, Lớp Fg).
 
 ### Bước 4: Chạy kiểm thử tự động (Unit Test)
 Chạy bộ kiểm thử độc lập trong thư mục `tests/`:
 ```powershell
+# Chạy bộ test riêng cho Hướng 2
 python -m unittest tests/test_direction2_new.py
+
+# Chạy toàn bộ test suite cho cả 4 hướng cốt lõi
+python tests/test_all_directions.py
 ```
-*(Toàn bộ 4 test case xác thực SceneBasis, solve_ell solver, mô hình 5 đầu ra và backward LossV2 đều vượt qua thành công 100%).*
+*(Toàn bộ 25 test cases xác thực SceneBasis, solve_ell solver, mô hình 5 đầu ra, phân tách cá thể và backward LossV2 đều vượt qua thành công 100%).*
