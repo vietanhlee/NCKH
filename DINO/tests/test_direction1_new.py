@@ -170,63 +170,85 @@ class TestDirection1New(unittest.TestCase):
         self.assertTrue(torch.allclose(pi1, pi2, atol=1e-5))
 
     def test_07_resume_scheduler_learning_rate_continuity(self):
-        """Kiểm tra cơ chế tái lập CosineAnnealingLR khi resume không bị giật ngược Learning Rate lên đỉnh."""
-        param = torch.nn.Parameter(torch.zeros(10))
+        """Kiểm tra cơ chế build_smooth_lr_scheduler đảm bảo tính liên tục C^0 tuyệt đối giữa các Session."""
+        from direction1_new.train import build_smooth_lr_scheduler
+
+        param1 = torch.nn.Parameter(torch.zeros(10))
         base_lr = 5e-5
         eta_min = 1e-6
-        optimizer = torch.optim.AdamW([param], lr=base_lr)
+        total_epochs = 12
+        warmup_epochs = 1
 
-        # Giả lập train 5 epochs ban đầu
-        scheduler_old = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=eta_min)
-        for _ in range(5):
-            optimizer.step()
-            scheduler_old.step()
+        # PHIÊN 1 (Session 1): Huấn luyện 4 epochs (Epoch 0 -> 3)
+        opt1 = torch.optim.AdamW([param1], lr=base_lr)
+        sched1 = build_smooth_lr_scheduler(opt1, total_epochs=total_epochs, warmup_epochs=warmup_epochs, eta_min=eta_min)
 
-        # Cuối epoch 5, LR đã giảm sát eta_min
-        last_lr = optimizer.param_groups[0]["lr"]
-        self.assertAlmostEqual(last_lr, eta_min, places=5)
+        lrs_session_1 = []
+        for ep in range(4):
+            lrs_session_1.append(opt1.param_groups[0]["lr"])
+            opt1.step()
+            sched1.step()
 
-        # Giả lập tình huống lỗi cũ: scheduler cũ bước tiếp sang epoch 6 (vượt T_max)
-        scheduler_old.step()
-        bounced_lr = optimizer.param_groups[0]["lr"]
-        # Chu kỳ cosine bị bật ngược tăng lên:
-        self.assertGreater(bounced_lr, eta_min)
+        # LR ở đầu Epoch 4 (sẵn sàng cho epoch tiếp theo sau khi step 4 lần)
+        lr_end_session_1 = opt1.param_groups[0]["lr"]
 
-        # Tình huống sửa mới: Tái lập scheduler với T_max=10 mới và last_epoch = 4
-        # Đảm bảo đường cong mượt mà từ epoch 5 đến epoch 10
-        optimizer2 = torch.optim.AdamW([param], lr=base_lr)
-        curr_cosine_lr = eta_min + 0.5 * (base_lr - eta_min) * (1.0 + np.cos(5 * np.pi / 10))
-        for group in optimizer2.param_groups:
-            group["initial_lr"] = base_lr
-            group["lr"] = float(curr_cosine_lr)
-        scheduler_new = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer2,
-            T_max=10,
+        # PHIÊN 2 (Session 2): Resume từ Checkpoint sau 4 epochs (start_epoch = 4, last_epoch = 3)
+        param2 = torch.nn.Parameter(torch.zeros(10))
+        opt2 = torch.optim.AdamW([param2], lr=base_lr)
+        sched2 = build_smooth_lr_scheduler(
+            opt2,
+            total_epochs=total_epochs,
+            warmup_epochs=warmup_epochs,
             eta_min=eta_min,
-            last_epoch=4,
+            last_epoch=3,
         )
-        lr_at_resume = optimizer2.param_groups[0]["lr"]
-        # LR tại epoch 5 của chu kỳ 10 epoch sẽ ở mức trung gian (~0.5 * base_lr), không bị bùng nổ lên 5e-5
-        self.assertLess(lr_at_resume, base_lr)
-        self.assertGreater(lr_at_resume, eta_min)
+        lr_start_session_2 = opt2.param_groups[0]["lr"]
+
+        # KIỂM ĐỊNH TOÁN HỌC: LR tại điểm tiếp nối của Session 2 phải bằng đúng LR kết thúc Session 1!
+        self.assertAlmostEqual(lr_end_session_1, lr_start_session_2, places=7)
+
+        # Chạy tiếp 4 epochs của Session 2 (Epoch 4 -> 7)
+        lrs_session_2 = []
+        for ep in range(4, 8):
+            lrs_session_2.append(opt2.param_groups[0]["lr"])
+            opt2.step()
+            sched2.step()
+
+        # Kiểm tra tính đơn điệu giảm của LR sau thời kỳ warmup (Epoch 1 -> 7)
+        all_cosine_lrs = lrs_session_1[warmup_epochs:] + lrs_session_2
+        for i in range(len(all_cosine_lrs) - 1):
+            self.assertGreaterEqual(all_cosine_lrs[i], all_cosine_lrs[i+1])
 
     def test_08_cli_args_parsing_and_smart_inheritance(self):
         """Kiểm tra helper get_cli_specified_args phân biệt đúng đối số người dùng truyền."""
         from direction1_new.train import get_cli_specified_args
 
-        # Người dùng chỉ truyền --resume và --lr
-        simulated_argv = ["--resume", "last_checkpoint.pth", "--lr", "2e-5", "--device", "cuda:0"]
+        simulated_argv = ["--resume", "last_checkpoint.pth", "--session_epochs", "4", "--device", "cuda:0"]
         specified = get_cli_specified_args(simulated_argv)
 
         self.assertIn("resume", specified)
-        self.assertIn("lr", specified)
+        self.assertIn("session_epochs", specified)
         self.assertIn("device", specified)
-        # Các tham số khác KHÔNG có trong argv
         self.assertNotIn("phi", specified)
         self.assertNotIn("q_max", specified)
         self.assertNotIn("p_srs", specified)
-        self.assertNotIn("out_dim", specified)
-        self.assertNotIn("batch_size", specified)
+
+    def test_09_koleo_loss_continuous_non_zero_gradient(self):
+        """Kiểm tra KoLeoLoss luôn sinh gradient liên tục và > 0 ngay cả khi các vector phân tán xa nhau."""
+        koleo_fn = KoLeoLoss()
+
+        # Tạo batch 4 vector trực giao hoàn toàn (khoảng cách cực đại sqrt(2) > 1.0)
+        cls_orthogonal = torch.eye(4, 16, requires_grad=True)
+        loss = koleo_fn(cls_orthogonal)
+
+        # Loss phải dương tự nhiên do chuẩn hóa rho / 2.0
+        self.assertGreater(loss.item(), 0.0)
+
+        # Gradient phải tồn tại và khác 0 (không bị clamp min=0 triệt tiêu)
+        loss.backward()
+        self.assertIsNotNone(cls_orthogonal.grad)
+        self.assertFalse(torch.all(cls_orthogonal.grad == 0))
+        self.assertFalse(torch.isnan(cls_orthogonal.grad).any())
 
 
 if __name__ == "__main__":

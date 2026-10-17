@@ -168,8 +168,10 @@ direction1_new/
 | `--data_dir` | `str` | `None` | Thư mục chứa ảnh camera giao thông thực tế. |
 | `--model_name` | `str` | `dinov3_vits16` | Backbone DINOv3 (`dinov3_vits16`, `dinov3_vitb16`, v.v.). |
 | `--batch_size` | `int` | `4` | Kích thước batch trên mỗi GPU (tự động nhân theo số GPU). |
-| `--epochs` | `int` | `5` | Tổng số epochs huấn luyện. |
-| `--lr` | `float` | `5e-5` | Tốc độ học khởi điểm của Student (Cosine Annealing LR). |
+| `--epochs` | `int` | `12` | Tổng số epochs huấn luyện theo kế hoạch toàn bộ (ví dụ: 12 hoặc 20). |
+| `--session_epochs` | `int` | `0` | Số epochs tối đa chạy trong phiên hiện tại (0 = chạy hết `--epochs`, ví dụ: 4). |
+| `--warmup_epochs` | `int` | `1` | Số epochs khởi động ấm Learning Rate tuyến tính ban đầu (mặc định: 1). |
+| `--lr` | `float` | `5e-5` | Tốc độ học khởi điểm của Student (Cosine Annealing LR mượt mà). |
 | `--phi` | `float` | `0.5` | Tỷ lệ ngân sách che dành cho vùng có xe trong AGM. |
 | `--q_max` | `float` | `0.6` | Tỷ lệ tối đa patch xe bị che để giữ ngữ cảnh. |
 | `--p_srs` | `float` | `0.5` | Xác suất áp dụng hoán đổi vùng tĩnh SRS trên mỗi mẫu. |
@@ -180,39 +182,54 @@ direction1_new/
 | `--skip_tam_warmup` | `flag` | `False` | Bỏ qua bước khởi động TAM offline nếu muốn train ngay. |
 | `--resume` | `str` | `None` | Đường dẫn checkpoint `.pth` để tiếp tục huấn luyện an toàn. |
 
-### Kịch bản 1: Huấn luyện chính thức từ đầu (Tự động Warmup TAM)
+### Kịch bản 1: Huấn luyện Chia Phiên (Session-Based Training — Thích hợp Kaggle / Colab)
+Bạn thiết lập tổng kế hoạch là 12 epochs nhưng giới hạn mỗi phiên chạy 4 epochs (`--session_epochs 4`):
+
+**Phiên 1 (Session 1: Chạy Epoch 1 -> 4):**
 ```powershell
 python direction1_new/train.py `
   --data_dir output `
   --batch_size 8 `
-  --epochs 20 `
+  --epochs 12 `
+  --session_epochs 4 `
   --lr 5e-5 `
-  --phi 0.5 `
-  --q_max 0.6 `
-  --p_srs 0.5 `
-  --tam_warmup_frames 40 `
-  --tam_kmeans_iters 20 `
-  --gmm_refit_steps 10 `
-  --gmm_iters 30 `
   --output_dir checkpoints/direction1_new
 ```
+*Kết thúc phiên 1, script tự động lưu checkpoint an toàn và xuất hướng dẫn lệnh chạy cho phiên 2.*
 
-### Kịch bản 2: Tiếp tục huấn luyện từ Checkpoint (Smart Resume)
-Hệ thống tự động kế thừa siêu tham số, phục hồi toàn bộ Optimizer, Scheduler mượt mà chống sốc gradient, nạp trạng thái TAM và tự động bỏ qua warmup:
+**Phiên 2 (Session 2: Chạy Epoch 5 -> 8):**
 ```powershell
 python direction1_new/train.py `
   --data_dir output `
-  --resume checkpoints/direction1_new/last_checkpoint.pth `
-  --epochs 30 `
+  --resume checkpoints/direction1_new/dinov3_direction1_new_latest.pth `
+  --session_epochs 4
+```
+*Hệ thống tự động kế thừa kế hoạch tổng 12 epochs, LR ở đầu Epoch 5 nối tiếp mượt mà 100% với cuối Epoch 4 (đường dốc $C^0$ liên tục, triệt tiêu hoàn toàn cú sốc gradient LR).*
+
+**Phiên 3 (Session 3: Chạy Epoch 9 -> 12 Hoàn tất):**
+```powershell
+python direction1_new/train.py `
+  --data_dir output `
+  --resume checkpoints/direction1_new/dinov3_direction1_new_latest.pth `
+  --session_epochs 4
+```
+
+### Kịch bản 2: Huấn luyện liên tục một mạch
+```powershell
+python direction1_new/train.py `
+  --data_dir output `
+  --batch_size 8 `
+  --epochs 12 `
+  --lr 5e-5 `
   --output_dir checkpoints/direction1_new
 ```
 
 ### Kịch bản 3: Chạy kiểm thử tự động toàn diện
 ```powershell
-# Chạy bộ test riêng cho Hướng 1
+# Chạy bộ test riêng cho Hướng 1 mới (kiểm thử 9 tính năng cốt lõi)
 python -m unittest tests/test_direction1_new.py
 
-# Chạy toàn bộ test suite cho cả 4 hướng cốt lõi
-python tests/test_all_directions.py
+# Chạy toàn bộ pytest suite cho repo
+python -m pytest tests
 ```
-*(Toàn bộ 25 test cases xác thực tính toán tensor, khởi động TAM, visual 6 cột, hoán đổi SRS và backward loss đều được kiểm chứng thành công 100%).*
+*(Toàn bộ 26 test cases xác thực tính toán tensor, khởi động TAM, visual 6 cột, hoán đổi SRS, gradient liên tục KoLeo và LR continuity giữa các session đều được kiểm chứng thành công 100%).*

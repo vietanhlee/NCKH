@@ -18,15 +18,16 @@ import torch.nn.functional as F
 class KoLeoLoss(nn.Module):
     """
     Kozachenko-Leonenko differential entropy estimator (KoLeo) (DINOv2/v3).
-    Khuyến khích các feature CLS phân bố đều trên mặt cầu đơn vị, chống sụp đổ biểu diễn.
-    Bổ sung chặn an toàn epsilon và clamp để chống bùng nổ gradient khi có các frame tương tự nhau trong batch.
+    Khuyến khích các feature CLS phân bố đều trên mặt cầu đơn vị, chống sụp đổ biểu diễn (Mode Collapse).
+    Bảo toàn gradient liên tục: Chuẩn hóa khoảng cách cực đại rho / 2.0 <= 1.0 trên mặt cầu đơn vị S^{D-1}.
+    Khi đó -log(rho / 2.0) luôn >= 0 tự nhiên, loại bỏ hoàn toàn việc clamp(min=0.0) làm triệt tiêu gradient.
     """
     def __init__(self, eps: float = 1e-4):
         super().__init__()
         self.eps = eps
 
     def forward(self, student_cls: torch.Tensor) -> torch.Tensor:
-        # student_cls: (B, D), giả định đã chuẩn hóa L2
+        # student_cls: (B, D), chuẩn hóa L2 lên mặt cầu đơn vị
         x = F.normalize(student_cls, p=2, dim=-1)
         B = x.shape[0]
         if B <= 1:
@@ -37,13 +38,15 @@ class KoLeoLoss(nn.Module):
         dist_sq = 2.0 - 2.0 * dots
         # Bỏ đường chéo
         dist_sq.fill_diagonal_(float("inf"))
-        # Láng giềng gần nhất với clamp chặn an toàn
+        # Láng giềng gần nhất với clamp chặn an toàn epsilon
         min_dist_sq = dist_sq.min(dim=1)[0]
         min_dist = torch.sqrt(torch.clamp(min_dist_sq, min=self.eps ** 2))
         min_dist = torch.clamp(min_dist, min=self.eps, max=2.0)
-        # Giới hạn loss trong khoảng ổn định [0.0, 5.0]
-        loss = -torch.mean(torch.log(min_dist))
-        return torch.clamp(loss, min=0.0, max=5.0)
+        # Chuẩn hóa khoảng cách theo đường kính tối đa 2.0 của mặt cầu đơn vị S^{D-1}
+        # dist_norm = min_dist / 2.0 in (0, 1] => -log(dist_norm) >= 0 luôn dương và đạo hàm liên tục!
+        dist_norm = min_dist / 2.0
+        loss = -torch.mean(torch.log(dist_norm))
+        return torch.clamp(loss, max=5.0)
 
 
 class DINOLoss(nn.Module):
@@ -55,7 +58,7 @@ class DINOLoss(nn.Module):
         out_dim: int = 16384,
         warmup_teacher_temp: float = 0.04,
         teacher_temp: float = 0.07,
-        warmup_teacher_temp_epochs: int = 10,
+        warmup_teacher_temp_epochs: Optional[int] = None,
         nepochs: int = 100,
         student_temp: float = 0.1,
         center_momentum: float = 0.9,
@@ -65,11 +68,15 @@ class DINOLoss(nn.Module):
         self.center_momentum = center_momentum
         self.register_buffer("center", torch.zeros(1, out_dim))
 
+        # Tự động cân đối số epoch warmup nhiệt độ Teacher phù hợp với tổng số epoch kế hoạch
+        if warmup_teacher_temp_epochs is None:
+            warmup_teacher_temp_epochs = min(10, max(2, int(nepochs * 0.35)))
+
         # Lịch tăng nhiệt độ teacher
         self.teacher_temp_schedule = [
             warmup_teacher_temp + (teacher_temp - warmup_teacher_temp) * (i / max(1, warmup_teacher_temp_epochs))
             if i < warmup_teacher_temp_epochs else teacher_temp
-            for i in range(nepochs)
+            for i in range(max(nepochs, warmup_teacher_temp_epochs))
         ]
 
     def forward(

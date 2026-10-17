@@ -522,6 +522,8 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--gmm_refit_steps": "gmm_refit_steps",
         "--gmm_iters": "gmm_iters",
         "--skip_tam_warmup": "skip_tam_warmup",
+        "--session_epochs": "session_epochs", "--max_session_epochs": "session_epochs",
+        "--warmup_epochs": "warmup_epochs",
     }
     for arg in argv_list:
         clean_arg = arg.split("=")[0].strip()
@@ -535,7 +537,10 @@ def parse_args():
     parser.add_argument("--data_dir", "--origin_dir", dest="data_dir", type=str, default=None, help="Thư mục ảnh giao thông thực tế (ví dụ: output)")
     parser.add_argument("--model_name", "--backbone", dest="model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
     parser.add_argument("--batch_size", type=int, default=4, help="Kích thước batch")
-    parser.add_argument("--epochs", type=int, default=5, help="Số epochs huấn luyện")
+    parser.add_argument("--epochs", type=int, default=12, help="Tổng số epochs huấn luyện theo kế hoạch toàn bộ (mặc định: 12)")
+    parser.add_argument("--session_epochs", "--max_session_epochs", dest="session_epochs", type=int, default=0,
+                        help="Số epochs tối đa chạy trong phiên làm việc hiện tại (0 = chạy hết toàn bộ --epochs, ví dụ: 4)")
+    parser.add_argument("--warmup_epochs", type=int, default=1, help="Số epochs khởi động ấm Learning Rate tuyến tính (mặc định: 1)")
     parser.add_argument("--lr", type=float, default=5e-5, help="Tốc độ học")
     parser.add_argument("--weight_decay", type=float, default=0.04, help="Hệ số weight decay")
     parser.add_argument("--phi", type=float, default=0.5, help="Tỷ lệ che ngân sách xe AGM")
@@ -706,6 +711,43 @@ def warmup_tam_offline(
     print("=" * 80 + "\n")
 
 
+def build_smooth_lr_scheduler(
+    optimizer: torch.optim.Optimizer,
+    total_epochs: int,
+    warmup_epochs: int = 1,
+    eta_min: float = 1e-6,
+    last_epoch: int = -1,
+) -> torch.optim.lr_scheduler.LambdaLR:
+    """
+    Xây dựng Lịch trình Learning Rate mượt mà kết hợp Linear Warmup và Cosine Annealing dài hạn.
+    Đảm bảo tính liên tục tuyệt đối C^0 Continuity qua mọi phiên làm việc (Resume Sessions):
+    - Tại bất kỳ epoch t trong [0, total_epochs - 1], LR là hàm đơn trị phụ thuộc vào total_epochs kế hoạch.
+    - Khi resume session tiếp theo (start_epoch), LR xuất phát chính xác từ giá trị tiếp nối,
+      triệt tiêu hoàn toàn hiện tượng sốc gradient (LR Shock / Kick).
+    """
+    base_lr = float(optimizer.param_groups[0]["initial_lr"] if "initial_lr" in optimizer.param_groups[0] else optimizer.param_groups[0]["lr"])
+    eta_min_ratio = float(eta_min) / max(1e-12, base_lr)
+
+    def lr_lambda(current_epoch: int) -> float:
+        # current_epoch là số nguyên 0-indexed
+        if warmup_epochs > 0 and current_epoch < warmup_epochs:
+            # Linear Warmup êm ái từ mức 0.5 lên 1.0 của base_lr
+            alpha = float(current_epoch + 1) / float(warmup_epochs + 1)
+            return eta_min_ratio + (1.0 - eta_min_ratio) * alpha
+        else:
+            # Cosine Annealing suy giảm mượt mà về eta_min tại total_epochs - 1
+            cosine_steps = max(1, total_epochs - max(0, warmup_epochs))
+            progress = float(current_epoch - max(0, warmup_epochs)) / float(cosine_steps)
+            progress = min(max(progress, 0.0), 1.0)
+            return eta_min_ratio + 0.5 * (1.0 - eta_min_ratio) * (1.0 + np.cos(np.pi * progress))
+
+    for group in optimizer.param_groups:
+        if "initial_lr" not in group:
+            group["initial_lr"] = base_lr
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda, last_epoch=last_epoch)
+
+
 def train_direction_g():
     args = parse_args()
     torch.manual_seed(args.seed)
@@ -728,20 +770,24 @@ def train_direction_g():
             raise ValueError(f"❌ Checkpoint file không đúng định dạng dictionary (type={type(preloaded_ckpt)})")
 
         # Tự động kế thừa Hyperparameters từ checkpoint cũ nếu người dùng không truyền trên CLI
-        if "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
-            ckpt_args = preloaded_ckpt["args"]
-            cli_specified = get_cli_specified_args(sys.argv[1:])
-            sync_keys = ["lr", "weight_decay", "phi", "q_max", "p_srs", "out_dim", "batch_size", "model_name", "seed"]
-            restored_info = []
-            override_info = []
+        ckpt_args = preloaded_ckpt.get("args", {}) if isinstance(preloaded_ckpt.get("args"), dict) else {}
+        cli_specified = get_cli_specified_args(sys.argv[1:])
+        sync_keys = ["epochs", "warmup_epochs", "lr", "weight_decay", "phi", "q_max", "p_srs", "out_dim", "batch_size", "model_name", "seed"]
+        restored_info = []
+        override_info = []
 
-            for key in sync_keys:
-                if key in ckpt_args:
-                    if key not in cli_specified:
-                        setattr(args, key, ckpt_args[key])
-                        restored_info.append((key, ckpt_args[key]))
-                    else:
-                        override_info.append((key, getattr(args, key), ckpt_args[key]))
+        # Ưu tiên lấy total_epochs trực tiếp từ checkpoint nếu có
+        if "total_epochs" in preloaded_ckpt and "epochs" not in cli_specified:
+            args.epochs = int(preloaded_ckpt["total_epochs"])
+            restored_info.append(("epochs", args.epochs))
+
+        for key in sync_keys:
+            if key in ckpt_args:
+                if key not in cli_specified:
+                    setattr(args, key, ckpt_args[key])
+                    restored_info.append((key, ckpt_args[key]))
+                else:
+                    override_info.append((key, getattr(args, key), ckpt_args[key]))
 
             print("\n" + "=" * 80)
             print(" ⚙️ [SMART HYPERPARAMETER RESTORATION] ĐỒNG BỘ SIÊU THAM SỐ TỪ CHECKPOINT")
@@ -874,7 +920,12 @@ def train_direction_g():
 
     trainable_params = [p for p in student_model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+    scheduler = build_smooth_lr_scheduler(
+        optimizer,
+        total_epochs=args.epochs,
+        warmup_epochs=args.warmup_epochs,
+        eta_min=1e-6,
+    )
 
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
@@ -1002,10 +1053,10 @@ def train_direction_g():
         cli_specified = get_cli_specified_args(sys.argv[1:])
         if start_epoch >= args.epochs:
             if "epochs" not in cli_specified:
-                extra_epochs = 5
-                if "args" in ckpt and isinstance(ckpt["args"], dict) and "epochs" in ckpt["args"]:
+                extra_epochs = args.session_epochs if args.session_epochs > 0 else 5
+                if "args" in ckpt and isinstance(ckpt["args"], dict) and "session_epochs" in ckpt["args"]:
                     try:
-                        extra_epochs = int(ckpt["args"]["epochs"])
+                        extra_epochs = int(ckpt["args"]["session_epochs"])
                     except Exception:
                         extra_epochs = 5
                 new_total_epochs = start_epoch + extra_epochs
@@ -1016,34 +1067,28 @@ def train_direction_g():
                 print(f"\n⚠️ [Cảnh Báo Resume] Checkpoint đã hoàn thành {start_epoch}/{args.epochs} epochs.")
                 print(f"   👉 Bạn đã chỉ định --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs > {start_epoch} để tiếp tục train!\n")
 
-        # 11. Tái lập Lịch trình CosineAnnealingLR mượt mà (CHỐNG HIỆN TƯỢNG LOSS BẬT NGƯỢC TĂNG VỌT)
-        # Trong PyTorch, CosineAnnealingLR là hàm tuần hoàn. Nếu gọi load_state_dict() với số epochs mới,
-        # hoặc bước qua T_max cũ, Learning Rate sẽ bật ngược tăng vọt từ 1e-6 lên đỉnh cao nhất (gấp 50 lần),
-        # gây sốc gradient phá vỡ biểu diễn đã học khiến Loss bùng nổ!
-        # Giải pháp: Tính toán và cập nhật LR hiện tại theo đường dốc Cosine Annealing dài hạn,
-        # tái lập CosineAnnealingLR với T_max = args.epochs mới, giúp LR suy giảm êm đềm về eta_min=1e-6.
-        eta_min = 1e-6
-        curr_cosine_lr = eta_min + 0.5 * (effective_lr - eta_min) * (1.0 + np.cos(start_epoch * np.pi / max(1, args.epochs)))
-        for group in optimizer.param_groups:
-            group["initial_lr"] = effective_lr
-            group["lr"] = float(curr_cosine_lr)
-
-        remaining_epochs = max(1, args.epochs - start_epoch)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        # 11. Tái lập Lịch trình Smooth LR Scheduler liên tục (CHỐNG HIỆN TƯỢNG LOSS BẬT NGƯỢC TĂNG VỌT)
+        # Sử dụng build_smooth_lr_scheduler dựa trên total_epochs kế hoạch và last_epoch = start_epoch - 1.
+        # Điều này đảm bảo LR xuất phát chính xác từ điểm kết thúc của session trước, đường dốc C^0 liên tục,
+        # không bao giờ bị nhảy vọt LR lên đỉnh.
+        scheduler = build_smooth_lr_scheduler(
             optimizer,
-            T_max=args.epochs,
-            eta_min=eta_min,
+            total_epochs=args.epochs,
+            warmup_epochs=args.warmup_epochs,
+            eta_min=1e-6,
             last_epoch=start_epoch - 1 if start_epoch > 0 else -1,
         )
-        print(f"   📈 [Scheduler Restored] Tái lập CosineAnnealingLR: Mục tiêu {args.epochs} epochs (còn {remaining_epochs} epochs).")
-        print(f"   🎯 [Current Learning Rate] LR khởi điểm cho epoch {start_epoch + 1}: {curr_cosine_lr:.3e} (suy giảm mượt mà về 1e-6, triệt tiêu gradient shock).")
+        curr_lr = optimizer.param_groups[0]["lr"]
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        print(f"   📈 [Scheduler Restored] Đồng bộ Lịch trình Smooth LR Scheduler: Kế hoạch tổng {args.epochs} epochs (còn {remaining_epochs} epochs).")
+        print(f"   🎯 [Current Learning Rate] LR chuẩn xác cho epoch {start_epoch + 1}: {curr_lr:.3e} (liên tục 100%, triệt tiêu gradient shock).")
 
-        # 12. Cập nhật lịch nhiệt độ teacher trong DINOLoss
+        # 12. Cập nhật lịch nhiệt độ teacher trong DINOLoss phù hợp với args.epochs
         if hasattr(dino_loss_fn, "teacher_temp_schedule"):
-            warmup_epochs = 10
+            warmup_temp_epochs = min(10, max(2, int(args.epochs * 0.35)))
             dino_loss_fn.teacher_temp_schedule = [
-                0.04 + (0.07 - 0.04) * (i / max(1, warmup_epochs))
-                if i < warmup_epochs else 0.07
+                0.04 + (0.07 - 0.04) * (i / max(1, warmup_temp_epochs))
+                if i < warmup_temp_epochs else 0.07
                 for i in range(max(args.epochs, len(dino_loss_fn.teacher_temp_schedule)))
             ]
 
@@ -1120,6 +1165,10 @@ def train_direction_g():
         raw_curr_fe = unwrap_model(frozen_extractor)
         checkpoint_dict = {
             "epoch": epoch_num,
+            "total_epochs": args.epochs,
+            "session_epochs": args.session_epochs,
+            "warmup_epochs": args.warmup_epochs,
+            "completed_epoch": epoch_num,
             "student_backbone": clean_state_dict(raw_curr_s.backbone.state_dict()),
             "teacher_backbone": clean_state_dict(raw_curr_t.backbone.state_dict()),
             "student_dino_head": clean_state_dict(raw_curr_s.dino_head.state_dict()),
@@ -1147,8 +1196,17 @@ def train_direction_g():
         if is_best:
             print(f"🏆 [Checkpoint] Đã lưu mô hình tốt nhất mới (Best Loss: {best_loss:.4f}) tại: {save_path}")
 
+    # Xác định giới hạn epoch cho phiên (session) hiện tại
+    if args.session_epochs > 0:
+        session_target_epoch = min(start_epoch + args.session_epochs, args.epochs)
+        print(f"\n🎯 [Session Kế Hoạch] Phiên hiện tại sẽ chạy {session_target_epoch - start_epoch} epochs: "
+              f"Epoch {start_epoch + 1} -> Epoch {session_target_epoch} (Kế hoạch tổng: {args.epochs} epochs)\n")
+    else:
+        session_target_epoch = args.epochs
+        print(f"\n🎯 [Full Training] Huấn luyện liên tục từ Epoch {start_epoch + 1} -> Epoch {session_target_epoch}\n")
+
     try:
-        for epoch in range(start_epoch, args.epochs):
+        for epoch in range(start_epoch, session_target_epoch):
             student_model.train()
             epoch_losses = []
             epoch_dino_losses = []
@@ -1311,6 +1369,8 @@ def train_direction_g():
         json.dump({
             "history": history,
             "final_epoch": len(history["total"]),
+            "session_target_epoch": session_target_epoch,
+            "total_planned_epochs": args.epochs,
             "best_loss": best_loss,
             "num_gpus": num_gpus,
             "effective_batch_size": effective_batch_size,
@@ -1325,17 +1385,32 @@ def train_direction_g():
     elapsed_time = time.time() - start_time
     vis_path = os.path.join(args.output_dir, "direction1_new_progress.png")
 
-    print("\n" + "=" * 80)
-    print(" 🎉 [HOÀN TẤT HUẤN LUYỆN TỰ GIÁM SÁT HƯỚNG 1 MỚI (DIRECTION 1 NEW)]")
-    print("=" * 80)
-    print(f" 💾 Checkpoint Weights (Latest): {latest_checkpoint_path}")
-    print(f" 💾 Checkpoint Weights (Best)  : {best_checkpoint_path}")
-    print(f" 💾 Checkpoint Weights (Last)  : {last_checkpoint_path}")
-    print(f" 🖼️ Ảnh Trực Quan Hóa (Visual) : {vis_path}")
-    print(f" 📊 Đồ Thị Hàm Mất Mát (Loss)  : {loss_curve_path}")
-    print(f" 📈 Nhật Ký Huấn Luyện (JSON)  : {metrics_path}")
-    print(f" ⏱️ Tổng Thời Gian Thực Thi    : {elapsed_time:.2f}s")
-    print("=" * 80 + "\n")
+    if session_target_epoch < args.epochs:
+        next_session_epochs = min(args.session_epochs, args.epochs - session_target_epoch) if args.session_epochs > 0 else (args.epochs - session_target_epoch)
+        next_end = session_target_epoch + next_session_epochs
+        print("\n" + "╔" + "═" * 78 + "╗")
+        print(f"║  🎉 [SESSION HOÀN TẤT] Đã chạy xong {session_target_epoch}/{args.epochs} epochs cho phiên làm việc này!  ║")
+        print(f"║  💾 Checkpoint an toàn đã được lưu tại:                                      ║")
+        print(f"║     {latest_checkpoint_path:<72} ║")
+        print(f"║  📊 Đồ thị loss tích lũy: {loss_curve_path:<50} ║")
+        print(f"║                                                                              ║")
+        print(f"║  👉 Để chạy tiếp Session kế tiếp (Epoch {session_target_epoch + 1} -> {next_end}), bạn chỉ cần chạy lệnh:    ║")
+        cmd_resume = f"python train.py --resume {latest_checkpoint_path}"
+        if args.data_dir:
+            cmd_resume += f" --data_dir {args.data_dir}"
+        if args.session_epochs > 0:
+            cmd_resume += f" --session_epochs {args.session_epochs}"
+        print(f"║     {cmd_resume:<72} ║")
+        print("╚" + "═" * 78 + "╝\n")
+    else:
+        print("\n" + "╔" + "═" * 78 + "╗")
+        print(f"║  🏆 [XUẤT SẮC] ĐÃ HOÀN TẤT TOÀN BỘ {args.epochs}/{args.epochs} EPOCHS THEO KẾ HOẠCH!              ║")
+        print(f"║  💾 Checkpoint tối ưu nhất (Best Loss) : {best_checkpoint_path:<36} ║")
+        print(f"║  💾 Checkpoint phiên bản mới nhất      : {latest_checkpoint_path:<36} ║")
+        print(f"║  🖼️ Ảnh trực quan hóa chất lượng cao  : {vis_path:<36} ║")
+        print(f"║  📊 Toàn bộ đồ thị hàm mất mát Loss    : {loss_curve_path:<36} ║")
+        print(f"║  ⏱️ Tổng thời gian thực thi            : {elapsed_time:.2f}s                                  ║")
+        print("╚" + "═" * 78 + "╝\n")
 
     return latest_checkpoint_path
 
