@@ -664,8 +664,12 @@ def warmup_tam_offline(
     # GIAI ĐOẠN 2: KHỞI TẠO K-MEANS CHO TỪNG CAMERA
     print(f" 🎯 [Giai Đoạn 2/3] Chạy K-means cosine (K={pos_stats.num_states}, iters={kmeans_iters}) cho từng camera...")
     cams_initialized = 0
+    cams_skipped = 0
     for cid, img_list in cam_images.items():
         if len(img_list) == 0:
+            continue
+        if cid < pos_stats.num_cams and bool(pos_stats.is_initialized[cid].item()):
+            cams_skipped += 1
             continue
 
         # Nạp toàn bộ frame warmup của camera này
@@ -695,7 +699,7 @@ def warmup_tam_offline(
             a_cam, valid_cam = pos_stats.atypicality(cids_tensor, U_cam)
             calibrator.push(a_cam, valid_cam)
 
-    print(f"    -> Đã khởi tạo thành công K-means trạng thái nền cho {cams_initialized} camera.")
+    print(f"    -> Đã khởi tạo K-means mới cho {cams_initialized} camera (giữ nguyên {cams_skipped} camera đã có sẵn).")
 
     # GIAI ĐOẠN 3: HIỆU CHUẨN SỚM PHÂN PHỐI GMM
     print(f" 📊 [Giai Đoạn 3/3] Hiệu chuẩn GMM 2 thành phần (EM iters={gmm_iters}) từ buffer ({len(calibrator.buffer)} mẫu)...")
@@ -1113,7 +1117,7 @@ def train_direction_g():
             dataset = TrafficCameraDataset(data_dir=args.data_dir, img_size=(256, 448))
             print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
             if dataset.num_cams > pos_stats.num_cams:
-                pos_stats.ensure_cam_capacity(dataset.num_cams)
+                pos_stats.ensure_cam_capacity(max(0, dataset.num_cams - 1))
         except Exception as e_data:
             print(f"⚠️ [Data] Không thể nạp ảnh từ '{args.data_dir}': {e_data}. Chuyển sang SyntheticTrafficDataset...")
             dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
@@ -1132,9 +1136,10 @@ def train_direction_g():
 
     # 6. Tự động khởi động TAM Warmup offline (Fit PCA, K-means đa camera & GMM sơ bộ)
     raw_fe = unwrap_model(frozen_extractor)
+    active_cams = min(getattr(dataset, "num_cams", pos_stats.num_cams), pos_stats.num_cams)
     need_tam_warmup = not args.skip_tam_warmup and (
         (not getattr(raw_fe.is_pca_fitted, "item", lambda: False)())
-        or (not pos_stats.is_initialized[:pos_stats.num_cams].all())
+        or (not pos_stats.is_initialized[:active_cams].all())
         or (not calibrator.is_fitted)
     )
     if need_tam_warmup:

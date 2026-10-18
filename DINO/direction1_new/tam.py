@@ -233,6 +233,7 @@ class PositionStats(nn.Module):
         self.mu[cids] = new_mu
         self.w[cids] = new_w
         self.s[cids] = new_s
+        self.is_initialized[cids] = True
 
     @torch.no_grad()
     def static_set(self, cids: torch.Tensor) -> torch.Tensor:
