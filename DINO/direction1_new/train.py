@@ -1294,21 +1294,27 @@ def train_direction_g():
             print(f"📦 [CameraGroupedSampler] Đã kích hoạt bộ lấy mẫu theo nhóm Camera: "
                   f"{cams_per_batch} cams x {frames_per_camera} frames/cam = batch {actual_batch_size} ảnh.")
 
+    loader_kwargs = {
+        "num_workers": args.num_workers,
+        "pin_memory": (device.type == "cuda"),
+    }
+    if args.num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
+        loader_kwargs["persistent_workers"] = True
+
     if batch_sampler is not None:
         loader = DataLoader(
             dataset,
             batch_sampler=batch_sampler,
-            num_workers=args.num_workers,
-            pin_memory=(device.type == "cuda"),
+            **loader_kwargs,
         )
     else:
         loader = DataLoader(
             dataset,
             batch_size=effective_batch_size,
             shuffle=True,
-            num_workers=args.num_workers,
-            pin_memory=(device.type == "cuda"),
             drop_last=(num_gpus > 1 and len(dataset) > effective_batch_size),
+            **loader_kwargs,
         )
 
     # 6. Tự động khởi động TAM Warmup offline (Fit PCA, K-means đa camera & GMM sơ bộ)
