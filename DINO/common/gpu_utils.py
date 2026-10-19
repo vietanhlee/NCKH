@@ -69,12 +69,25 @@ def setup_multi_gpu(
     """
     primary_device, num_gpus, gpu_names = get_available_devices()
 
-    # Nếu người dùng chỉ định rõ 'cpu' từ CLI thì ưu tiên CPU
+    # Nếu người dùng chỉ định rõ 'cpu' từ CLI hoặc không có GPU
     if device_arg.lower() == "cpu" or num_gpus == 0:
         device = torch.device("cpu")
         model = model.to(device)
         print("🖥️ [Hardware] Chạy trên CPU (Không phát hiện GPU hoặc được chỉ định thủ công).")
         return model, device, 0, batch_size_per_gpu, base_lr
+
+    # Nếu người dùng chỉ định rõ GPU cụ thể (ví dụ: 'cuda:1', 'cuda:0')
+    if ":" in device_arg and device_arg.lower().startswith("cuda:"):
+        try:
+            dev_idx = int(device_arg.split(":")[-1])
+            target_device = torch.device(f"cuda:{dev_idx}")
+            model = model.to(target_device)
+            gpu_name = gpu_names[dev_idx] if dev_idx < len(gpu_names) else f"GPU {dev_idx}"
+            mem_gb = torch.cuda.get_device_properties(dev_idx).total_memory / (1024 ** 3)
+            print(f"⚡ [Hardware] Chạy trên GPU chuyên dụng chỉ định: {gpu_name} ({target_device}) | VRAM: {mem_gb:.2f} GB")
+            return model, target_device, 1, batch_size_per_gpu, base_lr
+        except (ValueError, IndexError):
+            pass
 
     # Chuyển mô hình sang primary GPU trước
     model = model.to(primary_device)

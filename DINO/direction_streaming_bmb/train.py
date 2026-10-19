@@ -200,22 +200,14 @@ def train_streaming_bmb(args):
         ema_eta=args.ema_eta,
     )
 
-    # 3. Thiết lập Thiết bị & Multi-GPU (Thread-Safe Per-Device Memory Bank)
-    if args.data_parallel:
-        print("⚡ [Multi-GPU DataParallel] Kích hoạt nn.DataParallel với Per-Device Memory Bank Isolation.")
-        print("   Hệ thống tự động phân tách độc lập buffer bộ nhớ cho từng GPU để triệt tiêu 100% race condition.")
-        model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
-            model=model,
-            batch_size_per_gpu=args.batch_size,
-            base_lr=args.lr,
-            device_arg=args.device,
-        )
-    else:
-        # Chế độ Single GPU Chuyên Dụng
+    # 3. Thiết lập Thiết bị & Multi-GPU Tự Động (Auto-Detect All Available GPUs)
+    # Nhờ Per-Device Memory Bank Isolation (_MemoryBankDeviceState), ST-BMB hỗ trợ 100% DataParallel song song không race condition.
+    if getattr(args, "single_gpu", False):
+        # Chế độ ép chạy Single GPU do người dùng chỉ định rõ
         if args.device.lower() == "cpu" or not torch.cuda.is_available():
             device = torch.device("cpu")
             num_gpus = 0
-            print("🖥️ [Hardware] Chạy trên CPU.")
+            print("🖥️ [Hardware] Chạy trên CPU theo yêu cầu.")
         else:
             dev_idx = 0
             if ":" in args.device:
@@ -227,13 +219,19 @@ def train_streaming_bmb(args):
             num_gpus = 1
             gpu_name = torch.cuda.get_device_name(dev_idx)
             mem_gb = torch.cuda.get_device_properties(dev_idx).total_memory / (1024 ** 3)
-            print(f"⚡ [Hardware] ST-BMB chạy trên GPU chuyên dụng: {gpu_name} ({device}) | VRAM: {mem_gb:.2f} GB")
-            if torch.cuda.device_count() > 1:
-                print(f"ℹ️ [Multi-GPU Info] Phát hiện {torch.cuda.device_count()} GPUs. ST-BMB tự động vận hành trên GPU đơn ({device}) (hoặc dùng --data_parallel để kích hoạt song song {torch.cuda.device_count()} GPUs).")
+            print(f"⚡ [Hardware] ST-BMB ép chạy trên đơn GPU theo yêu cầu (--single_gpu): {gpu_name} ({device}) | VRAM: {mem_gb:.2f} GB")
 
         model = model.to(device)
         effective_batch_size = args.batch_size
         effective_lr = args.lr
+    else:
+        # TỰ ĐỘNG nhận diện toàn bộ GPU và kích hoạt Multi-GPU DataParallel
+        model, device, num_gpus, effective_batch_size, effective_lr = setup_multi_gpu(
+            model=model,
+            batch_size_per_gpu=args.batch_size,
+            base_lr=args.lr,
+            device_arg=args.device,
+        )
 
     raw_model = unwrap_model(model)
     raw_model.set_memory_dropout(args.memory_dropout)
@@ -617,12 +615,17 @@ def parse_args():
         action="store_true",
         default=False,
         help="Duy trì bộ nhớ liên tục qua các sliding window của cùng camera (Stateful Streaming Training) để thu hẹp khoảng cách phân phối huấn luyện vs suy luận",
+    parser.add_argument(
+        "--single_gpu",
+        action="store_true",
+        default=False,
+        help="Ép chạy trên duy nhất 1 GPU ngay cả khi hệ thống có nhiều GPU (Mặc định: False - tự động nhận diện và sử dụng toàn bộ GPU)",
     )
     parser.add_argument(
         "--data_parallel",
         action="store_true",
         default=False,
-        help="Bật nn.DataParallel nếu muốn chia batch qua nhiều GPU (Mặc định False để bảo toàn chuỗi bộ nhớ Streaming)",
+        help="Tương thích ngược: kích hoạt DataParallel (Hệ thống hiện tại đã MẶC ĐỊNH tự động bật khi có đa GPU)",
     )
     parser.add_argument(
         "--resume",
