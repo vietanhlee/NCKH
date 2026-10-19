@@ -132,8 +132,11 @@ def run_streaming_inference(args):
     # 3. Nạp trọng số checkpoint đã huấn luyện kèm logging chi tiết
     if os.path.exists(args.checkpoint):
         print(f"📦 [Checkpoint] Đang nạp trọng số từ: {args.checkpoint}")
-        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-        state_dict = ckpt.get("model", ckpt.get("state_dict", ckpt))
+        try:
+            ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+        except TypeError:
+            ckpt = torch.load(args.checkpoint, map_location="cpu")
+        state_dict = ckpt.get("model", ckpt.get("model_state", ckpt.get("state_dict", ckpt)))
         # Lọc bỏ tiền tố module. nếu huấn luyện DDP
         clean_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         incompatible = model.load_state_dict(clean_state_dict, strict=False)

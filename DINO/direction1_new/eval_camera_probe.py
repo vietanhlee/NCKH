@@ -209,8 +209,11 @@ def main():
 
     if args.checkpoint and os.path.isfile(args.checkpoint):
         print(f"🔄 Nạp trọng số Student Backbone từ Checkpoint: {args.checkpoint}")
-        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-        bb_sd = ckpt.get("student_backbone", ckpt.get("model_state", {}))
+        try:
+            ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+        except TypeError:
+            ckpt = torch.load(args.checkpoint, map_location="cpu")
+        bb_sd = ckpt.get("student_backbone", ckpt.get("student", ckpt.get("model_state", ckpt.get("state_dict", ckpt))))
         smart_load_state_dict(backbone, bb_sd, strict=False, verbose=True)
 
     backbone = backbone.to(device)

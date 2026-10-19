@@ -232,7 +232,15 @@ def train_decomposition(args):
         )
         if preloaded_ckpt is not None:
             from common.gpu_utils import smart_load_state_dict
-            model_sd = ckpt_data.get("model_state", ckpt_data.get("state_dict", ckpt_data))
+            candidate_keys = ["model_state", "state_dict", "student_state", "model", "student"]
+            model_sd = None
+            if isinstance(ckpt_data, dict):
+                for ck in candidate_keys:
+                    if ck in ckpt_data and isinstance(ckpt_data[ck], dict):
+                        model_sd = ckpt_data[ck]
+                        break
+            if model_sd is None:
+                model_sd = ckpt_data
             smart_load_state_dict(raw_model, model_sd, strict=False, verbose=True)
             if "optimizer" in ckpt_data:
                 try:

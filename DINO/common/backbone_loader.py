@@ -114,8 +114,17 @@ def resolve_dino_weights(
     if weights_path and os.path.isfile(weights_path):
         return weights_path
 
-    # Hỗ trợ URL Hugging Face spec: hf://repo_id:filename
-    if weights_path and (weights_path.startswith("hf://") or ("/" in weights_path and not os.path.exists(weights_path))):
+    # Hỗ trợ URL Hugging Face spec: hf://repo_id:filename (hoặc định dạng repo_id/filename nếu không phải đường dẫn local)
+    is_hf_spec = False
+    if weights_path:
+        norm_wp = weights_path.replace("\\", "/")
+        if norm_wp.startswith("hf://"):
+            is_hf_spec = True
+        elif not os.path.exists(weights_path) and ":" not in norm_wp and norm_wp.count("/") == 1:
+            # Dạng org/repo_name (ví dụ: facebook/dinov2_vits14)
+            is_hf_spec = True
+
+    if is_hf_spec:
         try:
             from huggingface_hub import hf_hub_download
             hf_spec = weights_path.replace("hf://", "")
@@ -125,7 +134,8 @@ def resolve_dino_weights(
                 repo_id = hf_spec
                 filename = "model.safetensors"
             print(f"📥 [HuggingFace Hub] Đang tải trọng số từ {repo_id}/{filename}...")
-            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, token=hf_token)
+            token_for_dl = hf_token or load_env_credentials() or os.environ.get("HF_TOKEN") or None
+            downloaded = hf_hub_download(repo_id=repo_id, filename=filename, token=token_for_dl)
             if downloaded and os.path.isfile(downloaded):
                 return downloaded
         except Exception as e_hf_dl:
@@ -212,6 +222,96 @@ def resolve_dino_weights(
             pass
 
     return None
+
+
+def smart_load_backbone_weights(
+    backbone: nn.Module,
+    weights_path: str,
+    verbose: bool = True,
+) -> int:
+    """
+    Nạp trọng số cho Backbone an toàn tuyệt đối từ file checkpoint (.pth, .pt, .bin, .safetensors).
+    Tự động:
+      1. Đọc an toàn không crash trên mọi phiên bản PyTorch (PyTorch 2.6+ weights_only fallback).
+      2. Đọc file .safetensors qua thư viện safetensors nếu có.
+      3. Trích xuất state_dict con nếu checkpoint lưu dưới dạng dictionary phức hợp.
+      4. Bóc tách tiền tố lồng nhau: 'module.', 'student.', 'teacher.', 'model.', 'base_model.', 'encoder.', 'backbone.', '0.'
+      5. So khớp shape nghiêm ngặt: chỉ nạp tensor có kích thước khớp 100% với backbone mục tiêu.
+      6. Báo cáo tỷ lệ nạp tham số rõ ràng.
+    """
+    if not os.path.isfile(weights_path):
+        if verbose:
+            print(f"⚠️ [BackboneLoader] File trọng số không tồn tại: {weights_path}")
+        return 0
+
+    # 1. Đọc file
+    state = None
+    if str(weights_path).endswith(".safetensors"):
+        try:
+            from safetensors.torch import load_file
+            state = load_file(weights_path, device="cpu")
+        except Exception as e_st:
+            if verbose:
+                print(f"⚠️ [BackboneLoader] Safetensors notice: {e_st}. Thử nạp qua PyTorch...")
+
+    if state is None:
+        try:
+            state = torch.load(weights_path, map_location="cpu", weights_only=False)
+        except TypeError:
+            state = torch.load(weights_path, map_location="cpu")
+        except Exception as e_load:
+            if verbose:
+                print(f"❌ [BackboneLoader] Lỗi đọc checkpoint: {e_load}")
+            return 0
+
+    # 2. Trích xuất state_dict con nếu có
+    if isinstance(state, dict):
+        for candidate in ["model_state", "model", "student_state", "student", "teacher", "state_dict", "backbone"]:
+            if candidate in state and isinstance(state[candidate], dict):
+                state = state[candidate]
+                break
+
+    if not isinstance(state, dict):
+        if verbose:
+            print(f"⚠️ [BackboneLoader] Định dạng checkpoint không hợp lệ (không phải dictionary).")
+        return 0
+
+    # 3. Bóc tách tiền tố và so khớp tham số với backbone mục tiêu
+    target_state = backbone.state_dict()
+    target_keys = set(target_state.keys())
+    matched_state = {}
+    prefixes = [
+        "module.", "student.", "teacher.", "model.", "base_model.",
+        "encoder.", "backbone.", "student_model.", "teacher_model.", "0."
+    ]
+
+    for k, v in state.items():
+        clean_k = str(k)
+        changed = True
+        while changed:
+            changed = False
+            for p in prefixes:
+                if clean_k.startswith(p):
+                    clean_k = clean_k[len(p):]
+                    changed = True
+
+        if clean_k in target_keys:
+            if target_state[clean_k].shape == v.shape:
+                matched_state[clean_k] = v
+            elif verbose:
+                print(f"   ⚠️ [BackboneLoader] Lệch shape tensor '{clean_k}': Target {target_state[clean_k].shape} vs Ckpt {v.shape}")
+        elif k in target_keys and target_state[k].shape == v.shape:
+            matched_state[k] = v
+
+    if matched_state:
+        backbone.load_state_dict(matched_state, strict=False)
+        if verbose:
+            print(f"✅ [BackboneLoader] Nạp thành công {len(matched_state)}/{len(target_keys)} tham số backbone từ: {weights_path}")
+    else:
+        if verbose:
+            print(f"⚠️ [BackboneLoader] Cảnh báo: Không có tham số nào khớp với backbone mục tiêu từ: {weights_path}")
+
+    return len(matched_state)
 
 
 def get_dino_backbone(
@@ -303,18 +403,7 @@ def get_dino_backbone(
         patch_size = 16
 
     if weights_path and os.path.isfile(weights_path):
-        try:
-            state = torch.load(weights_path, map_location="cpu", weights_only=False)
-        except TypeError:
-            state = torch.load(weights_path, map_location="cpu")
-        if isinstance(state, dict):
-            for k in ["model_state", "model", "student", "teacher", "state_dict"]:
-                if k in state:
-                    state = state[k]
-                    break
-        clean_state = {k.replace("module.", "").replace("backbone.", ""): v for k, v in state.items()}
-        backbone.load_state_dict(clean_state, strict=False)
-        print(f"✅ [BackboneLoader] Nạp thành công trọng số checkpoint từ: {weights_path}")
+        smart_load_backbone_weights(backbone=backbone, weights_path=weights_path, verbose=True)
 
     backbone = backbone.to(device)
     return backbone, embed_dim, patch_size
