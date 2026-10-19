@@ -358,11 +358,14 @@ class TestDirection1New(unittest.TestCase):
             camera_to_indices=cam_dict,
             batch_cameras=2,
             frames_per_camera=3,
+            batches_per_epoch=5,
             shuffle=False,
         )
-        batch = next(iter(sampler))
+        self.assertEqual(len(sampler), 5)
+        batches = list(iter(sampler))
+        self.assertEqual(len(batches), 5)
         # Batch size phải bằng 2 * 3 = 6
-        self.assertEqual(len(batch), 6)
+        self.assertEqual(len(batches[0]), 6)
 
 
 if __name__ == "__main__":

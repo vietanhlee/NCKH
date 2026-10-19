@@ -620,6 +620,8 @@ def parse_args():
     parser.add_argument("--no_cam_sampler", dest="use_cam_sampler", action="store_false")
     parser.add_argument("--cams_per_batch", type=int, default=4, help="Số camera trong 1 batch của CameraGroupedSampler")
     parser.add_argument("--frames_per_cam", type=int, default=2, help="Số frame mỗi camera trong 1 batch của CameraGroupedSampler")
+    parser.add_argument("--batches_per_epoch", type=int, default=0,
+                        help="Số batches mỗi epoch khi bật CameraGroupedSampler (0 = 1 lượt camera ~152 batches; -1 = duyệt trọn vẹn số mẫu dataset; >0 = số batches cụ thể, v.d. 1000, 2000)")
     parser.add_argument("--out_dim", type=int, default=4096, help="Số prototype DINO/iBOT head")
     parser.add_argument("--output_dir", "--save_dir", dest="output_dir", type=str, default="checkpoints/direction1_new", help="Thư mục lưu weights")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (.pth / .safetensors)")
@@ -1259,15 +1261,38 @@ def train_direction_g():
     if args.use_cam_sampler and hasattr(dataset, "camera_to_indices"):
         valid_cam_dict = {c: idxs for c, idxs in dataset.camera_to_indices.items() if len(idxs) >= 2}
         if len(valid_cam_dict) >= 2:
+            frames_per_camera = max(2, args.frames_per_cam)
+            # Tự động đồng bộ cams_per_batch nếu người dùng chỉ định batch_size lớn hơn
+            cams_per_batch = max(1, args.cams_per_batch)
+            if args.batch_size > cams_per_batch * frames_per_camera:
+                auto_cams = max(1, args.batch_size // frames_per_camera)
+                print(f"⚙️ [Batch Sync] Tự động nâng cams_per_batch ({cams_per_batch} -> {auto_cams}) "
+                      f"để khớp với --batch_size {args.batch_size} (với {frames_per_camera} frames/cam).")
+                cams_per_batch = auto_cams
+
+            actual_batch_size = cams_per_batch * frames_per_camera
+            target_batches = None
+            if args.batches_per_epoch == -1:
+                target_batches = max(1, len(dataset) // actual_batch_size)
+                print(f"📊 [Epoch Scale] Chế độ Full Dataset Coverage: {target_batches} batches/epoch (duyệt trọn vẹn ~{len(dataset)} ảnh).")
+            elif args.batches_per_epoch > 0:
+                target_batches = args.batches_per_epoch
+                print(f"📊 [Epoch Scale] Thiết lập thủ công: {target_batches} batches/epoch (~{target_batches * actual_batch_size} ảnh).")
+            else:
+                default_batches = len(valid_cam_dict) // cams_per_batch
+                print(f"ℹ️ [Epoch Notice] Chế độ Camera-Round: {default_batches} batches/epoch (mỗi epoch duyệt qua 1 lượt 608 camera, ~{default_batches * actual_batch_size} ảnh). "
+                      f"Để duyệt toàn bộ {len(dataset)} ảnh mỗi epoch, hãy dùng --batches_per_epoch -1 hoặc tắt --no_cam_sampler.")
+
             batch_sampler = CameraGroupedSampler(
                 camera_to_indices=valid_cam_dict,
-                batch_cameras=max(1, args.cams_per_batch),
-                frames_per_camera=max(2, args.frames_per_cam),
+                batch_cameras=cams_per_batch,
+                frames_per_camera=frames_per_camera,
+                batches_per_epoch=target_batches,
                 shuffle=True,
                 drop_last=(num_gpus > 1),
             )
             print(f"📦 [CameraGroupedSampler] Đã kích hoạt bộ lấy mẫu theo nhóm Camera: "
-                  f"{args.cams_per_batch} cams x {args.frames_per_cam} frames/cam = batch {args.cams_per_batch * args.frames_per_cam}.")
+                  f"{cams_per_batch} cams x {frames_per_camera} frames/cam = batch {actual_batch_size} ảnh.")
 
     if batch_sampler is not None:
         loader = DataLoader(
