@@ -182,14 +182,18 @@ def train_decomposition(args):
         device_arg=args.device,
     )
 
-    loader = DataLoader(
-        dataset,
-        batch_size=effective_batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=(device.type == "cuda"),
-        drop_last=True,
-    )
+    loader_kwargs = {
+        "batch_size": effective_batch_size,
+        "shuffle": True,
+        "num_workers": args.num_workers,
+        "pin_memory": (device.type == "cuda"),
+        "drop_last": True,
+    }
+    if args.num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
+        loader_kwargs["persistent_workers"] = True
+
+    loader = DataLoader(dataset, **loader_kwargs)
 
     # 3. Hàm mất mát & Optimizer
     loss_fn = DecompositionLoss(
@@ -560,7 +564,8 @@ def parse_args():
     parser.add_argument("--lambda_bin", type=float, default=0.05, help="Trọng số nhị phân hóa mặt nạ (L_bin)")
     parser.add_argument("--group_by_camera_slot", action="store_true", default=False, help="Nhóm K-frame cùng trạm khác ngày để tính L_shared")
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
-    parser.add_argument("--num_workers", type=int, default=0)
+    default_workers = 4 if sys.platform != "win32" else 0
+    parser.add_argument("--num_workers", type=int, default=default_workers, help=f"Số luồng CPU nạp dữ liệu (mặc định: {default_workers})")
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)

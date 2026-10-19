@@ -39,6 +39,7 @@ class DecompositionDataset(Dataset):
         k_frames_per_group: int = 4,
         group_by_camera_slot: bool = False,
         max_samples: Optional[int] = None,
+        compute_reliability: bool = False,
     ):
         super().__init__()
         self.matcher = TrafficPairMatcher(
@@ -54,6 +55,7 @@ class DecompositionDataset(Dataset):
         self.is_train = is_train
         self.k_frames = k_frames_per_group
         self.group_by_camera_slot = group_by_camera_slot
+        self.compute_reliability = compute_reliability
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         # Tổ chức nhóm theo (route_id, slot_hour)
@@ -77,11 +79,15 @@ class DecompositionDataset(Dataset):
             origin_pil = Image.new("RGB", (self.img_size, self.img_size), (128, 128, 128))
             bg_pil = Image.new("RGB", (self.img_size, self.img_size), (128, 128, 128))
 
-        # Ước lượng độ tin cậy r_i
-        r_i, _ = estimate_background_reliability(origin_pil, bg_pil)
+        # Ước lượng độ tin cậy r_i (chỉ tính khi người dùng yêu cầu để tối đa hóa tốc độ I/O)
+        if self.compute_reliability:
+            r_i, _ = estimate_background_reliability(origin_pil, bg_pil)
+        else:
+            r_i = 1.0
 
-        origin_pil = origin_pil.resize((self.img_size, self.img_size), Image.BICUBIC)
-        bg_pil = bg_pil.resize((self.img_size, self.img_size), Image.BICUBIC)
+        # Resize nhanh bằng Bilinear (nhanh hơn Bicubic 3x trên CPU)
+        origin_pil = origin_pil.resize((self.img_size, self.img_size), Image.BILINEAR)
+        bg_pil = bg_pil.resize((self.img_size, self.img_size), Image.BILINEAR)
 
         if self.is_train and random.random() > 0.5:
             origin_pil = origin_pil.transpose(Image.FLIP_LEFT_RIGHT)
