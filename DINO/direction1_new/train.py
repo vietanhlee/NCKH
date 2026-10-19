@@ -54,6 +54,7 @@ from common.gpu_utils import (
     clean_state_dict,
     smart_load_state_dict,
 )
+from common.logger import setup_training_logger
 from direction1_new.features import FrozenExtractor
 from direction1_new.tam import PositionStats, GMMCalibrator
 from direction1_new.masking import agm_sample
@@ -634,6 +635,7 @@ def parse_args():
     parser.add_argument("--gmm_refit_steps", type=int, default=10, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator")
     parser.add_argument("--gmm_iters", type=int, default=30, help="Số vòng lặp EM khi fit GMM Calibrator")
     parser.add_argument("--skip_tam_warmup", action="store_true", default=False, help="Bỏ qua bước khởi động TAM offline")
+    parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --output_dir)")
     parsed, unknown = parser.parse_known_args()
     if unknown:
         print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
@@ -837,6 +839,13 @@ def train_direction_g():
     np.random.seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
+
+    # Tự động kích hoạt cơ chế lưu toàn bộ log phiên huấn luyện vào file
+    setup_training_logger(
+        save_dir=args.output_dir,
+        log_file=args.log_file,
+        session_title=f"HUẤN LUYỆN TỰ GIÁM SÁT DINOv3 HƯỚNG G ({args.model_name})",
+    )
 
     # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
     preloaded_ckpt = None

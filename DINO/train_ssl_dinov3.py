@@ -54,6 +54,7 @@ try:
         smart_load_state_dict,
         save_clean_checkpoint,
     )
+    from common.logger import setup_training_logger
 except ImportError:
     try:
         from DINO.common.gpu_utils import (
@@ -64,7 +65,10 @@ except ImportError:
             smart_load_state_dict,
             save_clean_checkpoint,
         )
+        from DINO.common.logger import setup_training_logger
     except ImportError:
+        def setup_training_logger(*args, **kwargs):
+            return ""
         def get_available_devices():
             if torch.cuda.is_available():
                 return torch.device("cuda:0"), torch.cuda.device_count(), [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
@@ -676,6 +680,13 @@ def cancel_gradients_last_layer(epoch: int, model: nn.Module, freeze_last_layer_
 
 
 def train_ssl_dinov3(args):
+    # Tự động kích hoạt cơ chế lưu toàn bộ log phiên huấn luyện vào file
+    setup_training_logger(
+        save_dir=args.save_dir,
+        log_file=getattr(args, "log_file", None),
+        session_title=f"HUẤN LUYỆN TỰ GIÁM SÁT DINO SSL ({args.backbone})",
+    )
+
     # Set deterministic seeds
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -1338,6 +1349,7 @@ def main():
 
     # Hugging Face Auth Token
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token for gated models")
+    parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --save_dir)")
 
     args = parser.parse_args()
 

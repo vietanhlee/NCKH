@@ -42,6 +42,7 @@ from common.gpu_utils import (
     get_cli_specified_args,
     build_smooth_lr_scheduler,
 )
+from common.logger import setup_training_logger
 from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss
@@ -95,6 +96,13 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
 
 
 def train_decomposition(args):
+    # Tự động kích hoạt cơ chế lưu toàn bộ log phiên huấn luyện vào file
+    setup_training_logger(
+        save_dir=args.save_dir,
+        log_file=getattr(args, "log_file", None),
+        session_title=f"HUẤN LUYỆN TÁCH LỚP SCENE DECOMPOSITION ({args.backbone})",
+    )
+
     # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
     preloaded_ckpt = None
     if getattr(args, "resume", None):
@@ -580,6 +588,7 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
+    parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --save_dir)")
     parsed, unknown = parser.parse_known_args()
     if unknown:
         print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")

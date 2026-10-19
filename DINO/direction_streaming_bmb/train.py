@@ -47,6 +47,7 @@ from common.gpu_utils import (
     smart_inherit_checkpoint_args,
     get_cli_specified_args,
 )
+from common.logger import setup_training_logger
 from direction_streaming_bmb.models import StreamingDecompositionNet
 from direction_streaming_bmb.losses import StreamingDecompositionLoss
 from direction_streaming_bmb.dataset import SlidingWindowTrafficDataset
@@ -141,6 +142,13 @@ def save_streaming_visual_sample(
 
 
 def train_streaming_bmb(args):
+    # Tự động kích hoạt cơ chế lưu toàn bộ log phiên huấn luyện vào file
+    setup_training_logger(
+        save_dir=args.save_dir,
+        log_file=getattr(args, "log_file", None),
+        session_title=f"HUẤN LUYỆN ST-BMB STREAMING ({args.backbone})",
+    )
+
     # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
     preloaded_ckpt = None
     if getattr(args, "resume", None):
@@ -643,6 +651,7 @@ def parse_args():
         help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện ST-BMB",
     )
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --save_dir)")
     return parser.parse_args()
 
 

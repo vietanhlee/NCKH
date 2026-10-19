@@ -23,6 +23,7 @@ from .gpu_utils import (
     save_checkpoint,
     load_checkpoint,
 )
+from .logger import setup_training_logger, close_training_logger
 
 __all__ = [
     "TrafficPairMatcher",
@@ -42,4 +43,6 @@ __all__ = [
     "smart_load_state_dict",
     "save_checkpoint",
     "load_checkpoint",
+    "setup_training_logger",
+    "close_training_logger",
 ]
