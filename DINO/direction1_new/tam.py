@@ -357,40 +357,108 @@ class GMMCalibrator:
     """
     Ước lượng GMM 2 thành phần trên log(a_t) để hiệu chuẩn điểm khác thường
     thành xác suất tiền cảnh phương tiện pi_t(p) in [0, 1].
+    
+    Cải tiến chuẩn khoa học:
+    1. Thuật toán Hồ Chứa (Vectorized Reservoir Sampling - Knuth Algorithm R):
+       Thay thế FIFO để duy trì mẫu đại diện ngẫu nhiên đồng đều (Uniform Sample)
+       của toàn bộ quá trình quan sát, triệt tiêu thiên vị cục bộ (Recency Bias).
+    2. Làm mượt tham số qua EMA (Polyak-Ruppert Parameter Averaging):
+       Triệt tiêu hiện tượng giật ngưỡng (Jittery Drift) của pi, giữ AGM và SRS ổn định tuyệt đối.
+    3. Hỗ trợ Subsampling nội frame và lưu snapshot buffer khi checkpoint.
     """
-    def __init__(self, max_buffer_size: int = 150000):
-        self.max_buffer_size = max_buffer_size
-        self.buffer = []
+    def __init__(self, max_buffer_size: int = 300000, ema_alpha: float = 0.15):
+        self.max_buffer_size = int(max_buffer_size)
+        self.ema_alpha = float(ema_alpha)
+        # Bộ đệm dạng mảng numpy float32 để vector hóa tối ưu tốc độ và tiết kiệm RAM
+        self.buffer = np.zeros(self.max_buffer_size, dtype=np.float32)
+        self.size = 0          # Số lượng mẫu hiện có trong hồ chứa
+        self.total_seen = 0    # Tổng số mẫu đã quan sát từ trước đến nay
+
         # Tham số GMM (mean, std, weight của 2 thành phần)
         # Thành phần 0: Background (log_a thấp), Thành phần 1: Foreground/Vehicle (log_a cao)
         self.mu_bg = -1.0
         self.mu_fg = 1.0
         self.std_bg = 0.8
         self.std_fg = 0.8
-        self.pi_weight = 0.3  # Tỷ lệ tiền cảnh
+        self.pi_weight = 0.3  # Tỷ lệ tiền cảnh ban đầu
         self.is_fitted = False
 
-    def push(self, a: torch.Tensor, valid: torch.Tensor):
-        """Đưa các điểm khác thường hợp lệ vào buffer."""
-        valid_a = a[valid].detach().cpu().numpy().flatten()
-        if len(valid_a) > 0:
-            log_a = np.log(np.clip(valid_a, 1e-4, 100.0))
-            self.buffer.extend(log_a.tolist())
-            if len(self.buffer) > self.max_buffer_size:
-                self.buffer = self.buffer[-self.max_buffer_size:]
+    def push(
+        self,
+        a: torch.Tensor,
+        valid: torch.Tensor,
+        max_samples: Optional[int] = None,
+        subsample_ratio: Optional[float] = None,
+    ):
+        """
+        Đưa các điểm khác thường hợp lệ vào hồ chứa Reservoir Sampling.
+        
+        Args:
+            a: Tensor điểm khác thường (B, P) hoặc bất kỳ shape nào
+            valid: Tensor boolean đánh dấu vị trí hợp lệ
+            max_samples: Hạn ngạch số mẫu tối đa (dùng cho Warmup Equal Quota)
+            subsample_ratio: Tỷ lệ lấy mẫu ngẫu nhiên (ví dụ 0.15 để giảm tương quan không gian)
+        """
+        valid_mask = valid.detach().cpu().numpy().astype(bool)
+        valid_a = a.detach().cpu().numpy()[valid_mask].flatten()
+        if len(valid_a) == 0:
+            return
+
+        # 1. Subsampling ngẫu nhiên nếu được chỉ định
+        if subsample_ratio is not None and 0.0 < subsample_ratio < 1.0:
+            sub_count = max(1, int(len(valid_a) * subsample_ratio))
+            perm = np.random.choice(len(valid_a), size=sub_count, replace=False)
+            valid_a = valid_a[perm]
+
+        # 2. Giới hạn số mẫu tối đa (Equal Quota per camera)
+        if max_samples is not None and len(valid_a) > max_samples:
+            perm = np.random.choice(len(valid_a), size=max_samples, replace=False)
+            valid_a = valid_a[perm]
+
+        log_a = np.log(np.clip(valid_a, 1e-4, 100.0)).astype(np.float32)
+        k_new = len(log_a)
+        if k_new == 0:
+            return
+
+        # 3. Thuật toán Hồ Chứa Vectorized (Vectorized Reservoir Sampling)
+        # Bước 3a: Nếu hồ chứa chưa đầy, điền vào các vị trí trống còn lại
+        if self.size < self.max_buffer_size:
+            avail = min(k_new, self.max_buffer_size - self.size)
+            self.buffer[self.size : self.size + avail] = log_a[:avail]
+            self.size += avail
+            self.total_seen += avail
+            log_a = log_a[avail:]
+            k_new = len(log_a)
+
+        # Bước 3b: Nếu hồ chứa đã đầy và vẫn còn mẫu mới, áp dụng Knuth Algorithm R vector hóa
+        if k_new > 0:
+            t_indices = np.arange(self.total_seen + 1, self.total_seen + k_new + 1)
+            # Sinh số ngẫu nhiên r_i trong [0, t_i - 1]
+            rand_floats = np.random.random(size=k_new)
+            r_indices = (rand_floats * t_indices).astype(np.int64)
+            # Những phần tử có r < max_buffer_size sẽ được đưa vào hồ chứa
+            selected_mask = r_indices < self.max_buffer_size
+            if np.any(selected_mask):
+                target_slots = r_indices[selected_mask]
+                incoming_vals = log_a[selected_mask]
+                self.buffer[target_slots] = incoming_vals
+            self.total_seen += k_new
 
     def refit(self, max_iters: int = 30):
-        """Fit GMM 2 thành phần từ buffer với số vòng lặp EM tùy biến."""
-        if len(self.buffer) < 200:
+        """
+        Fit GMM 2 thành phần từ dữ liệu hồ chứa và làm mượt tham số qua EMA.
+        Triệt tiêu sốc ngưỡng, giữ cho phân phối dự báo ổn định lâu dài.
+        """
+        if self.size < 200:
             return
-        data = np.array(self.buffer)
+        data = self.buffer[:self.size]
         
         # EM Algorithm đơn giản 2 cụm 1 chiều
         # Khởi tạo bằng phân vị 30% và 80%
-        c1 = np.percentile(data, 30)
-        c2 = np.percentile(data, 80)
-        s1 = np.std(data) * 0.5 + 1e-3
-        s2 = np.std(data) * 0.5 + 1e-3
+        c1 = float(np.percentile(data, 30))
+        c2 = float(np.percentile(data, 80))
+        s1 = float(np.std(data) * 0.5 + 1e-3)
+        s2 = float(np.std(data) * 0.5 + 1e-3)
         w = 0.5
 
         for _ in range(max(1, max_iters)):
@@ -401,13 +469,13 @@ class GMMCalibrator:
             gamma1 = 1.0 - gamma2
 
             # M-step
-            n1 = np.sum(gamma1) + 1e-6
-            n2 = np.sum(gamma2) + 1e-6
-            new_c1 = np.sum(gamma1 * data) / n1
-            new_c2 = np.sum(gamma2 * data) / n2
-            new_s1 = np.sqrt(np.sum(gamma1 * (data - new_c1) ** 2) / n1 + 1e-4)
-            new_s2 = np.sqrt(np.sum(gamma2 * (data - new_c2) ** 2) / n2 + 1e-4)
-            new_w = n2 / float(len(data))
+            n1 = float(np.sum(gamma1) + 1e-6)
+            n2 = float(np.sum(gamma2) + 1e-6)
+            new_c1 = float(np.sum(gamma1 * data) / n1)
+            new_c2 = float(np.sum(gamma2 * data) / n2)
+            new_s1 = float(np.sqrt(np.sum(gamma1 * (data - new_c1) ** 2) / n1 + 1e-4))
+            new_s2 = float(np.sqrt(np.sum(gamma2 * (data - new_c2) ** 2) / n2 + 1e-4))
+            new_w = float(n2 / float(len(data)))
 
             # Kiểm tra hội tụ sớm
             if abs(new_c1 - c1) < 1e-4 and abs(new_c2 - c2) < 1e-4:
@@ -415,16 +483,31 @@ class GMMCalibrator:
                 break
             c1, c2, s1, s2, w = new_c1, new_c2, new_s1, new_s2, new_w
 
-        # Đảm bảo c2 > c1 (c2 là tiền cảnh xe)
+        # Đảm bảo c2 > c1 (c2 là tiền cảnh phương tiện, c1 là nền đường tĩnh)
         if c2 >= c1:
-            self.mu_bg, self.mu_fg = float(c1), float(c2)
-            self.std_bg, self.std_fg = float(s1), float(s2)
-            self.pi_weight = float(w)
+            cand_mu_bg, cand_mu_fg = c1, c2
+            cand_std_bg, cand_std_fg = s1, s2
+            cand_pi = w
         else:
-            self.mu_bg, self.mu_fg = float(c2), float(c1)
-            self.std_bg, self.std_fg = float(s2), float(s1)
-            self.pi_weight = float(1.0 - w)
-        self.is_fitted = True
+            cand_mu_bg, cand_mu_fg = c2, c1
+            cand_std_bg, cand_std_fg = s2, s1
+            cand_pi = 1.0 - w
+
+        # Cập nhật tham số: Lần đầu gán trực tiếp, các lần sau cập nhật theo EMA làm mượt
+        if not self.is_fitted:
+            self.mu_bg = cand_mu_bg
+            self.mu_fg = cand_mu_fg
+            self.std_bg = cand_std_bg
+            self.std_fg = cand_std_fg
+            self.pi_weight = cand_pi
+            self.is_fitted = True
+        else:
+            alpha = self.ema_alpha
+            self.mu_bg = (1.0 - alpha) * self.mu_bg + alpha * cand_mu_bg
+            self.mu_fg = (1.0 - alpha) * self.mu_fg + alpha * cand_mu_fg
+            self.std_bg = (1.0 - alpha) * self.std_bg + alpha * cand_std_bg
+            self.std_fg = (1.0 - alpha) * self.std_fg + alpha * cand_std_fg
+            self.pi_weight = (1.0 - alpha) * self.pi_weight + alpha * cand_pi
 
     def posterior(self, a: torch.Tensor) -> torch.Tensor:
         """
@@ -436,21 +519,27 @@ class GMMCalibrator:
         log_a = torch.log(a.clamp(min=1e-4, max=100.0))
 
         if not self.is_fitted:
-            # Fallback sigmoid chuẩn hóa mềm
+            # Fallback sigmoid chuẩn hóa mềm khi chưa fit
             return torch.sigmoid(1.5 * (log_a - 0.5))
 
         # Tính mật độ Gaussian của 2 thành phần
         log_p_bg = -0.5 * ((log_a - self.mu_bg) / self.std_bg) ** 2 - np.log(self.std_bg + 1e-6)
         log_p_fg = -0.5 * ((log_a - self.mu_fg) / self.std_fg) ** 2 - np.log(self.std_fg + 1e-6)
 
-        # Bayes rule
+        # Định lý Bayes
         p_bg = (1.0 - self.pi_weight) * torch.exp(log_p_bg.clamp(min=-20.0, max=20.0))
         p_fg = self.pi_weight * torch.exp(log_p_fg.clamp(min=-20.0, max=20.0))
         pi = p_fg / (p_fg + p_bg + 1e-8)
         return pi.clamp(0.0, 1.0)
 
     def state_dict(self) -> dict:
-        """Xuất trạng thái GMM Calibrator để lưu vào checkpoint."""
+        """Xuất trạng thái GMM Calibrator và snapshot hồ chứa để lưu vào checkpoint."""
+        # Lưu snapshot hồ chứa đại diện (tối đa 15,000 điểm ~ 60 KB) để resume mượt mà
+        snap = self.buffer[:self.size]
+        if len(snap) > 15000:
+            perm = np.random.choice(len(snap), size=15000, replace=False)
+            snap = snap[perm]
+
         return {
             "mu_bg": float(self.mu_bg),
             "mu_fg": float(self.mu_fg),
@@ -459,10 +548,13 @@ class GMMCalibrator:
             "pi_weight": float(self.pi_weight),
             "is_fitted": bool(self.is_fitted),
             "max_buffer_size": int(self.max_buffer_size),
+            "ema_alpha": float(self.ema_alpha),
+            "total_seen": int(self.total_seen),
+            "buffer_snapshot": snap.astype(np.float32),
         }
 
     def load_state_dict(self, state: dict):
-        """Khôi phục trạng thái GMM Calibrator từ checkpoint."""
+        """Khôi phục trạng thái GMM Calibrator và nạp lại snapshot hồ chứa từ checkpoint."""
         if not isinstance(state, dict):
             return
         self.mu_bg = float(state.get("mu_bg", -1.0))
@@ -472,5 +564,22 @@ class GMMCalibrator:
         self.pi_weight = float(state.get("pi_weight", 0.3))
         self.is_fitted = bool(state.get("is_fitted", False))
         if "max_buffer_size" in state:
-            self.max_buffer_size = int(state["max_buffer_size"])
+            new_max = int(state["max_buffer_size"])
+            if new_max != self.max_buffer_size:
+                # Điều chỉnh kích thước buffer nếu cần
+                new_buf = np.zeros(new_max, dtype=np.float32)
+                copy_len = min(self.size, new_max)
+                new_buf[:copy_len] = self.buffer[:copy_len]
+                self.buffer = new_buf
+                self.max_buffer_size = new_max
+                self.size = copy_len
+        if "ema_alpha" in state:
+            self.ema_alpha = float(state["ema_alpha"])
+        if "total_seen" in state:
+            self.total_seen = int(state["total_seen"])
+        if "buffer_snapshot" in state and isinstance(state["buffer_snapshot"], np.ndarray):
+            snap = state["buffer_snapshot"]
+            n_snap = min(len(snap), self.max_buffer_size)
+            self.buffer[:n_snap] = snap[:n_snap]
+            self.size = max(self.size, n_snap)
 

@@ -578,6 +578,8 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--gmm_buffer_size": "gmm_buffer_size",
         "--gmm_refit_steps": "gmm_refit_steps",
         "--gmm_iters": "gmm_iters",
+        "--gmm_ema_alpha": "gmm_ema_alpha",
+        "--gmm_subsample_ratio": "gmm_subsample_ratio",
         "--skip_tam_warmup": "skip_tam_warmup",
         "--session_epochs": "session_epochs", "--max_session_epochs": "session_epochs",
         "--warmup_epochs": "warmup_epochs",
@@ -634,11 +636,13 @@ def parse_args():
     parser.add_argument("--no_amp", dest="use_amp", action="store_false", help="Tắt Mixed Precision")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
-    parser.add_argument("--tam_warmup_frames", type=int, default=120, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 120 frame)")
+    parser.add_argument("--tam_warmup_frames", type=int, default=200, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 200 frame)")
     parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
-    parser.add_argument("--gmm_buffer_size", type=int, default=150000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 150000 mẫu)")
-    parser.add_argument("--gmm_refit_steps", type=int, default=10, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator")
+    parser.add_argument("--gmm_buffer_size", type=int, default=300000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 300000 mẫu)")
+    parser.add_argument("--gmm_refit_steps", type=int, default=100, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator (mặc định: 100)")
     parser.add_argument("--gmm_iters", type=int, default=30, help="Số vòng lặp EM khi fit GMM Calibrator")
+    parser.add_argument("--gmm_ema_alpha", type=float, default=0.15, help="Hệ số EMA làm mượt tham số GMM khi refit (mặc định: 0.15)")
+    parser.add_argument("--gmm_subsample_ratio", type=float, default=0.15, help="Tỷ lệ subsample patch ngẫu nhiên khi train để giảm tương quan không gian (mặc định: 0.15)")
     parser.add_argument("--skip_tam_warmup", action="store_true", default=False, help="Bỏ qua bước khởi động TAM offline")
     parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --output_dir)")
     parsed, unknown = parser.parse_known_args()
@@ -656,7 +660,7 @@ def warmup_tam_offline(
     calibrator: GMMCalibrator,
     dataset: Dataset,
     device: torch.device,
-    num_frames_per_cam: int = 120,
+    num_frames_per_cam: int = 200,
     kmeans_iters: int = 20,
     gmm_iters: int = 30,
     batch_size: int = 8,
@@ -665,10 +669,11 @@ def warmup_tam_offline(
     Khởi động TAM (Temporal Atypicality Map) trước khi bước vào huấn luyện chính thức:
     1. Trích xuất tokens đa camera để fit ma trận chiếu PCA tối ưu (embed_dim -> 64) cho FrozenExtractor.
     2. Chạy offline K-means cosine (K=4) cho từng camera để thiết lập tâm cụm mu, trọng số w và độ phân tán s thực tế.
-    3. Thu thập các giá trị atypicality ban đầu và hiệu chuẩn sớm phân phối GMM (mu_bg, mu_fg, std_bg, std_fg).
+    3. Thu thập các giá trị atypicality ban đầu theo hạn ngạch cân bằng (Equal Quota) qua 100% camera,
+       sau đó hiệu chuẩn phân phối GMM (mu_bg, mu_fg, std_bg, std_fg).
     """
     print("\n" + "=" * 80)
-    print(" 🛠️ [TAM WARMUP] BẮT ĐẦU KHỞI ĐỘNG THỐNG KÊ KHÔNG-THỜI GIAN TAM OFFLINE")
+    print(" 🛠️  [TAM WARMUP] BẮT ĐẦU KHỞI ĐỘNG THỐNG KÊ KHÔNG-THỜI GIAN TAM OFFLINE")
     print("=" * 80)
     start_t = time.time()
     raw_fe = unwrap_model(frozen_extractor)
@@ -747,8 +752,12 @@ def warmup_tam_offline(
     else:
         print(" ⏩ [Giai Đoạn 1/3] Ma trận chiếu PCA đã được fit từ trước -> Bỏ qua.")
 
-    # GIAI ĐOẠN 2: KHỞI TẠO K-MEANS CHO TỪNG CAMERA
+    # GIAI ĐOẠN 2: KHỞI TẠO K-MEANS CHO TỪNG CAMERA VỚI EQUAL QUOTA BUFFER SAMPLING
     print(f" 🎯 [Giai Đoạn 2/3] Chạy K-means cosine (K={pos_stats.num_states}, iters={kmeans_iters}) cho từng camera...")
+    # Tính hạn ngạch mẫu công bằng (Equal Quota) cho từng camera để đảm bảo 100% camera đều có mặt trong buffer
+    quota_per_cam = max(100, int(np.ceil(calibrator.max_buffer_size / max(1, num_active_cams))))
+    print(f"    -> Cơ chế Equal Quota Sampling: Tối đa {quota_per_cam} mẫu/cam (đảm bảo cân bằng qua toàn bộ {num_active_cams} camera)")
+
     cams_initialized = 0
     cams_skipped = 0
     for cid, img_list in cam_images.items():
@@ -779,16 +788,17 @@ def warmup_tam_offline(
         pos_stats.init_kmeans(cid, U_cam, n_iters=kmeans_iters)
         cams_initialized += 1
 
-        # Đưa các điểm khác thường atypicality vào calibrator buffer
+        # Đưa các điểm khác thường atypicality vào calibrator buffer theo quota công bằng
         with torch.no_grad():
             cids_tensor = torch.full((U_cam.shape[0],), cid, dtype=torch.long, device=device)
             a_cam, valid_cam = pos_stats.atypicality(cids_tensor, U_cam)
-            calibrator.push(a_cam, valid_cam)
+            calibrator.push(a_cam, valid_cam, max_samples=quota_per_cam)
 
     print(f"    -> Đã khởi tạo K-means mới cho {cams_initialized} camera (giữ nguyên {cams_skipped} camera đã có sẵn).")
 
     # GIAI ĐOẠN 3: HIỆU CHUẨN SỚM PHÂN PHỐI GMM
-    print(f" 📊 [Giai Đoạn 3/3] Hiệu chuẩn GMM 2 thành phần (EM iters={gmm_iters}) từ buffer ({len(calibrator.buffer)} mẫu)...")
+    current_samples = getattr(calibrator, "size", len(calibrator.buffer))
+    print(f" 📊 [Giai Đoạn 3/3] Hiệu chuẩn GMM 2 thành phần (EM iters={gmm_iters}) từ buffer ({current_samples} mẫu đại diện)...")
     calibrator.refit(max_iters=gmm_iters)
     if calibrator.is_fitted:
         print(f"    ✅ GMM Hiệu chuẩn thành công: mu_bg={calibrator.mu_bg:.3f}, mu_fg={calibrator.mu_fg:.3f}, "
@@ -1009,7 +1019,7 @@ def train_direction_g():
         frozen_extractor = nn.DataParallel(frozen_extractor)
 
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
-    calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size)
+    calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size, ema_alpha=args.gmm_ema_alpha)
 
     # 4. Losses, Metric Heads & Optimizer
     dino_loss_fn = DINOLoss(out_dim=args.out_dim, nepochs=args.epochs).to(device)
@@ -1135,7 +1145,12 @@ def train_direction_g():
             calibrator.load_state_dict(ckpt["calibrator"])
             if "gmm_buffer_size" in cli_specified:
                 calibrator.max_buffer_size = args.gmm_buffer_size
-            print(f"   🎯 [GMMCalibrator] Khôi phục phân phối GMM: mu_bg={calibrator.mu_bg:.2f}, mu_fg={calibrator.mu_fg:.2f}, std_bg={calibrator.std_bg:.2f}, std_fg={calibrator.std_fg:.2f}, pi_weight={calibrator.pi_weight:.2f} (buffer_size={calibrator.max_buffer_size})")
+            if "gmm_ema_alpha" in cli_specified:
+                calibrator.ema_alpha = args.gmm_ema_alpha
+            current_samples = getattr(calibrator, "size", len(calibrator.buffer))
+            print(f"   🎯 [GMMCalibrator] Khôi phục phân phối GMM: mu_bg={calibrator.mu_bg:.2f}, mu_fg={calibrator.mu_fg:.2f}, "
+                  f"std_bg={calibrator.std_bg:.2f}, std_fg={calibrator.std_fg:.2f}, pi_weight={calibrator.pi_weight:.2f} "
+                  f"(buffer_size={calibrator.max_buffer_size}, samples={current_samples}, ema_alpha={calibrator.ema_alpha})")
         else:
             print("   ℹ️ [GMMCalibrator] Checkpoint trước chưa lưu GMM, hệ thống sẽ tự động hiệu chuẩn sau 20 bước.")
 
@@ -1434,7 +1449,8 @@ def train_direction_g():
                     a1, valid1 = pos_stats.atypicality(cids, u1_f)
                     a2, valid2 = pos_stats.atypicality(cids2, u2_f)
 
-                    calibrator.push(a1, valid1)
+                    # Đẩy mẫu vào hồ chứa Reservoir Sampling với subsampling để giảm tương quan không gian nội frame
+                    calibrator.push(a1, valid1, subsample_ratio=args.gmm_subsample_ratio)
                     if step % args.gmm_refit_steps == 0:
                         calibrator.refit(max_iters=args.gmm_iters)
 

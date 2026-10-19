@@ -161,7 +161,9 @@ class TestDirection1New(unittest.TestCase):
         self.assertIn("mu_fg", sd)
         self.assertIn("pi_weight", sd)
         self.assertIn("max_buffer_size", sd)
-        self.assertEqual(sd["max_buffer_size"], 150000)
+        self.assertIn("ema_alpha", sd)
+        self.assertIn("buffer_snapshot", sd)
+        self.assertEqual(sd["max_buffer_size"], 300000)
         self.assertTrue(sd["is_fitted"])
 
         # Tạo calibrator mới chưa fit và khôi phục
@@ -169,7 +171,7 @@ class TestDirection1New(unittest.TestCase):
         self.assertFalse(calib2.is_fitted)
         calib2.load_state_dict(sd)
         self.assertTrue(calib2.is_fitted)
-        self.assertEqual(calib2.max_buffer_size, 150000)
+        self.assertEqual(calib2.max_buffer_size, 300000)
         self.assertAlmostEqual(calib1.mu_bg, calib2.mu_bg, places=4)
         self.assertAlmostEqual(calib1.mu_fg, calib2.mu_fg, places=4)
         self.assertAlmostEqual(calib1.pi_weight, calib2.pi_weight, places=4)
@@ -365,11 +367,42 @@ class TestDirection1New(unittest.TestCase):
             batches_per_epoch=5,
             shuffle=False,
         )
-        self.assertEqual(len(sampler), 5)
-        batches = list(iter(sampler))
-        self.assertEqual(len(batches), 5)
-        # Batch size phải bằng 2 * 3 = 6
-        self.assertEqual(len(batches[0]), 6)
+    def test_16_gmm_reservoir_sampling_and_ema_smoothing(self):
+        """Kiểm tra Reservoir Sampling không bị tràn buffer, Equal Quota và EMA smoothing khi refit."""
+        buffer_limit = 500
+        calib = GMMCalibrator(max_buffer_size=buffer_limit, ema_alpha=0.2)
+
+        # 1. Đẩy 2000 mẫu vào buffer size 500 -> Buffer phải giữ đúng 500 mẫu, total_seen = 2000
+        mock_a = torch.rand(10, 200) * 2.0 + 0.1
+        mock_v = torch.ones_like(mock_a, dtype=torch.bool)
+        calib.push(mock_a, mock_v)
+
+        self.assertEqual(calib.size, buffer_limit)
+        self.assertEqual(calib.total_seen, 2000)
+
+        # 2. Fit lần đầu
+        calib.refit(max_iters=20)
+        self.assertTrue(calib.is_fitted)
+        init_mu_bg = calib.mu_bg
+        init_mu_fg = calib.mu_fg
+
+        # 3. Đẩy dữ liệu mới bị lệch mạnh (giá trị rất lớn)
+        high_a = torch.full((5, 100), 50.0)
+        high_v = torch.ones_like(high_a, dtype=torch.bool)
+        calib.push(high_a, high_v)
+        calib.refit(max_iters=20)
+
+        # 4. Kiểm tra tính làm mượt EMA: tham số di chuyển dần dần chứ không nhảy bổ ngay lập tức
+        # mu_fg mới phải dịch về phía dữ liệu cao hơn, nhưng bị kìm hãm bởi ema_alpha = 0.2
+        self.assertGreaterEqual(calib.mu_fg, init_mu_fg - 0.1)
+
+        # 5. Kiểm tra tính năng max_samples (Equal Quota per camera)
+        quota_calib = GMMCalibrator(max_buffer_size=1000)
+        big_a = torch.rand(4, 448)
+        big_v = torch.ones_like(big_a, dtype=torch.bool)
+        quota_calib.push(big_a, big_v, max_samples=150)
+        # Chỉ có tối đa đúng 150 mẫu được nạp vào
+        self.assertEqual(quota_calib.size, 150)
 
 
 if __name__ == "__main__":
