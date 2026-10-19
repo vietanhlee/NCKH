@@ -159,11 +159,12 @@ def train_decomposition(args):
     print(f"✅ [Data] Đã nạp {len(dataset)} mẫu huấn luyện.")
 
     # 2. Khởi tạo Mô hình & Tự động cấu hình Toàn bộ GPU (Multi-GPU Engine)
+    effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
         pretrained=True,
         device=args.device,
-        weights_path=args.weights,
+        weights_path=effective_backbone_weights,
         hf_token=args.hf_token,
     )
     base_model = TrafficDecompositionNet(

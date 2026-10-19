@@ -179,10 +179,11 @@ def train_streaming_bmb(args):
     os.makedirs(vis_dir, exist_ok=True)
 
     # 1. Khởi tạo Backbone
+    effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
     print(f"\n🧠 [Backbone] Đang tải mô hình {args.backbone}...")
     backbone, feat_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
-        weights_path=args.weights,
+        weights_path=effective_backbone_weights,
         freeze=args.freeze_backbone,
     )
 

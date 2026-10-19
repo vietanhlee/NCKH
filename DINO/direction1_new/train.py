@@ -912,11 +912,12 @@ def train_direction_g():
         scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # 2. Khởi tạo Student & Teacher backbone và Projection Heads
+    effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
     print(f"📦 [Backbone] Nạp mô hình Student DINOv3 '{args.model_name}'...")
     student_backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.model_name,
         pretrained=True,
-        weights_path=args.weights,
+        weights_path=effective_backbone_weights,
         device=device,
         hf_token=args.hf_token,
     )

@@ -224,6 +224,132 @@ def resolve_dino_weights(
     return None
 
 
+def clean_corrupted_hub_checkpoints(keyword: str = "dinov2", verbose: bool = True) -> int:
+    """
+    Quét và tự động dọn dẹp các file checkpoint bị lỗi tải ngắt quãng (Corrupted Zip/miniz Error)
+    trong thư mục PyTorch Hub Cache (~/.cache/torch/hub/checkpoints/), ngăn ngừa 100% lỗi miniz / PytorchStreamReader.
+    """
+    import zipfile
+    import glob
+
+    candidate_dirs = [
+        os.path.join(torch.hub.get_dir(), "checkpoints"),
+        os.path.expanduser("~/.cache/torch/hub/checkpoints"),
+        "/root/.cache/torch/hub/checkpoints",
+    ]
+    cleaned_count = 0
+    checked_files = set()
+
+    for c_dir in candidate_dirs:
+        if not os.path.isdir(c_dir):
+            continue
+        patterns = [
+            os.path.join(c_dir, f"*{keyword}*"),
+            os.path.join(c_dir, "*.pth"),
+        ]
+        for pat in patterns:
+            for p in glob.glob(pat):
+                if p in checked_files or not os.path.isfile(p):
+                    continue
+                checked_files.add(p)
+                # Chỉ kiểm tra các file liên quan đến keyword
+                if keyword and keyword.lower() not in os.path.basename(p).lower():
+                    continue
+
+                is_corrupt = False
+                file_size = os.path.getsize(p)
+                # DINOv2 ViT-Small chuẩn là ~86MB, ViT-Base là ~340MB. Nếu < 15MB thì chắc chắn file tải dở dang
+                if file_size < 15 * 1024 * 1024:
+                    is_corrupt = True
+                else:
+                    # Kiểm tra xem có phải zip hợp lệ không
+                    try:
+                        with zipfile.ZipFile(p, "r") as zf:
+                            if zf.testzip() is not None:
+                                is_corrupt = True
+                    except Exception:
+                        is_corrupt = True
+
+                if is_corrupt:
+                    try:
+                        os.remove(p)
+                        cleaned_count += 1
+                        if verbose:
+                            print(f"🧹 [Auto-Recovery] Đã xóa file checkpoint cache bị hỏng: {p} ({file_size / (1024*1024):.2f} MB)")
+                    except Exception as e_del:
+                        if verbose:
+                            print(f"⚠️ [Auto-Recovery] Không thể xóa {p}: {e_del}")
+
+    return cleaned_count
+
+
+def safe_load_dinov2_from_hub(
+    hub_name: str = "dinov2_vits14",
+    pretrained: bool = True,
+    verbose: bool = True,
+) -> nn.Module:
+    """
+    Tải Foundation Model DINOv2 an toàn tuyệt đối từ PyTorch Hub với cơ chế Tự Phục Hồi (Self-Healing).
+    Tự động:
+      1. Quét và xóa file checkpoint bị hỏng trước khi load.
+      2. Nếu gặp lỗi PytorchStreamReader / miniz error (do rớt mạng khi tải), tự động xóa cache và tải lại.
+      3. Nếu Meta CDN tiếp tục bị lỗi mạng, tự động fallback sang HuggingFace Mirror / timm.
+    """
+    # 1. Dọn dẹp cache hỏng trước
+    clean_corrupted_hub_checkpoints(keyword="dinov2", verbose=verbose)
+
+    # 2. Thử tải qua PyTorch Hub
+    try:
+        if verbose:
+            print(f"📦 [PyTorch Hub] Đang tải mô hình facebookresearch/dinov2 '{hub_name}'...")
+        return torch.hub.load("facebookresearch/dinov2", hub_name, pretrained=pretrained)
+    except RuntimeError as e_rt:
+        err_msg = str(e_rt).lower()
+        if any(w in err_msg for w in ["pytorchstreamreader", "zip archive", "central directory", "miniz", "corrupted"]):
+            print(f"\n⚠️ [Self-Healing] Phát hiện checkpoint DINOv2 bị hỏng do rớt mạng khi tải:")
+            print(f"   Chi tiết: {e_rt}")
+            # Xóa triệt để file hỏng
+            clean_corrupted_hub_checkpoints(keyword="", verbose=True)
+            print(f"🔄 [Self-Healing] Đang tự động thử tải lại từ Meta PyTorch Hub...")
+            try:
+                return torch.hub.load("facebookresearch/dinov2", hub_name, pretrained=pretrained, force_reload=True)
+            except Exception as e_retry:
+                print(f"⚠️ [Self-Healing] Tải lại từ PyTorch Hub không thành công: {e_retry}.")
+        else:
+            print(f"⚠️ [PyTorch Hub Notice] {e_rt}")
+    except Exception as e_other:
+        print(f"⚠️ [PyTorch Hub Notice] {e_other}")
+
+    # 3. Fallback sang timm (HuggingFace CDN Mirror cực kỳ ổn định)
+    if verbose:
+        print(f"💡 [Fallback Loader] Đang nạp DINOv2 qua timm HuggingFace CDN mirror...")
+    try:
+        import timm
+        timm_arch = "vit_small_patch14_dinov2" if "s" in hub_name else "vit_base_patch14_dinov2"
+        model = timm.create_model(timm_arch, pretrained=pretrained, num_classes=0)
+        # Bổ sung thuộc tính get_intermediate_layers nếu chưa có để tương thích API DINOv2
+        if not hasattr(model, "get_intermediate_layers"):
+            def _timm_get_intermediate(x, n=1, return_class_token=True):
+                feat = model.forward_features(x)
+                cls_tok = feat[:, 0]
+                patch_toks = feat[:, 1:]
+                if return_class_token:
+                    return [(patch_toks, cls_tok)]
+                return [patch_toks]
+            model.get_intermediate_layers = _timm_get_intermediate
+        if verbose:
+            print(f"✅ [Fallback Loader] Nạp thành công '{timm_arch}' từ timm.")
+        return model
+    except Exception as e_timm:
+        if verbose:
+            print(f"❌ [Fallback Loader] Fallback timm thất bại: {e_timm}")
+        raise RuntimeError(
+            f"Không thể tải DINOv2 '{hub_name}' từ cả PyTorch Hub lẫn timm mirror.\n"
+            f"Gợi ý khắc phục thủ công trên terminal máy chủ:\n"
+            f"  rm -rf /root/.cache/torch/hub/checkpoints/*dinov2*\n"
+        )
+
+
 def smart_load_backbone_weights(
     backbone: nn.Module,
     weights_path: str,
@@ -379,22 +505,28 @@ def get_dino_backbone(
         backbone = backbone.to(device)
         return backbone, embed_dim, patch_size
     except Exception as e_base:
+        if "dinov3" in model_name.lower():
+            # Yêu cầu hệ thống: Chỉ dùng chuẩn DINOv3, tuyệt đối KHÔNG fallback sang DINOv2
+            raise RuntimeError(
+                f"\n❌ [LỖI DINOv3] Không thể nạp mô hình DINOv3 '{model_name}': {e_base}\n"
+                f"   Quy tắc hệ thống: Chỉ dùng chuẩn DINOv3, tuyệt đối KHÔNG fallback sang DINOv2.\n"
+                f"   👉 Giải pháp:\n"
+                f"      - Chỉ định rõ file weights DINOv3 qua đối số: --weights <đường_dẫn_weights>\n"
+                f"      - Hoặc tiếp tục huấn luyện từ checkpoint qua đối số: --resume <đường_dẫn_checkpoint.pth>\n"
+            ) from e_base
         print(f"⚠️ [BackboneLoader] Base builder notice: {e_base}. Chuyển sang fallback loader.")
 
-    # 2. Fallback trực tiếp qua torch.hub
+    # 2. Fallback trực tiếp qua torch.hub (Chỉ dành cho DINOv2 khi được yêu cầu tường minh)
     clean_name = model_name.lower().strip()
     if "dinov2" in clean_name:
         hub_tag = "dinov2_vits14" if "s" in clean_name else "dinov2_vitb14"
         embed_dim = 384 if "s" in clean_name else 768
         patch_size = 14
-        backbone = torch.hub.load("facebookresearch/dinov2", hub_tag, pretrained=pretrained)
+        backbone = safe_load_dinov2_from_hub(hub_name=hub_tag, pretrained=pretrained)
     elif "dinov3" in clean_name:
-        # Nếu DINOv3 chưa có weights remote, fallback an toàn sang DINOv2 với cảnh báo rõ ràng
-        print("💡 [BackboneLoader] DINOv3 đang dùng DINOv2 proxy weights để đảm bảo thực nghiệm.")
-        hub_tag = "dinov2_vits14" if "s" in clean_name else "dinov2_vitb14"
-        embed_dim = 384 if "s" in clean_name else 768
-        patch_size = 14
-        backbone = torch.hub.load("facebookresearch/dinov2", hub_tag, pretrained=pretrained)
+        raise RuntimeError(
+            f"❌ [LỖI DINOv3] Không thể khởi tạo DINOv3 '{model_name}'. Tuyệt đối KHÔNG fallback sang DINOv2 theo yêu cầu."
+        )
     else:
         # Fallback timm ViT-Small
         import timm

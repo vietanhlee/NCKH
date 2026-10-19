@@ -83,7 +83,6 @@ except ImportError:
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive headless backend for background/server training
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
 
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
@@ -451,30 +450,29 @@ def build_backbone(
                     _load_backbone_state(model, cleaned_state, weights_path)  # raises WeightLoadError on mismatch
                     print(f"   ✅ [Model Loader] Loaded official Meta DINOv3 weights from: {weights_path}")
                 else:
-                    model = model_fn(pretrained=False)
                     if pretrained:
-                        # Warm-start DINOv3 from ungated Meta DINOv2 foundation weights!
-                        try:
-                            d2_name = "dinov2_vits14" if "vits" in hub_name else "dinov2_vitb14"
-                            print(f"   💡 [Warm-Start] Bootstrapping DINOv3 Transformer blocks from public Meta DINOv2 '{d2_name}'...")
-                            d2_model = torch.hub.load("facebookresearch/dinov2", d2_name, pretrained=True)
-                            d2_state = d2_model.state_dict()
-                            compatible_state = {}
-                            for k, v in d2_state.items():
-                                if "pos_embed" in k or "patch_embed" in k:
-                                    continue
-                                if k in model.state_dict() and model.state_dict()[k].shape == v.shape:
-                                    compatible_state[k] = v
-                            model.load_state_dict(compatible_state, strict=False)
-                            print(f"   ✅ [Warm-Start Success] Initialized {len(compatible_state)} layers (Attention, MLP, LayerNorm) from Meta DINOv2 foundation weights into DINOv3!")
-                        except Exception as e_ws:
-                            print(f"   -> Initializing DINOv3 architecture for in-domain SSL pre-training from scratch: {e_ws}")
+                        raise RuntimeError(
+                            f"\n❌ [LỖI DINOv3] Không tìm thấy file trọng số tiền huấn luyện (pretrained weights) cho DINOv3 '{hub_name}'.\n"
+                            f"   Quy tắc hệ thống: Dùng chuẩn DINOv3, tuyệt đối KHÔNG fallback sang DINOv2.\n"
+                            f"   👉 Giải pháp:\n"
+                            f"      1. Chỉ định đường dẫn weights DINOv3 qua đối số: --weights <đường_dẫn_dinov3.pth hoặc .safetensors>\n"
+                            f"      2. Hoặc nếu bạn muốn khởi tạo kiến trúc DINOv3 ngẫu nhiên để huấn luyện SSL từ đầu (from scratch), truyền: --pretrained False\n"
+                            f"      3. Hoặc nếu bạn tiếp tục huấn luyện từ checkpoint resume, truyền: --resume <đường_dẫn_checkpoint.pth>\n"
+                        )
+                    else:
+                        model = model_fn(pretrained=False)
+                        print(f"   ℹ️ [Model Loader] Khởi tạo kiến trúc DINOv3 '{hub_name}' ngẫu nhiên (from scratch) theo yêu cầu pretrained=False.")
                 embed_dim = getattr(model, "embed_dim", 384)
                 print(f"   [Model Loader] Loaded DINOv3 '{hub_name}' successfully! Embedding Dim: {embed_dim}")
                 return model, embed_dim
         except WeightLoadError:
             raise  # never silently fall back to a randomly-initialised / different backbone
         except Exception as e:
+            if "dinov3" in model_name.lower():
+                raise RuntimeError(
+                    f"❌ [LỖI DINOv3] Không thể nạp kiến trúc DINOv3 '{hub_name}': {e}.\n"
+                    f"   Hệ thống không fallback sang DINOv2 theo yêu cầu cấu hình."
+                ) from e
             print(f"   [Warning] DINOv3 direct load encountered: {e}. Falling back...")
 
     # 2. Native Meta AI DINOv2 via PyTorch Hub (Official LVD-142M Foundation Weights)
@@ -1178,9 +1176,18 @@ def save_pca_feature_maps(backbone: nn.Module, sample_paths: List[str], save_dir
                     patch_tokens = None
 
             if patch_tokens is not None and len(patch_tokens) > 0:
-                # Fit PCA to 3 components (RGB channels)
-                pca = PCA(n_components=3)
-                pca_features = pca.fit_transform(patch_tokens)  # (N_patches, 3)
+                # Fit PCA to 3 components (RGB channels) bằng PyTorch thuần (không bắt buộc cài sklearn)
+                try:
+                    from sklearn.decomposition import PCA
+                    pca = PCA(n_components=3)
+                    pca_features = pca.fit_transform(patch_tokens)  # (N_patches, 3)
+                except ImportError:
+                    # Thuần PyTorch SVD-based PCA khi môi trường không có scikit-learn
+                    t_tokens = torch.from_numpy(patch_tokens).float()
+                    t_mean = t_tokens.mean(dim=0, keepdim=True)
+                    t_centered = t_tokens - t_mean
+                    _, _, V = torch.pca_lowrank(t_centered, q=3, center=False)
+                    pca_features = (t_centered @ V[:, :3]).numpy()
 
                 # Min-max normalize to [0, 1] for RGB display
                 for c in range(3):
