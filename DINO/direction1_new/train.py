@@ -21,6 +21,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+from tqdm.auto import tqdm
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 if sys.platform == "win32":
@@ -1404,7 +1405,13 @@ def train_direction_g():
             epoch_ric_losses = []
             epoch_cam_adv_losses = []
 
-            for batch in loader:
+            pbar = tqdm(
+                loader,
+                desc=f"Epoch [{epoch+1}/{args.epochs}]",
+                dynamic_ncols=True,
+                leave=True,
+            )
+            for batch in pbar:
                 x1 = batch["x1"].to(device, non_blocking=(device.type == "cuda"))
                 x2 = batch["x2"].to(device, non_blocking=(device.type == "cuda"))
                 cids = batch["cid"].to(device, non_blocking=(device.type == "cuda"))
@@ -1543,10 +1550,15 @@ def train_direction_g():
                 }
 
                 step += 1
-                if step % 2 == 0 or step == 1:
-                    print(f"   [Epoch {epoch+1}/{args.epochs} | Step {step}] Loss: {total_loss.item():.4f} "
-                          f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f}, "
-                          f"RIC: {loss_ric.item():.4f}, CamAdv: {loss_cam_adv.item():.4f})")
+                cur_lr = optimizer.param_groups[0]["lr"]
+                pbar.set_postfix({
+                    "loss": f"{total_loss.item():.4f}",
+                    "dino": f"{loss_dino.item():.4f}",
+                    "ibot": f"{loss_ibot.item():.4f}",
+                    "koleo": f"{loss_koleo.item():.3f}",
+                    "ric": f"{loss_ric.item():.3f}",
+                    "lr": f"{cur_lr:.1e}",
+                })
 
             # Cập nhật lịch trình Learning Rate Cosine Annealing
             scheduler.step()
@@ -1556,14 +1568,20 @@ def train_direction_g():
             avg_dino = float(np.mean(epoch_dino_losses)) if epoch_dino_losses else 0.0
             avg_ibot = float(np.mean(epoch_ibot_losses)) if epoch_ibot_losses else 0.0
             avg_koleo = float(np.mean(epoch_koleo_losses)) if epoch_koleo_losses else 0.0
+            avg_ric = float(np.mean(epoch_ric_losses)) if epoch_ric_losses else 0.0
+            avg_cam_adv = float(np.mean(epoch_cam_adv_losses)) if epoch_cam_adv_losses else 0.0
 
             history["total"].append(avg_tot)
             history["dino"].append(avg_dino)
             history["ibot"].append(avg_ibot)
             history["koleo"].append(avg_koleo)
+            history["ric"].append(avg_ric)
+            history["cam_adv"].append(avg_cam_adv)
 
-            print(f"🌟 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] Loss TB: {avg_tot:.4f} "
-                  f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f})")
+            cur_lr = optimizer.param_groups[0]["lr"]
+            print(f"📊 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] LR: {cur_lr:.2e} — Loss TB: {avg_tot:.4f} "
+                  f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f}, "
+                  f"RIC: {avg_ric:.4f}, CamAdv: {avg_cam_adv:.4f})")
 
             # Cập nhật hình ảnh trực quan hóa và đồ thị sau mỗi epoch
             if last_visual_data is not None:
