@@ -39,6 +39,8 @@ from common.gpu_utils import (
     load_checkpoint,
     resolve_checkpoint_path,
     smart_inherit_checkpoint_args,
+    get_cli_specified_args,
+    build_smooth_lr_scheduler,
 )
 from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
@@ -103,13 +105,18 @@ def train_decomposition(args):
         except TypeError:
             preloaded_ckpt = torch.load(args.resume, map_location="cpu")
 
-        if isinstance(preloaded_ckpt, dict) and "args" in preloaded_ckpt and isinstance(preloaded_ckpt["args"], dict):
+        if isinstance(preloaded_ckpt, dict):
+            ckpt_args = preloaded_ckpt.get("args", {}) if isinstance(preloaded_ckpt.get("args"), dict) else {}
+            cli_specified = get_cli_specified_args(sys.argv[1:])
+            # Nếu checkpoint lưu total_epochs riêng biệt
+            if "total_epochs" in preloaded_ckpt and "epochs" not in cli_specified:
+                args.epochs = int(preloaded_ckpt["total_epochs"])
             sync_keys = [
-                "lr", "img_size", "lambda_prior", "lambda_shared", "lambda_excl",
+                "epochs", "session_epochs", "warmup_epochs", "lr", "img_size", "lambda_prior", "lambda_shared", "lambda_excl",
                 "lambda_tv", "lambda_sparse", "lambda_bin", "warmup_bin_epoch",
                 "batch_size", "backbone", "weights", "match_strategy",
             ]
-            smart_inherit_checkpoint_args(args, preloaded_ckpt["args"], sync_keys)
+            smart_inherit_checkpoint_args(args, ckpt_args, sync_keys)
 
     torch.manual_seed(args.seed)
     if "cuda" in args.device.lower() and not torch.cuda.is_available():
@@ -200,7 +207,6 @@ def train_decomposition(args):
     )
     for pg in optimizer.param_groups:
         pg.setdefault("initial_lr", effective_lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     # 4. Khôi phục từ checkpoint nếu có cờ --resume hoặc nạp trọng số --weights
     start_epoch = 0
@@ -211,9 +217,7 @@ def train_decomposition(args):
         if not os.path.exists(args.resume):
             raise FileNotFoundError(f"Không tìm thấy file hoặc thư mục checkpoint resume: {args.resume}")
         print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
-        # Chú ý quan trọng: Truyền scheduler=None vào load_checkpoint để ngăn chặn bug của PyTorch
-        # CosineAnnealingLR khi last_epoch >= T_max cũ làm mẫu số tiến về 0, khiến LR nổ tung (tăng gấp hàng nghìn lần).
-        ckpt_data = load_checkpoint(
+        ckpt_data = preloaded_ckpt if preloaded_ckpt is not None else load_checkpoint(
             load_path=args.resume,
             model=raw_model,
             optimizer=optimizer,
@@ -222,36 +226,65 @@ def train_decomposition(args):
             strict=False,
             verbose=True,
         )
-        if "epoch" in ckpt_data and ckpt_data["epoch"] is not None:
-            start_epoch = int(ckpt_data["epoch"])
-            print(f"   ⏱️ [Epoch] Khôi phục tại epoch {start_epoch}. Sẽ tiếp tục chạy từ epoch {start_epoch + 1}.")
-            if args.epochs <= start_epoch:
-                target_epochs = start_epoch + args.epochs
-                print(f"   💡 [Gia hạn Epochs] Số epochs cài đặt ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
-                print(f"      -> Tự động huấn luyện thêm {args.epochs} epochs (Tổng mới: {target_epochs} epochs).")
-                args.epochs = target_epochs
+        if preloaded_ckpt is not None:
+            from common.gpu_utils import smart_load_state_dict
+            model_sd = ckpt_data.get("model_state", ckpt_data.get("state_dict", ckpt_data))
+            smart_load_state_dict(raw_model, model_sd, strict=False, verbose=True)
+            if "optimizer" in ckpt_data:
+                try:
+                    optimizer.load_state_dict(ckpt_data["optimizer"])
+                    dest_device = torch.device(device)
+                    for state in optimizer.state.values():
+                        for k, v in state.items():
+                            if isinstance(v, torch.Tensor):
+                                state[k] = v.to(dest_device)
+                    print("   ✅ [Optimizer] Khôi phục thành công toàn bộ trạng thái optimizer.")
+                except Exception as e_opt:
+                    print(f"   ⚠️ [Optimizer Notice] {e_opt}")
 
-        # Tái cấu hình Scheduler mượt mà cho số epochs còn lại
-        remaining_epochs = max(1, args.epochs - start_epoch)
-        current_lr = optimizer.param_groups[0]["lr"]
+        found_epoch = None
+        for ep_key in ["completed_epoch", "epoch", "start_epoch", "last_epoch"]:
+            if ep_key in ckpt_data and ckpt_data[ep_key] is not None:
+                found_epoch = int(ckpt_data[ep_key])
+                if ep_key == "completed_epoch":
+                    start_epoch = found_epoch + 1
+                else:
+                    start_epoch = found_epoch
+                break
 
-        # Nếu LR cũ đã chạm đáy cực tiểu (1e-6) ở cuối session trước, thực hiện Cosine Warm-Restart mượt mà
-        if current_lr <= 5e-6:
-            restart_lr = effective_lr * 0.5  # Bắt đầu chu kỳ gia hạn với 50% base lr để tiếp tục hội tụ sâu
-            for pg in optimizer.param_groups:
-                pg["lr"] = restart_lr
-            current_lr = restart_lr
-            print(f"   🔄 [LR Warm-Restart] LR trước đó đã chạm đáy ({current_lr:.2e}), tự động khởi động mềm với LR = {current_lr:.6e} cho {remaining_epochs} epochs tiếp theo.")
+        if found_epoch is not None:
+            print(f"   ⏱️ [Epoch] Khôi phục tại mốc đã chạy {start_epoch} epochs. Bắt đầu tiếp tục từ epoch {start_epoch + 1}.")
         else:
-            print(f"   🎯 [LR Continuity] Tiếp tục tốc độ học hiện tại: LR = {current_lr:.6e} cho {remaining_epochs} epochs còn lại.")
+            print("   ⚠️ [Epoch Notice] Checkpoint không có thông tin epoch. Bắt đầu từ epoch 1.")
 
-        for pg in optimizer.param_groups:
-            pg["initial_lr"] = current_lr
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        cli_specified = get_cli_specified_args(sys.argv[1:])
+        if start_epoch >= args.epochs:
+            if "epochs" not in cli_specified:
+                extra_epochs = args.session_epochs if args.session_epochs > 0 else 5
+                if "args" in ckpt_data and isinstance(ckpt_data["args"], dict) and "session_epochs" in ckpt_data["args"]:
+                    try:
+                        extra_epochs = int(ckpt_data["args"]["session_epochs"])
+                    except Exception:
+                        extra_epochs = 5
+                target_epochs = start_epoch + extra_epochs
+                print(f"   💡 [Gia hạn Epochs] Số epochs kế hoạch ({args.epochs}) <= epoch checkpoint ({start_epoch}).")
+                print(f"      -> Tự động huấn luyện thêm {extra_epochs} epochs (Tổng mới: {target_epochs} epochs).")
+                args.epochs = target_epochs
+            else:
+                print(f"   ⚠️ [Cảnh báo] --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs > {start_epoch} để tiếp tục train!")
+
+        # Tái lập Smooth LR Scheduler liên tục C^0 qua mọi session
+        scheduler = build_smooth_lr_scheduler(
             optimizer,
-            T_max=remaining_epochs,
+            total_epochs=args.epochs,
+            warmup_epochs=args.warmup_epochs,
             eta_min=1e-6,
+            last_epoch=start_epoch - 1 if start_epoch > 0 else -1,
         )
+        curr_lr = optimizer.param_groups[0]["lr"]
+        remaining_epochs = max(1, args.epochs - start_epoch)
+        print(f"   📈 [Scheduler Restored] Đồng bộ Lịch trình Smooth LR Scheduler: Kế hoạch tổng {args.epochs} epochs (còn {remaining_epochs} epochs).")
+        print(f"   🎯 [Current Learning Rate] LR chuẩn xác cho epoch {start_epoch + 1}: {curr_lr:.3e} (liên tục 100%, triệt tiêu gradient shock).")
 
         # Khôi phục kỷ lục best_loss trước đó (nếu có)
         if "metrics" in ckpt_data and isinstance(ckpt_data["metrics"], dict):
@@ -280,140 +313,174 @@ def train_decomposition(args):
         if os.path.isfile(args.weights):
             print(f"\n📦 [Weights] Nạp trọng số khởi tạo ban đầu: {args.weights}")
             load_checkpoint(load_path=args.weights, model=raw_model, device=device, strict=False, verbose=True)
-        for pg in optimizer.param_groups:
-            pg.setdefault("initial_lr", effective_lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+        scheduler = build_smooth_lr_scheduler(
+            optimizer,
+            total_epochs=args.epochs,
+            warmup_epochs=args.warmup_epochs,
+            eta_min=1e-6,
+            last_epoch=-1,
+        )
     else:
-        for pg in optimizer.param_groups:
-            pg.setdefault("initial_lr", effective_lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
+        scheduler = build_smooth_lr_scheduler(
+            optimizer,
+            total_epochs=args.epochs,
+            warmup_epochs=args.warmup_epochs,
+            eta_min=1e-6,
+            last_epoch=-1,
+        )
+
+    # Xác định giới hạn epoch cho phiên (session) hiện tại
+    if args.session_epochs > 0:
+        session_target_epoch = min(start_epoch + args.session_epochs, args.epochs)
+        print(f"\n🎯 [Session Kế Hoạch] Phiên hiện tại sẽ chạy {session_target_epoch - start_epoch} epochs: "
+              f"Epoch {start_epoch + 1} -> Epoch {session_target_epoch} (Kế hoạch tổng: {args.epochs} epochs)\n")
+    else:
+        session_target_epoch = args.epochs
+        print(f"\n🎯 [Full Training] Huấn luyện liên tục từ Epoch {start_epoch + 1} -> Epoch {session_target_epoch}\n")
 
     # 5. Vòng lặp huấn luyện
-    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{args.epochs}]...")
+    print(f"\n🏁 [Train] Bắt đầu huấn luyện từ Epoch [{start_epoch+1}/{session_target_epoch}]...")
 
-    for epoch in range(start_epoch, args.epochs):
-        model.train()
-        total_loss = 0.0
-        total_rec = 0.0
-        total_prior = 0.0
-        pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
+    try:
+        for epoch in range(start_epoch, session_target_epoch):
+            model.train()
+            total_loss = 0.0
+            total_rec = 0.0
+            total_prior = 0.0
+            pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
-        for batch in pbar:
-            if "origins" in batch:
-                origins = batch["origins"].to(device)
-                bgs = batch["prior_bgs"].to(device)
-                B, K, C, H, W = origins.shape
-                origin = origins.view(B * K, C, H, W)
-                bg = bgs.view(B * K, C, H, W)
-            else:
-                origin = batch["origin"].to(device)
-                bg = batch["bg"].to(device)
+            for batch in pbar:
+                if "origins" in batch:
+                    origins = batch["origins"].to(device)
+                    bgs = batch["prior_bgs"].to(device)
+                    B, K, C, H, W = origins.shape
+                    origin = origins.view(B * K, C, H, W)
+                    bg = bgs.view(B * K, C, H, W)
+                else:
+                    origin = batch["origin"].to(device)
+                    bg = batch["bg"].to(device)
 
-            preds = model(origin, prior=bg)
-            loss, loss_dict = loss_fn(
-                preds, origin, bg,
-                epoch=epoch,
-                warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
-            )
+                preds = model(origin, prior=bg)
+                loss, loss_dict = loss_fn(
+                    preds, origin, bg,
+                    epoch=epoch,
+                    warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
+                )
 
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
 
-            total_loss += loss.item()
-            total_rec += loss_dict.get("loss_rec", 0.0)
-            total_prior += loss_dict.get("loss_prior", 0.0)
+                total_loss += loss.item()
+                total_rec += loss_dict.get("loss_rec", 0.0)
+                total_prior += loss_dict.get("loss_prior", 0.0)
+
+                cur_lr = optimizer.param_groups[0]["lr"]
+                pbar.set_postfix({
+                    "loss": f"{loss.item():.4f}",
+                    "rec": f"{loss_dict.get('loss_rec', 0.0):.4f}",
+                    "prior": f"{loss_dict.get('loss_prior', 0.0):.4f}",
+                    "lr": f"{cur_lr:.2e}",
+                    "sigma": f"{loss_dict.get('mean_sigma', 0.0):.3f}",
+                })
 
             cur_lr = optimizer.param_groups[0]["lr"]
-            pbar.set_postfix({
-                "loss": f"{loss.item():.4f}",
-                "rec": f"{loss_dict.get('loss_rec', 0.0):.4f}",
-                "prior": f"{loss_dict.get('loss_prior', 0.0):.4f}",
-                "lr": f"{cur_lr:.2e}",
-                "sigma": f"{loss_dict.get('mean_sigma', 0.0):.3f}",
-            })
+            scheduler.step()
+            avg_loss = total_loss / max(1, len(loader))
+            avg_rec = total_rec / max(1, len(loader))
+            avg_prior = total_prior / max(1, len(loader))
 
-        cur_lr = optimizer.param_groups[0]["lr"]
-        scheduler.step()
-        avg_loss = total_loss / max(1, len(loader))
-        avg_rec = total_rec / max(1, len(loader))
-        avg_prior = total_prior / max(1, len(loader))
+            history["epochs"].append(epoch + 1)
+            history["loss"].append(float(avg_loss))
+            history["loss_rec"].append(float(avg_rec))
+            history["loss_prior"].append(float(avg_prior))
 
-        history["epochs"].append(epoch + 1)
-        history["loss"].append(float(avg_loss))
-        history["loss_rec"].append(float(avg_rec))
-        history["loss_prior"].append(float(avg_prior))
+            print(f"📊 Epoch [{epoch+1}/{args.epochs}] — LR: {cur_lr:.6e} — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
 
-        print(f"📊 Epoch [{epoch+1}/{args.epochs}] — LR: {cur_lr:.6e} — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
+            # Xuất ảnh trực quan kiểm tra
+            with torch.no_grad():
+                sample = next(iter(loader))
+                s_origin = sample["origin"][:1].to(device) if "origin" in sample else sample["origins"][:1, 0].to(device)
+                s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
+                s_preds = model(s_origin, prior=s_bg)
+                s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
+                progress_path = os.path.join(args.save_dir, "decomposition_progress.png")
+                epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
+                save_visual_sample(
+                    s_origin, s_bg,
+                    s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
+                    save_path=epoch_vis_path,
+                    epoch=epoch + 1,
+                )
+                save_visual_sample(
+                    s_origin, s_bg,
+                    s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
+                    save_path=progress_path,
+                    epoch=epoch + 1,
+                )
 
-        # Xuất ảnh trực quan kiểm tra
-        with torch.no_grad():
-            sample = next(iter(loader))
-            s_origin = sample["origin"][:1].to(device) if "origin" in sample else sample["origins"][:1, 0].to(device)
-            s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
-            s_preds = model(s_origin, prior=s_bg)
-            s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
-            progress_path = os.path.join(args.save_dir, "decomposition_progress.png")
-            epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
-            save_visual_sample(
-                s_origin, s_bg,
-                s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
-                save_path=epoch_vis_path,
-                epoch=epoch + 1,
-            )
-            # Đồng thời cập nhật decomposition_progress.png mới nhất ở thư mục gốc
-            save_visual_sample(
-                s_origin, s_bg,
-                s_preds["pred_bg"], s_preds["pred_fg"], s_mask, s_preds["recon_origin"],
-                save_path=progress_path,
-                epoch=epoch + 1,
-            )
+            # Metadata lưu kèm checkpoint
+            extra_meta = {
+                "total_epochs": args.epochs,
+                "session_epochs": args.session_epochs,
+                "warmup_epochs": args.warmup_epochs,
+                "completed_epoch": epoch,
+                "num_gpus": num_gpus,
+                "args": vars(args),
+            }
 
-        # Lưu Checkpoint
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            for b_name in ["best_decomposition_model.pth", "best_checkpoint.pth"]:
-                ckpt_path = os.path.join(args.save_dir, b_name)
+            # Lưu Best Checkpoint
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                for b_name in ["best_decomposition_model.pth", "best_checkpoint.pth"]:
+                    ckpt_path = os.path.join(args.save_dir, b_name)
+                    save_checkpoint(
+                        save_path=ckpt_path,
+                        model=raw_model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        epoch=epoch + 1,
+                        metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
+                        extra_dict=extra_meta,
+                        verbose=False,
+                    )
+
+            # Lưu Last Checkpoint mỗi epoch
+            for l_name in ["last_checkpoint.pth", "traffic_decomp_latest.pth"]:
+                last_ckpt_path = os.path.join(args.save_dir, l_name)
                 save_checkpoint(
-                    save_path=ckpt_path,
+                    save_path=last_ckpt_path,
                     model=raw_model,
                     optimizer=optimizer,
                     scheduler=scheduler,
                     epoch=epoch + 1,
                     metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
-                    extra_dict={"num_gpus": num_gpus, "args": vars(args)},
+                    extra_dict=extra_meta,
                     verbose=False,
                 )
 
-        # Lưu Last Checkpoint mỗi epoch
-        last_ckpt_path = os.path.join(args.save_dir, "last_checkpoint.pth")
-        save_checkpoint(
-            save_path=last_ckpt_path,
-            model=raw_model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            epoch=epoch + 1,
-            metrics={"loss": avg_loss, "loss_rec": avg_rec, "loss_prior": avg_prior},
-            extra_dict={"num_gpus": num_gpus, "args": vars(args)},
-            verbose=False,
-        )
+    except KeyboardInterrupt:
+        print("\n⚠️ [Dừng Sớm] Nhận tín hiệu ngắt (Ctrl+C). Đang tiến hành lưu khẩn cấp trạng thái và hình ảnh...")
 
     # Lưu metrics JSON
     metrics_path = os.path.join(args.save_dir, "training_metrics.json")
     try:
-        import json
         with open(metrics_path, "w", encoding="utf-8") as f:
             json.dump({
                 "args": vars(args),
                 "history": history,
                 "best_loss": float(best_loss),
+                "final_epoch": len(history["epochs"]),
+                "session_target_epoch": session_target_epoch,
+                "total_planned_epochs": args.epochs,
             }, f, indent=2, ensure_ascii=False)
         print(f"📊 [Metrics] Đã lưu lịch sử huấn luyện tại: {metrics_path}")
     except Exception as e_m:
         print(f"⚠️ [Metrics Warning] Không thể lưu JSON: {e_m}")
 
     # Vẽ biểu đồ Loss Curves
+    loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
     try:
         plt.figure(figsize=(10, 4.5), dpi=150)
         plt.plot(history["epochs"], history["loss"], "b-o", linewidth=2, label="Total Loss")
@@ -425,12 +492,40 @@ def train_decomposition(args):
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.legend()
         plt.tight_layout()
-        loss_curve_path = os.path.join(args.save_dir, "loss_curve.png")
         plt.savefig(loss_curve_path, bbox_inches="tight")
         plt.close()
         print(f"📈 [Charts] Đã lưu biểu đồ hàm mất mát tại: {loss_curve_path}")
     except Exception as e_plot:
         print(f"⚠️ [Chart Warning] {e_plot}")
+
+    latest_ckpt_path = os.path.join(args.save_dir, "traffic_decomp_latest.pth")
+    best_checkpoint_path = os.path.join(args.save_dir, "best_checkpoint.pth")
+    if session_target_epoch < args.epochs:
+        next_session_epochs = min(args.session_epochs, args.epochs - session_target_epoch) if args.session_epochs > 0 else (args.epochs - session_target_epoch)
+        next_end = session_target_epoch + next_session_epochs
+        print("\n" + "╔" + "═" * 78 + "╗")
+        print(f"║  🎉 [SESSION HOÀN TẤT] Đã chạy xong {session_target_epoch}/{args.epochs} epochs cho phiên làm việc này!  ║")
+        print(f"║  💾 Checkpoint an toàn đã được lưu tại:                                      ║")
+        print(f"║     {latest_ckpt_path:<72} ║")
+        print(f"║  📊 Đồ thị loss tích lũy: {loss_curve_path:<50} ║")
+        print(f"║                                                                              ║")
+        print(f"║  👉 Để chạy tiếp Session kế tiếp (Epoch {session_target_epoch + 1} -> {next_end}), bạn chỉ cần chạy lệnh:    ║")
+        cmd_resume = f"python train.py --resume {latest_ckpt_path}"
+        if getattr(args, "origin_dir", None):
+            cmd_resume += f" --origin_dir {args.origin_dir}"
+        if getattr(args, "bg_dir", None):
+            cmd_resume += f" --bg_dir {args.bg_dir}"
+        if args.session_epochs > 0:
+            cmd_resume += f" --session_epochs {args.session_epochs}"
+        print(f"║     {cmd_resume:<72} ║")
+        print("╚" + "═" * 78 + "╝\n")
+    else:
+        print("\n" + "╔" + "═" * 78 + "╗")
+        print(f"║  🏆 [XUẤT SẮC] ĐÃ HOÀN TẤT TOÀN BỘ {args.epochs}/{args.epochs} EPOCHS THEO KẾ HOẠCH!              ║")
+        print(f"║  💾 Checkpoint tối ưu nhất (Best Loss) : {best_checkpoint_path:<36} ║")
+        print(f"║  💾 Checkpoint phiên bản mới nhất      : {latest_ckpt_path:<36} ║")
+        print(f"║  📊 Toàn bộ đồ thị hàm mất mát Loss    : {loss_curve_path:<36} ║")
+        print("╚" + "═" * 78 + "╝\n")
 
     print("\n🎉 [Complete] Huấn luyện Scene Decomposition thành công!")
 
@@ -445,7 +540,10 @@ def parse_args():
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file trọng số khởi tạo ban đầu")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn file checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--img_size", type=int, default=256)
-    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--epochs", type=int, default=15, help="Tổng số epochs huấn luyện theo kế hoạch toàn bộ (mặc định: 15)")
+    parser.add_argument("--session_epochs", "--max_session_epochs", dest="session_epochs", type=int, default=0,
+                        help="Số epochs tối đa chạy trong phiên làm việc hiện tại (0 = chạy hết toàn bộ --epochs, ví dụ: 4)")
+    parser.add_argument("--warmup_epochs", type=int, default=1, help="Số epochs khởi động ấm Learning Rate tuyến tính (mặc định: 1)")
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--lambda_prior", "--lambda_bg", dest="lambda_prior", type=float, default=1.0, help="Trọng số giám sát nền prior (L_prior / lambda_bg)")

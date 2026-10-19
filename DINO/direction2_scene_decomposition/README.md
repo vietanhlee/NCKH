@@ -192,20 +192,36 @@ python DINO/direction2_scene_decomposition/train.py \
 
 Khi phiên chạy bị ngắt quãng (hết quota Kaggle, mất kết nối SSH) hoặc muốn gia hạn thêm số epochs:
 ```bash
+### 4.3 Kịch Bản Huấn Luyện Theo Phiên (Session-Based Training trên Kaggle/Colab)
+
+Môi trường Kaggle và Google Colab thường giới hạn thời gian GPU (9 - 12 giờ/phiên). Hệ thống hỗ trợ chế độ huấn luyện chia phiên linh hoạt (**Session-Based Training**) kết hợp **Smooth Continuous LR Scheduler** đảm bảo tính liên tục toán học $C^0$ qua các session:
+
+#### Phiên 1: Khởi động ấm và chạy 4 epochs đầu tiên
+```bash
 python DINO/direction2_scene_decomposition/train.py \
     --bg_dir traffic_backgrounds \
     --origin_dir output \
-    --resume checkpoints/direction2_scene_decomp/last_checkpoint.pth \
-    --epochs 10 \
+    --epochs 12 \
+    --session_epochs 4 \
+    --warmup_epochs 1 \
+    --batch_size 8 \
     --save_dir checkpoints/direction2_scene_decomp \
     --device cuda
 ```
+*Kết thúc Phiên 1*: Mô hình chạy xong Epoch 1 -> 4, lưu checkpoint `traffic_decomp_latest.pth` và in sẵn câu lệnh để chạy tiếp Phiên 2.
+
+#### Phiên 2 & 3: Tiếp tục huấn luyện các epochs tiếp theo (Resume mượt mà)
+```bash
+python DINO/direction2_scene_decomposition/train.py \
+    --resume checkpoints/direction2_scene_decomp/traffic_decomp_latest.pth \
+    --session_epochs 4
+```
 
 *Cơ chế tự động thông minh khi Resume:*
-1. **Khôi phục đầy đủ trạng thái**: Nạp đồng bộ trọng số Model, Optimizer, LR Scheduler, số epoch và kỷ lục `best_loss`.
-2. **Kế thừa siêu tham số (Smart Inherit)**: Tự động phát hiện và đồng bộ các siêu tham số `lambda_prior`, `img_size`, `backbone` đã lưu trong checkpoint.
-3. **Cosine LR Warm-Restart**: Nếu tốc độ học ở session trước đã chạm đáy ($10^{-6}$), hệ thống tự động khởi động mềm chu kỳ Cosine mới từ $50\%$ base LR để tiếp tục hội tụ sâu mà không bị nổ gradient.
-4. **Bảo toàn lịch sử đồ thị**: Biểu đồ `loss_curve.png` và file `training_metrics.json` được vẽ nối tiếp liền mạch từ các epoch cũ.
+1. **Lịch trình LR liên tục $C^0$ Continuity (`build_smooth_lr_scheduler`)**: LR tại Epoch 5 xuất phát chính xác từ giá trị kết thúc Epoch 4 của phiên trước, triệt tiêu $100\%$ hiện tượng giật văng LR (LR shock / kick) gây bùng nổ gradient.
+2. **Kế thừa siêu tham số thông minh (Smart Args Inheritance)**: Tự động kế thừa `total_epochs`, `warmup_epochs`, `img_size`, `lambda_prior` từ checkpoint mà không cần gõ lại trên CLI.
+3. **Bảo toàn lịch sử đồ thị**: Biểu đồ `loss_curve.png` và file `training_metrics.json` được vẽ nối tiếp liền mạch qua mọi session.
+4. **Hộp thoại ASCII chỉ dẫn trực quan**: Tự động gợi ý câu lệnh chính xác cho phiên kế tiếp kèm ước lượng epoch còn lại.
 
 ---
 

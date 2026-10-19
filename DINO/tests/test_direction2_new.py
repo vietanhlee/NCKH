@@ -157,6 +157,107 @@ class TestDirection2New(unittest.TestCase):
         self.assertIsNotNone(preds["pred_bg"].grad)
         self.assertIsNotNone(preds["alpha_mask"].grad)
 
+    def test_05_direction2_smooth_lr_scheduler_continuity(self):
+        """Kiểm tra build_smooth_lr_scheduler cho Hướng 2 đảm bảo C^0 continuity tuyệt đối giữa các Session."""
+        from common.gpu_utils import build_smooth_lr_scheduler
+
+        param1 = torch.nn.Parameter(torch.zeros(10))
+        base_lr = 3e-4
+        eta_min = 1e-6
+        total_epochs = 15
+        warmup_epochs = 1
+
+        # PHIÊN 1 (Session 1): Huấn luyện 4 epochs (Epoch 0 -> 3)
+        opt1 = torch.optim.AdamW([param1], lr=base_lr)
+        sched1 = build_smooth_lr_scheduler(opt1, total_epochs=total_epochs, warmup_epochs=warmup_epochs, eta_min=eta_min)
+
+        lrs_session_1 = []
+        for ep in range(4):
+            lrs_session_1.append(opt1.param_groups[0]["lr"])
+            opt1.step()
+            sched1.step()
+
+        # LR ở đầu Epoch 4 (sẵn sàng cho epoch tiếp theo sau khi kết thúc session 1)
+        lr_end_session_1 = opt1.param_groups[0]["lr"]
+
+        # PHIÊN 2 (Session 2): Resume từ Checkpoint sau 4 epochs (start_epoch = 4, last_epoch = 3)
+        param2 = torch.nn.Parameter(torch.zeros(10))
+        opt2 = torch.optim.AdamW([param2], lr=base_lr)
+        sched2 = build_smooth_lr_scheduler(
+            opt2,
+            total_epochs=total_epochs,
+            warmup_epochs=warmup_epochs,
+            eta_min=eta_min,
+            last_epoch=3,
+        )
+        lr_start_session_2 = opt2.param_groups[0]["lr"]
+
+        # KIỂM ĐỊNH TOÁN HỌC: LR tại điểm tiếp nối của Session 2 phải bằng đúng LR kết thúc Session 1!
+        self.assertAlmostEqual(lr_end_session_1, lr_start_session_2, places=7)
+
+        # Chạy tiếp 4 epochs của Session 2 (Epoch 4 -> 7)
+        lrs_session_2 = []
+        for ep in range(4, 8):
+            lrs_session_2.append(opt2.param_groups[0]["lr"])
+            opt2.step()
+            sched2.step()
+
+        # Kiểm tra tính đơn điệu giảm của LR sau thời kỳ warmup (Epoch 1 -> 7)
+        all_cosine_lrs = lrs_session_1[warmup_epochs:] + lrs_session_2
+        for i in range(len(all_cosine_lrs) - 1):
+            self.assertGreaterEqual(all_cosine_lrs[i], all_cosine_lrs[i + 1])
+
+    def test_06_direction2_session_checkpoint_metadata(self):
+        """Kiểm tra việc lưu và khôi phục metadata Session-based trong Checkpoint."""
+        import tempfile
+        from common.gpu_utils import save_checkpoint, load_checkpoint
+
+        backbone = MockViTBackbone(embed_dim=128)
+        model = TrafficDecompositionNet(backbone=backbone, embed_dim=128, patch_size=16)
+        opt = torch.optim.AdamW(model.parameters(), lr=1e-4)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            ckpt_path = os.path.join(tmp_dir, "test_session_ckpt.pth")
+            save_checkpoint(
+                save_path=ckpt_path,
+                model=model,
+                optimizer=opt,
+                epoch=4,
+                extra_dict={
+                    "total_epochs": 15,
+                    "session_epochs": 4,
+                    "warmup_epochs": 1,
+                    "completed_epoch": 3,
+                },
+                verbose=False,
+            )
+
+            loaded = load_checkpoint(ckpt_path, model=model, optimizer=opt, device="cpu", verbose=False)
+            self.assertEqual(loaded.get("total_epochs"), 15)
+            self.assertEqual(loaded.get("session_epochs"), 4)
+            self.assertEqual(loaded.get("warmup_epochs"), 1)
+            self.assertEqual(loaded.get("completed_epoch"), 3)
+            self.assertEqual(loaded.get("epoch"), 4)
+
+    def test_07_direction2_cli_specified_args(self):
+        """Kiểm tra get_cli_specified_args nhận diện đúng các đối số của Hướng 2."""
+        from common.gpu_utils import get_cli_specified_args
+
+        test_argv = [
+            "--resume", "checkpoints/direction2_scene_decomp/last_checkpoint.pth",
+            "--session_epochs", "4",
+            "--warmup_epochs", "1",
+            "--origin_dir", "data/output",
+        ]
+        specified = get_cli_specified_args(test_argv)
+        self.assertIn("resume", specified)
+        self.assertIn("session_epochs", specified)
+        self.assertIn("warmup_epochs", specified)
+        self.assertIn("origin_dir", specified)
+        self.assertNotIn("epochs", specified)
+        self.assertNotIn("lr", specified)
+
 
 if __name__ == "__main__":
     unittest.main()
+

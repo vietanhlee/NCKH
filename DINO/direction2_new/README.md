@@ -130,18 +130,30 @@ python direction2_new/scene_fit.py `
 ```
 
 ### Bước 2: Huấn luyện Mạng Phân Rã Sâu TrafficDecompositionNet (Giai đoạn 2)
-Huấn luyện mạng nơ-ron sử dụng các ảnh pseudo-background vừa sinh ra ở Bước 1:
+Huấn luyện mạng nơ-ron sử dụng các ảnh pseudo-background vừa sinh ra ở Bước 1. Hỗ trợ **Huấn luyện theo phiên (Session-Based Training)** và **Smooth LR Continuous Scheduler** chống sốc gradient:
+
+#### Chạy Phiên 1 (Session 1: 4 epochs đầu tiên):
 ```powershell
 python direction2_new/train.py `
   --origin_dir output `
   --bg_dir checkpoints/direction2_new_scene_fit/pseudo_bgs `
   --backbone dinov3_vits16 `
   --img_size 256 `
-  --epochs 20 `
+  --epochs 12 `
+  --session_epochs 4 `
+  --warmup_epochs 1 `
   --batch_size 8 `
   --lr 3e-4 `
   --save_dir checkpoints/direction2_new
 ```
+
+#### Chạy tiếp Phiên 2 & 3 (Resume mượt mà):
+```powershell
+python direction2_new/train.py `
+  --resume checkpoints/direction2_new/direction2_latest.pth `
+  --session_epochs 4
+```
+*Hệ thống tự động kế thừa `total_epochs=12`, `warmup_epochs=1`, và nối tiếp LR tại đúng điểm kết thúc của phiên trước với tính liên tục toán học $C^0$ tuyệt đối.*
 
 ### Bước 3: Suy luận Tách Lớp, Xóa Xe & Phân Đoạn Phương Tiện (Inference & Instance Segmentation)
 Chạy suy luận trên ảnh mới bất kỳ (hoàn toàn không cần ảnh nền lúc test) với cơ chế tự động tách cá thể phương tiện:
