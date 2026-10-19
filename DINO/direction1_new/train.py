@@ -58,7 +58,15 @@ from direction1_new.features import FrozenExtractor
 from direction1_new.tam import PositionStats, GMMCalibrator
 from direction1_new.masking import agm_sample
 from direction1_new.srs import static_region_swap
-from direction1_new.losses import DINOLoss, iBOTPatchLoss, KoLeoLoss
+from direction1_new.losses import (
+    DINOLoss,
+    iBOTPatchLoss,
+    KoLeoLoss,
+    RICLoss,
+    pool_vehicle_embedding,
+    CameraAdversarialHead,
+)
+from direction1_new.sampler import CameraGroupedSampler
 
 
 class DINOHead(nn.Module):
@@ -177,12 +185,21 @@ class DirectionGTeacherModel(nn.Module):
 class TrafficCameraDataset(Dataset):
     """
     Dataset nạp ảnh giao thông thực tế từ thư mục (ví dụ: 'output').
-    Tự động nhóm các frame theo camera để phục vụ cơ chế ghép vùng tĩnh SRS (Static Region Swap).
+    Tự động nhóm các frame theo camera để phục vụ cơ chế ghép vùng tĩnh SRS (Static Region Swap)
+    và lấy mẫu hard-negative cùng camera qua CameraGroupedSampler.
     """
-    def __init__(self, data_dir: str, img_size: Tuple[int, int] = (256, 448)):
+    def __init__(
+        self,
+        data_dir: str,
+        img_size: Tuple[int, int] = (256, 448),
+        cross_cam_srs: bool = False,
+        min_frame_offset: int = 12,
+    ):
         super().__init__()
         self.data_dir = data_dir
         self.H, self.W = img_size
+        self.cross_cam_srs = cross_cam_srs
+        self.min_frame_offset = min_frame_offset
 
         # 1. Tìm tất cả ảnh hợp lệ
         valid_exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
@@ -213,12 +230,15 @@ class TrafficCameraDataset(Dataset):
         self.cam_to_id = {k: i for i, k in enumerate(self.cam_keys)}
         self.num_cams = len(self.cam_keys)
 
-        # Danh sách phẳng các mẫu
+        # Danh sách phẳng các mẫu và ánh xạ camera_to_indices cho CameraGroupedSampler
         self.samples = []
+        self.camera_to_indices = defaultdict(list)
         for cam_key, files in self.cam_to_files.items():
             cid = self.cam_to_id[cam_key]
-            for f in files:
-                self.samples.append((f, cid, cam_key))
+            for local_pos, f in enumerate(files):
+                global_idx = len(self.samples)
+                self.samples.append((f, cid, cam_key, local_pos))
+                self.camera_to_indices[cid].append(global_idx)
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -232,19 +252,35 @@ class TrafficCameraDataset(Dataset):
             return torch.from_numpy(arr).permute(2, 0, 1)
 
     def __getitem__(self, idx: int) -> Dict[str, Union[torch.Tensor, int]]:
-        path1, cid, cam_key = self.samples[idx]
+        path1, cid, cam_key, local_pos = self.samples[idx]
         x1 = self._load_img(path1)
 
-        # Chọn frame x2 cùng camera (khác thời điểm) để phục vụ SRS
-        cam_files = self.cam_to_files[cam_key]
-        if len(cam_files) > 1:
-            candidates = [p for p in cam_files if p != path1]
-            path2 = random.choice(candidates) if candidates else path1
+        # Chọn frame x2 phục vụ SRS
+        if self.cross_cam_srs and self.num_cams > 1:
+            # Cross-Camera SRS: chọn ngẫu nhiên từ camera khác
+            other_keys = [k for k in self.cam_keys if k != cam_key]
+            chosen_key2 = random.choice(other_keys)
+            cid2 = self.cam_to_id[chosen_key2]
+            path2 = random.choice(self.cam_to_files[chosen_key2])
         else:
-            path2 = path1
+            cid2 = cid
+            cam_files = self.cam_to_files[cam_key]
+            n_files = len(cam_files)
+            if n_files > 1:
+                distant_cands = [
+                    cam_files[j] for j in range(n_files)
+                    if abs(j - local_pos) >= self.min_frame_offset
+                ]
+                if distant_cands:
+                    path2 = random.choice(distant_cands)
+                else:
+                    other_cands = [p for p in cam_files if p != path1]
+                    path2 = random.choice(other_cands) if other_cands else path1
+            else:
+                path2 = path1
 
         x2 = self._load_img(path2)
-        return {"x1": x1, "x2": x2, "cid": cid}
+        return {"x1": x1, "x2": x2, "cid": cid, "cid2": cid2}
 
 
 def save_direction_g_visuals(
@@ -421,6 +457,10 @@ class SyntheticTrafficDataset(Dataset):
     def __init__(self, num_samples: int = 200, num_cams: int = 4):
         self.num_samples = num_samples
         self.num_cams = num_cams
+        self.camera_to_indices = defaultdict(list)
+        for idx in range(num_samples):
+            cid = idx % num_cams
+            self.camera_to_indices[cid].append(idx)
 
     def __len__(self):
         return self.num_samples
@@ -431,7 +471,7 @@ class SyntheticTrafficDataset(Dataset):
         x1 = torch.rand(3, 256, 448) * 0.6 + 0.2
         # Frame 2 (cùng camera, khác ngày) để phục vụ SRS
         x2 = x1 * 0.9 + 0.1 * torch.rand(3, 256, 448)
-        return {"x1": x1, "x2": x2, "cid": cid}
+        return {"x1": x1, "x2": x2, "cid": cid, "cid2": cid}
 
 
 def resolve_resume_checkpoint(resume_target: str) -> str:
@@ -504,10 +544,24 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--batch_size": "batch_size",
         "--epochs": "epochs",
         "--lr": "lr",
+        "--backbone_lr_scale": "backbone_lr_scale",
         "--weight_decay": "weight_decay",
         "--phi": "phi",
         "--q_max": "q_max",
+        "--mask_ratio": "mask_ratio",
+        "--mask_mode": "mask_mode",
         "--p_srs": "p_srs",
+        "--srs_continuous": "srs_continuous", "--no_srs_continuous": "srs_continuous",
+        "--cross_cam_srs": "cross_cam_srs",
+        "--random_pi": "random_pi",
+        "--ibot_beta": "ibot_beta",
+        "--use_ric": "use_ric", "--no_ric": "use_ric",
+        "--lambda_ric": "lambda_ric",
+        "--use_cam_adv": "use_cam_adv", "--no_cam_adv": "use_cam_adv",
+        "--lambda_cam_adv": "lambda_cam_adv",
+        "--use_cam_sampler": "use_cam_sampler", "--no_cam_sampler": "use_cam_sampler",
+        "--cams_per_batch": "cams_per_batch",
+        "--frames_per_cam": "frames_per_cam",
         "--out_dim": "out_dim",
         "--output_dir": "output_dir", "--save_dir": "output_dir",
         "--weights": "weights",
@@ -533,19 +587,38 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Huấn luyện Tự Giám Sát DINOv3 Hướng G (TAM + AGM + SRS)")
+    parser = argparse.ArgumentParser(description="Huấn luyện Tự Giám Sát DINOv3 Hướng G (TAM + AGM + SRS + RIC + CamAdv)")
     parser.add_argument("--data_dir", "--origin_dir", dest="data_dir", type=str, default=None, help="Thư mục ảnh giao thông thực tế (ví dụ: output)")
     parser.add_argument("--model_name", "--backbone", dest="model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
-    parser.add_argument("--batch_size", type=int, default=4, help="Kích thước batch")
+    parser.add_argument("--batch_size", type=int, default=4, help="Kích thước batch (hoặc số camera mỗi batch nếu dùng CameraSampler)")
     parser.add_argument("--epochs", type=int, default=12, help="Tổng số epochs huấn luyện theo kế hoạch toàn bộ (mặc định: 12)")
     parser.add_argument("--session_epochs", "--max_session_epochs", dest="session_epochs", type=int, default=0,
                         help="Số epochs tối đa chạy trong phiên làm việc hiện tại (0 = chạy hết toàn bộ --epochs, ví dụ: 4)")
     parser.add_argument("--warmup_epochs", type=int, default=1, help="Số epochs khởi động ấm Learning Rate tuyến tính (mặc định: 1)")
-    parser.add_argument("--lr", type=float, default=5e-5, help="Tốc độ học")
+    parser.add_argument("--lr", type=float, default=5e-5, help="Tốc độ học cơ sở cho Projection Heads")
+    parser.add_argument("--backbone_lr_scale", type=float, default=0.2, help="Tỷ lệ giảm LR cho pretrained backbone (tránh làm lệch feature)")
     parser.add_argument("--weight_decay", type=float, default=0.04, help="Hệ số weight decay")
     parser.add_argument("--phi", type=float, default=0.5, help="Tỷ lệ che ngân sách xe AGM")
     parser.add_argument("--q_max", type=float, default=0.6, help="Tỷ lệ tối đa patch xe bị che AGM")
-    parser.add_argument("--p_srs", type=float, default=0.5, help="Xác suất áp dụng SRS")
+    parser.add_argument("--mask_ratio", type=float, default=0.35, help="Tỷ lệ tổng số patch bị che trong AGM (mặc định 0.35)")
+    parser.add_argument("--mask_mode", type=str, default="block", choices=["patch", "block", "random"],
+                        help="Chế độ che AGM: 'block' (liền khối xe), 'patch' (phân tầng rời rạc), 'random' (ngẫu nhiên)")
+    parser.add_argument("--p_srs", type=float, default=0.5, help="Xác suất áp dụng SRS hoán nền")
+    parser.add_argument("--srs_continuous", action="store_true", default=True, help="Hoán đổi toàn bộ nền tĩnh tự nhiên (thay vì chắp vá từng patch)")
+    parser.add_argument("--no_srs_continuous", dest="srs_continuous", action="store_false")
+    parser.add_argument("--cross_cam_srs", action="store_true", default=False, help="Ablation: Hoán nền từ camera khác để triệt góc máy")
+    parser.add_argument("--random_pi", action="store_true", default=False, help="Ablation: Sử dụng bản đồ pi ngẫu nhiên thay cho TAM")
+    parser.add_argument("--ibot_beta", type=float, default=0.5, help="Trọng số tiền cảnh beta trong iBOT Patch Loss (1 + beta * pi)")
+    parser.add_argument("--use_ric", action="store_true", default=True, help="Bật Regional Instance Contrastive (RIC) cùng camera")
+    parser.add_argument("--no_ric", dest="use_ric", action="store_false")
+    parser.add_argument("--lambda_ric", type=float, default=0.15, help="Hệ số trọng số RIC Loss")
+    parser.add_argument("--use_cam_adv", action="store_true", default=True, help="Bật Camera Adversarial Discriminator (GRL) chống shortcut")
+    parser.add_argument("--no_cam_adv", dest="use_cam_adv", action="store_false")
+    parser.add_argument("--lambda_cam_adv", type=float, default=0.05, help="Hệ số trọng số Camera Adversarial Loss")
+    parser.add_argument("--use_cam_sampler", action="store_true", default=True, help="Bật CameraGroupedSampler gom nhóm theo camera")
+    parser.add_argument("--no_cam_sampler", dest="use_cam_sampler", action="store_false")
+    parser.add_argument("--cams_per_batch", type=int, default=4, help="Số camera trong 1 batch của CameraGroupedSampler")
+    parser.add_argument("--frames_per_cam", type=int, default=2, help="Số frame mỗi camera trong 1 batch của CameraGroupedSampler")
     parser.add_argument("--out_dim", type=int, default=4096, help="Số prototype DINO/iBOT head")
     parser.add_argument("--output_dir", "--save_dir", dest="output_dir", type=str, default="checkpoints/direction1_new", help="Thư mục lưu weights")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn custom checkpoint ban đầu (.pth / .safetensors)")
@@ -593,12 +666,18 @@ def warmup_tam_offline(
     start_t = time.time()
     raw_fe = unwrap_model(frozen_extractor)
 
-    # Chuẩn bị danh sách ảnh theo từng camera
+    # Chuẩn bị danh sách ảnh theo từng camera với phân tầng thời gian trải rộng
     cam_images = defaultdict(list)
     if hasattr(dataset, "cam_to_files") and hasattr(dataset, "cam_to_id"):
         for cam_key, files in dataset.cam_to_files.items():
             cid = dataset.cam_to_id[cam_key]
-            subset = files[:num_frames_per_cam]
+            n_f = len(files)
+            if n_f <= num_frames_per_cam:
+                subset = list(files)
+            else:
+                # Lấy mẫu phân tầng đều trải từ sáng đến tối / qua các ngày
+                indices = np.linspace(0, n_f - 1, num_frames_per_cam, dtype=int)
+                subset = [files[i] for i in indices]
             cam_images[cid] = subset
     else:
         # Trường hợp dataset tổng quát hoặc Synthetic
@@ -917,13 +996,49 @@ def train_direction_g():
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
     calibrator = GMMCalibrator()
 
-    # 4. Losses & Optimizer
+    # 4. Losses, Metric Heads & Optimizer
     dino_loss_fn = DINOLoss(out_dim=args.out_dim, nepochs=args.epochs).to(device)
     ibot_loss_fn = iBOTPatchLoss(out_dim=args.out_dim).to(device)
     koleo_loss_fn = KoLeoLoss().to(device)
+    ric_loss_fn = RICLoss().to(device)
+    cam_adv_head = CameraAdversarialHead(in_dim=embed_dim, num_cams=pos_stats.num_cams).to(device)
 
-    trainable_params = [p for p in student_model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=args.weight_decay)
+    # Phân nhóm tham số khoa học (Parameter Groups):
+    # - Tách Backbone (giảm LR theo backbone_lr_scale) khỏi Heads (full LR) để bảo vệ pretrained DINOv3
+    # - Tách bias và norm (weight_decay = 0.0) theo chuẩn kiến trúc Transformer
+    decay_backbone, nodecay_backbone = [], []
+    decay_heads, nodecay_heads = [], []
+
+    raw_s = unwrap_model(student_model)
+    for name, param in raw_s.backbone.named_parameters():
+        if not param.requires_grad:
+            continue
+        if param.ndim <= 1 or name.endswith(".bias"):
+            nodecay_backbone.append(param)
+        else:
+            decay_backbone.append(param)
+
+    for head in [raw_s.dino_head, raw_s.ibot_head, cam_adv_head]:
+        for name, param in head.named_parameters():
+            if not param.requires_grad:
+                continue
+            if param.ndim <= 1 or name.endswith(".bias"):
+                nodecay_heads.append(param)
+            else:
+                decay_heads.append(param)
+
+    backbone_lr = effective_lr * args.backbone_lr_scale
+    param_groups = [
+        {"params": decay_backbone, "lr": backbone_lr, "weight_decay": args.weight_decay},
+        {"params": nodecay_backbone, "lr": backbone_lr, "weight_decay": 0.0},
+        {"params": decay_heads, "lr": effective_lr, "weight_decay": args.weight_decay},
+        {"params": nodecay_heads, "lr": effective_lr, "weight_decay": 0.0},
+    ]
+    # Lọc bỏ các group rỗng
+    param_groups = [g for g in param_groups if len(g["params"]) > 0]
+    trainable_params = [p for g in param_groups for p in g["params"]]
+
+    optimizer = torch.optim.AdamW(param_groups)
     scheduler = build_smooth_lr_scheduler(
         optimizer,
         total_epochs=args.epochs,
@@ -934,7 +1049,7 @@ def train_direction_g():
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
-    history = {"total": [], "dino": [], "ibot": [], "koleo": []}
+    history = {"total": [], "dino": [], "ibot": [], "koleo": [], "ric": [], "cam_adv": []}
 
     resume_target = args.resume
     if resume_target:
@@ -1114,7 +1229,11 @@ def train_direction_g():
     # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
     if args.data_dir and os.path.isdir(args.data_dir):
         try:
-            dataset = TrafficCameraDataset(data_dir=args.data_dir, img_size=(256, 448))
+            dataset = TrafficCameraDataset(
+                data_dir=args.data_dir,
+                img_size=(256, 448),
+                cross_cam_srs=args.cross_cam_srs,
+            )
             print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
             if dataset.num_cams > pos_stats.num_cams:
                 pos_stats.ensure_cam_capacity(max(0, dataset.num_cams - 1))
@@ -1125,14 +1244,37 @@ def train_direction_g():
         print("💡 [Data] Chưa truyền --data_dir -> Sử dụng SyntheticTrafficDataset mô phỏng...")
         dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
 
-    loader = DataLoader(
-        dataset,
-        batch_size=effective_batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        pin_memory=(device.type == "cuda"),
-        drop_last=False,
-    )
+    # Thiết lập Bộ lấy mẫu phân nhóm theo Camera (CameraGroupedSampler) cho hard negatives cùng camera
+    batch_sampler = None
+    if args.use_cam_sampler and hasattr(dataset, "camera_to_indices"):
+        valid_cam_dict = {c: idxs for c, idxs in dataset.camera_to_indices.items() if len(idxs) >= 2}
+        if len(valid_cam_dict) >= 2:
+            batch_sampler = CameraGroupedSampler(
+                camera_to_indices=valid_cam_dict,
+                batch_cameras=max(1, args.cams_per_batch),
+                frames_per_camera=max(2, args.frames_per_cam),
+                shuffle=True,
+                drop_last=False,
+            )
+            print(f"📦 [CameraGroupedSampler] Đã kích hoạt bộ lấy mẫu theo nhóm Camera: "
+                  f"{args.cams_per_batch} cams x {args.frames_per_cam} frames/cam = batch {args.cams_per_batch * args.frames_per_cam}.")
+
+    if batch_sampler is not None:
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            num_workers=args.num_workers,
+            pin_memory=(device.type == "cuda"),
+        )
+    else:
+        loader = DataLoader(
+            dataset,
+            batch_size=effective_batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=(device.type == "cuda"),
+            drop_last=False,
+        )
 
     # 6. Tự động khởi động TAM Warmup offline (Fit PCA, K-means đa camera & GMM sơ bộ)
     raw_fe = unwrap_model(frozen_extractor)
@@ -1180,6 +1322,7 @@ def train_direction_g():
             "teacher_dino_head": clean_state_dict(raw_curr_t.dino_head.state_dict()),
             "student_ibot_head": clean_state_dict(raw_curr_s.ibot_head.state_dict()),
             "teacher_ibot_head": clean_state_dict(raw_curr_t.ibot_head.state_dict()),
+            "cam_adv_head": clean_state_dict(cam_adv_head.state_dict()),
             "pos_stats": clean_state_dict(pos_stats.state_dict()),
             "calibrator": calibrator.state_dict(),
             "frozen_extractor": clean_state_dict(raw_curr_fe.state_dict()),
@@ -1217,29 +1360,42 @@ def train_direction_g():
             epoch_dino_losses = []
             epoch_ibot_losses = []
             epoch_koleo_losses = []
+            epoch_ric_losses = []
+            epoch_cam_adv_losses = []
 
             for batch in loader:
                 x1 = batch["x1"].to(device, non_blocking=(device.type == "cuda"))
                 x2 = batch["x2"].to(device, non_blocking=(device.type == "cuda"))
                 cids = batch["cid"].to(device, non_blocking=(device.type == "cuda"))
+                cids2 = batch.get("cid2", cids).to(device, non_blocking=(device.type == "cuda"))
                 B = x1.shape[0]
 
                 # Bước A: Trích xuất đặc trưng đóng băng cho TAM
+                # CHỐNG SELF-INCLUSION BIAS: Tính atypicality TRƯỚC, sau đó mới cập nhật có cổng
                 with torch.no_grad():
                     with torch.amp.autocast(device_type=device_type, enabled=use_amp):
                         u1 = frozen_extractor(x1)  # (B, 448, 64)
                         u2 = frozen_extractor(x2)  # (B, 448, 64)
                     u1_f = u1.float()
                     u2_f = u2.float()
-                    pos_stats.update(cids, u1_f)
+
                     a1, valid1 = pos_stats.atypicality(cids, u1_f)
-                    a2, valid2 = pos_stats.atypicality(cids, u2_f)
+                    a2, valid2 = pos_stats.atypicality(cids2, u2_f)
 
                     calibrator.push(a1, valid1)
                     if step % args.gmm_refit_steps == 0:
                         calibrator.refit(max_iters=args.gmm_iters)
-                    pi1 = calibrator.posterior(a1).view(B, 16, 28)
-                    pi2 = calibrator.posterior(a2).view(B, 16, 28)
+
+                    if args.random_pi:
+                        # Ablation: pi ngẫu nhiên
+                        pi1 = torch.rand((B, 16, 28), device=device)
+                        pi2 = torch.rand((B, 16, 28), device=device)
+                    else:
+                        pi1 = calibrator.posterior(a1).view(B, 16, 28)
+                        pi2 = calibrator.posterior(a2).view(B, 16, 28)
+
+                    # Gated Update: Bảo vệ cụm tĩnh không bị xe ở làn đông làm sai lệch
+                    pos_stats.update(cids, u1_f, gate_pi=pi1.view(B, 448))
 
                 # Bước B: Áp dụng SRS với xác suất p_srs
                 x_student = x1.clone()
@@ -1248,17 +1404,20 @@ def train_direction_g():
                         x_swapped, _ = static_region_swap(
                             x1[b], x2[b], pi1[b], pi2[b],
                             ratio=0.6, feather=4,
+                            continuous_bg=args.srs_continuous,
+                            color_match=args.cross_cam_srs,
                         )
                         x_student[b] = x_swapped
 
-                # Bước C: Áp dụng AGM sinh mask che phân tầng
+                # Bước C: Áp dụng AGM sinh mask che phân tầng (hoặc block / random)
                 masks = []
                 for b in range(B):
                     m_b = agm_sample(
                         pi=pi1[b].view(-1),
-                        ratio=0.35,
+                        ratio=args.mask_ratio,
                         phi=args.phi,
                         q_max=args.q_max,
+                        mode=args.mask_mode,
                     )
                     masks.append(m_b)
                 mask_batch = torch.stack(masks, dim=0).to(device)  # (B, 448) bool
@@ -1281,11 +1440,33 @@ def train_direction_g():
                     # Student nhận ảnh x_student_vit (SRS) cùng mặt nạ che phân tầng masks (AGM iBOT)
                     s_cls, s_patches, s_dino_logits, s_ibot_logits = student_model(x_student_vit, masks=mask_batch)
 
-                    # Bước E: Tính tổn thất Loss (KoLeo weight cân bằng 0.02 chống áp đảo)
+                    # Bước E: Tính toán toàn bộ hệ thống Loss
                     loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
-                    loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448))
+                    # Kích hoạt nhánh trọng số beta * pi trong iBOT
+                    loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448), beta=args.ibot_beta)
                     loss_koleo = koleo_loss_fn(s_cls)
-                    total_loss = loss_dino + 1.0 * loss_ibot + 0.02 * loss_koleo
+
+                    # Regional Instance Contrastive (RIC): ép mô hình tập trung vào xe qua hard-negatives cùng camera
+                    if args.use_ric:
+                        z_veh_s = pool_vehicle_embedding(s_patches, pi1.reshape(B, -1))
+                        z_veh_t = pool_vehicle_embedding(t_patches, pi1.reshape(B, -1))
+                        loss_ric = ric_loss_fn(z_veh_s, z_veh_t, cids)
+                    else:
+                        loss_ric = torch.tensor(0.0, device=device)
+
+                    # Camera Adversarial Loss (GRL): ép xóa bỏ thông tin camera ID trong CLS token
+                    if args.use_cam_adv:
+                        loss_cam_adv = cam_adv_head(s_cls, cids, grl_alpha=0.1)
+                    else:
+                        loss_cam_adv = torch.tensor(0.0, device=device)
+
+                    total_loss = (
+                        loss_dino
+                        + 1.0 * loss_ibot
+                        + 0.02 * loss_koleo
+                        + args.lambda_ric * loss_ric
+                        + args.lambda_cam_adv * loss_cam_adv
+                    )
 
                 # Bước F: Tối ưu Gradient qua GradScaler
                 optimizer.zero_grad()
@@ -1295,8 +1476,9 @@ def train_direction_g():
                 scaler.step(optimizer)
                 scaler.update()
 
-                # Bước G: Cập nhật EMA Teacher (momentum 0.996)
-                momentum = 0.996
+                # Bước G: Cập nhật EMA Teacher với Lịch trình Cosine Momentum (0.996 -> 1.0)
+                cosine_progress = float(epoch) / float(max(1, args.epochs))
+                momentum = 1.0 - (1.0 - 0.996) * 0.5 * (1.0 + np.cos(np.pi * cosine_progress))
                 with torch.no_grad():
                     raw_curr_s = unwrap_model(student_model)
                     raw_curr_t = unwrap_model(teacher_model)
@@ -1307,6 +1489,8 @@ def train_direction_g():
                 epoch_dino_losses.append(loss_dino.item())
                 epoch_ibot_losses.append(loss_ibot.item())
                 epoch_koleo_losses.append(loss_koleo.item())
+                epoch_ric_losses.append(loss_ric.item())
+                epoch_cam_adv_losses.append(loss_cam_adv.item())
 
                 # Lưu mẫu dữ liệu visual của batch cuối
                 last_visual_data = {
@@ -1320,7 +1504,8 @@ def train_direction_g():
                 step += 1
                 if step % 2 == 0 or step == 1:
                     print(f"   [Epoch {epoch+1}/{args.epochs} | Step {step}] Loss: {total_loss.item():.4f} "
-                          f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f})")
+                          f"(DINO: {loss_dino.item():.4f}, iBOT: {loss_ibot.item():.4f}, KoLeo: {loss_koleo.item():.4f}, "
+                          f"RIC: {loss_ric.item():.4f}, CamAdv: {loss_cam_adv.item():.4f})")
 
             # Cập nhật lịch trình Learning Rate Cosine Annealing
             scheduler.step()

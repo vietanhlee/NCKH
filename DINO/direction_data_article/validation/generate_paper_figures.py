@@ -5,7 +5,7 @@ generate_paper_figures.py
 Production figure generation script for the HCMC-TrafficSnap Data Article.
 Generates publication-quality, 300 DPI vector-styled figures:
   1. fig1_camera_spatial_map.png: Geographic distribution of 608 camera nodes in HCMC.
-  2. fig2_temporal_and_photometric.png: Diurnal luminance variation & crawl sampling intervals.
+  2. fig2_temporal_and_photometric.png: Diurnal luminance variation & temporal sampling intervals.
   3. fig3_graph_topology.png: Road network directionality classification & node degree distributions.
   4. fig4_sample_snapshots.png: Visual montage showing resolution and privacy unresolvability.
 
@@ -107,7 +107,7 @@ def generate_fig1_spatial_map():
 
 
 def generate_fig2_temporal_and_photometric():
-    """Figure 2: Diurnal Perceived Luminance and Crawl Interval Distribution."""
+    """Figure 2: Diurnal Perceived Luminance and Temporal Interval Distribution."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11.8, 4.6), dpi=300)
     
     # Subplot A: Diurnal Perceived Luminance Curve (24h) từ dữ liệu thực nghiệm
@@ -171,7 +171,7 @@ def generate_fig2_temporal_and_photometric():
     ax1.grid(True, linestyle='--', alpha=0.4)
     ax1.legend(loc='upper right', fontsize=7.8, framealpha=0.92)
     
-    # Subplot B: Crawl Sampling Interval & Hardware Lag
+    # Subplot B: Temporal Sampling Interval & Transmission Lag
     np.random.seed(42)
     n_total = 5000
     n_peak = int(n_total * 0.884)
@@ -201,14 +201,14 @@ def generate_fig2_temporal_and_photometric():
     ax2.set_ylim(0, max_c * 1.38)
     ax2.grid(True, linestyle='--', alpha=0.4)
     
-    # Hardware Lag & Ingestion performance text box placed in airy top-right without touching bars
+    # Transmission Lag & Recording performance text box
     info_text = (
-        r"$\mathbf{Ingestion\;Performance:}$" + "\n"
+        r"$\mathbf{Recording\;Performance:}$" + "\n"
         r"$\bullet$ Active Mean: $\Delta T = 269.0 \pm 239.7$~s" + "\n"
         r"$\bullet$ Median: $263.0$~s (Mode: $240$--$270$~s)" + "\n"
         r"$\bullet$ $\leq 300$~s: $\mathbf{88.4\%}$ | $p_{90} \approx 312.0$~s" + "\n"
         r"$\bullet$ $300$--$600$~s: $\mathbf{7.8\%}$ | $>600$~s: $\mathbf{3.8\%}$" + "\n"
-        r"$\bullet$ Hardware lag: $\Delta t_{\mathrm{lag}} = 15.0 \pm 4.2$~s"
+        r"$\bullet$ Transmission lag: $\Delta t_{\mathrm{lag}} = 15.0 \pm 4.2$~s"
     )
     ax2.text(0.97, 0.95, info_text, transform=ax2.transAxes, verticalalignment='top', horizontalalignment='right',
              fontsize=8, bbox=dict(boxstyle="round,pad=0.35", facecolor="#f8f9fa", edgecolor="#bdc3c7", lw=0.6))

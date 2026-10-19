@@ -45,32 +45,51 @@ def agm_sample(
     phi: float = 0.5,
     q_max: float = 0.6,
     generator: Optional[torch.Generator] = None,
+    mode: str = "patch",
+    grid_shape: Optional[Tuple[int, int]] = None,
 ) -> torch.Tensor:
     """
-    Lấy mẫu mask cho 1 crop view theo chính sách AGM phân tầng.
+    Lấy mẫu mask cho 1 crop view theo chính sách AGM phân tầng (hỗ trợ patch-wise, block-wise và random).
 
     Args:
-        pi: Tensor (N,) xác suất tiền cảnh của crop view (ví dụ N = 196 cho 14x14).
+        pi: Tensor (N,) hoặc (Hp, Wp) xác suất tiền cảnh của crop view.
         valid: Tensor (N,) bool, True nếu vị trí có TAM xác định.
         ratio: Tỷ lệ tổng số patch bị che (ví dụ ratio in [0.1, 0.5]).
         phi: Tỷ lệ ngân sách che dành cho vùng xe (mặc định 0.5).
         q_max: Tỷ lệ tối đa patch xe được phép che (mặc định 0.6, giữ lại >= 40% làm ngữ cảnh).
         generator: Bộ sinh số ngẫu nhiên torch.Generator.
+        mode: Chế độ che {'patch', 'block', 'random'}.
+              - 'patch': Lấy mẫu phân tầng có trọng số Gumbel-max.
+              - 'block': Gom cụm che theo khối 2x2 quanh tâm phương tiện để tránh nội suy cục bộ dễ dàng.
+              - 'random': Che ngẫu nhiên đồng nhất (dùng cho Ablation Study).
+        grid_shape: Kích thước lưới 2D (Hp, Wp), mặc định tự suy ra (16, 28) nếu N=448 hoặc (14, 14) nếu N=196.
 
     Returns:
         mask: Tensor (N,) bool, True là patch bị che.
     """
-    N = pi.numel()
-    device = pi.device
+    orig_pi_shape = pi.shape
+    pi_flat = pi.reshape(-1)
+    N = pi_flat.numel()
+    device = pi_flat.device
     if valid is None:
-        valid = torch.ones(N, dtype=torch.bool, device=device)
+        valid_flat = torch.ones(N, dtype=torch.bool, device=device)
+    else:
+        valid_flat = valid.reshape(-1)
 
     n_mask = int(round(ratio * N))
     if n_mask <= 0:
         return torch.zeros(N, dtype=torch.bool, device=device)
 
-    F_mask = (pi > 0.5) & valid       # Vùng xe
-    B_mask = ~F_mask                   # Vùng nền & không xác định
+    # Nhánh 1: Che ngẫu nhiên thuần túy (phục vụ Ablation AGM vs Random Mask)
+    if mode == "random":
+        all_indices = torch.arange(N, device=device)
+        chosen = sample_without_replacement(all_indices, n_mask, weights=None, generator=generator)
+        mask = torch.zeros(N, dtype=torch.bool, device=device)
+        mask[chosen] = True
+        return mask
+
+    F_mask = (pi_flat > 0.5) & valid_flat  # Vùng xe
+    B_mask = ~F_mask                       # Vùng nền & không xác định
 
     n_fg_total = int(F_mask.sum().item())
     n_bg_total = int(B_mask.sum().item())
@@ -90,8 +109,55 @@ def agm_sample(
     fg_indices = torch.where(F_mask)[0]
     bg_indices = torch.where(B_mask)[0]
 
-    fg_weights = pi[fg_indices] if n_fg_total > 0 else None
-    chosen_fg = sample_without_replacement(fg_indices, k_fg, weights=fg_weights, generator=generator)
+    # Nhánh 2: Che theo khối (Block-wise Masking quanh hạt giống vùng xe)
+    if mode == "block" and k_fg > 0:
+        if grid_shape is None:
+            if len(orig_pi_shape) == 2:
+                Hp, Wp = orig_pi_shape
+            elif N == 448:
+                Hp, Wp = 16, 28
+            else:
+                side = int(math.isqrt(N))
+                Hp, Wp = (side, N // max(1, side))
+        else:
+            Hp, Wp = grid_shape
+
+        if Hp * Wp == N:
+            # Chọn số hạt giống bằng khoảng 1/3 ngân sách k_fg rồi lan tỏa khối 2x2 trong tập F_mask
+            n_seeds = max(1, k_fg // 3)
+            fg_weights = pi_flat[fg_indices]
+            seeds = sample_without_replacement(fg_indices, n_seeds, weights=fg_weights, generator=generator)
+
+            fg_2d = F_mask.view(Hp, Wp)
+            block_cand_2d = torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
+            for s_idx in seeds.tolist():
+                r, c = s_idx // Wp, s_idx % Wp
+                r_end = min(Hp, r + 2)
+                c_end = min(Wp, c + 2)
+                block_cand_2d[r:r_end, c:c_end] = True
+
+            # Chỉ giữ các ô thuộc vùng xe để tôn trọng nghiêm ngặt trần q_max
+            block_fg_2d = block_cand_2d & fg_2d
+            block_fg_idx = torch.where(block_fg_2d.view(-1))[0]
+
+            if block_fg_idx.numel() >= k_fg:
+                chosen_fg = block_fg_idx[:k_fg]
+            else:
+                rem_fg_mask = F_mask.clone()
+                rem_fg_mask[block_fg_idx] = False
+                rem_fg_idx = torch.where(rem_fg_mask)[0]
+                need_more = k_fg - block_fg_idx.numel()
+                extra_chosen = sample_without_replacement(
+                    rem_fg_idx, need_more, weights=pi_flat[rem_fg_idx], generator=generator
+                )
+                chosen_fg = torch.cat([block_fg_idx, extra_chosen], dim=0)
+        else:
+            fg_weights = pi_flat[fg_indices] if n_fg_total > 0 else None
+            chosen_fg = sample_without_replacement(fg_indices, k_fg, weights=fg_weights, generator=generator)
+    else:
+        fg_weights = pi_flat[fg_indices] if n_fg_total > 0 else None
+        chosen_fg = sample_without_replacement(fg_indices, k_fg, weights=fg_weights, generator=generator)
+
     chosen_bg = sample_without_replacement(bg_indices, k_bg, weights=None, generator=generator)
 
     mask = torch.zeros(N, dtype=torch.bool, device=device)

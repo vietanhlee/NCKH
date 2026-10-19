@@ -1,0 +1,95 @@
+% Table 3: Comprehensive Data Dictionary: Three-Part Structured Specification
+\begin{table*}[!htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.12}
+\caption{Comprehensive Data Dictionary: Multi-Part Schemas, Data Types, and Concrete Sample Records.}
+\label{tab:data_dictionary}
+\begin{tabularx}{\textwidth}{@{} >{\bfseries}p{2.7cm} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{1.9cm} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}X @{}}
+\toprule
+\textbf{Asset / File Path} & \textbf{Shape / Volume} & \textbf{Data Format} & \textbf{Exact Schema \& Dtypes} & \textbf{Description \& Concrete Sample Record} \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Part A: Tabular Geospatial and Network Metadata CSV Assets}} \\
+\addlinespace[1.5pt]
+\path{metadata/routes.csv} & 
+$608 \times 8$ tabular records & 
+UTF-8 text CSV & 
+(1) \texttt{matrix\_index} (int64) \newline
+(2) \texttt{stt} (int64) \newline
+(3) \texttt{Location} (string) \newline
+(4) \texttt{CamID} (string, hex-24) \newline
+(5) \texttt{latitude} (float64) \newline
+(6) \texttt{longitude} (float64) \newline
+(7) \texttt{coord\_pair\_str} (string) \newline
+\phantom{xx}\textit{[col: "latitude, longitude"]} \newline
+(8) \texttt{Phuong} (string) & 
+Canonical camera registry containing exactly 8 columns synchronizing dense 0-indexed matrix indices with official hexadecimal stream identifiers and administrative wards across HCMC. Note: Column 7 contains the literal CSV header \texttt{"latitude, longitude"} storing the combined coordinate string. Camera elevations ($H \in [6.0, 15.0]$~m) are cataloged from municipal ITS engineering specifications. \newline
+\textit{Exact 8-element sample row:} \newline
+\texttt{0, 1, "Tran Quang Khai - Tran Khac Chan", "662b86c41afb9c00172dd31c", 10.791890, 106.691054, "10.791890, 106.691054", "Phuong Tan Dinh, Quan 1"} \\
+\addlinespace[2pt]
+\path{metadata/stations.csv} & 
+$608 \times 5$ tabular records & 
+UTF-8 text CSV & 
+(1) \texttt{matrix\_index} (int64) \newline
+(2) \texttt{station\_id} (int64) \newline
+(3) \texttt{out\_degree} (int64) \newline
+(4) \texttt{in\_degree} (int64) \newline
+(5) \texttt{node\_type} (string) & 
+Station-level topological degree catalog and structural role classification within the directed road network graph (\texttt{regular}, \texttt{source}, \texttt{sink}, \texttt{isolated}). \newline
+\textit{Exact 5-element sample row:} \newline
+\texttt{0, 1, 7, 5, "regular"} (Station 1 has out-degree 7, in-degree 5, classified as regular transit node). \\
+\addlinespace[2pt]
+\path{graph/edges.csv} & 
+$2,450 \times 9$ tabular links & 
+UTF-8 text CSV & 
+(1) \texttt{source\_station\_id} (int64) \newline
+(2) \texttt{target\_station\_id} (int64) \newline
+(3) \texttt{source\_idx} (int64) \newline
+(4) \texttt{target\_idx} (int64) \newline
+(5) \texttt{distance\_km} (float64) \newline
+(6) \texttt{distance\_m} (float64) \newline
+(7) \texttt{is\_bidirectional} (bool) \newline
+(8) \texttt{reverse\_dist\_km} (float64) \newline
+(9) \texttt{dist\_diff\_m} (float64) & 
+Exhaustive edge list of all 2,450 valid directed arterial corridors extracted within the 6.0~km OSRM navigability horizon. Unidirectional links record \texttt{NaN} for reverse metrics. \newline
+\textit{Exact 9-element sample row:} \newline
+\texttt{1, 7, 0, 5, 1.74, 1740.0, False, NaN, NaN} (directed corridor from Station 1 [\texttt{idx=0}] to Station 7 [\texttt{idx=5}] of length $1.74$~km without direct reverse edge). \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Part B: Machine-Learning Ready Graph Tensors}} \\
+\addlinespace[1.5pt]
+\path{graph/distance_km.npy} & 
+Matrix tensor: \newline
+$(608, 608)$ 2D & 
+NumPy binary \newline
+(\texttt{float64}, little-endian, $2.82$~MB) & 
+$d_{ii} = 0.0$ (self) \newline
+$d_{ij} \in (0.0, 6.0]$~km (valid) \newline
+$d_{ij} = \text{NaN}$ (unconnected) & 
+Directed driving distance tensor along OpenStreetMap corridors. Self-distances along diagonal are $0.0$. Valid corridors ($2,450$ links) contain driving distances in kilometers. Unconnected pairs ($366,606$ entries, $99.17\%$) are explicitly encoded as IEEE 754 floating-point \texttt{NaN}. When loaded via \path{code/graph_utils.py}, NaNs are mapped to $0.0$ via \texttt{np.nan\_to\_num}. \newline
+\textit{Sample slice:} \texttt{dist[0, 5] = 1.74}; \texttt{dist[0, 1] = NaN}. \\
+\addlinespace[2pt]
+\path{graph/direction.npy} & 
+Matrix tensor: \newline
+$(608, 608)$ 2D & 
+NumPy binary \newline
+(\texttt{int8}, little-endian, $361$~KB) & 
+$A_{ij} \in \{0, 1\}$ \newline
+($1 = \text{link}$, $0 = \text{none}$) & 
+Directed binary reachability adjacency matrix ($1$ denotes a verified navigable directed road corridor from station $i$ to station $j$; $0$ denotes absence of direct link or self-loop). Non-zero entries count: $2,450$. \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Part C: Visual Surveillance Image Corpus}} \\
+\addlinespace[1.5pt]
+\path{images/station_<id>/*.jpg} & 
+$714,123$ image files \newline
+($44.38$~GiB / $47.66$~GB) & 
+RGB JPEG image \newline
+(JFIF 1.01 standard) & 
+$512 \times 288 \times 3$ px \newline
+$66.74\text{ KB}\ (65.18\text{ KiB})$ \newline
+$Q \approx 75$--$80$ compression & 
+Surveillance snapshots partitioned into per-station subdirectories, following the deterministic pattern \path{station_<id>/<station_id>_<unix_timestamp>.jpg}. \newline
+\textit{Exact sample file:} \path{images/station_1/1_1759401420.jpg} (Station 1, captured at UTC epoch $1759401420 \equiv$ 2026-10-02 17:37:00 ICT, file size $65.2$~KiB). \\
+\bottomrule
+\end{tabularx}
+\end{table*}

@@ -1,38 +1,38 @@
 % Table 2: Systematic Dataset Comparison (Elsevier Data in Brief Standard)
 \begin{table*}[!htbp]
 \centering
-\footnotesize
-\setlength{\tabcolsep}{4.5pt}
-\renewcommand{\arraystretch}{1.20}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.03}
 \caption{Systematic comparison of IC4SD-TrafficSnap with established benchmarks in intelligent transportation systems and computer vision.}
 \label{tab:dataset_comparison}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.5cm} c >{\raggedright\arraybackslash}p{1.7cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.6cm} c >{\raggedright\arraybackslash}p{1.6cm} >{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Dataset} & \textbf{Urban Context \& Flow} & \textbf{Nodes} & \textbf{Time Span} & \textbf{Sensing Modality \& Topology} & \textbf{Primary Target Research Scope} \\
 \midrule
 \multicolumn{6}{@{}l}{\textbf{A. Longitudinal 1D Sensor Infrastructure Benchmarks}} \\
-\addlinespace[2pt]
-METR-LA~\cite{li2018diffusion} & Los Angeles, USA \newline (Car-dominant) & 207 & 4 months & Inductive loop sensors (Directed distance graph) & 1D traffic speed forecasting (lacks visual context) \\
-\addlinespace[2.5pt]
-PEMS-BAY~\cite{li2018diffusion} & San Francisco, USA \newline (Car-dominant) & 325 & 6 months & Inductive loop sensors (Directed distance graph) & 1D traffic speed forecasting (lacks visual context) \\
-\addlinespace[2.5pt]
-LargeST~\cite{liu2023largest} & California, USA \newline (Car-dominant) & 8,600 & 5 years & Inductive loop sensors (Large-scale highway graph) & Macroscopic network forecasting (lacks visual context) \\
+\addlinespace[1.5pt]
+METR-LA~\cite{li2018diffusion} & Los Angeles, USA (Car-dominant) & 207 & 4 months & Inductive loop sensors (Directed distance graph) & 1D traffic speed forecasting (lacks visual context) \\
+\addlinespace[1.5pt]
+PEMS-BAY~\cite{li2018diffusion} & San Francisco, USA (Car-dominant) & 325 & 6 months & Inductive loop sensors (Directed distance graph) & 1D traffic speed forecasting (lacks visual context) \\
+\addlinespace[1.5pt]
+LargeST~\cite{liu2023largest} & California, USA (Car-dominant) & 8,600 & 5 years & Inductive loop sensors (Large-scale highway graph) & Macroscopic network forecasting (lacks visual context) \\
 \midrule
 \multicolumn{6}{@{}l}{\textbf{B. Ego-Vehicle / Localized Microscopic Video Benchmarks}} \\
-\addlinespace[2pt]
-BDD100K~\cite{yu2020bdd100k} & United States \newline (Car-dominant) & Mobile & 100K clips & Ego-vehicle dashcam video (No fixed surveillance graph) & Autonomous driving multitask perception (lane, drivable, tracking) \\
-\addlinespace[2.5pt]
-UA-DETRAC~\cite{wen2020ua} & Beijing / Tianjin, China \newline (Car-dominant) & 24 & Short clips & $960 \times 540$ surveillance video (Isolated intersections, no graph) & Microscopic vehicle detection and multi-object tracking \\
-\addlinespace[2.5pt]
-CityFlow~\cite{tang2019cityflow} & Mid-sized city, USA \newline (Car-dominant) & 40 & 3.25 hours & HD synchronized video clips (Small intersection cluster, no tensor) & Multi-target multi-camera tracking (MTMC) and vehicle Re-ID \\
-\addlinespace[2.5pt]
-MIO-TCD~\cite{luo2018miotcd} & North America \newline (Car-dominant) & Multiple \newline (unindexed) & Discontinuous & Isolated crop snapshots (Unconnected cameras, no graph) & Vehicle categorization and localization (no continuous temporal dynamics) \\
-\addlinespace[2.5pt]
-CityCam~\cite{zhang2017understanding} & New York City, USA \newline (Car-dominant) & 212 & Multi-day & Low-resolution webcams (No formal routing graph) & Vehicle counting and density estimation across disparate viewpoints \\
+\addlinespace[1.5pt]
+BDD100K~\cite{yu2020bdd100k} & United States (Car-dominant) & Mobile & 100K clips & Ego-vehicle dashcam video (No fixed surveillance graph) & Autonomous driving multitask perception (lane, drivable, tracking) \\
+\addlinespace[1.5pt]
+UA-DETRAC~\cite{wen2020ua} & Beijing / Tianjin, China (Car-dominant) & 24 & Short clips & $960 \times 540$ surveillance video (Isolated intersections, no graph) & Microscopic vehicle detection and multi-object tracking \\
+\addlinespace[1.5pt]
+CityFlow~\cite{tang2019cityflow} & Mid-sized city, USA (Car-dominant) & 40 & 3.25 hours & HD synchronized video clips (Small intersection cluster, no tensor) & Multi-target multi-camera tracking (MTMC) and vehicle Re-ID \\
+\addlinespace[1.5pt]
+MIO-TCD~\cite{luo2018miotcd} & North America (Car-dominant) & Multiple (unindexed) & Discontinuous & Isolated crop snapshots (Unconnected cameras, no graph) & Vehicle categorization and localization (no continuous dynamics) \\
+\addlinespace[1.5pt]
+CityCam~\cite{zhang2017understanding} & New York City, USA (Car-dominant) & 212 & Multi-day & Low-resolution webcams (No formal routing graph) & Vehicle counting and density estimation across disparate viewpoints \\
 \midrule
 \multicolumn{6}{@{}l}{\textbf{C. City-Scale Multimodal Spatial-Temporal Vision Benchmark}} \\
-\addlinespace[2pt]
-\textbf{IC4SD-TrafficSnap} & \textbf{Ho Chi Minh City, VN} \newline \textbf{(Motorcycle, 70--80\%)} & \textbf{608} & \textbf{93.6 hours} & \textbf{Multimodal: $512\times288$ RGB snapshots + Geospatial road network (derived directed graph, 2,450 corridors)} & \textbf{Multi-camera self-supervised visual representation learning, roadway background modeling, and macroscopic urban traffic scene understanding} \\
+\addlinespace[1.5pt]
+\textbf{IC4SD-TrafficSnap} & \textbf{Ho Chi Minh City, VN (Motorcycles: 70--80\%)} & \textbf{608} & \textbf{93.6 hours} & \textbf{Multimodal: $512\times288$ RGB snapshots + Geospatial road network (2,450 directed corridors)} & \textbf{Self-supervised visual representation, roadway background modeling, and macroscopic urban traffic scene understanding} \\
 \bottomrule
 \end{tabularx}
 \end{table*}

@@ -220,3 +220,91 @@ class RICLoss(nn.Module):
         denom = exp_pos + (exp_sim * hard_neg_mask.float()).sum(dim=-1)
         loss = -torch.log(exp_pos / denom.clamp(min=1e-8)).mean()
         return loss
+
+
+def pool_vehicle_embedding(
+    patch_tokens: torch.Tensor,
+    pi: torch.Tensor,
+    eps: float = 1e-6,
+) -> torch.Tensor:
+    """
+    Gộp đặc trưng vùng phương tiện (Attention-Weighted Vehicle Pooling) theo bản đồ xác suất tiền cảnh pi.
+    Buộc vector đại diện z_veh tập trung hoàn toàn vào các patch chứa xe thay vì nền tĩnh.
+
+    Args:
+        patch_tokens: (B, P, D) Đặc trưng patch từ backbone.
+        pi: (B, P) hoặc (B, Hp, Wp) Xác suất tiền cảnh phương tiện trong [0, 1].
+        eps: Hằng số chống chia cho 0.
+
+    Returns:
+        z_veh: (B, D) Vector vùng phương tiện đã chuẩn hóa L2.
+    """
+    B, P, D = patch_tokens.shape
+    w = pi.reshape(B, P, 1).detach().clamp(min=0.0, max=1.0)
+    # Cộng thêm một sàn nhỏ 1e-3 để nếu frame hoàn toàn vắng xe, phép gộp vẫn ổn định số học
+    w_safe = w + 1e-3
+    pooled = (patch_tokens * w_safe).sum(dim=1) / (w_safe.sum(dim=1) + eps)
+    return F.normalize(pooled, p=2, dim=-1)
+
+
+class _GradientReversalFn(torch.autograd.Function):
+    """
+    Hàm tự động đảo ngược dấu đạo hàm (Gradient Reversal Layer - Ganin et al.).
+    Chiều thuận (Forward): giữ nguyên đầu vào.
+    Chiều ngược (Backward): nhân gradient với -alpha để ép backbone xóa thông tin phân biệt miền/camera.
+    """
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, alpha: float) -> torch.Tensor:
+        ctx.alpha = alpha
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        return grad_output.neg() * ctx.alpha, None
+
+
+class CameraAdversarialHead(nn.Module):
+    """
+    Đầu phân loại đối kháng Camera ID (Camera-Invariance Adversarial Discriminator).
+    Sử dụng Gradient Reversal Layer (GRL) để phạt trực tiếp việc mã hóa Camera ID trong CLS token,
+    triệt tiêu hoàn toàn Camera ID Shortcut Trap.
+    """
+    def __init__(self, in_dim: int, num_cams: int = 64, hidden_dim: int = 256):
+        super().__init__()
+        self.in_dim = in_dim
+        self.num_cams = max(2, num_cams)
+        self.hidden_dim = hidden_dim
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, self.num_cams),
+        )
+
+    def ensure_cam_capacity(self, max_cid: int):
+        """Mở rộng tầng phân loại nếu gặp camera ID vượt quá num_cams hiện tại."""
+        if max_cid < self.num_cams:
+            return
+        new_cams = max(max_cid + 1, self.num_cams * 2)
+        old_linear = self.net[-1]
+        device = old_linear.weight.device
+        dtype = old_linear.weight.dtype
+        new_linear = nn.Linear(self.hidden_dim, new_cams, device=device, dtype=dtype)
+        with torch.no_grad():
+            new_linear.weight[:self.num_cams].copy_(old_linear.weight)
+            new_linear.bias[:self.num_cams].copy_(old_linear.bias)
+        self.net[-1] = new_linear
+        self.num_cams = new_cams
+
+    def forward(self, cls_feat: torch.Tensor, cids: torch.Tensor, grl_alpha: float = 0.1) -> torch.Tensor:
+        """
+        cls_feat: (B, D) Đặc trưng CLS từ Student.
+        cids: (B,) Nhãn Camera ID.
+        grl_alpha: Hệ số cường độ đảo chiều gradient.
+        """
+        max_cid = int(cids.max().item()) if cids.numel() > 0 else 0
+        self.ensure_cam_capacity(max_cid)
+        x_Norm = F.normalize(cls_feat, p=2, dim=-1)
+        x_rev = _GradientReversalFn.apply(x_Norm, grl_alpha)
+        logits = self.net(x_rev)
+        return F.cross_entropy(logits, cids.long())
+

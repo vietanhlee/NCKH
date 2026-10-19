@@ -1,9 +1,9 @@
 % Table 5: Quantitative Visual Privacy Audit and Optical Nyquist Resolution Limits
-\begin{table*}[!htbp]
+\begin{table}[!htbp]
 \centering
-\footnotesize
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.18}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
 \caption{Quantitative visual privacy parameters, optical Nyquist-Shannon resolution limits, and empirical multi-tiered audit results for IC4SD-TrafficSnap.}
 \label{tab:pii_audit}
 \begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
@@ -22,7 +22,7 @@ Multi-rater blind inspection & $\mathbf{0\text{ readable plates / faces}}$ & Eva
 \addlinespace[1.5pt]
 Positive control rater calibration & $\mathbf{100.0\%\text{ sensitivity}}$ & $50$ close-up ground photos ($<5$~m) with legible text; verified $100\%$ detection recall across all $3$ raters \\
 \addlinespace[1.5pt]
-Camera mounting elevation ($H$) & $\mathbf{6.0 - 15.0\text{ m}}$ & Municipal overhead gantries cataloged from official technical metadata in \path{metadata/routes.csv} \\
+Camera mounting elevation ($H$) & $\mathbf{6.0 - 15.0\text{ m}}$ & Municipal overhead gantries cataloged from official municipal ITS technical installation records \\
 \addlinespace[1.5pt]
 Camera downward pitch angle ($\theta$) & $\mathbf{15^\circ - 40^\circ}$ & Oblique downward viewports monitoring arterial lane queues \\
 \addlinespace[1.5pt]
@@ -36,9 +36,9 @@ Motorcycle plate sensor projection & $\mathbf{\approx 7 \times 5\text{ pixels}}$
 \addlinespace[1.5pt]
 Facial biometric region & $\mathbf{< 8 \times 8\text{ pixels}}$ & Physical occlusion: statutory mandatory helmets (Decree 100/2019/ND-CP) and multi-layer fabric sun/dust masks ($>85\%$) \\
 \addlinespace[1.5pt]
-Statistical Rule of Three ($95\%$ CI) & $\mathbf{p \le 0.30\%}$ (Stress sample) \newline $\mathbf{p \le 0.15\%}$ (Random sample) & Upper risk bound for zero violations: $3/1,000 = 0.30\%$ on worst-case stress sample, and $3/2,000 = 0.15\%$ on stratified random sample \\
+Statistical Rule of Three ($95\%$ CI) & $\mathbf{p \le 0.30\%}$ (Stress sample) \newline $\mathbf{p \le 0.15\%}$ (Random sample) & Upper risk bound for zero violations: $3/1,000 = 0.30\%$ on worst-case stress sample, and $3/2,000 = 0.15\%$ on stratified random sample via Hanley \& Lippman-Hand~\cite{hanley1983if} \\
 \addlinespace[1.5pt]
 Regulatory compliance alignment & $\mathbf{Aligned}$ & Conforms to Vietnamese Decree 13/2023/ND-CP, Decree 47/2020/ND-CP, and Law 91/2025/QH15 \\
 \bottomrule
 \end{tabularx}
-\end{table*}
+\end{table}

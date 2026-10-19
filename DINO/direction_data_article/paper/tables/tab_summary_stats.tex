@@ -1,28 +1,28 @@
-% Table 3: Thống kê định lượng tập ảnh và kiểm toán thị giác IC4SD-TrafficSnap (Chuẩn xuất bản Elsevier Data in Brief)
+% Table 3: Quantitative image corpus statistics and visual audit of IC4SD-TrafficSnap (Elsevier Data in Brief)
 \begin{table*}[!htbp]
 \centering
-\footnotesize
-\setlength{\tabcolsep}{5pt}
-\renewcommand{\arraystretch}{1.10}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.03}
 \caption{Empirical characteristics, acquisition timeline, and photometric descriptors of the visual snapshot corpus.}
 \label{tab:summary_stats}
-\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X @{}}
+\begin{tabularx}{\textwidth}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}X @{}}
 \toprule
 \textbf{Characteristic / Descriptor} & \textbf{Empirical Measurement} & \textbf{Technical Specification / Dataset Context} \\
 \midrule
-\multicolumn{3}{@{}l}{\textbf{A. Ingestion Timeline \& Quantitative Volume}} \\
+\multicolumn{3}{@{}l}{\textbf{A. Recording Timeline \& Quantitative Volume}} \\
 \addlinespace[1pt]
 Observation duration & $\mathbf{93.6\text{ hours}}$ ($3.90$ days) & Spanning 5 calendar days: Oct 2 (17:37) to Oct 6 (15:12 ICT) \\
 \addlinespace[1pt]
-Total valid snapshots collected & $\mathbf{714,123\text{ frames}}$ & Time-lapse surveillance image bank \\
+Total valid snapshots collected & $\mathbf{714,123\text{ frames}}$ & Continuous time-lapse surveillance image bank \\
 \addlinespace[1pt]
 Monitored surveillance endpoints & $\mathbf{608\text{ stations}}$ & Integrated active municipal camera network across urban corridors; mean: $1,174.5$ frames/station (up to $1,268$) \\
 \addlinespace[1pt]
-Total archive storage volume & $\mathbf{44.38\text{ GiB}}$ ($\mathbf{47.66\text{ GB}}$) & 3-channel RGB JPEG stream archive (Quality factor $\approx 75$--$80$) \\
+Total archive storage volume & $\mathbf{44.38\text{ GiB}}$ ($\mathbf{47.66\text{ GB}}$) & 3-channel RGB JPEG stream archive ($47,660,782,551$~bytes; $Q \approx 75$--$80$) \\
 \addlinespace[1pt]
 Native snapshot frame resolution & $\mathbf{512 \times 288\text{ pixels}}$ & $16:9$ streaming aspect ratio ($100\%$ uniform) \\
 \addlinespace[1pt]
-Average snapshot file size & $\mathbf{65.17 \pm 13.36\text{ KB}}$ & Median: $64.8$~KB (Empirical range: $[31.2, 118.4]$~KB) \\
+Average snapshot file size & $\mathbf{66.74 \pm 13.68\text{ KB}}$ \newline ($\mathbf{65.18 \pm 13.36\text{ KiB}}$) & Exact math: $714,123 \times 65.175\text{ KiB} \times 1,024 = 47.66\text{ GB} = 44.387\text{ GiB}$. Median: $66.3$~KB / $64.8$~KiB (range: $[31.2, 118.4]$~KB) \\
 \addlinespace[1pt]
 Active pairwise interval ($\Delta T < 3,600$~s) & $\mathbf{269.0 \pm 239.7\text{ s}}$ & Median: $263.0$~s ($88.4\% \le 300$~s; $p_{90} \approx 312.0$~s, $p_{95} \approx 520.0$~s, $p_{99} \approx 1,200.0$~s) \\
 \addlinespace[1pt]
@@ -30,13 +30,13 @@ Global fleet interval range & $[2.0\text{ s}, 4.12\text{ h}]$ & Empirical extrem
 \addlinespace[1pt]
 Station-wise wall-clock interval & $\mathbf{286.9\text{ s/frame/station}}$ & $93.6\text{h} \times 3,600\text{s} / 1,174.5$ mean snapshots across fleet \\
 \addlinespace[1pt]
-Fleet-wide aggregate throughput & $\mathbf{0.47\text{ s/frame}}$ & Overall fleet ingestion rate ($\approx 2.12$ frames/s received across all 608 stations) \\
+Fleet-wide aggregate throughput & $\mathbf{0.47\text{ s/frame}}$ & Overall fleet recording throughput ($\approx 2.12$ frames/s received across all 608 stations) \\
 \addlinespace[1pt]
-Camera station continuity profile & \textbf{512 / 82 / 14 stations} & High: $\ge 1,100$ frames ($84.2\%$); Moderate: $600$--$1,099$ ($13.5\%$); Intermittent: $<600$ ($2.3\%$) (Nominal baseline: $1,123$ frames at 300~s polling) \\
+Camera station continuity profile & \textbf{512 / 82 / 14 stations} & High: $\ge 1,100$ frames ($84.2\%$); Moderate: $600$--$1,099$ ($13.5\%$); Intermittent: $<600$ ($2.3\%$) (Nominal baseline: $1,123$ frames at 300~s sampling) \\
 \addlinespace[1pt]
 Clock-based day / night schedule & $\mathbf{48.8\% \;/\; 51.2\%}$ & Daytime ($06:00$--$18:00$: $348,464$) vs. Nighttime ($365,659$ frames) \\
 \addlinespace[1pt]
-Client ingestion time latency ($\Delta t_{\text{lag}}$) & $\mathbf{15.0 \pm 4.2\text{ s}}$ & Buffer-to-disk offset on NTP-synchronized stations ($1.8\%$ un-synchronized) \\
+Frame transmission \& recording latency ($\Delta t_{\text{lag}}$) & $\mathbf{15.0 \pm 4.2\text{ s}}$ & Buffer-to-disk offset on NTP-synchronized stations ($1.8\%$ un-synchronized) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{B. Photometric Diversity \& Optical Descriptors}} \\
 \addlinespace[1pt]

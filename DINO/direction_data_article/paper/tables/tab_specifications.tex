@@ -14,7 +14,7 @@ Specific subject area & Intelligent Transportation Systems, Computer Vision, Spa
 \midrule
 Type of data & Image time-series, geospatial metadata, derived road network graph tensors, PyTorch code utilities \\
 \midrule
-How data were acquired & Automated retrieval from the public municipal traffic surveillance portal of the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}) via asynchronous HTTP polling. Driving distances and road network routing were computed using OSRM over OpenStreetMap data. \\
+How data were acquired & Recorded from open public municipal traffic monitoring camera streams operated under the intelligent transportation system (ITS) of the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}) for civic traffic monitoring and open public research. Driving distances and road network routing were computed using OSRM over OpenStreetMap data. \\
 \midrule
 Data format & Raw snapshots: RGB JPEG ($512 \times 288$ px, JFIF 1.01, stream quality factor $\approx 75$--$80$); \newline
 Geospatial metadata: Tabular CSV (\path{routes.csv}, \path{stations.csv}, \path{road_network_distance.csv}); \newline
@@ -26,11 +26,15 @@ Description of data collection & Snapshots were collected across $608$ indexed s
 Data source location & Region: Ho Chi Minh City, Vietnam (metropolitan urban core and peri-urban corridors including Thu Duc City, District 12, Binh Chanh, and Hoc Mon); \newline
 Coordinates: $[10.642472^\circ\text{N} - 10.988295^\circ\text{N}, 106.452713^\circ\text{E} - 106.850624^\circ\text{E}]$ (dense urban core: $[10.70^\circ\text{N} - 10.88^\circ\text{N}, 106.60^\circ\text{E} - 106.78^\circ\text{E}]$). \\
 \midrule
-Data accessibility & Repository name: Zenodo; \newline
-Direct URL: \url{https://doi.org/10.5281/zenodo.22929940} (Dataset evolution: expands upon the initial pilot labeled subset IC4SD-Traffic-HCM into Release v2.0 comprising the 714,123-snapshot corpus, $608 \times 608$ directed road graph, and PyTorch ingestion toolchain); \newline
-Licensing: Surveillance camera imagery is provided under Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) for non-commercial academic research; derived road network graph is licensed under the Open Database License (ODbL); Python software utilities are distributed under the MIT License. \\
+Data accessibility & Repository name: \textbf{Zenodo} \newline
+Data identification number (DOI): \textbf{10.5281/zenodo.22929940} \newline
+Direct URL to data: \url{https://doi.org/10.5281/zenodo.22929940} \newline
+Licensing: \newline
+\textbullet~Visual surveillance snapshots: \textit{Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)} \newline
+\textbullet~Derived road network graph and distance tensors: \textit{Open Database License 1.0 (ODbL)} \newline
+\textbullet~Software utilities and loaders: \textit{MIT License} \\
 \midrule
-Related research article & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{Engineering Applications of Artificial Intelligence}, Under Review (2026). \\
+Related research article & V.-A. Le, D. Hoang-Viet, K. Nguyen-Trong, ``Urban Traffic Perception and Multi-Horizon Graph Forecasting: A Two-Stage Camera-Sensed Framework'', \textit{arXiv preprint arXiv:2602.04159} (2026). Companion pilot benchmark dataset (v1.0): Zenodo, DOI: \url{https://doi.org/10.5281/zenodo.22089673}. \\
 \bottomrule
 \end{tabularx}
 \end{table*}

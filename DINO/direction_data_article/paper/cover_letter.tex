@@ -1,0 +1,123 @@
+\documentclass[10.5pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=0.8in, top=0.8in, bottom=0.8in}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{charter}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!70!black,
+    citecolor=blue!70!black
+}
+
+\titleformat{\section}{\large\bfseries\color{blue!70!black}}{}{0em}{}[\titlerule]
+
+\pagestyle{empty}
+
+\begin{document}
+
+\noindent
+\textbf{Intelligent Computing for Sustainable Development Laboratory (IC4SD)} \\
+Posts and Telecommunications Institute of Technology (PTIT) \\
+Km 10, Nguyen Trai Road, Ha Dong District, Hanoi, Vietnam \\
+\textbf{Contact:} \texttt{khanhnt@ptit.edu.vn} $\vert$ \texttt{anhlv.b23kh002@stu.ptit.edu.vn}
+
+\vspace{5mm}
+\noindent
+\textbf{Date:} October 18, 2026
+
+\vspace{3mm}
+\noindent
+\textbf{To:} \\
+The Editors-in-Chief and Editorial Board \\
+\textit{Data in Brief}, Elsevier BV
+
+\vspace{4mm}
+\noindent
+\textbf{Subject:} Submission of Original Data Article --- \textit{IC4SD-TrafficSnap}
+
+\vspace{2mm}
+\noindent
+\textbf{Article Title:} \\
+\textbf{IC4SD-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Geospatial Road Network Dataset for Heterogeneous Urban Traffic}
+
+\vspace{2mm}
+\noindent
+\textbf{Authors:} Viet-Anh Le and Khanh Nguyen-Trong$^*$ \\
+$^*$Corresponding Author: \texttt{khanhnt@ptit.edu.vn}
+
+\vspace{2mm}
+\noindent
+\textbf{Permanent Digital Object Identifiers:} \\
+\textbullet~Target Dataset (Release v2.0): Zenodo DOI \href{https://doi.org/10.5281/zenodo.22929940}{10.5281/zenodo.22929940} \\
+\textbullet~Companion Pilot Benchmark (Release v1.0): Zenodo DOI \href{https://doi.org/10.5281/zenodo.22089673}{10.5281/zenodo.22089673} \\
+\textbullet~Companion Research Preprint: arXiv:2602.04159
+
+\vspace{4mm}
+\noindent
+Dear Editors-in-Chief and Editorial Board,
+
+\vspace{2mm}
+We are pleased to submit our original data article entitled \textbf{``IC4SD-TrafficSnap: A City-Scale Multi-Camera Image Time-Series and Geospatial Road Network Dataset for Heterogeneous Urban Traffic''} for consideration in \textit{Data in Brief}. 
+
+Existing intelligent transportation benchmarks predominantly focus on either 1D inductive loop sensor time-series (e.g., METR-LA, PEMS-BAY) or isolated microscopic surveillance clips (e.g., UA-DETRAC, CityFlow) collected in car-dominant Western metropolitan areas. \textbf{IC4SD-TrafficSnap} addresses a critical global benchmark void by coupling a massive continuous visual surveillance snapshot archive with an OpenStreetMap-derived directed spatial road network in Ho Chi Minh City, Vietnam, where motorcycles account for 70--80\% of modal vehicular volume:
+\begin{itemize}[noitemsep,topsep=2pt]
+    \item \textbf{714,123 continuous JPEG snapshots} ($512 \times 288$ px, $44.38$~GiB / $47.66$~GB) recorded across \textbf{608 active stations} over \textbf{93.6 continuous hours} (October 2--6, 2026).
+    \item \textbf{2,450 directed arterial corridor links} within a 6.0~km OSRM driving distance horizon, capturing real-world physical directionality (1,070 unidirectional links and 238 distance-asymmetric pairs).
+    \item \textbf{Production PyTorch loaders, samplers, and dual-transition directed diffusion operators} ($P_f, P_b$, and scaled Chebyshev Laplacian $\tilde{L}$) ready for immediate self-supervised ViT pre-training and spatial graph learning.
+\end{itemize}
+
+\section*{Rationale for Three-Tier Licensing and the CC BY-NC 4.0 License}
+We understand that \textit{Data in Brief} typically favors unrestricted open data reuse. To maximize open scientific reproducibility while strictly upholding public civic ethics and personal data protection regulations, the repository adopts an intentional \textbf{three-tier licensing framework}:
+\begin{enumerate}[leftmargin=*,noitemsep,topsep=2pt]
+    \item \textbf{Visual Snapshot Corpus (CC BY-NC 4.0):}
+    \begin{itemize}[noitemsep,topsep=1pt]
+        \item \textit{Public Civic Purpose:} Snapshots were recorded from the open public traffic camera streams broadcast by the Ho Chi Minh City Department of Transportation (\url{https://giaothong.hochiminhcity.gov.vn}). Under Vietnamese Decree No.~47/2020/ND-CP on open government data sharing, this service was established specifically for civic travel information, congestion monitoring, and flood tracking.
+        \item \textit{Ethical Non-Commercial Stewardship:} Because these camera streams are taxpayer-funded municipal assets deployed for community safety, applying the NonCommercial (NC) clause is a mandatory ethical obligation to prevent commercial corporations from appropriating and commercializing public surveillance feeds for private financial profit.
+        \item \textit{Unrestricted Academic Openness:} The CC BY-NC 4.0 license guarantees 100\% free, unrestricted access for all academic researchers, universities, non-profit institutions, and students globally to download, extract visual representations, benchmark machine learning models, and publish scientific findings.
+        \item \textit{Ethical Safety Layer for Privacy:} In addition to statutory sub-Nyquist anonymity ($p \le 0.30\%$), the NC clause provides an extra ethical safeguard preventing data ingestion into commercial surveillance or face-matching products.
+    \end{itemize}
+    \item \textbf{Geospatial Road Graph and Distance Tensors (ODbL 1.0):} Fully complies with upstream OpenStreetMap licensing, ensuring open database reuse for all graph learning applications.
+    \item \textbf{Software Utilities and PyTorch Loaders (MIT License):} Permissive open-source license enabling seamless integration into deep learning toolchains.
+\end{enumerate}
+
+\section*{Visual Privacy-by-Design and Empirical Multi-Tier Audit}
+The visual corpus captures macroscopic urban traffic dynamics and guarantees anonymity by design:
+\begin{itemize}[noitemsep,topsep=2pt]
+    \item \textbf{Sub-Nyquist Optical Limits:} High mounting elevations ($H \ge 6.0$~m) and native $512 \times 288$ resolution restrict license plate character stroke heights to at most $2.5$--$2.8$~pixels (far below ALPR readability of $\ge 16$~px).
+    \item \textbf{Biometric Occlusion:} Statutory motorcycle helmets (Decree 100/2019/ND-CP) and protective fabric sun/dust masks ($>85\%$) physically occlude facial biometrics.
+    \item \textbf{Statistical Rule of Three ($p \le 0.30\%$):} Across $3,000$ audited snapshots (including $1,000$ worst-case daylight stress frames evaluated by three independent raters with 100\% unanimous agreement), zero readable license plates or facial features were detected. By the Hanley and Lippman-Hand Rule of Three, the 95\% upper confidence bound on residual privacy risk is bounded at $p \le 0.30\%$.
+    \item \textbf{Three-Tier Revocation Protocol:} An enforceable mechanism comprising an official public registry (\path{REVOKED_STATIONS.csv}), an automated local purge script (\path{code/redact_revoked_stations.py}), and Zenodo minor version deprecation.
+\end{itemize}
+
+\section*{Dataset Lineage and Companion Pilot Benchmark}
+The dataset evolved from an initial pilot benchmark (\textit{IC4SD-Traffic-HCM}, v1.0, Zenodo DOI: \href{https://doi.org/10.5281/zenodo.22089673}{10.5281/zenodo.22089673}), which provided 5,012 annotated frames and 86-day flow series. \textbf{IC4SD-TrafficSnap} represents a major city-scale expansion ($140\times$ visual corpus scaling to 714,123 frames and a 2,450-edge directed road graph). Both the pilot Zenodo record and the companion preprint (arXiv:2602.04159) are fully documented in the manuscript.
+
+\vspace{4mm}
+\noindent
+We confirm that this manuscript adheres strictly to the \textit{Data in Brief} guidelines and represents original data documentation. Thank you for your time and consideration.
+
+\vspace{6mm}
+\noindent
+Sincerely,
+
+\vspace{3mm}
+\noindent
+\textbf{Dr. Khanh Nguyen-Trong} (Corresponding Author) \\
+Intelligent Computing for Sustainable Development Laboratory (IC4SD) \\
+Posts and Telecommunications Institute of Technology (PTIT), Hanoi, Vietnam \\
+Email: \texttt{khanhnt@ptit.edu.vn}
+
+\vspace{3mm}
+\noindent
+\textbf{Viet-Anh Le} (First Author) \\
+Email: \texttt{anhlv.b23kh002@stu.ptit.edu.vn}
+
+\end{document}

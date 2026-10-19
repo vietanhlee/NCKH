@@ -36,13 +36,15 @@ def static_region_swap(
     thr: float = 0.2,
     feather: int = 4,
     patch_size: int = 16,
+    continuous_bg: bool = False,
+    color_match: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    Hoán đổi các khối patch vùng tĩnh từ x2 sang x.
+    Hoán đổi các khối patch vùng tĩnh từ x2 sang x (hỗ trợ cả patch-wise rời rạc và continuous background).
 
     Args:
         x: Tensor (3, H, W) Frame ngày d (mặc định H=256, W=448).
-        x2: Tensor (3, H, W) Frame ngày d' cùng camera.
+        x2: Tensor (3, H, W) Frame ngày d' (cùng hoặc khác camera).
         pi: Tensor (Hp, Wp) Bản đồ xác suất tiền cảnh frame x (16, 28).
         pi2: Tensor (Hp, Wp) Bản đồ xác suất tiền cảnh frame x2 (16, 28).
         valid: Tensor (Hp, Wp) bool
@@ -52,6 +54,8 @@ def static_region_swap(
         thr: Ngưỡng xác định vùng tĩnh (mặc định pi < 0.2).
         feather: Độ rộng dải làm mềm biên pixel (mặc định 4 px).
         patch_size: Kích thước patch (mặc định 16).
+        continuous_bg: Nếu True, thay thế liền mạch toàn bộ vùng nền tĩnh (1 - pi đã giãn) thay vì bốc patch rời rạc.
+        color_match: Nếu True, chuẩn hóa nhẹ mean/std của x2 theo x (hữu ích cho Cross-Camera SRS).
 
     Returns:
         x_tilde: (3, H, W) Ảnh sau khi hoán đổi nền.
@@ -78,23 +82,35 @@ def static_region_swap(
     if n_eligible == 0 or ratio <= 0.0:
         return x.clone(), torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
 
-    # 3. Lấy ngẫu nhiên một tập con với tỷ lệ ratio
-    k_swap = max(1, int(round(ratio * n_eligible)))
-    eligible_indices = torch.where(eligible_swap.view(-1))[0]
-    perm = torch.randperm(eligible_indices.numel(), generator=generator, device=device)
-    chosen_indices = eligible_indices[perm[:k_swap]]
+    # 3. Xác định mặt nạ hoán đổi (liền mạch hoặc lấy mẫu con theo ratio)
+    if continuous_bg or ratio >= 0.99:
+        swap_mask_patch = eligible_swap.clone()
+    else:
+        k_swap = max(1, int(round(ratio * n_eligible)))
+        eligible_indices = torch.where(eligible_swap.view(-1))[0]
+        perm = torch.randperm(eligible_indices.numel(), generator=generator, device=device)
+        chosen_indices = eligible_indices[perm[:k_swap]]
 
-    swap_mask_patch = torch.zeros(Hp * Wp, dtype=torch.bool, device=device)
-    swap_mask_patch[chosen_indices] = True
-    swap_mask_patch = swap_mask_patch.view(Hp, Wp)
+        swap_mask_patch = torch.zeros(Hp * Wp, dtype=torch.bool, device=device)
+        swap_mask_patch[chosen_indices] = True
+        swap_mask_patch = swap_mask_patch.view(Hp, Wp)
 
     # 4. Phóng đại mask patch lên kích thước pixel (H, W)
-    # swap_mask_patch: (1, 1, Hp, Wp) -> (1, 1, H, W)
-    pixel_mask = F.interpolate(
-        swap_mask_patch.float().view(1, 1, Hp, Wp),
-        size=(H, W),
-        mode="nearest",
-    )  # (1, 1, H, W)
+    # Nếu continuous_bg, dùng bilinear trên trọng số mềm (1 - pi) kết hợp eligible_swap để biên cực mượt
+    if continuous_bg:
+        soft_patch_mask = eligible_swap.float() * (1.0 - pi.clamp(0.0, 1.0))
+        pixel_mask = F.interpolate(
+            soft_patch_mask.view(1, 1, Hp, Wp),
+            size=(H, W),
+            mode="bilinear",
+            align_corners=False,
+        )
+    else:
+        pixel_mask = F.interpolate(
+            swap_mask_patch.float().view(1, 1, Hp, Wp),
+            size=(H, W),
+            mode="nearest",
+        )  # (1, 1, H, W)
 
     # 5. Làm mềm biên với dải feather pixel bằng average pool
     if feather > 0:
@@ -106,6 +122,17 @@ def static_region_swap(
     if x.dim() == 3:
         pixel_weight = pixel_weight.squeeze(0)  # (1, H, W)
 
-    # 6. Ghép tuyến tính: x_tilde = (1 - w) * x + w * x2
-    x_tilde = (1.0 - pixel_weight) * x + pixel_weight * x2
+    x2_src = x2
+    if color_match:
+        # Cân bằng nhẹ độ sáng / tương phản của x2 theo x để ghép khác camera tự nhiên
+        mean_x = x.mean(dim=(1, 2), keepdim=True)
+        std_x = x.std(dim=(1, 2), keepdim=True).clamp(min=1e-4)
+        mean_x2 = x2.mean(dim=(1, 2), keepdim=True)
+        std_x2 = x2.std(dim=(1, 2), keepdim=True).clamp(min=1e-4)
+        x2_matched = (x2 - mean_x2) * (std_x / std_x2) + mean_x
+        x2_src = (0.5 * x2 + 0.5 * x2_matched).clamp(0.0, 1.0)
+
+    # 6. Ghép tuyến tính: x_tilde = (1 - w) * x + w * x2_src
+    x_tilde = (1.0 - pixel_weight) * x + pixel_weight * x2_src
     return x_tilde.clamp(0.0, 1.0), swap_mask_patch
+

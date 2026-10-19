@@ -33,7 +33,15 @@ if _dino_root not in sys.path:
 from direction1_new.tam import PositionStats, GMMCalibrator
 from direction1_new.masking import agm_sample
 from direction1_new.srs import static_region_swap
-from direction1_new.losses import DINOLoss, iBOTPatchLoss, KoLeoLoss, RICLoss
+from direction1_new.losses import (
+    DINOLoss,
+    iBOTPatchLoss,
+    KoLeoLoss,
+    RICLoss,
+    pool_vehicle_embedding,
+    CameraAdversarialHead,
+)
+from direction1_new.sampler import CameraGroupedSampler
 
 
 class TestDirection1New(unittest.TestCase):
@@ -250,6 +258,113 @@ class TestDirection1New(unittest.TestCase):
         self.assertFalse(torch.all(cls_orthogonal.grad == 0))
         self.assertFalse(torch.isnan(cls_orthogonal.grad).any())
 
+    def test_10_gated_tam_update_protects_static_clusters(self):
+        """Kiểm tra Gated Online Update: Vùng có xác suất xe pi=1 không làm dịch chuyển tâm cụm nền tĩnh."""
+        stats = PositionStats(num_cams=2, num_patches=16, num_states=2, feat_dim=8)
+        cids = torch.tensor([0])
+        U = F.normalize(torch.randn(1, 16, 8), p=2, dim=-1)
+        stats.init_kmeans(0, U.repeat(5, 1, 1))
+
+        initial_mu = stats.mu[0].clone()
+
+        # Giả lập frame xuất hiện xe dày đặc ở patch 0..7 (pi = 1.0) và nền sạch ở patch 8..15 (pi = 0.0)
+        gate_pi = torch.zeros(1, 16)
+        gate_pi[0, :8] = 1.0  # Xe rõ rệt
+
+        # Vector feature mới hoàn toàn khác lạ (để thử kéo lệch)
+        U_new = F.normalize(-U, p=2, dim=-1)
+        stats.update(cids, U_new, gate_pi=gate_pi)
+
+        # Kiểm tra: Patch có pi=1 thì delta_mu bị khóa hãm (thay đổi cực kỳ nhỏ hoặc không đổi)
+        # Trong khi patch có pi=0 được cập nhật bình thường
+        shift_fg = torch.norm(stats.mu[0, :8] - initial_mu[:8], dim=-1).mean().item()
+        shift_bg = torch.norm(stats.mu[0, 8:] - initial_mu[8:], dim=-1).mean().item()
+        self.assertLess(shift_fg, shift_bg)
+
+    def test_11_block_masking_mode(self):
+        """Kiểm tra AGM Block-wise Masking che cụm 2x2 quanh xe và không vượt quá trần q_max."""
+        N = 16 * 16  # 256 patches
+        pi = torch.zeros(N)
+        # Giả lập 2 cụm xe 3x3
+        pi[10:13] = 0.9
+        pi[26:29] = 0.9
+        pi[42:45] = 0.9
+
+        mask = agm_sample(pi, ratio=0.25, phi=0.5, q_max=0.6, mode="block", grid_shape=(16, 16))
+        self.assertEqual(mask.sum().item(), int(round(0.25 * N)))
+        # Không vi phạm trần q_max
+        fg_count = (pi > 0.5).sum().item()
+        fg_masked = mask[pi > 0.5].sum().item()
+        self.assertLessEqual(fg_masked, int(math.floor(0.6 * fg_count)))
+
+    def test_12_continuous_srs_and_color_match(self):
+        """Kiểm tra SRS chế độ continuous_bg và color_match."""
+        x1 = torch.rand(3, 256, 448)
+        x2 = torch.rand(3, 256, 448) * 0.5  # tối hơn
+        pi1 = torch.zeros(16, 28)
+        pi2 = torch.zeros(16, 28)
+        pi1[5:9, 5:9] = 0.85  # Xe
+
+        x_tilde, swap_mask = static_region_swap(
+            x1, x2, pi1, pi2, ratio=0.8, continuous_bg=True, color_match=True
+        )
+        self.assertEqual(x_tilde.shape, (3, 256, 448))
+        self.assertTrue((x_tilde >= 0.0).all() and (x_tilde <= 1.0).all())
+
+    def test_13_camera_adversarial_head_grl(self):
+        """Kiểm tra CameraAdversarialHead với Gradient Reversal Layer."""
+        in_dim = 64
+        num_cams = 4
+        head = CameraAdversarialHead(in_dim=in_dim, num_cams=num_cams)
+        cls_feat = torch.randn(4, in_dim, requires_grad=True)
+        cids = torch.tensor([0, 1, 2, 3])
+
+        loss = head(cls_feat, cids, grl_alpha=0.5)
+        self.assertGreater(loss.item(), 0.0)
+        loss.backward()
+        self.assertIsNotNone(cls_feat.grad)
+        self.assertFalse(torch.isnan(cls_feat.grad).any())
+
+    def test_14_vehicle_pooling_and_ric_loss(self):
+        """Kiểm tra pool_vehicle_embedding và RICLoss trên hard negatives cùng camera."""
+        B, P, D = 4, 16, 32
+        patches = torch.randn(B, P, D)
+        pi = torch.zeros(B, P)
+        pi[:, :4] = 0.9  # 4 patch đầu là xe
+
+        z_veh = pool_vehicle_embedding(patches, pi)
+        self.assertEqual(z_veh.shape, (B, D))
+        # Chuẩn hóa L2
+        norms = torch.norm(z_veh, p=2, dim=-1)
+        self.assertTrue(torch.allclose(norms, torch.ones(B), atol=1e-4))
+
+        # Test RICLoss
+        z1 = z_veh
+        z2 = z_veh + 0.05 * torch.randn_like(z_veh)
+        cids = torch.tensor([0, 0, 1, 1])  # 2 camera, mỗi camera 2 frame
+        ric_fn = RICLoss()
+        loss_ric = ric_fn(z1, z2, cids)
+        self.assertGreater(loss_ric.item(), 0.0)
+
+    def test_15_camera_grouped_sampler(self):
+        """Kiểm tra CameraGroupedSampler phân phối đúng camera và số frame mỗi batch."""
+        cam_dict = {
+            0: list(range(0, 10)),
+            1: list(range(10, 20)),
+            2: list(range(20, 30)),
+            3: list(range(30, 40)),
+        }
+        sampler = CameraGroupedSampler(
+            camera_to_indices=cam_dict,
+            batch_cameras=2,
+            frames_per_camera=3,
+            shuffle=False,
+        )
+        batch = next(iter(sampler))
+        # Batch size phải bằng 2 * 3 = 6
+        self.assertEqual(len(batch), 6)
+
 
 if __name__ == "__main__":
     unittest.main()
+
