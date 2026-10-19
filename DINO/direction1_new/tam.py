@@ -358,7 +358,7 @@ class GMMCalibrator:
     Ước lượng GMM 2 thành phần trên log(a_t) để hiệu chuẩn điểm khác thường
     thành xác suất tiền cảnh phương tiện pi_t(p) in [0, 1].
     """
-    def __init__(self, max_buffer_size: int = 50000):
+    def __init__(self, max_buffer_size: int = 150000):
         self.max_buffer_size = max_buffer_size
         self.buffer = []
         # Tham số GMM (mean, std, weight của 2 thành phần)
@@ -458,6 +458,7 @@ class GMMCalibrator:
             "std_fg": float(self.std_fg),
             "pi_weight": float(self.pi_weight),
             "is_fitted": bool(self.is_fitted),
+            "max_buffer_size": int(self.max_buffer_size),
         }
 
     def load_state_dict(self, state: dict):
@@ -470,4 +471,6 @@ class GMMCalibrator:
         self.std_fg = float(state.get("std_fg", 0.8))
         self.pi_weight = float(state.get("pi_weight", 0.3))
         self.is_fitted = bool(state.get("is_fitted", False))
+        if "max_buffer_size" in state:
+            self.max_buffer_size = int(state["max_buffer_size"])
 

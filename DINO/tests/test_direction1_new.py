@@ -160,13 +160,16 @@ class TestDirection1New(unittest.TestCase):
         self.assertIn("mu_bg", sd)
         self.assertIn("mu_fg", sd)
         self.assertIn("pi_weight", sd)
+        self.assertIn("max_buffer_size", sd)
+        self.assertEqual(sd["max_buffer_size"], 150000)
         self.assertTrue(sd["is_fitted"])
 
         # Tạo calibrator mới chưa fit và khôi phục
-        calib2 = GMMCalibrator()
+        calib2 = GMMCalibrator(max_buffer_size=200000)
         self.assertFalse(calib2.is_fitted)
         calib2.load_state_dict(sd)
         self.assertTrue(calib2.is_fitted)
+        self.assertEqual(calib2.max_buffer_size, 150000)
         self.assertAlmostEqual(calib1.mu_bg, calib2.mu_bg, places=4)
         self.assertAlmostEqual(calib1.mu_fg, calib2.mu_fg, places=4)
         self.assertAlmostEqual(calib1.pi_weight, calib2.pi_weight, places=4)
@@ -231,12 +234,13 @@ class TestDirection1New(unittest.TestCase):
         """Kiểm tra helper get_cli_specified_args phân biệt đúng đối số người dùng truyền."""
         from direction1_new.train import get_cli_specified_args
 
-        simulated_argv = ["--resume", "last_checkpoint.pth", "--session_epochs", "4", "--device", "cuda:0"]
+        simulated_argv = ["--resume", "last_checkpoint.pth", "--session_epochs", "4", "--device", "cuda:0", "--gmm_buffer_size", "200000"]
         specified = get_cli_specified_args(simulated_argv)
 
         self.assertIn("resume", specified)
         self.assertIn("session_epochs", specified)
         self.assertIn("device", specified)
+        self.assertIn("gmm_buffer_size", specified)
         self.assertNotIn("phi", specified)
         self.assertNotIn("q_max", specified)
         self.assertNotIn("p_srs", specified)

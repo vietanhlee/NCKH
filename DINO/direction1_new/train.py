@@ -575,6 +575,7 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--hf_token": "hf_token",
         "--tam_warmup_frames": "tam_warmup_frames",
         "--tam_kmeans_iters": "tam_kmeans_iters",
+        "--gmm_buffer_size": "gmm_buffer_size",
         "--gmm_refit_steps": "gmm_refit_steps",
         "--gmm_iters": "gmm_iters",
         "--skip_tam_warmup": "skip_tam_warmup",
@@ -633,8 +634,9 @@ def parse_args():
     parser.add_argument("--no_amp", dest="use_amp", action="store_false", help="Tắt Mixed Precision")
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
-    parser.add_argument("--tam_warmup_frames", type=int, default=40, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means)")
+    parser.add_argument("--tam_warmup_frames", type=int, default=120, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 120 frame)")
     parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
+    parser.add_argument("--gmm_buffer_size", type=int, default=150000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 150000 mẫu)")
     parser.add_argument("--gmm_refit_steps", type=int, default=10, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator")
     parser.add_argument("--gmm_iters", type=int, default=30, help="Số vòng lặp EM khi fit GMM Calibrator")
     parser.add_argument("--skip_tam_warmup", action="store_true", default=False, help="Bỏ qua bước khởi động TAM offline")
@@ -654,7 +656,7 @@ def warmup_tam_offline(
     calibrator: GMMCalibrator,
     dataset: Dataset,
     device: torch.device,
-    num_frames_per_cam: int = 40,
+    num_frames_per_cam: int = 120,
     kmeans_iters: int = 20,
     gmm_iters: int = 30,
     batch_size: int = 8,
@@ -1007,7 +1009,7 @@ def train_direction_g():
         frozen_extractor = nn.DataParallel(frozen_extractor)
 
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
-    calibrator = GMMCalibrator()
+    calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size)
 
     # 4. Losses, Metric Heads & Optimizer
     dino_loss_fn = DINOLoss(out_dim=args.out_dim, nepochs=args.epochs).to(device)
@@ -1131,7 +1133,9 @@ def train_direction_g():
         # 5. Khôi phục GMMCalibrator (Ước lượng xác suất tiền cảnh pi_t)
         if "calibrator" in ckpt and ckpt["calibrator"] is not None:
             calibrator.load_state_dict(ckpt["calibrator"])
-            print(f"   🎯 [GMMCalibrator] Khôi phục phân phối GMM: mu_bg={calibrator.mu_bg:.2f}, mu_fg={calibrator.mu_fg:.2f}, std_bg={calibrator.std_bg:.2f}, std_fg={calibrator.std_fg:.2f}, pi_weight={calibrator.pi_weight:.2f}")
+            if "gmm_buffer_size" in cli_specified:
+                calibrator.max_buffer_size = args.gmm_buffer_size
+            print(f"   🎯 [GMMCalibrator] Khôi phục phân phối GMM: mu_bg={calibrator.mu_bg:.2f}, mu_fg={calibrator.mu_fg:.2f}, std_bg={calibrator.std_bg:.2f}, std_fg={calibrator.std_fg:.2f}, pi_weight={calibrator.pi_weight:.2f} (buffer_size={calibrator.max_buffer_size})")
         else:
             print("   ℹ️ [GMMCalibrator] Checkpoint trước chưa lưu GMM, hệ thống sẽ tự động hiệu chuẩn sau 20 bước.")
 
