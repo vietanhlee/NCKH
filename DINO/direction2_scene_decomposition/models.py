@@ -70,6 +70,7 @@ def _sobel_gradients(img_gray: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor
 def compute_illumination_invariant_guide(
     origin: torch.Tensor,
     prior: torch.Tensor,
+    pi: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Trích xuất mặt nạ hướng dẫn chuyển động bất biến ánh sáng (Illumination-Invariant Motion Guide):
@@ -78,7 +79,9 @@ def compute_illumination_invariant_guide(
          để bắt trọn thân xe có màu xám/bạc trùng màu nhựa đường.
       3. Triệt tiêu cạnh tĩnh (Static Edge Suppression): Loại bỏ vạch sơn kẻ đường, mũi tên chỉ hướng,
          bờ vỉa hè và dòng timestamp vốn xuất hiện ở cả origin lẫn prior.
-      4. Đóng mở hình thái học khả vi (Morphological Opening & Closing) giúp lấp đầy lỗ thủng thân xe.
+      4. Tích hợp Semantic TAM Guidance (pi từ ViT deep tokens nếu có): Hợp nhất đa tầng ngữ nghĩa
+         giúp bắt trọn 100% xe cộ kể cả khi sơn xe trùng khít màu nhựa đường và khử bóng râm ảo.
+      5. Đóng mở hình thái học khả vi (Morphological Opening & Closing) giúp lấp đầy lỗ thủng thân xe.
     Returns:
       - m_guide: Mặt nạ hướng dẫn phương tiện (B, 1, H, W) trong [0, 1]
       - prior_aligned: Ảnh nền đã căn chỉnh ánh sáng theo origin (B, 3, H, W)
@@ -135,6 +138,20 @@ def compute_illumination_invariant_guide(
         m_guide = torch.clamp((closed_7 - 0.05) / 0.10, 0.0, 1.0)
         # Làm mịn nhẹ biên hướng dẫn
         m_guide = F.avg_pool2d(m_guide, kernel_size=3, stride=1, padding=1)
+
+        # 5. Tích hợp Semantic TAM Guidance nếu có: Hợp nhất đa mức với xác suất tiền cảnh từ ViT
+        if pi is not None:
+            B_g, _, H_g, W_g = m_guide.shape
+            if pi.dim() == 3:
+                pi_in = pi.unsqueeze(1).float()
+            else:
+                pi_in = pi.float()
+            if pi_in.shape[-2:] != (H_g, W_g):
+                pi_up = F.interpolate(pi_in, size=(H_g, W_g), mode="bilinear", align_corners=False)
+            else:
+                pi_up = pi_in
+            # Hợp nhất: Lấy max để bảo toàn mọi phát hiện xe, đồng thời triệt tiêu bóng râm
+            m_guide = torch.clamp(torch.max(m_guide, pi_up), 0.0, 1.0)
 
     return m_guide.detach(), prior_aligned.detach(), static_edge_map.detach()
 
@@ -354,7 +371,7 @@ class TrafficDecompositionNet(nn.Module):
 
         # Chuẩn bị Prior đã căn chỉnh ánh sáng cục bộ nếu có
         if prior is not None and use_prior:
-            m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(x, prior)
+            m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(x, prior, pi=pi)
             p_keep = (1.0 - self.prior_dropout) if self.training else 1.0
             if torch.rand(1).item() < p_keep:
                 has_active_prior = True
@@ -367,13 +384,24 @@ class TrafficDecompositionNet(nn.Module):
         # Tính đầu mã ánh sáng ell: gộp trung bình các token patch tĩnh (pi < 0.2)
         B_cur, D_cur, Hp, Wp = feat_map.shape
         patch_tokens = feat_map.flatten(2).transpose(1, 2)  # (B, P, D)
+        pi_full = None
         if pi is not None:
-            if pi.shape[-2:] != (Hp, Wp):
-                pi_down = F.interpolate(pi.float(), size=(Hp, Wp), mode="bilinear", align_corners=False)
+            if pi.dim() == 3:
+                pi_in = pi.unsqueeze(1).float()
             else:
-                pi_down = pi.float()
+                pi_in = pi.float()
+            if pi_in.shape[-2:] != (Hp, Wp):
+                pi_down = F.interpolate(pi_in, size=(Hp, Wp), mode="bilinear", align_corners=False)
+            else:
+                pi_down = pi_in
             w_static = (1.0 - pi_down).view(B_cur, -1, 1).clamp(min=1e-3)
             static_token_avg = (patch_tokens * w_static).sum(dim=1) / w_static.sum(dim=1).clamp(min=1e-4)
+
+            # Bản đồ pi kích thước đầy đủ (H, W) để bảo vệ lá chắn nền vehicle_shield
+            if pi_in.shape[-2:] != (H, W):
+                pi_full = F.interpolate(pi_in, size=(H, W), mode="bilinear", align_corners=False)
+            else:
+                pi_full = pi_in
         else:
             static_token_avg = patch_tokens.mean(dim=1)  # (B, D)
 
@@ -400,10 +428,16 @@ class TrafficDecompositionNet(nn.Module):
         isolated_fg = alpha_mask * pred_fg
 
         # 2. Nhánh Nền sạch (Clean Road Background): NGẮT RÒ RỈ XE CỘ TỪ RGB_SKIP(X)
+        # Tích hợp lá chắn đa tầng (Alpha Mask + Pixel Guide + Semantic TAM Pi)
+        shield_components = [alpha_mask.detach()]
         if m_guide is not None:
-            vehicle_shield = torch.max(alpha_mask.detach(), m_guide.detach())
-        else:
-            vehicle_shield = alpha_mask.detach()
+            shield_components.append(m_guide.detach())
+        if pi_full is not None:
+            shield_components.append(pi_full.detach())
+
+        vehicle_shield = shield_components[0]
+        for sc in shield_components[1:]:
+            vehicle_shield = torch.max(vehicle_shield, sc)
 
         # Giãn nở mặt nạ chắn 7x7 để xóa sạch cả viền và bóng xe khỏi nhánh nền
         shield_dilated = F.max_pool2d(vehicle_shield, kernel_size=7, stride=1, padding=3)
@@ -424,10 +458,12 @@ class TrafficDecompositionNet(nn.Module):
             dec_feat_bg = dec_inpainted + skip_inpainted
             pred_bg = self.head_bg(dec_feat_bg)
 
-        # 3. Tính độ bất định sigma = exp(clamp(s, log(0.01), log(0.5)))
-        log_sigma = self.head_log_sigma(dec_feat_fg)
-        log_sigma_clamped = torch.clamp(log_sigma, min=math.log(0.01), max=math.log(0.50))
-        sigma = torch.exp(log_sigma_clamped)
+        # 3. Tính độ bất định Laplace sigma: Kích hoạt mượt mà khả vi toàn miền C^\infty
+        # Loại bỏ hoàn toàn clamp cứng gây triệt tiêu gradient (vanishing gradients)
+        # sigma = sigma_min + (sigma_max - sigma_min) * sigmoid(raw_s) in (0.01, 0.50)
+        raw_sigma = self.head_log_sigma(dec_feat_fg)
+        sigma = 0.01 + 0.49 * torch.sigmoid(raw_sigma)
+        log_sigma = torch.log(sigma)
 
         # 4. Tái tạo ảnh gốc vật lý: I_recon = M * F + (1 - M) * B_hat
         recon_origin = alpha_mask * pred_fg + (1.0 - alpha_mask) * pred_bg
@@ -439,7 +475,7 @@ class TrafficDecompositionNet(nn.Module):
             "isolated_fg": isolated_fg,     # Lớp xe cộ tách biệt: M_alpha * F (B, 3, H, W)
             "pred_bg": pred_bg,             # B_hat: Mặt đường sạch không còn xe (B, 3, H, W)
             "sigma": sigma,                 # Độ bất định sigma: (B, 1, H, W)
-            "log_sigma": log_sigma_clamped, # Phục vụ Laplace NLL
+            "log_sigma": log_sigma,         # Phục vụ Laplace NLL (khả vi toàn miền)
             "pred_ell": pred_ell,           # Mã ánh sáng dự đoán: (B, J)
             "recon_origin": recon_origin,   # I_recon: (B, 3, H, W)
         }

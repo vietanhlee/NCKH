@@ -95,23 +95,35 @@ Trong đó, để bảo vệ mặt đường sạch không bị kéo về phía 
 $$\hat{B}_{\text{safe}} = (1 - m_{\text{guide}}) \odot \hat{B} + m_{\text{guide}} \odot \text{detach}(\hat{B})$$
 $$\hat{I}_{\text{recon}} = M_\alpha \odot F + (1 - M_\alpha) \odot \hat{B}_{\text{safe}}$$
 
-### 2.2 Hàm Giám Sát Nền Prior Đa Tạp Có Độ Bất Định ($\mathcal{L}_{\text{prior}}$)
+### 2.2 Hàm Giám Sát Nền Prior Đa Tạp Có Độ Bất Định Trơn Tru Khả Vi ($\mathcal{L}_{\text{prior}}$)
 Kết hợp mô hình xác suất Laplace NLL và ràng buộc neo trực tiếp mặt đường sạch:
 $$\mathcal{L}_{\text{prior}} = 0.5 \times \text{mean}\left(\frac{|\hat{B} - P_{\text{aligned}}|}{\sigma} + \log\frac{\sigma}{\sigma_{\min}}\right) + 0.5 \times \text{mean}\left((1.0 + 2.5 \cdot m_{\text{guide}}) \odot |\hat{B} - P_{\text{aligned}}|\right) + 0.25 \times \left(1 - \text{SSIM}(\hat{B}, P_{\text{aligned}})\right)$$
-Ngăn chặn triệt để hành vi mô hình gian lận đẩy $\sigma \to \sigma_{\max}$ để trốn phạt tại các vùng có xe.
+
+> [!IMPORTANT]
+> **Đột phá Kích Hoạt $\sigma$ Khả Vi Toàn Miền $C^\infty$ (Smooth Differentiable Uncertainty Activation)**:
+> Thay thế hoàn toàn phép `clamp` cứng trước đây (vốn làm triệt tiêu gradient $\frac{\partial \text{clamp}}{\partial x} = 0$ khi $\sigma$ chạm ngưỡng biên) bằng hàm kích hoạt mở rộng liên tục:
+> $$\sigma = \sigma_{\min} + (\sigma_{\max} - \sigma_{\min}) \cdot \operatorname{sigmoid}(s_{\text{raw}}) \in (0.01, 0.50)$$
+> Đạo hàm $\frac{\partial \sigma}{\partial s_{\text{raw}}} > 0$ luôn dương nghiêm ngặt ở mọi điểm, đảm bảo gradient truyền ngược trơn tru từ Laplace NLL về Decoder và ViT Backbone.
 
 ### 2.3 Ràng Buộc Nền Dùng Chung Đa Ngày ($\mathcal{L}_{\text{shared}}$)
 Với batch gồm $K$ khung hình từ cùng một camera ở cùng khung giờ nhưng khác ngày, nền mặt đường vật lý phải bất biến:
 $$\mathcal{L}_{\text{shared}} = \frac{1}{K} \sum_{k=1}^K \sqrt{\left(\hat{B}_k - \text{median}(\hat{B})\right)^2 + \epsilon_{\text{charb}}^2}$$
 
-### 2.4 Hàm Loại Trừ Lẫn Nhau Trên Vùng Nền Tĩnh ($\mathcal{L}_{\text{excl}}$)
-$$\mathcal{L}_{\text{excl}} = \text{mean}\left(M_\alpha \odot (1.0 - 1.5 m_{\text{guide}}) \odot \left(\exp\left(-\frac{|I - P_{\text{aligned}}|}{\tau_{\text{excl}}}\right) + 1.5 \cdot G_{\text{static}}\right)\right)$$
-Chỉ phạt $M_\alpha$ tại vùng mặt đường thực sự và các vạch kẻ đường tĩnh, **hoàn toàn không đè ép $M_\alpha$ tại vùng có xe**.
+### 2.4 Hợp Nhất Hướng Dẫn Đa Tầng Semantic TAM ($\pi$) & Khử Thủng Lỗ Mặt Nạ ($\mathcal{L}_{\text{excl}}$)
+Kế thừa đột phá từ **Hướng 1 Mới (Temporal Atypicality Map - TAM)**, mặt nạ hướng dẫn $m_{\text{guide}}$ được nâng cấp từ sai khác pixel RGB thuần túy sang **Hợp nhất Đa Tầng Ngữ Nghĩa (Multi-Scale Semantic Guidance)**:
+$$m_{\text{fused}} = \max\left(m_{\text{guide}}, \; \operatorname{Upsample}(\pi)\right)$$
+- Khi xe có màu sơn xám/bạc/đen trùng màu nhựa đường ($\Delta_{\text{photo}} \approx 0$), token ngữ nghĩa tầng sâu của DINOv3 ViT vẫn phát hiện bất thường ($\pi \approx 0.95$), lập tức kích hoạt cổng chắn rò rỉ xe $vehicle\_shield$.
+- Hàm loại trừ được bảo vệ tuyệt đối:
+$$\mathcal{L}_{\text{excl}} = \text{mean}\left(M_\alpha \odot (1.0 - 1.5 m_{\text{fused}}) \odot \left(\exp\left(-\frac{|I - P_{\text{aligned}}|}{\tau_{\text{excl}}}\right) + 1.5 \cdot G_{\text{static}}\right)\right)$$
+Chỉ phạt $M_\alpha$ tại vùng mặt đường thực sự và các vạch kẻ đường tĩnh, **chấm dứt hoàn toàn hiện tượng thủng lỗ mặt nạ ở nóc xe và mui xe**.
 
-### 2.5 Hướng Dẫn Mặt Nạ Cân Bằng Lớp Dương ($\mathcal{L}_{\text{guide}}$)
+### 2.5 Hướng Dẫn Mặt Nạ Cân Bằng Lớp Dương ($\mathcal{L}_{\text{guide}}$) & Lực Phạt Nhị Phân Hóa Làm Mịn (Smooth Annealed $\mathcal{L}_{\text{bin}}$)
 Vì xe cộ chỉ chiếm khoảng $5\% - 15\%$ tổng diện tích khung hình, hàm Binary Cross-Entropy được tái cân bằng trọng số theo từng pixel:
-$$\mathcal{L}_{\text{guide}} = \text{mean}\left(\text{BCE}(M_\alpha, m_{\text{guide}}) \odot \left(1.0 + 3.5 \cdot m_{\text{guide}} + 2.0 \cdot G_{\text{static}} \odot (1 - m_{\text{guide}})\right)\right)$$
-Giúp mặt nạ Alpha đạt giá trị tự tin $0.90 - 0.98$ trên toàn bộ phương tiện thay vì bị kẹt ở mức $< 0.20$.
+$$\mathcal{L}_{\text{guide}} = \text{mean}\left(\text{BCE}(M_\alpha, m_{\text{fused}}) \odot \left(1.0 + 3.5 \cdot m_{\text{fused}} + 2.0 \cdot G_{\text{static}} \odot (1 - m_{\text{fused}})\right)\right)$$
+
+Đồng thời, hàm mất mát nhị phân hóa $\mathcal{L}_{\text{bin}}$ được điều phối qua **Lịch trình làm mịn (Smooth Annealed Ramp)** qua 4 epoch:
+$$w_{\text{ramp}}(\text{epoch}) = \min\left(1.0, \; \frac{\text{epoch} - \text{warmup\_bin\_epoch} + 1}{4}\right), \quad \text{khi } \text{epoch} \ge \text{warmup\_bin\_epoch}$$
+Triệt tiêu hoàn toàn cú sốc hàm mất mát (loss shock) tại mốc chuyển giao epoch, bảo toàn viền cạnh sắc nét của phương tiện.
 
 ---
 

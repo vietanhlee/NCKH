@@ -108,10 +108,13 @@ class NoiseAwareDecompositionLoss(nn.Module):
         prior_bg: Optional[torch.Tensor] = None,
         epoch: int = 10,
         warmup_bin_epoch: int = 10,
+        pi: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         if isinstance(origin, dict):
             targets = origin
             prior_bg = targets.get("bg", targets.get("prior_bg", targets.get("prior", prior_bg)))
+            if pi is None:
+                pi = targets.get("pi", targets.get("pi_map", None))
             origin = targets.get("origin", targets.get("frame", None))
 
         assert origin is not None, "origin frame không được None"
@@ -123,7 +126,16 @@ class NoiseAwareDecompositionLoss(nn.Module):
         sigma = preds["sigma"]
         log_sigma = preds["log_sigma"]
 
-        m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(origin, prior_bg)
+        m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(origin, prior_bg, pi=pi)
+
+        # Hợp nhất bổ sung Semantic TAM Guidance pi nếu có
+        if pi is not None:
+            pi_4d = pi.unsqueeze(1).float() if pi.dim() == 3 else pi.float()
+            if pi_4d.shape[-2:] != origin.shape[-2:]:
+                pi_full = F.interpolate(pi_4d, size=origin.shape[-2:], mode="bilinear", align_corners=False)
+            else:
+                pi_full = pi_4d
+            m_guide = torch.clamp(torch.max(m_guide, pi_full.detach()), 0.0, 1.0)
 
         if "pred_fg" in preds:
             bg_safe_for_rec = (1.0 - m_guide) * B_hat + m_guide * B_hat.detach()
@@ -172,9 +184,13 @@ class NoiseAwareDecompositionLoss(nn.Module):
         l_tv = total_variation_loss(M_alpha)
         l_sparse = torch.mean(M_alpha * true_static_zone)
 
+        # 8. Nhị phân hóa (L_bin): Đẩy M về 0 hoặc 1 với lịch trình làm mịn (Smooth Annealed Ramp)
+        ramp_epochs = 4
         if epoch >= warmup_bin_epoch:
-            l_bin = torch.mean(M_alpha * (1.0 - M_alpha))
+            ramp_weight = min(1.0, float(epoch - warmup_bin_epoch + 1) / float(ramp_epochs))
+            l_bin = ramp_weight * torch.mean(M_alpha * (1.0 - M_alpha))
         else:
+            ramp_weight = 0.0
             l_bin = torch.tensor(0.0, device=B_hat.device)
 
         total_loss = (
@@ -186,7 +202,7 @@ class NoiseAwareDecompositionLoss(nn.Module):
             + 0.35 * l_fg
             + self.lambda_tv * l_tv
             + self.lambda_sparse * l_sparse
-            + (self.lambda_bin * l_bin if epoch >= warmup_bin_epoch else 0.0)
+            + self.lambda_bin * l_bin
         )
 
         loss_dict = {
@@ -200,6 +216,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
             "loss_fg": float(l_fg.item()),
             "loss_tv": float(l_tv.item()),
             "loss_sparse": float(l_sparse.item()),
+            "loss_bin": float(l_bin.item()),
+            "bin_ramp_w": float(ramp_weight),
             "mean_sigma": float(sigma.mean().item()),
             "mean_alpha": float(M_alpha.mean().item()),
         }
@@ -308,9 +326,12 @@ class SceneDecompositionLossV2(nn.Module):
             l_fg = torch.tensor(0.0, device=origin.device)
 
         l_tv = total_variation_loss(M_alpha)
+        ramp_epochs = 4
         if epoch >= self.warmup_bin_epoch:
-            l_bin = torch.mean(M_alpha * (1.0 - M_alpha))
+            ramp_weight = min(1.0, float(epoch - self.warmup_bin_epoch + 1) / float(ramp_epochs))
+            l_bin = ramp_weight * torch.mean(M_alpha * (1.0 - M_alpha))
         else:
+            ramp_weight = 0.0
             l_bin = torch.tensor(0.0, device=origin.device)
 
         total_loss = (
@@ -321,7 +342,7 @@ class SceneDecompositionLossV2(nn.Module):
             + self.lambda_excl * l_excl
             + 0.30 * l_fg
             + self.lambda_tv * l_tv
-            + (self.lambda_bin * l_bin if epoch >= self.warmup_bin_epoch else 0.0)
+            + self.lambda_bin * l_bin
         )
 
         loss_dict = {
@@ -332,6 +353,8 @@ class SceneDecompositionLossV2(nn.Module):
             "loss_ell": float(l_ell.item()),
             "loss_excl": float(l_excl.item()),
             "loss_tv": float(l_tv.item()),
+            "loss_bin": float(l_bin.item()),
+            "bin_ramp_w": float(ramp_weight),
             "mean_sigma": float(sigma.mean().item()),
             "mean_alpha": float(M_alpha.mean().item()),
         }

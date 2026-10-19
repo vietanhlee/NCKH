@@ -359,8 +359,17 @@ def train_decomposition(args):
                     origin = batch["origin"].to(device)
                     bg = batch["bg"].to(device)
 
-                preds = model(origin, prior=bg)
-                loss, loss_dict = loss_fn(preds, origin, bg, epoch=epoch)
+                pi = batch.get("pi", None)
+                if pi is not None:
+                    pi = pi.to(device)
+
+                preds = model(origin, prior=bg, pi=pi)
+                loss, loss_dict = loss_fn(
+                    preds, origin, bg,
+                    epoch=epoch,
+                    warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
+                    pi=pi,
+                )
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -378,6 +387,7 @@ def train_decomposition(args):
                     "prior": f"{loss_dict.get('loss_prior', 0.0):.4f}",
                     "lr": f"{cur_lr:.2e}",
                     "sigma": f"{loss_dict.get('mean_sigma', 0.0):.3f}",
+                    "bin_w": f"{loss_dict.get('bin_ramp_w', 0.0):.2f}",
                 })
 
             cur_lr = optimizer.param_groups[0]["lr"]

@@ -257,6 +257,87 @@ class TestDirection2New(unittest.TestCase):
         self.assertNotIn("epochs", specified)
         self.assertNotIn("lr", specified)
 
+    def test_08_smooth_sigma_gradient_continuity(self):
+        """Kiểm tra độ bất định sigma kích hoạt trơn tru C^inf, không bị triệt tiêu gradient (Vanishing Gradient)."""
+        backbone = MockViTBackbone(embed_dim=128)
+        model = TrafficDecompositionNet(backbone=backbone, embed_dim=128, patch_size=16).to(self.device)
+
+        # Kiểm tra forward qua toàn bộ mạng
+        x = torch.rand(2, 3, 256, 448, device=self.device)
+        out = model(x)
+        sigma = out["sigma"]
+        log_sigma = out["log_sigma"]
+
+        # Kiểm tra khoảng giá trị lý thuyết: sigma in (0.01, 0.50)
+        self.assertTrue((sigma >= 0.01).all() and (sigma <= 0.50).all())
+        self.assertTrue((log_sigma >= -4.606).all() and (log_sigma <= -0.693).all())
+
+        # Kiểm tra đạo hàm trực tiếp: Ở dải hoạt động rộng [-8.0, +8.0], đạo hàm của sigma theo raw_sigma không bị triệt tiêu
+        raw_s = torch.tensor([-8.0, -4.0, 0.0, 4.0, 8.0], requires_grad=True)
+        sig = 0.01 + 0.49 * torch.sigmoid(raw_s)
+        loss = sig.sum()
+        loss.backward()
+
+        self.assertIsNotNone(raw_s.grad)
+        self.assertFalse(torch.isnan(raw_s.grad).any())
+        self.assertTrue((raw_s.grad > 0.0).all(), "Đạo hàm của sigma theo raw_s phải luôn dương nghiêm ngặt trong dải hoạt động!")
+
+    def test_09_semantic_tam_guidance_fusion(self):
+        """Kiểm tra Semantic TAM Guidance (pi) hợp nhất thành công với m_guide và kích hoạt vehicle_shield."""
+        from direction2_new.models import compute_illumination_invariant_guide
+
+        H, W = 256, 448
+        # Giả lập tình huống xe máy trùng màu nhựa đường: origin và prior có RGB giống hệt nhau
+        origin = torch.full((1, 3, H, W), 0.35, device=self.device)
+        prior = torch.full((1, 3, H, W), 0.35, device=self.device)
+
+        # 1. Khi không có pi: m_guide sẽ bằng 0 do sai khác pixel RGB = 0
+        m_guide_no_pi, _, _ = compute_illumination_invariant_guide(origin, prior, pi=None)
+        self.assertLess(m_guide_no_pi.max().item(), 0.10, "Khi không có pi và xe trùng màu đường, m_guide pixel bị mù!")
+
+        # 2. Khi có Semantic TAM pi: DINOv3 ViT phát hiện patch xe tại góc (pi = 0.95)
+        pi = torch.zeros(1, 16, 28, device=self.device)
+        pi[:, 5:10, 10:15] = 0.95
+
+        m_guide_with_pi, _, _ = compute_illumination_invariant_guide(origin, prior, pi=pi)
+        # Tại vùng xe, m_guide_with_pi phải được kích hoạt mạnh mẽ >= 0.85
+        self.assertGreaterEqual(m_guide_with_pi.max().item(), 0.85, "TAM pi phải cứu nguy và kích hoạt m_guide khi xe trùng màu đường!")
+
+    def test_10_smooth_binarization_ramp(self):
+        """Kiểm tra lịch trình làm mịn lực phạt nhị phân hóa (Smooth Annealed Binarization Ramp)."""
+        from direction2_new.losses import NoiseAwareDecompositionLoss
+
+        loss_fn = NoiseAwareDecompositionLoss(lambda_bin=0.05, warmup_bin_epoch=10)
+        B, C, H, W = 2, 3, 256, 448
+        preds = {
+            "recon_origin": torch.rand(B, C, H, W, device=self.device),
+            "pred_bg": torch.rand(B, C, H, W, device=self.device),
+            "pred_fg": torch.rand(B, C, H, W, device=self.device),
+            "alpha_mask": torch.full((B, 1, H, W), 0.5, device=self.device),  # Độ bất định cực đại 0.5
+            "sigma": torch.full((B, 1, H, W), 0.1, device=self.device),
+            "log_sigma": torch.full((B, 1, H, W), -2.3, device=self.device),
+        }
+        origin = torch.rand(B, C, H, W, device=self.device)
+        prior_bg = torch.rand(B, C, H, W, device=self.device)
+
+        # Epoch 9 (< 10): bin_ramp_w = 0.0, loss_bin = 0.0
+        _, dict_ep9 = loss_fn(preds, origin, prior_bg, epoch=9, warmup_bin_epoch=10)
+        self.assertEqual(dict_ep9["bin_ramp_w"], 0.0)
+        self.assertEqual(dict_ep9["loss_bin"], 0.0)
+
+        # Epoch 10 (bắt đầu kích hoạt): ramp_weight = 1/4 = 0.25
+        _, dict_ep10 = loss_fn(preds, origin, prior_bg, epoch=10, warmup_bin_epoch=10)
+        self.assertAlmostEqual(dict_ep10["bin_ramp_w"], 0.25, places=5)
+        self.assertGreater(dict_ep10["loss_bin"], 0.0)
+
+        # Epoch 11: ramp_weight = 2/4 = 0.50
+        _, dict_ep11 = loss_fn(preds, origin, prior_bg, epoch=11, warmup_bin_epoch=10)
+        self.assertAlmostEqual(dict_ep11["bin_ramp_w"], 0.50, places=5)
+
+        # Epoch 13: ramp_weight = 4/4 = 1.0 (đạt 100% êm đềm, không sốc gradient)
+        _, dict_ep13 = loss_fn(preds, origin, prior_bg, epoch=13, warmup_bin_epoch=10)
+        self.assertAlmostEqual(dict_ep13["bin_ramp_w"], 1.0, places=5)
+
 
 if __name__ == "__main__":
     unittest.main()
