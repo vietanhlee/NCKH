@@ -89,10 +89,13 @@ def evaluate_representation_quality(
             cids = batch["cid"].to(device)
             B = x.shape[0]
 
-            # 1. Trích xuất TAM pi
-            u = frozen_extractor(x).float()
-            a, valid = pos_stats.atypicality(cids, u)
-            pi = calibrator.posterior(a).view(B, -1)  # (B, 448)
+            # 1. Trích xuất TAM pi (ưu tiên từ batch cache nếu có)
+            if "pi1" in batch and batch["pi1"] is not None:
+                pi = batch["pi1"].to(device).view(B, -1)
+            else:
+                u = frozen_extractor(x).float()
+                a, valid = pos_stats.atypicality(cids, u)
+                pi = calibrator.posterior(a).view(B, -1)  # (B, 448)
 
             # 2. Trích xuất backbone tokens
             x_norm = imagenet_normalize(x)
@@ -103,13 +106,21 @@ def evaluate_representation_quality(
 
             cls_tokens_list.append(cls_tok.cpu())
 
-            # 3. Phân nhóm patch Xe (pi > 0.5) vs patch Nền (pi < 0.2)
+            # 3. Phân nhóm patch Xe (pi > 0.40) vs patch Nền (pi < 0.20)
             for b in range(B):
                 pi_b = pi[b]
                 p_b = patches_norm[b]
 
-                fg_mask = (pi_b > 0.5)
-                bg_mask = (pi_b < 0.2)
+                fg_mask = (pi_b > 0.40)
+                bg_mask = (pi_b < 0.20)
+
+                # Fallback thích nghi phân vị nếu ngưỡng cứng chưa bắt được
+                if fg_mask.sum() < 2:
+                    p_high = torch.quantile(pi_b, 0.80)
+                    fg_mask = (pi_b >= p_high)
+                if bg_mask.sum() < 2:
+                    p_low = torch.quantile(pi_b, 0.20)
+                    bg_mask = (pi_b <= p_low)
 
                 if fg_mask.sum() >= 2 and bg_mask.sum() >= 2:
                     fg_vec = p_b[fg_mask].mean(dim=0, keepdim=True)
@@ -154,6 +165,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output_json", type=str, default="downstream_metrics.json")
+    parser.add_argument("--tam_cache_dir", type=str, default=None, help="Thư mục cache TAM pi (.npy) nếu có")
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -161,10 +173,19 @@ def main():
     print(" 🚗 [DOWNSTREAM EVALUATION] ĐÁNH GIÁ CHẤT LƯỢNG BIỂU DIỄN PHƯƠNG TIỆN")
     print("=" * 80)
 
-    # 1. Dataset
+    # 1. Dataset & TAM Cache
+    tam_cache_dir = args.tam_cache_dir
+    if tam_cache_dir is None:
+        for candidate in ["tam_cache", "checkpoints/direction1_new/tam_cache", "/workspace/nckh/DINO/tam_cache"]:
+            if os.path.isdir(candidate):
+                tam_cache_dir = candidate
+                break
+
     if os.path.isdir(args.data_dir):
-        dataset = TrafficCameraDataset(data_dir=args.data_dir, img_size=(256, 448))
+        dataset = TrafficCameraDataset(data_dir=args.data_dir, img_size=(256, 448), tam_cache_dir=tam_cache_dir)
         print(f"✅ Nạp {len(dataset)} ảnh thực tế từ '{args.data_dir}' ({dataset.num_cams} camera)")
+        if tam_cache_dir and os.path.isdir(tam_cache_dir):
+            print(f"   ⚡ Sử dụng TAM Cache offline từ: {os.path.abspath(tam_cache_dir)}")
     else:
         print(f"💡 Thư mục '{args.data_dir}' chưa có, dùng SyntheticTrafficDataset mô phỏng...")
         dataset = SyntheticTrafficDataset(num_samples=100, num_cams=4)
@@ -215,6 +236,36 @@ def main():
         if "calibrator" in ckpt and ckpt["calibrator"]:
             calibrator.load_state_dict(ckpt["calibrator"])
             print("   Khôi phục thành công GMMCalibrator.")
+
+        if "frozen_extractor" in ckpt and ckpt["frozen_extractor"] is not None:
+            smart_load_state_dict(frozen_extractor, ckpt["frozen_extractor"], strict=False, verbose=False)
+            print("   🧊 [FrozenExtractor] Khôi phục toàn bộ đặc trưng và ma trận PCA từ checkpoint.")
+        elif "pca_components" in ckpt and ckpt["pca_components"] is not None:
+            frozen_extractor.pca_components.copy_(ckpt["pca_components"].to(device))
+            if "pca_mean" in ckpt and ckpt["pca_mean"] is not None:
+                frozen_extractor.pca_mean.copy_(ckpt["pca_mean"].to(device))
+            if "is_pca_fitted" in ckpt and ckpt["is_pca_fitted"] is not None:
+                frozen_extractor.is_pca_fitted.copy_(ckpt["is_pca_fitted"].to(device))
+            print("   🧊 [FrozenExtractor] Khôi phục thành công ma trận PCA buffers từ checkpoint.")
+    elif tam_cache_dir and os.path.isdir(tam_cache_dir):
+        stats_file = os.path.join(tam_cache_dir, "tam_stats.pth")
+        if os.path.isfile(stats_file):
+            print(f"🔄 Đang nạp tham số TAM từ cache: {stats_file}")
+            try:
+                tam_saved = torch.load(stats_file, map_location="cpu", weights_only=False)
+            except TypeError:
+                tam_saved = torch.load(stats_file, map_location="cpu")
+            if "pos_stats" in tam_saved:
+                pos_stats.load_state_dict(tam_saved["pos_stats"])
+                print(f"   Khôi phục PositionStats ({pos_stats.num_cams} cams) từ {stats_file}.")
+            if "calibrator" in tam_saved:
+                calibrator.load_state_dict(tam_saved["calibrator"])
+                print("   Khôi phục GMMCalibrator.")
+            if "pca_components" in tam_saved and tam_saved["pca_components"] is not None:
+                frozen_extractor.pca_components.copy_(tam_saved["pca_components"].to(device))
+                if "pca_mean" in tam_saved and tam_saved["pca_mean"] is not None:
+                    frozen_extractor.pca_mean.copy_(tam_saved["pca_mean"].to(device))
+                print("   Khôi phục PCA components từ tam_stats.pth.")
 
     backbone = backbone.to(device)
 

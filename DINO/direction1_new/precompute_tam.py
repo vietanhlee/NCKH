@@ -266,6 +266,10 @@ def precompute_tam_cache(
     torch.save({
         "pos_stats": pos_stats.state_dict(),
         "calibrator": calibrator.state_dict(),
+        "frozen_extractor": frozen_extractor.state_dict(),
+        "pca_components": getattr(frozen_extractor, "pca_components", None),
+        "pca_mean": getattr(frozen_extractor, "pca_mean", None),
+        "is_pca_fitted": getattr(frozen_extractor, "is_pca_fitted", None),
     }, stats_file)
     print(f"💾 Đã lưu trọng số PositionStats & GMMCalibrator tại: {stats_file}")
 
