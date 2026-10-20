@@ -662,6 +662,7 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--num_workers": "num_workers",
         "--seed": "seed",
         "--use_amp": "use_amp", "--no_amp": "use_amp",
+        "--amp_dtype": "amp_dtype",
         "--resume": "resume",
         "--hf_token": "hf_token",
         "--tam_warmup_frames": "tam_warmup_frames",
@@ -726,6 +727,13 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--use_amp", action="store_true", default=True, help="Sử dụng Mixed Precision (AMP) để tối ưu VRAM và tăng tốc độ")
     parser.add_argument("--no_amp", dest="use_amp", action="store_false", help="Tắt Mixed Precision")
+    parser.add_argument(
+        "--amp_dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "bf16", "bfloat16", "fp16", "float16"],
+        help="Kiểu dữ liệu AMP: 'auto' (tự động dùng bfloat16 nếu GPU hỗ trợ Tensor Cores BF16, ngược lại dùng fp16), 'bf16', hoặc 'fp16'",
+    )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
     parser.add_argument("--tam_warmup_frames", type=int, default=200, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 200 frame)")
@@ -1010,6 +1018,16 @@ def train_direction_g():
     else:
         device = primary_device
 
+    # Kích hoạt Tensor Cores TF32 cho các phép tính ma trận FP32 trên Ampere / Ada Lovelace / Hopper
+    if torch.cuda.is_available():
+        try:
+            torch.set_float32_matmul_precision("high")
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            print("🚀 [Tensor Cores] Đã kích hoạt TensorFloat-32 (TF32) cho cuBLAS & cuDNN.")
+        except Exception:
+            pass
+
     print("\n" + "=" * 80)
     print(" 🚀 [DIRECTION G] VEHICLE-CENTRIC SSL PRETRAINING (TAM + AGM + SRS)")
     print("=" * 80)
@@ -1020,13 +1038,32 @@ def train_direction_g():
     print("=" * 80)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Khởi tạo Mixed Precision Scaler
+    # Khởi tạo Mixed Precision Scaler & Kiểu dữ liệu Tensor Cores
     device_type = "cuda" if device.type == "cuda" else "cpu"
     use_amp = args.use_amp and (device.type == "cuda")
+    amp_dtype = torch.float16
+    use_scaler = True
+
+    if use_amp:
+        req_dtype = getattr(args, "amp_dtype", "auto").lower()
+        bf16_supported = hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported()
+        if req_dtype in ["auto", "bf16", "bfloat16"] and bf16_supported:
+            amp_dtype = torch.bfloat16
+            use_scaler = False  # BFloat16 có dải số 8-bit exponent tương đương FP32, miễn nhiễm tràn số, không cần GradScaler
+            print("⚡ [Tensor Cores BFloat16] Phát hiện GPU hỗ trợ native BF16 -> Kích hoạt BFloat16 AMP (Bỏ qua GradScaler, chống tràn số tuyệt đối)!")
+        elif req_dtype in ["bf16", "bfloat16"]:
+            print("⚠️ [AMP Notice] GPU không hỗ trợ native BF16 phần cứng, tự động dùng Float16 (FP16).")
+            amp_dtype = torch.float16
+            use_scaler = True
+        else:
+            amp_dtype = torch.float16
+            use_scaler = True
+            print("⚡ [AMP Float16] Kích hoạt FP16 AMP kèm GradScaler.")
+
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
-        scaler = torch.amp.GradScaler(device_type, enabled=use_amp)
+        scaler = torch.amp.GradScaler(device_type, enabled=(use_amp and use_scaler))
     else:
-        scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and use_scaler))
 
     # 2. Khởi tạo Student & Teacher backbone và Projection Heads
     effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
@@ -1517,7 +1554,8 @@ def train_direction_g():
             "ibot_center": ibot_loss_fn.center.detach().cpu(),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
-            "scaler": scaler.state_dict() if use_amp else None,
+            "scaler": scaler.state_dict() if (use_amp and use_scaler) else None,
+            "amp_dtype": str(amp_dtype),
             "history": history,
             "best_loss": best_loss,
             "num_gpus": num_gpus,
@@ -1568,7 +1606,7 @@ def train_direction_g():
                     pi2 = batch["pi2"].to(device, non_blocking=(device.type == "cuda"))
                 else:
                     with torch.no_grad():
-                        with torch.amp.autocast(device_type=device_type, enabled=use_amp):
+                        with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
                             u1 = frozen_extractor(x1)  # (B, 448, 64)
                             u2 = frozen_extractor(x2)  # (B, 448, 64)
                         u1_f = u1.float()
@@ -1628,7 +1666,7 @@ def train_direction_g():
                     x1_vit = x1
                     x_student_vit = x_student
 
-                with torch.amp.autocast(device_type=device_type, enabled=use_amp):
+                with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
                     # Teacher nhận ảnh x_student_vit (SRS hoán nền) SẠCH KHÔNG CHE
                     # Đồng bộ hóa bối cảnh giữa Teacher và Student: Cả hai đều nhìn cùng phương tiện trên nền mới,
                     # triệt tiêu hoàn toàn sự lệ thuộc vào góc máy camera gốc và giải quyết dứt điểm xung đột với CamAdv GRL!
@@ -1668,13 +1706,18 @@ def train_direction_g():
                         + args.lambda_cam_adv * loss_cam_adv
                     )
 
-                # Bước F: Tối ưu Gradient qua GradScaler
+                # Bước F: Tối ưu Gradient qua GradScaler (cho FP16) hoặc direct backward (cho Tensor Cores BF16)
                 optimizer.zero_grad()
-                scaler.scale(total_loss).backward()
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
-                scaler.step(optimizer)
-                scaler.update()
+                if use_amp and use_scaler:
+                    scaler.scale(total_loss).backward()
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    total_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=3.0)
+                    optimizer.step()
 
                 # Bước G: Cập nhật EMA Teacher với Lịch trình Cosine Momentum (0.996 -> 1.0)
                 cosine_progress = float(epoch) / float(max(1, args.epochs))

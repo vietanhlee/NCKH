@@ -119,12 +119,28 @@ def precompute_tam_cache(
     device = torch.device(device_str if torch.cuda.is_available() and device_str.startswith("cuda") else "cpu")
     os.makedirs(cache_dir, exist_ok=True)
 
+    # Kích hoạt Tensor Cores TF32 cho các phép tính ma trận FP32 trên Ampere / Ada Lovelace / Hopper
+    if torch.cuda.is_available():
+        try:
+            torch.set_float32_matmul_precision("high")
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+        except Exception:
+            pass
+
+    device_type = "cuda" if device.type == "cuda" else "cpu"
+    use_bf16 = device.type == "cuda" and hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported()
+    amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
+
     print("=" * 80)
     print(" 🚀 [TAM PRECOMPUTE & CACHE ENGINE] TIỀN XỬ LÝ BẢN ĐỒ TIỀN CẢNH XE CỘ")
     print("=" * 80)
     print(f"📁 Thư mục ảnh nguồn   : {data_dir}")
     print(f"💾 Thư mục cache đích  : {cache_dir}")
     print(f"⚙️ Thiết bị tính toán  : {device}")
+    if device.type == "cuda":
+        dtype_name = "BFloat16 (Tensor Cores native)" if use_bf16 else "Float16 (AMP)"
+        print(f"⚡ Tăng tốc phần cứng  : {dtype_name} + TF32")
 
     # 1. Khởi tạo Dataset
     if os.path.isdir(data_dir):
@@ -229,8 +245,10 @@ def precompute_tam_cache(
                     skipped_count += B
                     continue
 
-            # Forward qua Frozen Extractor & TAM
-            u = frozen_extractor(imgs).float()
+            # Forward qua Frozen Extractor & TAM (Tensor Cores AMP autocast)
+            with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=(device.type == "cuda")):
+                u = frozen_extractor(imgs)
+            u = u.float()
             a, valid = pos_stats.atypicality(cids, u)
             pi_batch = calibrator.posterior(a).view(B, 16, 28).cpu().numpy().astype(np.float16)
 
