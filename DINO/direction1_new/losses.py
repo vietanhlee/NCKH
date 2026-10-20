@@ -9,7 +9,8 @@
 =============================================================================
 """
 
-from typing import Optional
+from typing import Optional, Dict
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -106,6 +107,41 @@ class DINOLoss(nn.Module):
         return loss
 
     @torch.no_grad()
+    def compute_distribution_metrics(
+        self,
+        student_output: torch.Tensor,
+        teacher_output: torch.Tensor,
+        epoch: int = 0,
+    ) -> Dict[str, float]:
+        """
+        Tính toán các chỉ số giám sát phân bố xác suất để phát hiện sớm phân kỳ hoặc sụp đổ biểu diễn:
+        - teacher_entropy: Entropy phân bố Teacher (đo độ phân tán)
+        - student_entropy: Entropy phân bố Student
+        - kl_div: Khoảng cách phân bố KL(Teacher || Student)
+        - active_prototypes: Số lượng prototype có kích hoạt thực tế
+        """
+        curr_teacher_temp = self.teacher_temp_schedule[min(epoch, len(self.teacher_temp_schedule) - 1)]
+        s_out = student_output / self.student_temp
+        s_logprobs = F.log_softmax(s_out, dim=-1)
+        s_probs = F.softmax(s_out, dim=-1)
+        t_probs = F.softmax((teacher_output - self.center) / curr_teacher_temp, dim=-1)
+
+        t_entropy = -(t_probs * torch.log(t_probs.clamp(min=1e-9))).sum(dim=-1).mean().item()
+        s_entropy = -(s_probs * s_logprobs).sum(dim=-1).mean().item()
+        kl_div = F.kl_div(s_logprobs, t_probs, reduction="batchmean").item()
+
+        out_dim = teacher_output.shape[-1]
+        active_cnt = (t_probs.mean(dim=0) > (1.0 / out_dim)).sum().item()
+
+        return {
+            "teacher_entropy": float(f"{t_entropy:.4f}"),
+            "student_entropy": float(f"{s_entropy:.4f}"),
+            "kl_div": float(f"{kl_div:.4f}"),
+            "active_prototypes": int(active_cnt),
+            "teacher_temp": float(f"{curr_teacher_temp:.4f}"),
+        }
+
+    @torch.no_grad()
     def update_center(self, teacher_output: torch.Tensor):
         batch_center = torch.mean(teacher_output, dim=0, keepdim=True)
         self.center.copy_(self.center * self.center_momentum + batch_center * (1.0 - self.center_momentum))
@@ -175,13 +211,15 @@ class iBOTPatchLoss(nn.Module):
 
 class RICLoss(nn.Module):
     """
-    Regional Instance Contrastive (RIC) Loss.
-    Tập trung vector vùng xe z_i (gộp theo trọng số pi) của các view khác nhau cùng 1 frame (cặp dương)
-    và tương phản với các frame khác của cùng camera (cặp âm).
+    Regional Instance Contrastive (RIC) Loss cải tiến chống bão hòa (Anti-Saturation InfoNCE).
+    Gộp đặc trưng vùng phương tiện z_veh theo xác suất tiền cảnh pi.
+    Tương phản giữa Student và Teacher của cùng một frame (cặp dương)
+    với tập mẫu âm gồm toàn bộ batch, trong đó các mẫu âm cùng camera được tăng trọng số phạt (hard negatives).
     """
-    def __init__(self, temperature: float = 0.2):
+    def __init__(self, temperature: float = 0.07, hard_cam_weight: float = 2.0):
         super().__init__()
         self.temperature = temperature
+        self.hard_cam_weight = hard_cam_weight
 
     def forward(
         self,
@@ -200,24 +238,30 @@ class RICLoss(nn.Module):
 
         sim_pos = torch.sum(z1 * z2, dim=-1) / self.temperature  # (B,)
         
-        # Ma trận tương đồng toàn phần z1 x z2.T
-        all_sim = torch.matmul(z1, z2.T) / self.temperature     # (B, B)
+        # Ma trận tương đồng liên view z1 x z2.T và nội view z1 x z1.T
+        sim_cross = torch.matmul(z1, z2.T) / self.temperature     # (B, B)
+        sim_within = torch.matmul(z1, z1.T) / self.temperature    # (B, B)
 
-        # Mask âm: Các frame khác (j != i) nhưng CÙNG CAMERA
-        same_cam = (cids.unsqueeze(1) == cids.unsqueeze(0))     # (B, B) bool
+        # Mask âm: Các frame khác j != i
         diff_frame = ~torch.eye(B, dtype=torch.bool, device=z1.device)
-        hard_neg_mask = same_cam & diff_frame
+        same_cam = (cids.unsqueeze(1) == cids.unsqueeze(0)) & diff_frame     # (B, B) cùng cam khác frame
 
-        if not hard_neg_mask.any():
-            # InfoNCE tiêu chuẩn
-            labels = torch.arange(B, device=z1.device)
-            return F.cross_entropy(all_sim, labels)
+        # Trọng số phạt mẫu âm: cùng camera được phạt mạnh hơn gấp hard_cam_weight lần
+        neg_weights = torch.ones((B, B), device=z1.device, dtype=z1.dtype)
+        if same_cam.any():
+            neg_weights = torch.where(
+                same_cam,
+                torch.tensor(self.hard_cam_weight, device=z1.device, dtype=z1.dtype),
+                neg_weights,
+            )
+        neg_weights = neg_weights * diff_frame.float()
 
-        # Mẫu số InfoNCE
-        exp_sim = torch.exp(all_sim)
+        # Mẫu số InfoNCE gồm cặp dương + toàn bộ mẫu âm trong batch (cả cross-view và within-view)
+        exp_cross = torch.exp(sim_cross) * neg_weights
+        exp_within = torch.exp(sim_within) * neg_weights
         exp_pos = torch.exp(sim_pos)
-        # Chỉ gom pos + các negatives cùng camera
-        denom = exp_pos + (exp_sim * hard_neg_mask.float()).sum(dim=-1)
+
+        denom = exp_pos + exp_cross.sum(dim=-1) + exp_within.sum(dim=-1)
         loss = -torch.log(exp_pos / denom.clamp(min=1e-8)).mean()
         return loss
 
@@ -245,6 +289,18 @@ def pool_vehicle_embedding(
     w_safe = w + 1e-3
     pooled = (patch_tokens * w_safe).sum(dim=1) / (w_safe.sum(dim=1) + eps)
     return F.normalize(pooled, p=2, dim=-1)
+
+
+def compute_dann_alpha(progress: float, max_alpha: float = 0.1, gamma: float = 10.0) -> float:
+    """
+    Lịch trình tăng mượt mà hệ số đảo đạo hàm Ganin et al. (DANN):
+    alpha(p) = max_alpha * (2.0 / (1.0 + exp(-gamma * p)) - 1.0)
+    Tại p = 0.0 (đầu buổi train): alpha = 0.0 (bảo vệ backbone, tránh xung đột sớm).
+    Tại p = 1.0 (cuối buổi train): alpha = max_alpha (0.1).
+    """
+    p = float(np.clip(progress, 0.0, 1.0))
+    schedule = (2.0 / (1.0 + np.exp(-gamma * p))) - 1.0
+    return float(max_alpha * schedule)
 
 
 class _GradientReversalFn(torch.autograd.Function):

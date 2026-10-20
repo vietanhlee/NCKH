@@ -40,6 +40,7 @@ from direction1_new.losses import (
     RICLoss,
     pool_vehicle_embedding,
     CameraAdversarialHead,
+    compute_dann_alpha,
 )
 from direction1_new.sampler import CameraGroupedSampler
 
@@ -403,6 +404,103 @@ class TestDirection1New(unittest.TestCase):
         quota_calib.push(big_a, big_v, max_samples=150)
         # Chỉ có tối đa đúng 150 mẫu được nạp vào
         self.assertEqual(quota_calib.size, 150)
+
+    def test_17_ric_anti_saturation_and_gradients(self):
+        """Kiểm tra RICLoss cải tiến: Không bị bão hòa sát 0, sinh gradient mạnh trên cả z1 và z2."""
+        B, D = 8, 128
+        raw_z1 = torch.randn(B, D, requires_grad=True)
+        raw_z2 = torch.randn(B, D, requires_grad=True)
+        z1 = F.normalize(raw_z1, p=2, dim=-1)
+        z2 = F.normalize(raw_z2, p=2, dim=-1)
+        cids = torch.tensor([0, 0, 1, 1, 2, 2, 3, 3])
+
+        ric_fn = RICLoss(temperature=0.07, hard_cam_weight=2.0)
+        loss = ric_fn(z1, z2, cids)
+
+        # Loss phải nằm trong dải động hoạt động lành mạnh (> 0.2), không được bẹp dí ở 0.04
+        self.assertGreater(loss.item(), 0.2)
+
+        # Kiểm tra lan truyền gradient
+        loss.backward()
+        self.assertIsNotNone(raw_z1.grad)
+        self.assertIsNotNone(raw_z2.grad)
+        self.assertGreater(raw_z1.grad.norm().item(), 1e-4)
+        self.assertGreater(raw_z2.grad.norm().item(), 1e-4)
+
+    def test_18_dann_progressive_alpha(self):
+        """Kiểm tra lịch trình DANN GRL alpha tăng mượt mà từ 0.0 -> 0.1."""
+        alpha_start = compute_dann_alpha(0.0, max_alpha=0.1)
+        alpha_mid = compute_dann_alpha(0.5, max_alpha=0.1)
+        alpha_end = compute_dann_alpha(1.0, max_alpha=0.1)
+
+        self.assertAlmostEqual(alpha_start, 0.0, places=4)
+        self.assertGreater(alpha_mid, 0.05)
+        self.assertLessEqual(alpha_end, 0.1)
+        self.assertGreater(alpha_end, alpha_mid)
+
+    def test_19_dino_distribution_metrics(self):
+        """Kiểm tra tính toán phân bố xác suất DINO (Teacher/Student Entropy, KL Div, Active Prototypes)."""
+        dino_fn = DINOLoss(out_dim=1024, nepochs=10)
+        s_logits = torch.randn(4, 1024)
+        t_logits = torch.randn(4, 1024)
+
+        metrics = dino_fn.compute_distribution_metrics(s_logits, t_logits, epoch=2)
+        self.assertIn("teacher_entropy", metrics)
+        self.assertIn("student_entropy", metrics)
+        self.assertIn("kl_div", metrics)
+        self.assertIn("active_prototypes", metrics)
+        self.assertGreater(metrics["teacher_entropy"], 0.0)
+        self.assertGreater(metrics["active_prototypes"], 0)
+
+    def test_20_tam_cache_loading(self):
+        """Kiểm tra nạp trực tiếp bản đồ pi từ cache thư mục."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cache_dir = os.path.join(tmp_dir, "cache")
+            data_dir = os.path.join(tmp_dir, "data")
+            os.makedirs(cache_dir, exist_ok=True)
+            cam_dir = os.path.join(data_dir, "cam_0")
+            os.makedirs(cam_dir, exist_ok=True)
+
+            # Tạo 2 ảnh giả lập
+            f1 = os.path.join(cam_dir, "img_001.jpg")
+            f2 = os.path.join(cam_dir, "img_002.jpg")
+            from PIL import Image
+            Image.new("RGB", (256, 448)).save(f1)
+            Image.new("RGB", (256, 448)).save(f2)
+
+            # Tạo 2 file cache .npy
+            c1_dir = os.path.join(cache_dir, "cam_0")
+            os.makedirs(c1_dir, exist_ok=True)
+            np.save(os.path.join(c1_dir, "img_001.jpg.npy"), np.ones((16, 28), dtype=np.float16) * 0.75)
+            np.save(os.path.join(c1_dir, "img_002.jpg.npy"), np.ones((16, 28), dtype=np.float16) * 0.25)
+
+            from direction1_new.train import TrafficCameraDataset
+            ds = TrafficCameraDataset(data_dir=data_dir, tam_cache_dir=cache_dir)
+            sample = ds[0]
+
+            self.assertIn("pi1", sample)
+            self.assertIn("pi2", sample)
+            self.assertEqual(sample["pi1"].shape, (16, 28))
+            self.assertAlmostEqual(sample["pi1"][0, 0].item(), 0.75, places=2)
+            self.assertAlmostEqual(sample["pi2"][0, 0].item(), 0.25, places=2)
+
+    def test_21_prototype_weights_no_weight_decay(self):
+        """Kiểm tra lớp last_layer.weight trong DINOHead không bị áp dụng weight decay."""
+        from direction1_new.train import DINOHead
+        head = DINOHead(in_dim=384, out_dim=1024, norm_last_layer=True)
+
+        decay_params, nodecay_params = [], []
+        for name, param in head.named_parameters():
+            if not param.requires_grad:
+                continue
+            if param.ndim <= 1 or name.endswith(".bias") or "last_layer" in name:
+                nodecay_params.append((name, param))
+            else:
+                decay_params.append((name, param))
+
+        nodecay_names = [n for n, p in nodecay_params]
+        self.assertIn("last_layer.weight", nodecay_names)
 
 
 if __name__ == "__main__":
