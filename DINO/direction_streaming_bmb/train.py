@@ -249,7 +249,16 @@ def train_streaming_bmb(args):
     use_amp = bool(getattr(args, "amp", True)) and torch.cuda.is_available() and device.type == "cuda"
     use_bf16 = use_amp and torch.cuda.is_bf16_supported()
     amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
-    scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and not use_bf16))
+    # Tương thích PyTorch 2.x (torch.amp) và PyTorch 1.x (torch.cuda.amp)
+    if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+        scaler = torch.amp.GradScaler("cuda", enabled=(use_amp and not use_bf16))
+    else:
+        scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and not use_bf16))
+
+    def get_autocast(enabled_flag, dtype_val):
+        if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
+            return torch.amp.autocast("cuda", dtype=dtype_val, enabled=enabled_flag)
+        return torch.cuda.amp.autocast(dtype=dtype_val, enabled=enabled_flag)
     if use_amp:
         print(f"⚡ [AMP] Đã kích hoạt Mixed Precision Training: {'BFloat16 (Native Ada Lovelace/Tensor Cores)' if use_bf16 else 'Float16 (GradScaler)'}")
 
@@ -493,7 +502,7 @@ def train_streaming_bmb(args):
 
             optimizer.zero_grad()
             if use_amp:
-                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                with get_autocast(use_amp, amp_dtype):
                     step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
                     total_loss, loss_dict = loss_fn(
                         step_outputs,
@@ -581,7 +590,7 @@ def train_streaming_bmb(args):
                 sample_frames = sample_batch["frames"][:1].to(device)
                 sample_ts = sample_batch["timestamps"][:1].to(device) if "timestamps" in sample_batch else None
 
-            with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+            with get_autocast(use_amp, amp_dtype):
                 sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
 
             epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
@@ -607,7 +616,7 @@ def train_streaming_bmb(args):
                     v_frames = val_batch["frames"].to(device, non_blocking=True)
                     v_ts = val_batch["timestamps"].to(device, non_blocking=True) if "timestamps" in val_batch else None
                     v_fov = val_batch["fov_mask"].to(device, non_blocking=True) if "fov_mask" in val_batch and val_batch["fov_mask"] is not None else None
-                    with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+                    with get_autocast(use_amp, amp_dtype):
                         v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
                         v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
                     val_loss_acc += v_loss.item()
