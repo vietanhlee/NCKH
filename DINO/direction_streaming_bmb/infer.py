@@ -102,11 +102,16 @@ def run_streaming_inference(args):
     print(f"📹 [Camera Đích] Đã chọn Camera: {target_cam} với {len(sequence)} khung hình liên tiếp.")
 
     # 2. Khởi tạo Backbone & Mô hình
+    if getattr(args, "hf_token", None):
+        os.environ["HF_TOKEN"] = args.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
+
     print(f"\n🧠 [Backbone] Đang nạp {args.backbone}...")
     backbone, feat_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
         weights_path=args.weights,
         freeze=True,
+        hf_token=getattr(args, "hf_token", None),
     )
 
     model = StreamingDecompositionNet(
@@ -284,6 +289,12 @@ def parse_args():
     parser.add_argument("--max_frames", type=int, default=15)
     parser.add_argument("--save_gif", action="store_true", default=True)
     parser.add_argument("--gif_fps", type=int, default=2)
+    parser.add_argument(
+        "--hf_token",
+        type=str,
+        default=None,
+        help="Hugging Face user access token (nếu nạp model/weights từ HF Hub)",
+    )
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     return parser.parse_args()
 

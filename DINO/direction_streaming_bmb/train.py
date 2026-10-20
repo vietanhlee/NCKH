@@ -187,12 +187,17 @@ def train_streaming_bmb(args):
     os.makedirs(vis_dir, exist_ok=True)
 
     # 1. Khởi tạo Backbone
+    if getattr(args, "hf_token", None):
+        os.environ["HF_TOKEN"] = args.hf_token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = args.hf_token
+
     effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
     print(f"\n🧠 [Backbone] Đang tải mô hình {args.backbone}...")
     backbone, feat_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
         weights_path=effective_backbone_weights,
         freeze=args.freeze_backbone,
+        hf_token=getattr(args, "hf_token", None),
     )
 
     # 2. Khởi tạo Mô hình StreamingDecompositionNet
@@ -812,6 +817,12 @@ def parse_args():
         type=str,
         default=None,
         help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện ST-BMB",
+    )
+    parser.add_argument(
+        "--hf_token",
+        type=str,
+        default=None,
+        help="Hugging Face user access token (để tải trọng số DINOv3 tự động nếu dùng weights trên HF)",
     )
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --save_dir)")
