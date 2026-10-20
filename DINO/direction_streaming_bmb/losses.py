@@ -108,6 +108,15 @@ class StreamingDecompositionLoss(nn.Module):
       L_total = L_rec + lambda_temp * L_temp_bg + warmup * lambda_cross * L_cross
                 + lambda_fam * L_fam + lambda_sparse * L_sparse + lambda_tv * L_edge_tv
                 + lambda_excl * L_excl + warmup * lambda_bin * L_bin + lambda_illum_reg * L_illum_reg
+
+    CẢI TIẾN CỐT LÕI (Chống Nghiệm Suy biến & Dẫn truyền Gradient vào Alpha):
+      1. Robust Matting Formulation: L_robust = (1 - alpha) * |B - I| + lambda_cost * alpha
+         - Biến alpha thành 'chi phí' để giải thích pixel bằng phương tiện thay vì nền.
+         - Triệt tiêu nghiệm suy biến alpha=1 (buộc phải trả giá đắt lambda_cost trên toàn ảnh).
+      2. Mở đường truyền gradient vào alpha từ L_cross:
+         - Không detach alpha_s, đạo hàm dL/d(alpha_s) = -diff + lambda_cost đẩy alpha -> 1
+           tại mọi nơi nền B_t không giải thích được frame s.
+      3. Hỗ trợ fov_mask: Loại bỏ hoàn toàn padding viền đen của Letterbox khỏi hàm loss.
     """
 
     def __init__(
@@ -122,6 +131,8 @@ class StreamingDecompositionLoss(nn.Module):
         lambda_excl: float = 0.2,
         lambda_bin: float = 0.05,
         lambda_adaptor_sup: float = 0.5,
+        lambda_cost: float = 0.10,
+        lambda_robust: float = 1.0,
         ssim_weight: float = 0.2,
         charbonnier_eps: float = 1e-3,
         fam_tau: float = 0.85,
@@ -137,6 +148,8 @@ class StreamingDecompositionLoss(nn.Module):
         self.lambda_excl = lambda_excl
         self.lambda_bin = lambda_bin
         self.lambda_adaptor_sup = lambda_adaptor_sup
+        self.lambda_cost = lambda_cost
+        self.lambda_robust = lambda_robust
         self.ssim_weight = ssim_weight
         self.charbonnier_eps = charbonnier_eps
         self.fam_tau = fam_tau
@@ -157,12 +170,18 @@ class StreamingDecompositionLoss(nn.Module):
         self,
         step_outputs: List[Dict[str, torch.Tensor]],
         frames: torch.Tensor,
+        fov_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Cross-Frame Background Consistency Loss:
+        Cross-Frame Background Consistency & Vehicle Identification Loss:
           Nền dự đoán B_hat_t ở frame t phải giải thích được frame s tại những vùng
-          mà frame s không có xe (vis_s = (1 - alpha_s).detach()):
-            L_cross = 1 / (W * (W - 1)) * sum_{t != s} ( sum(vis_s * |Align(B_hat_t -> s) - I_s|) / (3 * sum(vis_s) + eps) )
+          mà frame s không có xe. Áp dụng công thức Robust Matting:
+            L_cross(t, s) = (1 - alpha_s) * |Align(B_hat_t -> s) - I_s| + lambda_cost * alpha_s
+
+          Tín hiệu gradient chuẩn xác:
+            1. dL/d(alpha_s) = -diff + lambda_cost (kéo alpha_s -> 1 nếu B_hat_t không giải thích được I_s)
+            2. dL/d(B_hat_t) = (1 - alpha_s) * sign(Align(B_hat_t -> s) - I_s) * gain
+            3. Triệt tiêu hoàn toàn nghiệm suy biến alpha=1: alpha=1 sẽ bị phạt lambda_cost trên mọi pixel!
         """
         W_len = len(step_outputs)
         if W_len <= 1:
@@ -179,26 +198,28 @@ class StreamingDecompositionLoss(nn.Module):
                     continue
 
                 frame_s = frames[:, s]  # (B, 3, H, W)
-                alpha_s = step_outputs[s]["alpha_mask"]  # (B, 1, H, W)
-                vis_s = (1.0 - alpha_s).detach()         # (B, 1, H, W)
+                alpha_s = step_outputs[s]["alpha_mask"]  # (B, 1, H, W) - KHÔNG DETACH!
+                vis_s_det = (1.0 - alpha_s).detach()     # Chỉ detach để tính gain trắc quang
 
-                # Căn chỉnh quang sai đơn giản giữa t và s theo vùng đường nhìn thấy được:
-                # Tính gain kênh màu RGB (BẮT BUỘC DETACH để gradient hướng trực tiếp về B_hat_t tái tạo I_s)
-                denom_illum = (bg_t * vis_s).sum(dim=[-2, -1], keepdim=True) + 1e-4
-                numer_illum = (frame_s * vis_s).sum(dim=[-2, -1], keepdim=True) + 1e-4
-                gain_t_to_s = (numer_illum / denom_illum).detach().clamp(0.05, 4.0)
-                # KHÔNG clamp cứng trước khi tính diff để tránh gradient death khi bị cháy sáng (vượt 1.0)
-                bg_t_aligned = bg_t * gain_t_to_s
+                # Căn chỉnh quang sai đơn giản giữa t và s theo vùng đường sạch:
+                denom_illum = (bg_t.detach() * vis_s_det).sum(dim=[-2, -1], keepdim=True) + 1e-4
+                numer_illum = (frame_s * vis_s_det).sum(dim=[-2, -1], keepdim=True) + 1e-4
+                gain_t_to_s = (numer_illum / denom_illum).clamp(0.1, 3.5)
+                bg_t_aligned = bg_t * gain_t_to_s  # (B, 3, H, W)
 
-                # L1 có trọng số theo vis_s
-                diff = torch.abs(bg_t_aligned - frame_s)  # (B, 3, H, W)
-                weighted_diff = vis_s * diff              # (B, 3, H, W)
+                # L1 sai khác điểm ảnh giữa nền t và khung hình s:
+                diff = torch.abs(bg_t_aligned - frame_s).mean(dim=1, keepdim=True)  # (B, 1, H, W)
 
-                # Mẫu số: 3 * sum(vis_s) + eps
-                num = weighted_diff.sum(dim=[1, 2, 3])    # (B,)
-                den = 3.0 * vis_s.sum(dim=[1, 2, 3]) + 1e-4  # (B,)
+                # Robust Matting Formulation: alpha_s nhận gradient trực tiếp từ diff!
+                pixel_cost = (1.0 - alpha_s) * diff + self.lambda_cost * alpha_s
 
-                pair_loss = torch.mean(num / den)
+                # Loại trừ padding đen của Letterbox (nếu có fov_mask)
+                if fov_mask is not None:
+                    m_s = fov_mask[:, s] if fov_mask.dim() == 5 else fov_mask
+                    pair_loss = (pixel_cost * m_s).sum() / (m_s.sum() + 1e-4)
+                else:
+                    pair_loss = torch.mean(pixel_cost)
+
                 total_cross = total_cross + pair_loss
                 pair_count += 1
 
@@ -266,6 +287,7 @@ class StreamingDecompositionLoss(nn.Module):
         frames: torch.Tensor,
         target_jitter_gain: Optional[torch.Tensor] = None,
         target_jitter_bias: Optional[torch.Tensor] = None,
+        fov_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """
         Tính toán toàn bộ hàm mất mát trên chuỗi W khung hình.
@@ -274,6 +296,7 @@ class StreamingDecompositionLoss(nn.Module):
             frames: Tensor ảnh gốc chuỗi (B, W, 3, H, W).
             target_jitter_gain: Nhãn gain g (B,) từ jitter augmentation để giám sát trực tiếp Adaptor.
             target_jitter_bias: Nhãn bias b (B,) từ jitter augmentation để giám sát trực tiếp Adaptor.
+            fov_mask: Mặt nạ nhị phân loại bỏ viền đen letterbox padding (B, 1, H, W) hoặc (B, W, 1, H, W).
         Returns:
             total_loss: Scalar loss phục vụ backward.
             loss_dict: Dictionary các giá trị thành phần để log.
@@ -299,11 +322,26 @@ class StreamingDecompositionLoss(nn.Module):
             recon = out_t["recon_origin"]
             bg_fam = out_t["bg_familiarity"]
 
+            m_t = None
+            if fov_mask is not None:
+                m_t = fov_mask[:, t] if fov_mask.dim() == 5 else fov_mask
+
             # 1. Tái tạo ảnh vật lý: Charbonnier L1 + SSIM
             l1_rec = self.charbonnier_loss(recon, cur_frame)
             ssim_val = ssim_2d_loss(recon, cur_frame)
             rec_t = (1.0 - self.ssim_weight) * l1_rec + self.ssim_weight * (1.0 - ssim_val)
-            loss_rec_total = loss_rec_total + rec_t
+
+            # 1b. Robust Intra-Frame Background Explanation Loss:
+            # Ép alpha = 0 tại mọi nơi nền pred_bg giải thích được cur_frame.
+            # Chỉ cho phép alpha = 1 khi cur_frame khác biệt rõ rệt so với pred_bg (chi phí lambda_cost).
+            diff_intra_bg = torch.abs(pred_bg - cur_frame).mean(dim=1, keepdim=True)
+            cost_intra_bg = (1.0 - alpha) * diff_intra_bg + self.lambda_cost * alpha
+            if m_t is not None:
+                robust_t = (cost_intra_bg * m_t).sum() / (m_t.sum() + 1e-4)
+            else:
+                robust_t = torch.mean(cost_intra_bg)
+
+            loss_rec_total = loss_rec_total + rec_t + self.lambda_robust * robust_t
 
             # 2. Ràng buộc bất biến thời gian liên frame (Temporal Uncertainty Consistency)
             if t > 0:
@@ -327,19 +365,25 @@ class StreamingDecompositionLoss(nn.Module):
                 loss_illum_reg_total = loss_illum_reg_total + illum_reg_step
 
             # 3. Familiarity Loss Một Chiều: ReLU(bg_fam.detach() - tau) * alpha
-            # BẮT BUỘC DETACH bg_fam để chỉ phạt khi vùng cực quen bị đoán là xe,
-            # tuyệt đối không cho gradient làm suy biến các tham số familiarity map
-            fam_conflict = torch.mean(F.relu(bg_fam.detach() - self.fam_tau) * alpha)
-            loss_fam_total = loss_fam_total + fam_conflict
+            fam_conflict = F.relu(bg_fam.detach() - self.fam_tau) * alpha
+            if m_t is not None:
+                loss_fam_total = loss_fam_total + (fam_conflict * m_t).sum() / (m_t.sum() + 1e-4)
+            else:
+                loss_fam_total = loss_fam_total + torch.mean(fam_conflict)
 
             # 4. Regularization: Sparsity, Edge-Aware TV, Exclusion, Binarization
-            loss_sparse_total = loss_sparse_total + torch.mean(alpha)
+            if m_t is not None:
+                loss_sparse_total = loss_sparse_total + (alpha * m_t).sum() / (m_t.sum() + 1e-4)
+                loss_bin_total = loss_bin_total + (4.0 * alpha * (1.0 - alpha) * m_t).sum() / (m_t.sum() + 1e-4)
+            else:
+                loss_sparse_total = loss_sparse_total + torch.mean(alpha)
+                loss_bin_total = loss_bin_total + torch.mean(4.0 * alpha * (1.0 - alpha))
+
             loss_tv_total = loss_tv_total + edge_aware_tv_loss(alpha, cur_frame)
             loss_excl_total = loss_excl_total + gradient_exclusion_loss(pred_fg, pred_bg, alpha)
-            loss_bin_total = loss_bin_total + torch.mean(4.0 * alpha * (1.0 - alpha))
 
-        # 5. Cross-Frame Background Loss: Triệt tiêu 2 nghiệm suy biến
-        loss_cross = self.cross_frame_bg_loss(step_outputs, frames)
+        # 5. Cross-Frame Background Loss: Triệt tiêu 2 nghiệm suy biến & Dẫn truyền gradient vào alpha
+        loss_cross = self.cross_frame_bg_loss(step_outputs, frames, fov_mask=fov_mask)
 
         # 6. Giám sát trực tiếp Photometric Illumination Adaptor với nhãn Jitter (nếu có)
         loss_adaptor_sup = torch.tensor(0.0, device=frames.device)

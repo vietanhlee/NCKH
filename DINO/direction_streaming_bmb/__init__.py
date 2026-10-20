@@ -12,7 +12,7 @@ from .memory import BackgroundMemoryBank
 from .attention import MemoryCrossAttention
 from .models import StreamingDecompositionNet, BackgroundMemoryEncoder, PhotometricIlluminationAdaptor
 from .losses import StreamingDecompositionLoss
-from .dataset import SlidingWindowTrafficDataset
+from .dataset import SlidingWindowTrafficDataset, parse_cam_and_time, letterbox_resize, get_letterbox_fov_mask
 
 __all__ = [
     "BackgroundMemoryBank",
@@ -22,4 +22,7 @@ __all__ = [
     "PhotometricIlluminationAdaptor",
     "StreamingDecompositionLoss",
     "SlidingWindowTrafficDataset",
+    "parse_cam_and_time",
+    "letterbox_resize",
+    "get_letterbox_fov_mask",
 ]

@@ -243,11 +243,12 @@ class StreamingDecompositionNet(nn.Module):
             dropout=0.05,
         )
 
-        # Background Memory Encoder (Khối Write)
+        # Background Memory Encoder (Khối Write - Giữ lại để tương thích nạp checkpoint cũ nếu có)
         self.memory_encoder = BackgroundMemoryEncoder(
             in_channels=5,
             embed_dim=embed_dim,
         )
+        self.use_dino_memory_encoder = True
 
         # Photometric Illumination Adaptor
         self.illumination_adaptor = PhotometricIlluminationAdaptor(embed_dim=embed_dim)
@@ -295,8 +296,18 @@ class StreamingDecompositionNet(nn.Module):
         """Đặt tỷ lệ Memory Dropout khi huấn luyện."""
         self.memory_dropout_p = float(p)
 
-    def extract_visual_tokens(self, x: torch.Tensor) -> Tuple[torch.Tensor, Tuple[int, int]]:
-        """Trích xuất visual tokens từ Vision Transformer (B, L, embed_dim) cộng 2D sin-cos PE."""
+    def extract_visual_tokens(
+        self,
+        x: torch.Tensor,
+        add_spatial_pe: bool = True,
+        return_raw: bool = False,
+    ) -> Union[Tuple[torch.Tensor, Tuple[int, int]], Tuple[torch.Tensor, torch.Tensor, Tuple[int, int]]]:
+        """
+        Trích xuất visual tokens từ Vision Transformer:
+          - x_norm qua Backbone DINO -> patch_tokens
+          - Linear visual_proj -> raw_tokens (B, L, embed_dim)
+          - Cộng 2D Sin-Cos Spatial Positional Embedding nếu add_spatial_pe=True
+        """
         B, C, H, W = x.shape
         Hp = H // self.patch_size
         Wp = W // self.patch_size
@@ -318,13 +329,18 @@ class StreamingDecompositionNet(nn.Module):
             patch_tokens = feats[0]
 
         # Ánh xạ về embed_dim của memory system: (B, L, embed_dim)
-        visual_tokens = self.visual_proj(patch_tokens)
+        raw_tokens = self.visual_proj(patch_tokens)
 
-        # Cộng 2D Sin-Cos Spatial Positional Embedding
-        spatial_pe = self.memory_bank.get_spatial_pos_embed(Hp, Wp, visual_tokens.device)
-        visual_tokens = visual_tokens + spatial_pe
+        if add_spatial_pe or return_raw:
+            spatial_pe = self.memory_bank.get_spatial_pos_embed(Hp, Wp, raw_tokens.device)
+            pe_tokens = raw_tokens + spatial_pe
+        else:
+            pe_tokens = raw_tokens
 
-        return visual_tokens, (Hp, Wp)
+        if return_raw:
+            return pe_tokens, raw_tokens, (Hp, Wp)
+
+        return (pe_tokens if add_spatial_pe else raw_tokens), (Hp, Wp)
 
     def forward_single_step(
         self,
@@ -337,10 +353,13 @@ class StreamingDecompositionNet(nn.Module):
         Xử lý 1 khung hình đơn lẻ trong luồng streaming:
           1. READ: Point-wise Temporal Attention truy vấn BMB.
           2. PREDICT: MultiScale Decoder sinh alpha, FG, BG, Sigma (softplus).
-          3. WRITE: Gated Write có cổng, token detached vào BMB.
+             BỊT SHORTCUT: Head B và Head Sigma CHỈ nhận dec_feat_base từ memory-conditioned decoder.
+             Chỉ Head F và Head Alpha mới nhận rgb_skip(x) để phục hồi chi tiết xe cộ!
+          3. WRITE: Gated Write có cổng, token detached vào BMB với DINO tokens đồng bộ không gian.
         """
         B, C, H, W = x.shape
-        visual_tokens, (Hp, Wp) = self.extract_visual_tokens(x)
+        # Trích xuất đồng thời pe_tokens (cho Attention Q) và raw_q_tokens (cho Familiarity Map)
+        visual_tokens, raw_q_tokens, (Hp, Wp) = self.extract_visual_tokens(x, return_raw=True)
         mean_rgb = x.mean(dim=[-2, -1]).detach()  # (B, 3)
 
         # 1. READ: Truy vấn Memory Bank kết hợp độ tương đồng ánh sáng và kích thước lưới patch
@@ -358,27 +377,34 @@ class StreamingDecompositionNet(nn.Module):
             raw_mem_tokens=raw_mem,
             valid=mem_valid,
             is_empty_memory=is_empty,
+            raw_q_tokens=raw_q_tokens,
         )
 
         # 2. Reshape về không gian 2D cho Decoder: (B, embed_dim, Hp, Wp)
         feat_map = cond_tokens.transpose(1, 2).contiguous().view(B, self.embed_dim, Hp, Wp)
 
-        # 3. Upsample Decoder kết hợp RGB Skip
-        dec_feat = self.decoder(feat_map, target_hw=(H, W))
-        dec_feat = dec_feat + self.rgb_skip(x)
+        # 3. Upsample Decoder từ conditioned memory features
+        # CHỐNG SHORTCUT CHO NHÁNH NỀN B:
+        # dec_feat_base: Thuần túy là biểu diễn được tái tạo từ Spatio-Temporal Background Memory Bank.
+        # rgb_skip(x) chứa toàn bộ chi tiết cao tần của xe cộ hiện tại.
+        # Do đó:
+        # - Head B và Head Sigma CHỈ nhận dec_feat_base (ép mạng phải phục hồi nền từ bộ nhớ)
+        # - Chỉ Head F và Head Alpha mới nhận rgb_skip(x) để phục hồi chi tiết biên dạng xe cộ
+        dec_feat_base = self.decoder(feat_map, target_hw=(H, W))
+        dec_feat_fg = dec_feat_base + self.rgb_skip(x)
 
         # Background Familiarity upsample lên kích thước ảnh (H, W)
         bg_fam_map = bg_fam.transpose(1, 2).contiguous().view(B, 1, Hp, Wp)
         bg_fam_upsampled = F.interpolate(bg_fam_map, size=(H, W), mode="bilinear", align_corners=False)
 
         # 4. Dự đoán 4 Heads
-        alpha_in = torch.cat([dec_feat, bg_fam_upsampled], dim=1)
+        alpha_in = torch.cat([dec_feat_fg, bg_fam_upsampled], dim=1)
         alpha_mask = self.head_alpha(alpha_in)
-        pred_fg = self.head_fg(dec_feat)
-        pred_bg = self.head_bg(dec_feat)
+        pred_fg = self.head_fg(dec_feat_fg)
+        pred_bg = self.head_bg(dec_feat_base)
 
         # Sigma: softplus trơn tru + 0.01 đảm bảo gradient không bao giờ bị triệt tiêu
-        raw_sigma = self.head_sigma(dec_feat)
+        raw_sigma = self.head_sigma(dec_feat_base)
         sigma = F.softplus(raw_sigma) + 0.01
 
         # Tái tạo ảnh vật lý: I_recon = alpha * F + (1 - alpha) * B
@@ -390,13 +416,21 @@ class StreamingDecompositionNet(nn.Module):
 
         # 6. WRITE: Gated Write có cổng vào Memory Bank cho frame kế tiếp
         if update_memory:
-            # Token Detach BẮT BUỘC: Cắt đứt gradient lịch sử
-            new_bg_tokens = self.memory_encoder(
-                pred_bg=pred_bg.detach(),
-                alpha_mask=alpha_mask.detach(),
-                sigma=sigma.detach(),
-                target_hw=(Hp, Wp),
-            )
+            # Token Detach BẮT BUỘC: Cắt đứt gradient lịch sử chống rò rỉ BPTT
+            if getattr(self, "use_dino_memory_encoder", True):
+                # Trích xuất DINO tokens trực tiếp từ pred_bg không cộng spatial PE
+                # (vì memory_bank.read() sẽ tự động cộng spatial PE và temporal PE khi đọc).
+                # Query và Memory lúc này nằm trên CÙNG MỘT KHÔNG GIAN BIỂU DIỄN NGỮ NGHĨA DINO!
+                with torch.no_grad():
+                    new_bg_tokens, _ = self.extract_visual_tokens(pred_bg.detach(), add_spatial_pe=False)
+            else:
+                new_bg_tokens = self.memory_encoder(
+                    pred_bg=pred_bg.detach(),
+                    alpha_mask=alpha_mask.detach(),
+                    sigma=sigma.detach(),
+                    target_hw=(Hp, Wp),
+                )
+
             self.memory_bank.write(
                 bg_tokens=new_bg_tokens.detach(),
                 alpha_p=alpha_p.detach(),

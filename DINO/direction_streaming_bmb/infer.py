@@ -41,7 +41,7 @@ if dino_root not in sys.path:
 
 from common.backbone_loader import get_dino_backbone
 from direction_streaming_bmb.models import StreamingDecompositionNet
-from direction_streaming_bmb.dataset import letterbox_resize
+from direction_streaming_bmb.dataset import letterbox_resize, parse_cam_and_time
 
 
 def calculate_psnr(img1: np.ndarray, img2: np.ndarray) -> float:
@@ -80,19 +80,9 @@ def run_streaming_inference(args):
     if not all_files:
         raise RuntimeError(f"Không tìm thấy ảnh hợp lệ trong {args.input_dir}")
 
-    def parse_key(p):
-        base = os.path.splitext(os.path.basename(p))[0]
-        digits = re.findall(r"\d{8,14}", base)
-        if digits:
-            ts = float(digits[-1])
-            idx = base.rfind(digits[-1])
-            c_id = base[:idx].rstrip("_-")
-            return c_id or "cam_default", ts
-        return "cam_default", os.path.getmtime(p)
-
     cam_dict = {}
     for p in all_files:
-        c_id, ts = parse_key(p)
+        c_id, ts = parse_cam_and_time(p)
         if args.cam_id and c_id != args.cam_id:
             continue
         if c_id not in cam_dict:

@@ -299,7 +299,7 @@ def train_streaming_bmb(args):
     optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
-    # 5. Hàm mất mát đa mục tiêu chuẩn Production
+    # 5. Hàm mất mát đa mục tiêu chuẩn Production (kèm Robust Matting chống suy biến)
     loss_fn = StreamingDecompositionLoss(
         lambda_temp=args.lambda_temp,
         lambda_cross=args.lambda_cross,
@@ -309,6 +309,8 @@ def train_streaming_bmb(args):
         lambda_tv=args.lambda_tv,
         lambda_excl=args.lambda_excl,
         lambda_bin=args.lambda_bin,
+        lambda_cost=args.lambda_cost,
+        lambda_robust=args.lambda_robust,
     ).to(device)
 
     # 6. Khôi phục từ checkpoint nếu có cờ --resume
@@ -428,6 +430,7 @@ def train_streaming_bmb(args):
             jitter_b = batch["jitter_bias"].to(device) if "jitter_bias" in batch and torch.is_tensor(batch["jitter_bias"]) else (
                 torch.tensor(batch["jitter_bias"], device=device) if "jitter_bias" in batch else None
             )
+            fov_mask = batch["fov_mask"].to(device) if "fov_mask" in batch and batch["fov_mask"] is not None else None
 
             # Cơ chế Stateful Memory: Nếu bật --stateful_memory và batch hiện tại cùng camera với batch trước,
             # giữ nguyên bộ nhớ để mô hình học cách tận dụng bộ nhớ sâu (T >= 5) như khi suy luận thực tế!
@@ -453,6 +456,7 @@ def train_streaming_bmb(args):
                 frames,
                 target_jitter_gain=jitter_g,
                 target_jitter_bias=jitter_b,
+                fov_mask=fov_mask,
             )
 
             optimizer.zero_grad()
@@ -518,9 +522,48 @@ def train_streaming_bmb(args):
             save_streaming_visual_sample(sample_frames, sample_outputs, epoch_vis_path, epoch=epoch + 1)
             save_streaming_visual_sample(sample_frames, sample_outputs, progress_path, epoch=epoch + 1)
 
-        # Lưu Best Checkpoint
-        if avg_loss < best_loss:
-            best_loss = avg_loss
+        # Đánh giá trên tập kiểm định (Validation) nếu có val_loader
+        val_loss = None
+        if val_loader is not None and len(val_loader) > 0:
+            raw_model.eval()
+            val_loss_acc = 0.0
+            val_rec_acc = 0.0
+            val_cross_acc = 0.0
+            val_batches = 0
+            with torch.no_grad():
+                # Tạm thời đặt warmup_factor = 1.0 để đánh giá công bằng tuyệt đối giữa các epoch
+                loss_fn.set_warmup_factor(1.0)
+                for val_batch in val_loader:
+                    v_frames = val_batch["frames"].to(device)
+                    v_ts = val_batch["timestamps"].to(device) if "timestamps" in val_batch else None
+                    v_fov = val_batch["fov_mask"].to(device) if "fov_mask" in val_batch and val_batch["fov_mask"] is not None else None
+                    v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
+                    v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
+                    val_loss_acc += v_loss.item()
+                    val_rec_acc += v_dict.get("loss_rec", 0.0)
+                    val_cross_acc += v_dict.get("loss_cross", 0.0)
+                    val_batches += 1
+
+                # Khôi phục warmup_factor cho epoch tiếp theo
+                loss_fn.set_warmup_factor(warmup_factor)
+
+            if val_batches > 0:
+                val_loss = val_loss_acc / val_batches
+                val_rec = val_rec_acc / val_batches
+                val_cross = val_cross_acc / val_batches
+                history.setdefault("val_loss", []).append(float(val_loss))
+                history.setdefault("val_rec", []).append(float(val_rec))
+                history.setdefault("val_cross", []).append(float(val_cross))
+                print(
+                    f"   🧪 [Validation Epoch {epoch+1:02d}] Val Loss: {val_loss:.4f} "
+                    f"(Rec: {val_rec:.4f}, Cross: {val_cross:.4f})"
+                )
+            raw_model.train()
+
+        # Tiêu chí chọn Best Checkpoint: Ưu tiên val_loss (nếu có), nếu không dùng train avg_loss
+        eval_metric = val_loss if val_loss is not None else avg_loss
+        if eval_metric < best_loss:
+            best_loss = eval_metric
             ckpt_best = os.path.join(args.save_dir, "best_streaming_model.pth")
             save_checkpoint(
                 save_path=ckpt_best,
@@ -528,10 +571,18 @@ def train_streaming_bmb(args):
                 optimizer=optimizer,
                 scheduler=scheduler,
                 epoch=epoch + 1,
-                metrics={"loss": avg_loss, "rec": avg_rec, "cross": avg_cross, "temp_bg": avg_temp},
+                metrics={
+                    "loss": eval_metric,
+                    "train_loss": avg_loss,
+                    "val_loss": val_loss,
+                    "rec": avg_rec,
+                    "cross": avg_cross,
+                    "temp_bg": avg_temp,
+                },
                 extra_dict={"num_gpus": num_gpus, "args": vars(args)},
                 verbose=False,
             )
+            print(f"   🏆 [Best Checkpoint] Đã cập nhật best_streaming_model.pth (Metric: {best_loss:.4f})")
 
         # Lưu Last Checkpoint
         ckpt_last = os.path.join(args.save_dir, "last_checkpoint.pth")
@@ -623,6 +674,8 @@ def parse_args():
     parser.add_argument("--lambda_tv", type=float, default=0.02)
     parser.add_argument("--lambda_excl", type=float, default=0.2)
     parser.add_argument("--lambda_bin", type=float, default=0.05)
+    parser.add_argument("--lambda_cost", type=float, default=0.10, help="Chi phí gán pixel phương tiện (lambda_cost) trong công thức Robust Matting")
+    parser.add_argument("--lambda_robust", type=float, default=1.0, help="Trọng số mất mát Robust Background Explanation nội khung hình")
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
     parser.add_argument("--unfreeze_last_blocks", type=int, default=0)
     parser.add_argument("--num_workers", type=int, default=0)
@@ -632,6 +685,7 @@ def parse_args():
         action="store_true",
         default=False,
         help="Duy trì bộ nhớ liên tục qua các sliding window của cùng camera (Stateful Streaming Training) để thu hẹp khoảng cách phân phối huấn luyện vs suy luận",
+    )
     parser.add_argument(
         "--single_gpu",
         action="store_true",

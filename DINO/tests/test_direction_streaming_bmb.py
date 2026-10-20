@@ -52,6 +52,8 @@ from direction_streaming_bmb.losses import (
 from direction_streaming_bmb.dataset import (
     SlidingWindowTrafficDataset,
     letterbox_resize,
+    parse_cam_and_time,
+    get_letterbox_fov_mask,
 )
 
 
@@ -546,6 +548,58 @@ class TestStreamingBMB(unittest.TestCase):
         bank.reset()
         self.assertEqual(len(state_1.recent_tokens), 0)
         self.assertTrue(bank.is_empty)
+
+    def test_10_robust_matting_alpha_gradient_and_anti_shortcut(self):
+        """Kiểm tra Robust Matting Loss dẫn truyền gradient cho alpha, triệt tiêu nghiệm suy biến và bịt decoder shortcut."""
+        # 1. Kiểm tra parse_cam_and_time đồng bộ
+        c_id, ts = parse_cam_and_time("cam_hcm01_20261019_143000.jpg")
+        self.assertEqual(c_id, "cam_hcm01")
+        self.assertGreater(ts, 1700000000.0)
+
+        # 2. Kiểm tra Alpha Mask nhận gradient trực tiếp từ cross_frame_bg_loss
+        loss_fn = StreamingDecompositionLoss(lambda_cross=1.5, lambda_cost=0.10)
+        frames = torch.rand(2, 3, 3, self.img_size, self.img_size)
+
+        step_outputs = []
+        for t in range(3):
+            step_outputs.append({
+                "pred_bg": torch.rand(2, 3, self.img_size, self.img_size, requires_grad=True),
+                "pred_fg": torch.rand(2, 3, self.img_size, self.img_size, requires_grad=True),
+                "alpha_mask": torch.rand(2, 1, self.img_size, self.img_size, requires_grad=True),
+                "sigma": torch.full((2, 1, self.img_size, self.img_size), 0.05),
+                "recon_origin": torch.rand(2, 3, self.img_size, self.img_size, requires_grad=True),
+                "bg_familiarity": torch.full((2, 1, self.img_size, self.img_size), 0.5),
+            })
+
+        l_cross = loss_fn.cross_frame_bg_loss(step_outputs, frames)
+        l_cross.backward()
+
+        alpha_grad = step_outputs[1]["alpha_mask"].grad
+        self.assertIsNotNone(alpha_grad, "Alpha mask bắt buộc phải nhận gradient từ cross_frame_bg_loss!")
+        self.assertGreater(alpha_grad.norm().item(), 0.0, "Norm gradient của alpha mask từ cross_frame phải khác 0!")
+
+        # 3. Kiểm tra Head B không nhận shortcut rgb_skip
+        backbone = DummyBackbone(embed_dim=self.backbone_dim, patch_size=self.patch_size)
+        model = StreamingDecompositionNet(
+            backbone=backbone,
+            backbone_dim=self.backbone_dim,
+            embed_dim=self.embed_dim,
+            patch_size=self.patch_size,
+        )
+        x = torch.rand(1, 3, self.img_size, self.img_size, requires_grad=True)
+        out = model.forward_single_step(x, update_memory=False)
+
+        # Backward từ pred_bg
+        out["pred_bg"].sum().backward(retain_graph=True)
+        # rgb_skip không được nhận gradient từ pred_bg!
+        skip_param_has_grad = any(p.grad is not None and p.grad.norm().item() > 0 for p in model.rgb_skip.parameters())
+        self.assertFalse(skip_param_has_grad, "rgb_skip tuyệt đối không được cấp thông tin hoặc nhận gradient từ pred_bg!")
+
+        # 4. Kiểm tra FOV Mask
+        fov_mask = get_letterbox_fov_mask(320, 240, 256)
+        self.assertEqual(fov_mask.shape, (1, 256, 256))
+        self.assertTrue(torch.any(fov_mask == 1.0))
+        self.assertTrue(torch.any(fov_mask == 0.0))  # Có padding viền đen
 
 
 if __name__ == "__main__":

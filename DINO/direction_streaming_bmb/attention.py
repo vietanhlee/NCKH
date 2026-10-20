@@ -85,15 +85,17 @@ class MemoryCrossAttention(nn.Module):
         raw_mem_tokens: Optional[torch.Tensor] = None,
         valid: Optional[torch.Tensor] = None,
         is_empty_memory: bool = False,
+        raw_q_tokens: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Thực hiện truy vấn đọc bộ nhớ nền điểm-theo-điểm theo trục thời gian.
         Args:
-            q_tokens: Visual tokens của frame hiện tại, shape (B, L, embed_dim).
+            q_tokens: Visual tokens của frame hiện tại (kèm Spatial PE), shape (B, L, embed_dim).
             mem_tokens: Memory tokens đã cộng PE, shape (B, T, L, embed_dim) hoặc (B, T*L, embed_dim).
             raw_mem_tokens: Memory tokens nguyên bản chưa cộng Temporal PE (cho Familiarity Map).
             valid: Mask độ tin cậy nền, shape (B, T, L) in [0, 1].
             is_empty_memory: Biến cờ báo bộ nhớ rỗng.
+            raw_q_tokens: Visual tokens nguyên bản chưa cộng Spatial PE (cho Familiarity Map cùng không gian DINO).
         Returns:
             conditioned_tokens: Tensor đặc trưng sau khi hòa trộn với ký ức nền (B, L, embed_dim).
             bg_familiarity: Bản đồ độ tương đồng nền (B, L, 1) in [0, 1].
@@ -171,13 +173,17 @@ class MemoryCrossAttention(nn.Module):
         x = x + self.mlp(self.norm_mlp(x))
 
         # 8. Point-wise Background Familiarity Map:
-        # Tính Cosine Similarity tại cùng vị trí không gian qua các frame trước khi cộng Temporal PE
+        # Tính Cosine Similarity tại cùng vị trí không gian qua các frame trước khi cộng Temporal PE.
+        # Sử dụng raw_q_tokens và raw_mem_tokens (cùng không gian biểu diễn DINO nguyên bản không lệch PE)
         source_mem_for_sim = raw_mem_tokens if raw_mem_tokens is not None else mem_tokens
         if source_mem_for_sim.dim() == 3:
             source_mem_for_sim = source_mem_for_sim.view(B, T, L, D)
 
+        source_q_for_sim = raw_q_tokens if raw_q_tokens is not None else q_tokens
+
         with torch.no_grad():
-            q_unit = F.normalize(q_norm, p=2, dim=-1)                              # (B, L, D)
+            q_sim_norm = self.norm_q(source_q_for_sim)
+            q_unit = F.normalize(q_sim_norm, p=2, dim=-1)                          # (B, L, D)
             mem_raw_norm = self.norm_mem(source_mem_for_sim)
             mem_unit = F.normalize(mem_raw_norm, p=2, dim=-1)                      # (B, T, L, D)
 

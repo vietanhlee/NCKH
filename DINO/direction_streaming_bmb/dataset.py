@@ -28,6 +28,94 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
+def get_letterbox_bbox(w: int, h: int, target_size: int) -> Tuple[int, int, int, int]:
+    """
+    Trả về (pad_x, pad_y, new_w, new_h) của vùng ảnh thực tế trong khung letterbox.
+    """
+    scale = target_size / max(w, h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    pad_x = (target_size - new_w) // 2
+    pad_y = (target_size - new_h) // 2
+    return pad_x, pad_y, new_w, new_h
+
+
+def get_letterbox_fov_mask(w: int, h: int, target_size: int) -> torch.Tensor:
+    """
+    Tạo mặt nạ nhị phân FOV (1, target_size, target_size):
+    1.0 ở vùng ảnh thực tế, 0.0 ở padding viền đen (để loại bỏ padding khỏi hàm loss).
+    """
+    pad_x, pad_y, new_w, new_h = get_letterbox_bbox(w, h, target_size)
+    mask = torch.zeros((1, target_size, target_size), dtype=torch.float32)
+    mask[:, pad_y:pad_y + new_h, pad_x:pad_x + new_w] = 1.0
+    return mask
+
+
+def parse_cam_and_time(filepath: str) -> Tuple[str, float]:
+    """
+    Trích xuất chuẩn hóa (cam_id, timestamp) từ tên tệp hình ảnh camera:
+    1. Hỗ trợ định dạng datetime đầy đủ YYYYMMDD_HHMMSS hoặc YYYYMMDDHHMMSS
+       chuyển đổi thành Unix timestamp (giây) theo múi giờ Việt Nam GMT+7.
+    2. Hỗ trợ Unix timestamp (10 chữ số giây chuẩn hoặc 13 chữ số mili-giây).
+    3. Hỗ trợ ngày YYYYMMDD (khởi đầu ngày 00:00:00 GMT+7).
+    4. Tự động trích xuất cam_id từ tiền tố trước timestamp.
+    5. Fallback an toàn theo mtime nếu không khớp mẫu.
+    """
+    basename = os.path.splitext(os.path.basename(filepath))[0]
+
+    # Kiểm tra mẫu YYYYMMDD_HHMMSS (ví dụ cam01_20240510_143000)
+    dt_pattern = re.search(r"(\d{8})_(\d{6})", basename)
+    if dt_pattern:
+        date_str = f"{dt_pattern.group(1)}_{dt_pattern.group(2)}"
+        try:
+            tz_vn = timezone(timedelta(hours=7))
+            dt = datetime.strptime(date_str, "%Y%m%d_%H%M%S").replace(tzinfo=tz_vn)
+            ts = float(dt.timestamp())
+            cam_id = basename[:dt_pattern.start()].rstrip("_-") or "cam_default"
+            return cam_id, ts
+        except Exception:
+            pass
+
+    digits = re.findall(r"\d{8,14}", basename)
+    if digits:
+        ts_str = digits[-1]
+        idx = basename.rfind(ts_str)
+        cam_id = basename[:idx].rstrip("_-") or "cam_default"
+
+        # Chuỗi 14 chữ số: YYYYMMDDHHMMSS
+        if len(ts_str) == 14:
+            try:
+                tz_vn = timezone(timedelta(hours=7))
+                dt = datetime.strptime(ts_str, "%Y%m%d%H%M%S").replace(tzinfo=tz_vn)
+                return cam_id, float(dt.timestamp())
+            except Exception:
+                pass
+        # Chuỗi 13 chữ số: epoch mili-giây
+        elif len(ts_str) == 13:
+            return cam_id, float(ts_str) / 1000.0
+        # Chuỗi 10 chữ số: epoch giây chuẩn
+        elif len(ts_str) == 10:
+            return cam_id, float(ts_str)
+        # Chuỗi 8 chữ số: YYYYMMDD
+        elif len(ts_str) == 8 and (ts_str.startswith("20") or ts_str.startswith("19")):
+            try:
+                tz_vn = timezone(timedelta(hours=7))
+                dt = datetime.strptime(ts_str, "%Y%m%d").replace(tzinfo=tz_vn)
+                return cam_id, float(dt.timestamp())
+            except Exception:
+                pass
+
+        return cam_id, float(ts_str)
+
+    # Fallback an toàn: thư mục cha làm cam_id, mtime làm timestamp
+    parent_dir = os.path.basename(os.path.dirname(filepath))
+    try:
+        mtime = os.path.getmtime(filepath)
+    except Exception:
+        mtime = 0.0
+    return parent_dir or "cam_default", float(mtime)
+
+
 def letterbox_resize(pil_img: Image.Image, target_size: int) -> Image.Image:
     """
     Thay đổi kích thước ảnh bảo toàn tỷ lệ khung hình (Aspect-Ratio Preserving Resize),
@@ -100,64 +188,8 @@ class SlidingWindowTrafficDataset(Dataset):
         )
 
     def _parse_cam_and_time(self, filepath: str) -> Tuple[str, float]:
-        """
-        Trích xuất (cam_id, timestamp) từ tên tệp:
-        1. Hỗ trợ định dạng datetime đầy đủ YYYYMMDD_HHMMSS hoặc YYYYMMDDHHMMSS
-           chuyển đổi thành Unix timestamp (giây) theo múi giờ Việt Nam GMT+7.
-        2. Hỗ trợ Unix timestamp (10 chữ số giây chuẩn hoặc 13 chữ số mili-giây).
-        3. Tự động trích xuất cam_id từ tiền tố trước timestamp.
-        """
-        basename = os.path.splitext(os.path.basename(filepath))[0]
-
-        # Kiểm tra mẫu YYYYMMDD_HHMMSS (ví dụ 20240510_143000)
-        dt_pattern = re.search(r"(\d{8})_(\d{6})", basename)
-        if dt_pattern:
-            date_str = f"{dt_pattern.group(1)}_{dt_pattern.group(2)}"
-            try:
-                # Múi giờ Việt Nam GMT+7
-                tz_vn = timezone(timedelta(hours=7))
-                dt = datetime.strptime(date_str, "%Y%m%d_%H%M%S").replace(tzinfo=tz_vn)
-                ts = float(dt.timestamp())
-                cam_id = basename[:dt_pattern.start()].rstrip("_-") or "cam_default"
-                return cam_id, ts
-            except Exception:
-                pass
-
-        digits = re.findall(r"\d{8,14}", basename)
-        if digits:
-            ts_str = digits[-1]
-            idx = basename.rfind(ts_str)
-            cam_id = basename[:idx].rstrip("_-") or "cam_default"
-
-            # Nếu là chuỗi 14 chữ số YYYYMMDDHHMMSS
-            if len(ts_str) == 14:
-                try:
-                    tz_vn = timezone(timedelta(hours=7))
-                    dt = datetime.strptime(ts_str, "%Y%m%d%H%M%S").replace(tzinfo=tz_vn)
-                    return cam_id, float(dt.timestamp())
-                except Exception:
-                    pass
-            # Nếu là chuỗi 13 chữ số (mili-giây)
-            elif len(ts_str) == 13:
-                return cam_id, float(ts_str) / 1000.0
-            # Nếu là chuỗi 10 chữ số (Unix epoch giây chuẩn)
-            elif len(ts_str) == 10:
-                return cam_id, float(ts_str)
-            # Nếu là chuỗi 8 chữ số (YYYYMMDD)
-            elif len(ts_str) == 8 and (ts_str.startswith("20") or ts_str.startswith("19")):
-                try:
-                    tz_vn = timezone(timedelta(hours=7))
-                    dt = datetime.strptime(ts_str, "%Y%m%d").replace(tzinfo=tz_vn)
-                    return cam_id, float(dt.timestamp())
-                except Exception:
-                    pass
-
-            return cam_id, float(ts_str)
-
-        # Fallback an toàn: thư mục cha làm cam_id, mtime làm timestamp
-        parent_dir = os.path.basename(os.path.dirname(filepath))
-        mtime = os.path.getmtime(filepath)
-        return parent_dir or "cam_default", float(mtime)
+        """Chuyển tiếp đến hàm parse chuẩn hóa parse_cam_and_time."""
+        return parse_cam_and_time(filepath)
 
     def _discover_sliding_windows(self) -> List[Dict[str, Union[str, List[str], List[float]]]]:
         """
@@ -288,6 +320,9 @@ class SlidingWindowTrafficDataset(Dataset):
             if crop_box is not None:
                 pil_img = pil_img.crop(crop_box)
 
+            # Tính mặt nạ FOV thực tế (loại bỏ padding đen do letterbox khỏi hàm loss)
+            fov_mask = get_letterbox_fov_mask(pil_img.size[0], pil_img.size[1], self.img_size)
+
             # Resize bảo toàn tỷ lệ khung hình (Letterbox)
             pil_img = letterbox_resize(pil_img, self.img_size)
 
@@ -312,4 +347,5 @@ class SlidingWindowTrafficDataset(Dataset):
             "timestamps": timestamps_tensor,           # (W,)
             "jitter_gain": float(jitter_g),
             "jitter_bias": float(jitter_b),
+            "fov_mask": fov_mask,                      # (1, H, W)
         }
