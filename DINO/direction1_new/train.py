@@ -555,6 +555,76 @@ def resolve_resume_checkpoint(resume_target: str) -> str:
     return resume_target
 
 
+def resolve_or_precompute_tam_cache(
+    data_dir: Optional[str],
+    requested_cache_dir: Optional[str] = None,
+    output_dir: str = "checkpoints/direction1_new",
+    model_name: str = "dinov3_vits16",
+    device: str = "cuda",
+    batch_size: int = 32,
+    num_workers: int = 4,
+    hf_token: str = "",
+) -> Optional[str]:
+    """
+    Tự động tìm kiếm hoặc kích hoạt tiền xử lý bộ nhớ đệm TAM pi (tam_cache):
+    1. Quét các vị trí tiềm năng (requested_cache_dir, tam_cache, data_dir/../tam_cache, output_dir/tam_cache).
+    2. Nếu tìm thấy thư mục chứa file .npy hợp lệ: tự động nạp trực tiếp.
+    3. Nếu chưa có: tự động chạy precompute_tam_cache để trích xuất trước toàn bộ pi rồi nạp vào.
+    """
+    if not data_dir or not os.path.isdir(data_dir):
+        return None
+
+    data_parent = os.path.dirname(os.path.abspath(data_dir))
+    candidate_dirs = []
+    if requested_cache_dir:
+        candidate_dirs.append(requested_cache_dir)
+    candidate_dirs.extend([
+        os.path.join(data_parent, "tam_cache"),
+        os.path.join(output_dir, "tam_cache"),
+        os.path.abspath("tam_cache"),
+        "/workspace/tam_cache",
+    ])
+
+    # 1. Tìm xem có thư mục nào đã chứa cache hoàn chỉnh không
+    for c_dir in candidate_dirs:
+        if os.path.isdir(c_dir):
+            meta_file = os.path.join(c_dir, "cache_meta.json")
+            has_cache = False
+            if os.path.isfile(meta_file):
+                has_cache = True
+            else:
+                for root, _, files in os.walk(c_dir):
+                    if any(f.endswith(".npy") for f in files):
+                        has_cache = True
+                        break
+            if has_cache:
+                print(f"⚡ [TAM Cache Auto-Detect] Đã tìm thấy bộ nhớ đệm TAM tại: '{c_dir}'. Tự động nạp trực tiếp!")
+                return c_dir
+
+    # 2. Nếu chưa có bất kỳ cache nào, tự động kích hoạt tiền xử lý precompute
+    chosen_cache_dir = requested_cache_dir or os.path.join(data_parent, "tam_cache")
+    print("\n" + "=" * 80)
+    print(" 🔍 [TAM Cache Auto-Detect] Chưa tìm thấy bộ nhớ đệm TAM pi.")
+    print(f" 🚀 Tự động kích hoạt tiền xử lý (precompute_tam_cache) vào: '{chosen_cache_dir}'")
+    print("=" * 80)
+
+    try:
+        from direction1_new.precompute_tam import precompute_tam_cache
+        precompute_tam_cache(
+            data_dir=data_dir,
+            cache_dir=chosen_cache_dir,
+            model_name=model_name,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            device_str=device,
+            hf_token=hf_token,
+        )
+        return chosen_cache_dir
+    except Exception as e:
+        print(f"⚠️ [TAM Cache Precompute] Không thể tự động tính trước cache ({e}). Chuyển sang trích xuất online...")
+        return None
+
+
 def get_cli_specified_args(argv_list: List[str]) -> set:
     """
     Xác định tập hợp các tham số được người dùng chỉ định tường minh trên dòng lệnh CLI.
@@ -1283,14 +1353,41 @@ def train_direction_g():
             best_loss = float(ckpt["best_loss"])
         print("✅ [Resume] Đã khôi phục hoàn chỉnh và an toàn tuyệt đối toàn bộ trạng thái mô hình!")
 
-    # 5. Dataloader: Ưu tiên nạp dữ liệu thực tế từ args.data_dir
+    # 5. Dataloader: Tự động phát hiện hoặc tạo trước TAM cache, sau đó nạp dataset
+    active_tam_cache = None
     if args.data_dir and os.path.isdir(args.data_dir):
+        active_tam_cache = resolve_or_precompute_tam_cache(
+            data_dir=args.data_dir,
+            requested_cache_dir=args.tam_cache_dir,
+            output_dir=args.output_dir,
+            model_name=args.model_name,
+            device=args.device,
+            batch_size=min(64, max(16, args.batch_size)),
+            num_workers=args.num_workers,
+            hf_token=args.hf_token,
+        )
+
+        # Nếu tìm thấy trọng số TAM đã fit từ cache, nạp luôn để bỏ qua warmup offline
+        if active_tam_cache:
+            stats_pth = os.path.join(active_tam_cache, "tam_stats.pth")
+            if os.path.isfile(stats_pth):
+                try:
+                    s_ckpt = torch.load(stats_pth, map_location=device, weights_only=False)
+                except TypeError:
+                    s_ckpt = torch.load(stats_pth, map_location=device)
+                if "pos_stats" in s_ckpt:
+                    pos_stats.load_state_dict(s_ckpt["pos_stats"])
+                if "calibrator" in s_ckpt:
+                    calibrator.load_state_dict(s_ckpt["calibrator"])
+                args.skip_tam_warmup = True
+                print("⚡ [TAM Cache] Đã khôi phục thành công trọng số PositionStats & GMMCalibrator từ cache -> Tự động bỏ qua Warm-up offline!")
+
         try:
             dataset = TrafficCameraDataset(
                 data_dir=args.data_dir,
                 img_size=(256, 448),
                 cross_cam_srs=args.cross_cam_srs,
-                tam_cache_dir=args.tam_cache_dir,
+                tam_cache_dir=active_tam_cache,
             )
             print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
             if dataset.num_cams > pos_stats.num_cams:

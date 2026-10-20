@@ -502,6 +502,40 @@ class TestDirection1New(unittest.TestCase):
         nodecay_names = [n for n, p in nodecay_params]
         self.assertIn("last_layer.weight", nodecay_names)
 
+    def test_22_auto_detect_or_precompute_tam_cache(self):
+        """Kiểm tra cơ chế tự động tìm cache hoặc tự động tiền xử lý TAM cache trước khi train."""
+        import tempfile
+        from direction1_new.train import resolve_or_precompute_tam_cache
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            data_dir = os.path.join(tmp_dir, "data")
+            cam_dir = os.path.join(data_dir, "cam_0")
+            os.makedirs(cam_dir, exist_ok=True)
+
+            from PIL import Image
+            Image.new("RGB", (256, 448)).save(os.path.join(cam_dir, "frame_01.jpg"))
+            Image.new("RGB", (256, 448)).save(os.path.join(cam_dir, "frame_02.jpg"))
+
+            # 1. Chưa có cache: Hàm tự động chạy precompute và trả về cache_dir hợp lệ
+            target_cache = os.path.join(tmp_dir, "auto_cache")
+            res_cache = resolve_or_precompute_tam_cache(
+                data_dir=data_dir,
+                requested_cache_dir=target_cache,
+                device="cpu",
+                batch_size=2,
+            )
+            self.assertEqual(res_cache, target_cache)
+            self.assertTrue(os.path.isdir(target_cache))
+            self.assertTrue(os.path.isfile(os.path.join(target_cache, "tam_stats.pth")))
+
+            # 2. Đã có cache: Lần gọi tiếp theo tự động phát hiện và tái sử dụng ngay lập tức mà không chạy lại
+            cached_res = resolve_or_precompute_tam_cache(
+                data_dir=data_dir,
+                requested_cache_dir=target_cache,
+                device="cpu",
+            )
+            self.assertEqual(cached_res, target_cache)
+
 
 if __name__ == "__main__":
     unittest.main()

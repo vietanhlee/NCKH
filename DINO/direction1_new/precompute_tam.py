@@ -261,7 +261,14 @@ def precompute_tam_cache(
     print(f"   - Thư mục lưu trữ           : {os.path.abspath(cache_dir)}")
     print("=" * 80)
 
-    # Lưu thêm metadata
+    # Lưu thêm metadata và trọng số TAM
+    stats_file = os.path.join(cache_dir, "tam_stats.pth")
+    torch.save({
+        "pos_stats": pos_stats.state_dict(),
+        "calibrator": calibrator.state_dict(),
+    }, stats_file)
+    print(f"💾 Đã lưu trọng số PositionStats & GMMCalibrator tại: {stats_file}")
+
     meta_path = os.path.join(cache_dir, "cache_meta.json")
     import json
     with open(meta_path, "w", encoding="utf-8") as f:
