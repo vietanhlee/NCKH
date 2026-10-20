@@ -245,6 +245,14 @@ def train_streaming_bmb(args):
     raw_model = unwrap_model(model)
     raw_model.set_memory_dropout(args.memory_dropout)
 
+    # 3.1. Thiết lập Huấn luyện Mixed Precision (AMP) — Kích hoạt Tensor Cores trên RTX 4090 / Ada / Ampere
+    use_amp = bool(getattr(args, "amp", True)) and torch.cuda.is_available() and device.type == "cuda"
+    use_bf16 = use_amp and torch.cuda.is_bf16_supported()
+    amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and not use_bf16))
+    if use_amp:
+        print(f"⚡ [AMP] Đã kích hoạt Mixed Precision Training: {'BFloat16 (Native Ada Lovelace/Tensor Cores)' if use_bf16 else 'Float16 (GradScaler)'}")
+
     # 4. Khởi tạo Dataset huấn luyện & Validation với effective_batch_size chuẩn
     train_dataset = SlidingWindowTrafficDataset(
         data_dir=args.data_dir,
@@ -258,14 +266,34 @@ def train_streaming_bmb(args):
         max_samples=args.max_samples,
     )
 
+    # Tự động tối ưu số workers nếu người dùng chưa chỉ định rõ
+    if getattr(args, "num_workers", None) is None or args.num_workers < 0:
+        actual_workers = min(8, max(2, (os.cpu_count() or 4) // 2)) if torch.cuda.is_available() else 0
+    else:
+        actual_workers = int(args.num_workers)
+
+    loader_kwargs = {
+        "batch_size": effective_batch_size,
+        "num_workers": actual_workers,
+        "pin_memory": torch.cuda.is_available(),
+    }
+    if actual_workers > 0:
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = 2
+
     train_loader = DataLoader(
         train_dataset,
-        batch_size=effective_batch_size,
         shuffle=True,
-        num_workers=args.num_workers,
         drop_last=(len(train_dataset) > effective_batch_size),
-        pin_memory=torch.cuda.is_available(),
+        **loader_kwargs,
     )
+
+    print(f"📦 [Dataloader] Đã tạo DataLoader với {actual_workers} workers | Batch size: {effective_batch_size} | Cửa sổ train: {len(train_dataset)}")
+    if args.stride == 1 and len(train_dataset) > 5000:
+        print(
+            f"💡 [Tối ưu tốc độ] Tập dữ liệu lớn ({len(train_dataset)} cửa sổ) với --stride 1 chứa 80% frame trùng lặp giữa các window kế tiếp.\n"
+            f"   Khuyến nghị: Thêm '--stride 3' hoặc '--stride 5' và '--batch_size 8' để giảm số bước 12-20 lần mà vẫn giữ nguyên độ đa dạng cảnh!"
+        )
 
     val_loader = None
     if args.val_ratio > 0.0 and args.split == "train":
@@ -285,10 +313,8 @@ def train_streaming_bmb(args):
             )
             val_loader = DataLoader(
                 val_dataset,
-                batch_size=effective_batch_size,
                 shuffle=False,
-                num_workers=args.num_workers,
-                pin_memory=torch.cuda.is_available(),
+                **loader_kwargs,
             )
             print(f"📊 [Validation] Đã khởi tạo tập kiểm định: {len(val_dataset)} cửa sổ.")
         except Exception as e_v:
@@ -419,18 +445,35 @@ def train_streaming_bmb(args):
         epoch_sigma = 0.0
         epoch_soft_w = 0.0
 
-        pbar = tqdm(train_loader, desc=f"Epoch [{epoch+1}/{args.epochs}] (Warmup={warmup_factor:.2f})", leave=True)
+        total_train_batches = len(train_loader)
+        max_batches = getattr(args, "batches_per_epoch", None)
+        steps_this_epoch = min(total_train_batches, max_batches) if (max_batches is not None and max_batches > 0) else total_train_batches
+
+        pbar = tqdm(train_loader, total=steps_this_epoch, desc=f"Epoch [{epoch+1}/{args.epochs}] (Warmup={warmup_factor:.2f})", leave=True)
         last_cam_id: Optional[str] = None
+        sample_batch_cache = None
+        batches_processed = 0
+
         for batch_idx, batch in enumerate(pbar):
-            frames = batch["frames"].to(device)  # (B, W, 3, H, W)
-            timestamps = batch["timestamps"].to(device) if "timestamps" in batch else None
-            jitter_g = batch["jitter_gain"].to(device) if "jitter_gain" in batch and torch.is_tensor(batch["jitter_gain"]) else (
+            if max_batches is not None and max_batches > 0 and batch_idx >= max_batches:
+                break
+            batches_processed += 1
+
+            if sample_batch_cache is None:
+                sample_batch_cache = {
+                    "frames": batch["frames"][:1].clone(),
+                    "timestamps": batch["timestamps"][:1].clone() if "timestamps" in batch else None,
+                }
+
+            frames = batch["frames"].to(device, non_blocking=True)  # (B, W, 3, H, W)
+            timestamps = batch["timestamps"].to(device, non_blocking=True) if "timestamps" in batch else None
+            jitter_g = batch["jitter_gain"].to(device, non_blocking=True) if "jitter_gain" in batch and torch.is_tensor(batch["jitter_gain"]) else (
                 torch.tensor(batch["jitter_gain"], device=device) if "jitter_gain" in batch else None
             )
-            jitter_b = batch["jitter_bias"].to(device) if "jitter_bias" in batch and torch.is_tensor(batch["jitter_bias"]) else (
+            jitter_b = batch["jitter_bias"].to(device, non_blocking=True) if "jitter_bias" in batch and torch.is_tensor(batch["jitter_bias"]) else (
                 torch.tensor(batch["jitter_bias"], device=device) if "jitter_bias" in batch else None
             )
-            fov_mask = batch["fov_mask"].to(device) if "fov_mask" in batch and batch["fov_mask"] is not None else None
+            fov_mask = batch["fov_mask"].to(device, non_blocking=True) if "fov_mask" in batch and batch["fov_mask"] is not None else None
 
             # Cơ chế Stateful Memory: Nếu bật --stateful_memory và batch hiện tại cùng camera với batch trước,
             # giữ nguyên bộ nhớ để mô hình học cách tận dụng bộ nhớ sâu (T >= 5) như khi suy luận thực tế!
@@ -448,21 +491,39 @@ def train_streaming_bmb(args):
                 reset_memory = True
             last_cam_id = cur_cam_str
 
-            # Xử lý chuỗi W khung hình với BMB Memory Bank
-            step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
-
-            total_loss, loss_dict = loss_fn(
-                step_outputs,
-                frames,
-                target_jitter_gain=jitter_g,
-                target_jitter_bias=jitter_b,
-                fov_mask=fov_mask,
-            )
-
             optimizer.zero_grad()
-            total_loss.backward()
-            torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
-            optimizer.step()
+            if use_amp:
+                with torch.cuda.amp.autocast(dtype=amp_dtype):
+                    step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
+                    total_loss, loss_dict = loss_fn(
+                        step_outputs,
+                        frames,
+                        target_jitter_gain=jitter_g,
+                        target_jitter_bias=jitter_b,
+                        fov_mask=fov_mask,
+                    )
+                if not use_bf16:
+                    scaler.scale(total_loss).backward()
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    total_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    optimizer.step()
+            else:
+                step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
+                total_loss, loss_dict = loss_fn(
+                    step_outputs,
+                    frames,
+                    target_jitter_gain=jitter_g,
+                    target_jitter_bias=jitter_b,
+                    fov_mask=fov_mask,
+                )
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                optimizer.step()
 
             # Tích lũy số liệu
             epoch_loss += loss_dict["loss_total"]
@@ -484,7 +545,7 @@ def train_streaming_bmb(args):
             })
 
         scheduler.step()
-        num_batches = max(1, len(train_loader))
+        num_batches = max(1, batches_processed)
         avg_loss = epoch_loss / num_batches
         avg_rec = epoch_rec / num_batches
         avg_temp = epoch_temp / num_batches
@@ -512,10 +573,16 @@ def train_streaming_bmb(args):
 
         # Xuất trực quan hóa chuỗi
         with torch.no_grad():
-            sample_batch = next(iter(train_loader))
-            sample_frames = sample_batch["frames"][:1].to(device)
-            sample_ts = sample_batch["timestamps"][:1].to(device) if "timestamps" in sample_batch else None
-            sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
+            if sample_batch_cache is not None:
+                sample_frames = sample_batch_cache["frames"].to(device)
+                sample_ts = sample_batch_cache["timestamps"].to(device) if sample_batch_cache["timestamps"] is not None else None
+            else:
+                sample_batch = next(iter(train_loader))
+                sample_frames = sample_batch["frames"][:1].to(device)
+                sample_ts = sample_batch["timestamps"][:1].to(device) if "timestamps" in sample_batch else None
+
+            with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+                sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
 
             epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
             progress_path = os.path.join(args.save_dir, "streaming_progress.png")
@@ -530,15 +597,19 @@ def train_streaming_bmb(args):
             val_rec_acc = 0.0
             val_cross_acc = 0.0
             val_batches = 0
+            max_vb = getattr(args, "max_val_batches", 100)
             with torch.no_grad():
                 # Tạm thời đặt warmup_factor = 1.0 để đánh giá công bằng tuyệt đối giữa các epoch
                 loss_fn.set_warmup_factor(1.0)
-                for val_batch in val_loader:
-                    v_frames = val_batch["frames"].to(device)
-                    v_ts = val_batch["timestamps"].to(device) if "timestamps" in val_batch else None
-                    v_fov = val_batch["fov_mask"].to(device) if "fov_mask" in val_batch and val_batch["fov_mask"] is not None else None
-                    v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
-                    v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
+                for v_idx, val_batch in enumerate(val_loader):
+                    if max_vb is not None and max_vb > 0 and v_idx >= max_vb:
+                        break
+                    v_frames = val_batch["frames"].to(device, non_blocking=True)
+                    v_ts = val_batch["timestamps"].to(device, non_blocking=True) if "timestamps" in val_batch else None
+                    v_fov = val_batch["fov_mask"].to(device, non_blocking=True) if "fov_mask" in val_batch and val_batch["fov_mask"] is not None else None
+                    with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
+                        v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
+                        v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
                     val_loss_acc += v_loss.item()
                     val_rec_acc += v_dict.get("loss_rec", 0.0)
                     val_cross_acc += v_dict.get("loss_cross", 0.0)
@@ -678,7 +749,36 @@ def parse_args():
     parser.add_argument("--lambda_robust", type=float, default=1.0, help="Trọng số mất mát Robust Background Explanation nội khung hình")
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
     parser.add_argument("--unfreeze_last_blocks", type=int, default=0)
-    parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=None,
+        help="Số luồng tải dữ liệu song song (Mặc định: None - Tự động thiết lập 4-8 workers trên GPU để triệt tiêu nghẽn I/O CPU)",
+    )
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        default=True,
+        help="Kích hoạt Mixed Precision Training (BFloat16/FP16) trên Tensor Cores để tăng tốc 2.5x-3x (Mặc định: True)",
+    )
+    parser.add_argument(
+        "--no_amp",
+        dest="amp",
+        action="store_false",
+        help="Tắt Mixed Precision Training (ép chạy FP32)",
+    )
+    parser.add_argument(
+        "--batches_per_epoch",
+        type=int,
+        default=None,
+        help="Số batches tối đa huấn luyện trong mỗi epoch (vd: 1000). Giúp 1 epoch hoàn thành nhanh, lưu checkpoint và vẽ ảnh trực quan đều đặn",
+    )
+    parser.add_argument(
+        "--max_val_batches",
+        type=int,
+        default=100,
+        help="Số batches tối đa để đánh giá trên tập validation (mặc định: 100)",
+    )
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument(
         "--stateful_memory",

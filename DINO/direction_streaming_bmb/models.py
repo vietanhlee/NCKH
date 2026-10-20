@@ -210,6 +210,8 @@ class StreamingDecompositionNet(nn.Module):
         self.backbone_dim = backbone_dim
         self.embed_dim = embed_dim
         self.patch_size = patch_size
+        self.freeze_backbone = freeze_backbone
+        self.unfreeze_last_blocks = unfreeze_last_blocks
         self.memory_dropout_p = 0.0
 
         # Cấu hình đóng băng backbone
@@ -313,7 +315,11 @@ class StreamingDecompositionNet(nn.Module):
         Wp = W // self.patch_size
 
         x_norm = imagenet_normalize(x)
-        feats = self.backbone(x_norm)
+        if self.freeze_backbone and self.unfreeze_last_blocks == 0:
+            with torch.no_grad():
+                feats = self.backbone(x_norm)
+        else:
+            feats = self.backbone(x_norm)
         if isinstance(feats, dict):
             patch_tokens = feats.get("x_norm_patchtokens", None)
             if patch_tokens is None:
@@ -348,6 +354,8 @@ class StreamingDecompositionNet(nn.Module):
         update_memory: bool = True,
         is_anchor: bool = False,
         timestamp: Optional[Union[float, torch.Tensor]] = None,
+        precomputed_visual_tokens: Optional[torch.Tensor] = None,
+        precomputed_raw_tokens: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
         """
         Xử lý 1 khung hình đơn lẻ trong luồng streaming:
@@ -359,7 +367,13 @@ class StreamingDecompositionNet(nn.Module):
         """
         B, C, H, W = x.shape
         # Trích xuất đồng thời pe_tokens (cho Attention Q) và raw_q_tokens (cho Familiarity Map)
-        visual_tokens, raw_q_tokens, (Hp, Wp) = self.extract_visual_tokens(x, return_raw=True)
+        if precomputed_visual_tokens is not None and precomputed_raw_tokens is not None:
+            visual_tokens = precomputed_visual_tokens
+            raw_q_tokens = precomputed_raw_tokens
+            Hp = H // self.patch_size
+            Wp = W // self.patch_size
+        else:
+            visual_tokens, raw_q_tokens, (Hp, Wp) = self.extract_visual_tokens(x, return_raw=True)
         mean_rgb = x.mean(dim=[-2, -1]).detach()  # (B, 3)
 
         # 1. READ: Truy vấn Memory Bank kết hợp độ tương đồng ánh sáng và kích thước lưới patch
@@ -473,6 +487,13 @@ class StreamingDecompositionNet(nn.Module):
         if reset_memory:
             self.memory_bank.reset(frames.device)
 
+        # Tối ưu hóa GPU: Batch trích xuất đặc trưng của toàn bộ W frames cùng lúc (B * W, C, H, W)
+        # thay vì gọi backbone tuần tự W lần, tận dụng tối đa song song hóa của GPU và Tensor Cores
+        frames_flat = frames.view(B * W_len, C, H, W)
+        all_vis_tokens, all_raw_tokens, (Hp, Wp) = self.extract_visual_tokens(frames_flat, return_raw=True)
+        all_vis_tokens = all_vis_tokens.view(B, W_len, -1, self.embed_dim)
+        all_raw_tokens = all_raw_tokens.view(B, W_len, -1, self.embed_dim)
+
         step_outputs: List[Dict[str, torch.Tensor]] = []
         for t in range(W_len):
             cur_frame = frames[:, t]
@@ -485,6 +506,8 @@ class StreamingDecompositionNet(nn.Module):
                 update_memory=True,
                 is_anchor=is_anchor,
                 timestamp=cur_ts,
+                precomputed_visual_tokens=all_vis_tokens[:, t],
+                precomputed_raw_tokens=all_raw_tokens[:, t],
             )
 
             if t == 0:

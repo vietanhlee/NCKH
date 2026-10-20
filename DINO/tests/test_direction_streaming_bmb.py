@@ -601,6 +601,45 @@ class TestStreamingBMB(unittest.TestCase):
         self.assertTrue(torch.any(fov_mask == 1.0))
         self.assertTrue(torch.any(fov_mask == 0.0))  # Có padding viền đen
 
+    def test_11_batched_backbone_and_amp_speedup(self):
+        """Kiểm tra cơ chế Batch trích xuất đặc trưng DINO backbone và tương thích Mixed Precision (AMP)."""
+        backbone = DummyBackbone(embed_dim=self.backbone_dim, patch_size=self.patch_size)
+        model = StreamingDecompositionNet(
+            backbone=backbone,
+            backbone_dim=self.backbone_dim,
+            embed_dim=self.embed_dim,
+            patch_size=self.patch_size,
+        )
+        W_len = 4
+        seq_frames = torch.rand(2, W_len, 3, self.img_size, self.img_size)
+
+        # 1. Forward sequence với batched backbone extraction
+        outs = model.forward_sequence(seq_frames, reset_memory=True)
+        self.assertEqual(len(outs), W_len)
+        for t in range(W_len):
+            self.assertEqual(outs[t]["pred_bg"].shape, (2, 3, self.img_size, self.img_size))
+            self.assertEqual(outs[t]["alpha_mask"].shape, (2, 1, self.img_size, self.img_size))
+
+        # 2. Kiểm tra forward_single_step với precomputed tokens
+        single_frame = seq_frames[:, 0]
+        vis_tok, raw_tok, (Hp, Wp) = model.extract_visual_tokens(single_frame, return_raw=True)
+        out_precomp = model.forward_single_step(
+            single_frame,
+            update_memory=False,
+            precomputed_visual_tokens=vis_tok,
+            precomputed_raw_tokens=raw_tok,
+        )
+        self.assertEqual(out_precomp["pred_bg"].shape, (2, 3, self.img_size, self.img_size))
+
+        # 3. Kiểm tra tương thích Mixed Precision (AMP)
+        if torch.cuda.is_available():
+            with torch.cuda.amp.autocast(dtype=torch.float16):
+                outs_amp = model.forward_sequence(seq_frames, reset_memory=True)
+                self.assertEqual(len(outs_amp), W_len)
+        else:
+            outs_plain = model.forward_sequence(seq_frames, reset_memory=True)
+            self.assertEqual(len(outs_plain), W_len)
+
 
 if __name__ == "__main__":
     unittest.main()

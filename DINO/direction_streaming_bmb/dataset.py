@@ -128,7 +128,7 @@ def letterbox_resize(pil_img: Image.Image, target_size: int) -> Image.Image:
     scale = target_size / max(w, h)
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
-    resized = pil_img.resize((new_w, new_h), Image.BICUBIC)
+    resized = pil_img.resize((new_w, new_h), Image.BILINEAR)
 
     padded = Image.new("RGB", (target_size, target_size), (0, 0, 0))
     pad_x = (target_size - new_w) // 2
