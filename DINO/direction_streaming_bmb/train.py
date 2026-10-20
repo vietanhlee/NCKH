@@ -250,9 +250,19 @@ def train_streaming_bmb(args):
     raw_model = unwrap_model(model)
     raw_model.set_memory_dropout(args.memory_dropout)
 
-    # 3.1. Thiết lập Huấn luyện Mixed Precision (AMP) — Kích hoạt Tensor Cores trên RTX 4090 / Ada / Ampere
+    # 3.1. Thiết lập Huấn luyện Mixed Precision (AMP) — Tự động chọn BFloat16 (Ada/Ampere) hoặc Float16 (Tesla T4/Turing)
+    def is_native_bf16_supported():
+        if not torch.cuda.is_available():
+            return False
+        try:
+            cap = torch.cuda.get_device_capability()
+            # Compute Capability >= 8.0: Ampere (A100, RTX 3090), Ada Lovelace (RTX 4090), Hopper
+            return cap[0] >= 8 and hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported()
+        except Exception:
+            return False
+
     use_amp = bool(getattr(args, "amp", True)) and torch.cuda.is_available() and device.type == "cuda"
-    use_bf16 = use_amp and torch.cuda.is_bf16_supported()
+    use_bf16 = use_amp and is_native_bf16_supported()
     amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
     # Tương thích PyTorch 2.x (torch.amp) và PyTorch 1.x (torch.cuda.amp)
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
@@ -264,8 +274,10 @@ def train_streaming_bmb(args):
         if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
             return torch.amp.autocast("cuda", dtype=dtype_val, enabled=enabled_flag)
         return torch.cuda.amp.autocast(dtype=dtype_val, enabled=enabled_flag)
+
     if use_amp:
-        print(f"⚡ [AMP] Đã kích hoạt Mixed Precision Training: {'BFloat16 (Native Ada Lovelace/Tensor Cores)' if use_bf16 else 'Float16 (GradScaler)'}")
+        dtype_desc = "BFloat16 (Native Ada Lovelace/Tensor Cores)" if use_bf16 else "Float16 (GradScaler - Turing/Tesla T4/V100 Tensor Cores)"
+        print(f"⚡ [AMP] Đã kích hoạt Mixed Precision Training: {dtype_desc}")
 
     # 4. Khởi tạo Dataset huấn luyện & Validation với effective_batch_size chuẩn
     train_dataset = SlidingWindowTrafficDataset(

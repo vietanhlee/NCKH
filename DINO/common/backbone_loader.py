@@ -120,8 +120,13 @@ def resolve_dino_weights(
         norm_wp = weights_path.replace("\\", "/")
         if norm_wp.startswith("hf://"):
             is_hf_spec = True
-        elif not os.path.exists(weights_path) and ":" not in norm_wp and norm_wp.count("/") == 1:
-            # Dạng org/repo_name (ví dụ: facebook/dinov2_vits14)
+        elif (
+            not os.path.exists(weights_path)
+            and ":" not in norm_wp
+            and norm_wp.count("/") == 1
+            and not norm_wp.lower().endswith((".safetensors", ".pth", ".bin", ".pt", ".ckpt"))
+        ):
+            # Dạng org/repo_name hợp lệ (ví dụ: facebook/dinov3-vits16-pretrain-lvd1689m)
             is_hf_spec = True
 
     if is_hf_spec:
