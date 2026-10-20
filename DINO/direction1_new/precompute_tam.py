@@ -115,6 +115,7 @@ def precompute_tam_cache(
     force: bool = False,
     gmm_buffer_size: int = 300000,
     gmm_ema_alpha: float = 0.15,
+    tam_warmup_frames: int = None,
 ):
     device = torch.device(device_str if torch.cuda.is_available() and device_str.startswith("cuda") else "cpu")
     os.makedirs(cache_dir, exist_ok=True)
@@ -193,13 +194,15 @@ def precompute_tam_cache(
     if os.path.isdir(data_dir):
         warmup_ds = TrafficCameraDataset(data_dir=data_dir, img_size=(256, 448))
         print("\n🔄 [Warm-up TAM] Bắt đầu khởi động phân bố K-means và GMM đa camera...")
+        avg_frames = max(1, len(warmup_ds) // max(1, num_cams))
+        actual_warmup_frames = min(tam_warmup_frames, avg_frames) if tam_warmup_frames else min(40, avg_frames)
         warmup_tam_offline(
             frozen_extractor=frozen_extractor,
             pos_stats=pos_stats,
             calibrator=calibrator,
             dataset=warmup_ds,
             device=device,
-            num_frames_per_cam=min(40, len(warmup_ds) // max(1, num_cams)),
+            num_frames_per_cam=actual_warmup_frames,
             kmeans_iters=15,
             gmm_iters=25,
             batch_size=min(16, batch_size),

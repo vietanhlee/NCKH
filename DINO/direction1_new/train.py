@@ -564,6 +564,9 @@ def resolve_or_precompute_tam_cache(
     batch_size: int = 32,
     num_workers: int = 4,
     hf_token: str = "",
+    tam_warmup_frames: Optional[int] = None,
+    gmm_buffer_size: int = 300000,
+    gmm_ema_alpha: float = 0.15,
 ) -> Optional[str]:
     """
     Tự động tìm kiếm hoặc kích hoạt tiền xử lý bộ nhớ đệm TAM pi (tam_cache):
@@ -618,6 +621,9 @@ def resolve_or_precompute_tam_cache(
             num_workers=num_workers,
             device_str=device,
             hf_token=hf_token,
+            tam_warmup_frames=tam_warmup_frames,
+            gmm_buffer_size=gmm_buffer_size,
+            gmm_ema_alpha=gmm_ema_alpha,
         )
         return chosen_cache_dir
     except Exception as e:
@@ -1402,6 +1408,9 @@ def train_direction_g():
             batch_size=min(64, max(16, args.batch_size)),
             num_workers=args.num_workers,
             hf_token=args.hf_token,
+            tam_warmup_frames=args.tam_warmup_frames,
+            gmm_buffer_size=args.gmm_buffer_size,
+            gmm_ema_alpha=args.gmm_ema_alpha,
         )
 
         # Nếu tìm thấy trọng số TAM đã fit từ cache, nạp luôn để bỏ qua warmup offline
