@@ -72,12 +72,12 @@ def save_streaming_visual_sample(
     fig, axes = plt.subplots(6, W_len, figsize=(3.5 * W_len, 18), dpi=150)
 
     def to_rgb(t):
-        arr = t.squeeze().detach().cpu().permute(1, 2, 0).numpy()
-        return np.clip(arr, 0.0, 1.0)
+        arr = t.squeeze().detach().float().cpu().permute(1, 2, 0).numpy()
+        return np.clip(arr, 0.0, 1.0).astype(np.float32)
 
     def to_gray(t):
-        arr = t.squeeze().detach().cpu().numpy()
-        return np.clip(arr, 0.0, 1.0)
+        arr = t.squeeze().detach().float().cpu().numpy()
+        return np.clip(arr, 0.0, 1.0).astype(np.float32)
 
     if W_len == 1:
         axes = np.expand_dims(axes, axis=1)
@@ -101,8 +101,8 @@ def save_streaming_visual_sample(
         sigma_t = out_t["sigma"][0]
         recon_t = out_t["recon_origin"][0]
 
-        sigma_np = sigma_t.squeeze().detach().cpu().numpy()
-        sigma_norm = np.clip((sigma_np - 0.01) / (0.50 - 0.01), 0.0, 1.0)
+        sigma_np = sigma_t.squeeze().detach().float().cpu().numpy()
+        sigma_norm = np.clip((sigma_np - 0.01) / (0.50 - 0.01), 0.0, 1.0).astype(np.float32)
 
         axes[0, t].imshow(to_rgb(cur_in))
         axes[0, t].set_title(f"Time Step $t={t+1}$", fontsize=11, fontweight="bold")
@@ -136,9 +136,13 @@ def save_streaming_visual_sample(
         fontsize=14, fontweight="bold", y=0.99,
     )
     plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, bbox_inches="tight")
-    plt.close()
+    try:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, bbox_inches="tight")
+    except Exception as e_s:
+        print(f"   ⚠️ [Visual Sample Error] Không thể lưu ảnh {save_path}: {e_s}")
+    finally:
+        plt.close()
 
 
 def train_streaming_bmb(args):
@@ -607,13 +611,16 @@ def train_streaming_bmb(args):
                 sample_frames = sample_batch["frames"][:1].to(device)
                 sample_ts = sample_batch["timestamps"][:1].to(device) if "timestamps" in sample_batch else None
 
-            with get_autocast(use_amp, amp_dtype):
-                sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
+            try:
+                with get_autocast(use_amp, amp_dtype):
+                    sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
 
-            epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
-            progress_path = os.path.join(args.save_dir, "streaming_progress.png")
-            save_streaming_visual_sample(sample_frames, sample_outputs, epoch_vis_path, epoch=epoch + 1)
-            save_streaming_visual_sample(sample_frames, sample_outputs, progress_path, epoch=epoch + 1)
+                epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
+                progress_path = os.path.join(args.save_dir, "streaming_progress.png")
+                save_streaming_visual_sample(sample_frames, sample_outputs, epoch_vis_path, epoch=epoch + 1)
+                save_streaming_visual_sample(sample_frames, sample_outputs, progress_path, epoch=epoch + 1)
+            except Exception as e_vis:
+                print(f"⚠️ [Visual Sample Notice] Bỏ qua xuất ảnh epoch {epoch+1}: {e_vis}")
 
         # Đánh giá trên tập kiểm định (Validation) nếu có val_loader
         val_loss = None
