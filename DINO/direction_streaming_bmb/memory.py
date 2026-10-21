@@ -526,8 +526,12 @@ class BackgroundMemoryBank(nn.Module):
           4. Cập nhật Dual-Slot Anchor (Day và Night riêng biệt) tránh bẫy khóa Anchor đêm 2 AM.
           5. Cách ly bộ nhớ theo thiết bị phần cứng z.device triệt tiêu race condition trên Multi-GPU.
         """
-        # 1. Bắt buộc detach() triệt để
+        # 1. Bắt buộc detach() triệt để và phòng thủ chống nhiễm độc NaN (NaN-Poisoning Prevention)
         z = bg_tokens.detach()
+        if not torch.isfinite(z).all():
+            # Nếu tensor đặc trưng chứa NaN/Inf, lập tức huỷ bỏ ghi để bảo toàn Memory Bank
+            return
+
         B, L, D = z.shape
         state = self._get_state(z.device)
 
@@ -540,11 +544,12 @@ class BackgroundMemoryBank(nn.Module):
             pool_hw = (h_cand, L // h_cand)
 
         if alpha_p is not None:
-            if alpha_p.dim() == 4:
-                alpha_p = F.adaptive_avg_pool2d(alpha_p, pool_hw).flatten(1)
-            elif alpha_p.dim() == 3:
-                alpha_p = alpha_p.squeeze(1) if alpha_p.shape[1] == 1 else alpha_p.flatten(1)
-            valid_clean = (1.0 - alpha_p.detach()).clamp(0.0, 1.0)
+            alpha_p_clean = torch.nan_to_num(alpha_p.detach(), nan=0.0, posinf=1.0, neginf=0.0)
+            if alpha_p_clean.dim() == 4:
+                alpha_p_clean = F.adaptive_avg_pool2d(alpha_p_clean, pool_hw).flatten(1)
+            elif alpha_p_clean.dim() == 3:
+                alpha_p_clean = alpha_p_clean.squeeze(1) if alpha_p_clean.shape[1] == 1 else alpha_p_clean.flatten(1)
+            valid_clean = (1.0 - alpha_p_clean).clamp(0.0, 1.0)
             if valid_clean.shape[-1] != L:
                 valid_clean = valid_clean.view(B, -1)[:, :L]
         else:
@@ -552,11 +557,12 @@ class BackgroundMemoryBank(nn.Module):
 
         # Lọc nhiễu độ bất định quang học sigma_p:
         if sigma_p is not None:
-            if sigma_p.dim() == 4:
-                sigma_p = F.adaptive_avg_pool2d(sigma_p, pool_hw).flatten(1)
-            elif sigma_p.dim() == 3:
-                sigma_p = sigma_p.squeeze(1) if sigma_p.shape[1] == 1 else sigma_p.flatten(1)
-            sigma_det = sigma_p.detach().clamp_min(0.0)
+            sigma_p_clean = torch.nan_to_num(sigma_p.detach(), nan=0.1, posinf=1.0, neginf=0.0)
+            if sigma_p_clean.dim() == 4:
+                sigma_p_clean = F.adaptive_avg_pool2d(sigma_p_clean, pool_hw).flatten(1)
+            elif sigma_p_clean.dim() == 3:
+                sigma_p_clean = sigma_p_clean.squeeze(1) if sigma_p_clean.shape[1] == 1 else sigma_p_clean.flatten(1)
+            sigma_det = sigma_p_clean.clamp(min=0.0, max=5.0)
             if sigma_det.shape[-1] != L:
                 sigma_det = sigma_det.view(B, -1)[:, :L]
             valid_optical = torch.exp(-sigma_det / 0.25)
@@ -816,7 +822,7 @@ class BackgroundMemoryBank(nn.Module):
                 q_ts = torch.zeros((B, 1), device=current_device)
 
             delta_sec = torch.abs(q_ts - mem_ts)
-            delta_min = delta_sec / 60.0  # (B, T)
+            delta_min = (delta_sec / 60.0).clamp(0.0, 1e5)  # (B, T)
             # Chu kỳ nhật triệt (ngày/đêm) theo múi giờ địa phương Việt Nam (GMT+7: UTC + 7*3600s)
             hour_of_day = ((mem_ts + 7.0 * 3600.0) % 86400.0) / 3600.0  # (B, T)
 

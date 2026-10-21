@@ -483,6 +483,7 @@ def train_streaming_bmb(args):
         last_cam_id: Optional[str] = None
         sample_batch_cache = None
         batches_processed = 0
+        batches_valid_in_epoch = 0
 
         for batch_idx, batch in enumerate(pbar):
             if max_batches is not None and max_batches > 0 and batch_idx >= max_batches:
@@ -532,15 +533,35 @@ def train_streaming_bmb(args):
                         target_jitter_bias=jitter_b,
                         fov_mask=fov_mask,
                     )
+
+                # [Active NaN Guard] Tầng 1: Kiểm tra tính hữu hạn của tổng hàm mất mát
+                if not torch.isfinite(total_loss):
+                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item()}) tại step {batch_idx + 1}. Bỏ qua batch để bảo vệ mô hình và giải phóng memory bank!")
+                    optimizer.zero_grad()
+                    raw_model.reset_memory()
+                    continue
+
                 if not use_bf16:
                     scaler.scale(total_loss).backward()
                     scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    # [Active NaN Guard] Tầng 2: Kiểm tra bùng nổ gradient sau khi unscale
+                    if not torch.isfinite(grad_norm):
+                        print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số và điều chỉnh hạ scale factor!")
+                        optimizer.zero_grad()
+                        scaler.update()
+                        raw_model.reset_memory()
+                        continue
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     total_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    if not torch.isfinite(grad_norm):
+                        print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số!")
+                        optimizer.zero_grad()
+                        raw_model.reset_memory()
+                        continue
                     optimizer.step()
             else:
                 step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
@@ -551,19 +572,33 @@ def train_streaming_bmb(args):
                     target_jitter_bias=jitter_b,
                     fov_mask=fov_mask,
                 )
+
+                if not torch.isfinite(total_loss):
+                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item()}) tại step {batch_idx + 1}. Bỏ qua batch!")
+                    optimizer.zero_grad()
+                    raw_model.reset_memory()
+                    continue
+
                 total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                if not torch.isfinite(grad_norm):
+                    print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số!")
+                    optimizer.zero_grad()
+                    raw_model.reset_memory()
+                    continue
                 optimizer.step()
 
-            # Tích lũy số liệu
-            epoch_loss += loss_dict["loss_total"]
-            epoch_rec += loss_dict["loss_rec"]
-            epoch_temp += loss_dict["loss_temp_bg"]
-            epoch_cross += loss_dict["loss_cross"]
-            epoch_fam += loss_dict["loss_fam"]
-            epoch_sparse += loss_dict["loss_sparse"]
-            epoch_sigma += loss_dict["mean_sigma"]
-            epoch_soft_w += loss_dict.get("mean_soft_weight", 1.0)
+            # Tích lũy số liệu chỉ từ các batch hợp lệ
+            if math.isfinite(loss_dict["loss_total"]):
+                epoch_loss += loss_dict["loss_total"]
+                epoch_rec += loss_dict["loss_rec"]
+                epoch_temp += loss_dict["loss_temp_bg"]
+                epoch_cross += loss_dict["loss_cross"]
+                epoch_fam += loss_dict["loss_fam"]
+                epoch_sparse += loss_dict["loss_sparse"]
+                epoch_sigma += loss_dict["mean_sigma"]
+                epoch_soft_w += loss_dict.get("mean_soft_weight", 1.0)
+                batches_valid_in_epoch += 1
 
             pbar.set_postfix({
                 "loss": f"{loss_dict['loss_total']:.4f}",
@@ -575,7 +610,7 @@ def train_streaming_bmb(args):
             })
 
         scheduler.step()
-        num_batches = max(1, batches_processed)
+        num_batches = max(1, batches_valid_in_epoch)
         avg_loss = epoch_loss / num_batches
         avg_rec = epoch_rec / num_batches
         avg_temp = epoch_temp / num_batches
@@ -643,10 +678,13 @@ def train_streaming_bmb(args):
                     with get_autocast(use_amp, amp_dtype):
                         v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
                         v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
-                    val_loss_acc += v_loss.item()
-                    val_rec_acc += v_dict.get("loss_rec", 0.0)
-                    val_cross_acc += v_dict.get("loss_cross", 0.0)
-                    val_batches += 1
+                    if torch.isfinite(v_loss):
+                        val_loss_acc += v_loss.item()
+                        val_rec_acc += v_dict.get("loss_rec", 0.0)
+                        val_cross_acc += v_dict.get("loss_cross", 0.0)
+                        val_batches += 1
+                    else:
+                        print(f"⚠️ [Validation Notice] Phát hiện validation loss không hợp lệ tại val batch {v_idx + 1}. Bỏ qua batch này!")
 
                 # Khôi phục warmup_factor cho epoch tiếp theo
                 loss_fn.set_warmup_factor(warmup_factor)

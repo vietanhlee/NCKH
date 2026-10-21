@@ -30,32 +30,42 @@ import torch.nn.functional as F
 
 
 def ssim_2d_loss(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11, channel: int = 3) -> torch.Tensor:
-    """Tính Structural Similarity (SSIM) Loss vi phân 2D (Wang et al., 2004)."""
-    coords = torch.arange(window_size, dtype=img1.dtype, device=img1.device) - window_size // 2
+    """
+    Tính Structural Similarity (SSIM) Loss vi phân 2D (Wang et al., 2004).
+    Tối ưu hóa số học: Ép tính toán trên float32 để chống phương sai âm và chia cho 0 trong float16.
+    """
+    orig_dtype = img1.dtype
+    img1_f = img1.float()
+    img2_f = img2.float()
+
+    coords = torch.arange(window_size, dtype=torch.float32, device=img1.device) - window_size // 2
     g = torch.exp(-(coords ** 2) / (2 * 1.5 ** 2))
     g = g / g.sum()
 
     kernel_2d = (g.unsqueeze(1) * g.unsqueeze(0)).unsqueeze(0).unsqueeze(0)
-    kernel = kernel_2d.repeat(channel, 1, 1, 1)
+    kernel = kernel_2d.repeat(channel, 1, 1, 1).to(device=img1.device, dtype=torch.float32)
 
-    mu1 = F.conv2d(img1, kernel, padding=window_size // 2, groups=channel)
-    mu2 = F.conv2d(img2, kernel, padding=window_size // 2, groups=channel)
+    mu1 = F.conv2d(img1_f, kernel, padding=window_size // 2, groups=channel)
+    mu2 = F.conv2d(img2_f, kernel, padding=window_size // 2, groups=channel)
 
     mu1_sq = mu1.pow(2)
     mu2_sq = mu2.pow(2)
     mu1_mu2 = mu1 * mu2
 
-    sigma1_sq = F.conv2d(img1 * img1, kernel, padding=window_size // 2, groups=channel) - mu1_sq
-    sigma2_sq = F.conv2d(img2 * img2, kernel, padding=window_size // 2, groups=channel) - mu2_sq
-    sigma12 = F.conv2d(img1 * img2, kernel, padding=window_size // 2, groups=channel) - mu1_mu2
+    # F.relu() bắt buộc để triệt tiêu phương sai âm do sai số làm tròn số học
+    sigma1_sq = F.relu(F.conv2d(img1_f * img1_f, kernel, padding=window_size // 2, groups=channel) - mu1_sq)
+    sigma2_sq = F.relu(F.conv2d(img2_f * img2_f, kernel, padding=window_size // 2, groups=channel) - mu2_sq)
+    sigma12 = F.conv2d(img1_f * img2_f, kernel, padding=window_size // 2, groups=channel) - mu1_mu2
 
     C1 = 0.01 ** 2
     C2 = 0.03 ** 2
 
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
-        (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
-    )
-    return ssim_map.mean()
+    denom = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    denom = torch.clamp(denom, min=1e-6)
+
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / denom
+    ssim_val = torch.nan_to_num(ssim_map.mean(), nan=1.0, posinf=1.0, neginf=-1.0)
+    return ssim_val.to(orig_dtype)
 
 
 def edge_aware_tv_loss(alpha: torch.Tensor, img: torch.Tensor) -> torch.Tensor:
@@ -72,8 +82,8 @@ def edge_aware_tv_loss(alpha: torch.Tensor, img: torch.Tensor) -> torch.Tensor:
     grad_alpha_y = torch.abs(alpha[:, :, 1:, :] - alpha[:, :, :-1, :])
 
     # Trọng số viền: Nơi ảnh gốc có biên độ cạnh lớn thì cho phép alpha biến thiên
-    w_x = torch.exp(-10.0 * grad_img_x).detach()
-    w_y = torch.exp(-10.0 * grad_img_y).detach()
+    w_x = torch.exp(-torch.clamp(10.0 * grad_img_x, max=20.0)).detach()
+    w_y = torch.exp(-torch.clamp(10.0 * grad_img_y, max=20.0)).detach()
 
     loss_x = torch.mean(grad_alpha_x * w_x)
     loss_y = torch.mean(grad_alpha_y * w_y)
@@ -202,9 +212,10 @@ class StreamingDecompositionLoss(nn.Module):
                 vis_s_det = (1.0 - alpha_s).detach()     # Chỉ detach để tính gain trắc quang
 
                 # Căn chỉnh quang sai đơn giản giữa t và s theo vùng đường sạch:
-                denom_illum = (bg_t.detach() * vis_s_det).sum(dim=[-2, -1], keepdim=True) + 1e-4
-                numer_illum = (frame_s * vis_s_det).sum(dim=[-2, -1], keepdim=True) + 1e-4
-                gain_t_to_s = (numer_illum / denom_illum).clamp(0.1, 3.5)
+                denom_illum = (bg_t.detach().float() * vis_s_det.float()).sum(dim=[-2, -1], keepdim=True) + 1e-4
+                numer_illum = (frame_s.float() * vis_s_det.float()).sum(dim=[-2, -1], keepdim=True) + 1e-4
+                gain_raw = numer_illum / denom_illum
+                gain_t_to_s = torch.nan_to_num(gain_raw, nan=1.0, posinf=3.5, neginf=0.1).clamp(0.1, 3.5).to(bg_t.dtype)
                 bg_t_aligned = bg_t * gain_t_to_s  # (B, 3, H, W)
 
                 # L1 sai khác điểm ảnh giữa nền t và khung hình s:
@@ -216,11 +227,11 @@ class StreamingDecompositionLoss(nn.Module):
                 # Loại trừ padding đen của Letterbox (nếu có fov_mask)
                 if fov_mask is not None:
                     m_s = fov_mask[:, s] if fov_mask.dim() == 5 else fov_mask
-                    pair_loss = (pixel_cost * m_s).sum() / (m_s.sum() + 1e-4)
+                    pair_loss = (pixel_cost * m_s).sum() / (m_s.sum().clamp(min=1.0))
                 else:
                     pair_loss = torch.mean(pixel_cost)
 
-                total_cross = total_cross + pair_loss
+                total_cross = total_cross + torch.nan_to_num(pair_loss, nan=0.0)
                 pair_count += 1
 
         return total_cross / max(1, pair_count)
@@ -256,17 +267,20 @@ class StreamingDecompositionLoss(nn.Module):
 
         # Đồng bộ mẫu số: combined_sigma = 0.5 * (sigma_t + sigma_prev_det)
         combined_sigma = 0.5 * (sigma_t + sigma_prev_det)  # (B, 1, H, W)
+        combined_sigma = torch.clamp(combined_sigma, min=0.005, max=2.0)
         sigma_min = 0.01
 
-        # Laplace Negative Log-Likelihood
-        nll = diff / (combined_sigma + 1e-4) + torch.log((combined_sigma + 1e-4) / sigma_min)
+        # Laplace Negative Log-Likelihood với clamp bảo vệ gradient
+        denom_nll = combined_sigma + 1e-4
+        nll = diff / denom_nll + torch.log(denom_nll / sigma_min)
+        nll = torch.clamp(nll, min=-10.0, max=50.0)
 
         # Ràng buộc Sắc độ Bất biến (Normalized Chromaticity Invariance):
         # Nâng sàn mẫu số lên >= 0.05 để chống phân kỳ chia cho 0 trong bóng râm / ban đêm
         denom_t = bg_t.sum(dim=1, keepdim=True).clamp(min=0.05)
-        denom_prev = ref_bg.sum(dim=1, keepdim=True).clamp(min=0.05)
+        denom_prev = ref_bg.clamp(min=0.0).sum(dim=1, keepdim=True).clamp(min=0.05)
         chroma_t = bg_t / denom_t
-        chroma_prev = ref_bg / denom_prev
+        chroma_prev = ref_bg.clamp(min=0.0) / denom_prev
         loss_chroma = torch.mean(torch.abs(chroma_t - chroma_prev))
 
         # Regularizer khóa chặt Photometric Adaptor (kéo g -> 1, b -> 0, w -> 1)
@@ -337,7 +351,7 @@ class StreamingDecompositionLoss(nn.Module):
             diff_intra_bg = torch.abs(pred_bg - cur_frame).mean(dim=1, keepdim=True)
             cost_intra_bg = (1.0 - alpha) * diff_intra_bg + self.lambda_cost * alpha
             if m_t is not None:
-                robust_t = (cost_intra_bg * m_t).sum() / (m_t.sum() + 1e-4)
+                robust_t = (cost_intra_bg * m_t).sum() / (m_t.sum().clamp(min=1.0))
             else:
                 robust_t = torch.mean(cost_intra_bg)
 
@@ -367,14 +381,14 @@ class StreamingDecompositionLoss(nn.Module):
             # 3. Familiarity Loss Một Chiều: ReLU(bg_fam.detach() - tau) * alpha
             fam_conflict = F.relu(bg_fam.detach() - self.fam_tau) * alpha
             if m_t is not None:
-                loss_fam_total = loss_fam_total + (fam_conflict * m_t).sum() / (m_t.sum() + 1e-4)
+                loss_fam_total = loss_fam_total + (fam_conflict * m_t).sum() / (m_t.sum().clamp(min=1.0))
             else:
                 loss_fam_total = loss_fam_total + torch.mean(fam_conflict)
 
             # 4. Regularization: Sparsity, Edge-Aware TV, Exclusion, Binarization
             if m_t is not None:
-                loss_sparse_total = loss_sparse_total + (alpha * m_t).sum() / (m_t.sum() + 1e-4)
-                loss_bin_total = loss_bin_total + (4.0 * alpha * (1.0 - alpha) * m_t).sum() / (m_t.sum() + 1e-4)
+                loss_sparse_total = loss_sparse_total + (alpha * m_t).sum() / (m_t.sum().clamp(min=1.0))
+                loss_bin_total = loss_bin_total + (4.0 * alpha * (1.0 - alpha) * m_t).sum() / (m_t.sum().clamp(min=1.0))
             else:
                 loss_sparse_total = loss_sparse_total + torch.mean(alpha)
                 loss_bin_total = loss_bin_total + torch.mean(4.0 * alpha * (1.0 - alpha))

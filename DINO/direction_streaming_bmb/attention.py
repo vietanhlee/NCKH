@@ -152,8 +152,9 @@ class MemoryCrossAttention(nn.Module):
         valid_bias = torch.log(valid_clamped).permute(0, 2, 1).unsqueeze(1)  # (B, 1, L, T)
         s = s + valid_bias
 
-        # 5. Softmax dọc theo trục thời gian T
-        w = F.softmax(s, dim=-1)  # (B, H, L, T)
+        # 5. Softmax dọc theo trục thời gian T (tính trên float32 để chống tràn số trong FP16/AMP)
+        w = F.softmax(s.float(), dim=-1).to(s.dtype)  # (B, H, L, T)
+        w = torch.nan_to_num(w, nan=1.0 / max(1, T))
         w = self.attn_dropout(w)
 
         # 6. Tập hợp giá trị (Attention Aggregation):
@@ -198,9 +199,12 @@ class MemoryCrossAttention(nn.Module):
             max_sim, _ = torch.max(masked_sim, dim=1)                              # (B, L)
 
         # 9. Hiệu chỉnh độ lệch phân bố bằng Sigmoid với tham số học được (fam_temp, fam_shift)
-        # Sử dụng softplus + 1.0 để đảm bảo nhiệt độ luôn dương, cosine similarity càng cao thì familiarity càng cao
-        temp = F.softplus(self.fam_temp) + 1.0
-        bg_familiarity = torch.sigmoid(temp * (max_sim - self.fam_shift)).unsqueeze(-1)  # (B, L, 1)
+        # Bọc giới hạn clamp để triệt tiêu hoàn toàn nguy cơ tràn số hoặc gradient explosion trong FP16
+        temp = (F.softplus(self.fam_temp) + 1.0).clamp(max=20.0)
+        fam_shift = torch.clamp(self.fam_shift, -2.0, 2.0)
+        logit = torch.clamp(temp * (max_sim - fam_shift), -20.0, 20.0)
+        bg_familiarity = torch.sigmoid(logit).unsqueeze(-1)  # (B, L, 1)
+        bg_familiarity = torch.nan_to_num(bg_familiarity, nan=0.5)
 
         return x, bg_familiarity
 
@@ -221,7 +225,8 @@ class MemoryCrossAttention(nn.Module):
         V = self.v_proj(mem_norm).view(B, L_mem, self.num_heads, self.head_dim).transpose(1, 2)
 
         attn_scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
-        attn_weights = F.softmax(attn_scores, dim=-1)
+        attn_weights = F.softmax(attn_scores.float(), dim=-1).to(attn_scores.dtype)
+        attn_weights = torch.nan_to_num(attn_weights, nan=1.0 / max(1, L_mem))
         attn_weights = self.attn_dropout(attn_weights)
 
         attn_out = torch.matmul(attn_weights, V).transpose(1, 2).contiguous().view(B, L_q, D)
@@ -235,7 +240,10 @@ class MemoryCrossAttention(nn.Module):
             mem_unit = F.normalize(mem_norm, p=2, dim=-1)
             sim_matrix = torch.bmm(q_unit, mem_unit.transpose(1, 2))
             max_sim, _ = torch.max(sim_matrix, dim=-1, keepdim=True)
-            temp = F.softplus(self.fam_temp) + 1.0
-            bg_familiarity = torch.sigmoid(temp * (max_sim - self.fam_shift))
+            temp = (F.softplus(self.fam_temp) + 1.0).clamp(max=20.0)
+            fam_shift = torch.clamp(self.fam_shift, -2.0, 2.0)
+            logit = torch.clamp(temp * (max_sim - fam_shift), -20.0, 20.0)
+            bg_familiarity = torch.sigmoid(logit)
+            bg_familiarity = torch.nan_to_num(bg_familiarity, nan=0.5)
 
         return x, bg_familiarity

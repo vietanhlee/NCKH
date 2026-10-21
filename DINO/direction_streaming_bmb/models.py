@@ -174,9 +174,9 @@ class PhotometricIlluminationAdaptor(nn.Module):
         feat_in = torch.cat([token_t, token_prev, mean_diff], dim=1)  # (B, 2*D + 3)
 
         out = self.net(feat_in)
-        raw_gain = out[:, 0:3]
-        raw_bias = out[:, 3:6]
-        raw_soft = out[:, 6:7]
+        raw_gain = torch.clamp(out[:, 0:3], -5.0, 5.0)
+        raw_bias = torch.clamp(out[:, 3:6], -5.0, 5.0)
+        raw_soft = torch.clamp(out[:, 6:7], -5.0, 5.0)
 
         gain = (1.0 + torch.tanh(raw_gain) * 0.8).view(B, 3, 1, 1)
         bias = (torch.tanh(raw_bias) * 0.3).view(B, 3, 1, 1)
@@ -418,7 +418,7 @@ class StreamingDecompositionNet(nn.Module):
         pred_bg = self.head_bg(dec_feat_base)
 
         # Sigma: softplus trơn tru + 0.01 đảm bảo gradient không bao giờ bị triệt tiêu
-        raw_sigma = self.head_sigma(dec_feat_base)
+        raw_sigma = torch.clamp(self.head_sigma(dec_feat_base), -10.0, 10.0)
         sigma = F.softplus(raw_sigma) + 0.01
 
         # Tái tạo ảnh vật lý: I_recon = alpha * F + (1 - alpha) * B
