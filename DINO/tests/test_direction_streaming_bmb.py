@@ -284,11 +284,15 @@ class TestStreamingBMB(unittest.TestCase):
         self.assertTrue(torch.is_tensor(total_loss))
         self.assertTrue(total_loss.item() > 0.0)
         self.assertIn("loss_cross", loss_dict)
+        self.assertIn("loss_bg_prior", loss_dict)
+        self.assertIn("loss_motion_guide", loss_dict)
         self.assertIn("loss_temp_bg", loss_dict)
         self.assertIn("loss_fam", loss_dict)
         self.assertIn("loss_tv", loss_dict)
         self.assertIn("loss_illum_reg", loss_dict)
         self.assertEqual(loss_dict["warmup_factor"], 0.5)
+        self.assertGreater(loss_dict["loss_bg_prior"], 0.0)
+        self.assertGreater(loss_dict["loss_motion_guide"], 0.0)
 
         # 2. Kiểm tra Backward Gradient
         total_loss.backward()
@@ -639,6 +643,44 @@ class TestStreamingBMB(unittest.TestCase):
         else:
             outs_plain = model.forward_sequence(seq_frames, reset_memory=True)
             self.assertEqual(len(outs_plain), W_len)
+
+    def test_12_temporal_median_prior_and_motion_guidance(self):
+        """Kiểm tra cơ chế Tiên nghiệm Nền Trung vị (Temporal Median Prior) và Hướng dẫn Chuyển động Tự Giám sát."""
+        # 1. Giả lập chuỗi 5 frames: 4 frames nền sạch (giá trị 0.3) và 1 frame có xe ô tô chạy qua (giá trị 0.8 tại patch giữa)
+        B, W, C, H, W_sz = 2, 5, 3, 64, 64
+        frames = torch.full((B, W, C, H, W_sz), 0.3)
+        # Frame index 2 có xe ở vùng giữa [20:44, 20:44]
+        frames[:, 2, :, 20:44, 20:44] = 0.8
+
+        # 2. Kiểm tra tính Temporal Median Prior
+        bg_prior = StreamingDecompositionLoss.compute_temporal_median_prior(frames)
+        self.assertEqual(bg_prior.shape, (B, C, H, W_sz))
+        # Phép lấy trung vị theo thời gian phải lọc sạch hoàn toàn chiếc xe ở frame 2!
+        self.assertTrue(torch.allclose(bg_prior, torch.tensor(0.3), atol=1e-5), "Temporal Median Prior phải lọc sạch hoàn toàn xe chuyển động!")
+
+        # 3. Kiểm tra Pseudo-Mask chuyển động tự giám sát
+        # Với frame 2: Vùng xe [20:44, 20:44] có diff = |0.8 - 0.3| = 0.5 > 0.16 -> alpha_pseudo phải = 1.0
+        # Vùng nền ngoài [0:20, :] có diff = |0.3 - 0.3| = 0.0 < 0.04 -> alpha_pseudo phải = 0.0
+        diff_motion = torch.abs(frames[:, 2] - bg_prior).mean(dim=1, keepdim=True)
+        alpha_pseudo = torch.clamp((diff_motion - 0.04) / 0.12, 0.0, 1.0)
+        self.assertEqual(alpha_pseudo[:, :, 30, 30].mean().item(), 1.0, "Vùng có xe phải nhận alpha_pseudo = 1.0!")
+        self.assertEqual(alpha_pseudo[:, :, 5, 5].mean().item(), 0.0, "Vùng nền sạch phải nhận alpha_pseudo = 0.0!")
+
+        # 4. Kiểm tra loss_bg_prior và loss_motion_guide truyền gradient chính xác
+        pred_bg = torch.full((B, C, H, W_sz), 0.5, requires_grad=True)  # Giả sử nền bị collapse về 0.5 (xám)
+        alpha_pred = torch.full((B, 1, H, W_sz), 0.0, requires_grad=True)  # Giả sử alpha bị collapse về 0.0
+
+        loss_fn = StreamingDecompositionLoss(lambda_bg_prior=1.0, lambda_motion_guide=1.0)
+        l_bg = loss_fn.charbonnier_loss(pred_bg, bg_prior)
+        l_mot = F.l1_loss(alpha_pred, alpha_pseudo)
+
+        l_total = l_bg + l_mot
+        l_total.backward()
+
+        self.assertIsNotNone(pred_bg.grad)
+        self.assertGreater(pred_bg.grad.norm().item(), 0.0)
+        self.assertIsNotNone(alpha_pred.grad)
+        self.assertGreater(alpha_pred.grad.norm().item(), 0.0)
 
 
 if __name__ == "__main__":

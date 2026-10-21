@@ -363,7 +363,7 @@ def train_streaming_bmb(args):
     optimizer = torch.optim.AdamW(trainable_params, lr=effective_lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
-    # 5. Hàm mất mát đa mục tiêu chuẩn Production (kèm Robust Matting chống suy biến)
+    # 5. Hàm mất mát đa mục tiêu chuẩn Production (kèm Robust Matting, Median Prior & Motion Guidance)
     loss_fn = StreamingDecompositionLoss(
         lambda_temp=args.lambda_temp,
         lambda_cross=args.lambda_cross,
@@ -375,6 +375,8 @@ def train_streaming_bmb(args):
         lambda_bin=args.lambda_bin,
         lambda_cost=args.lambda_cost,
         lambda_robust=args.lambda_robust,
+        lambda_bg_prior=getattr(args, "lambda_bg_prior", 1.0),
+        lambda_motion_guide=getattr(args, "lambda_motion_guide", 1.0),
     ).to(device)
 
     # 6. Khôi phục từ checkpoint nếu có cờ --resume
@@ -384,6 +386,8 @@ def train_streaming_bmb(args):
         "epochs": [],
         "loss_total": [],
         "loss_rec": [],
+        "loss_bg_prior": [],
+        "loss_motion_guide": [],
         "loss_temp_bg": [],
         "loss_cross": [],
         "loss_fam": [],
@@ -476,6 +480,8 @@ def train_streaming_bmb(args):
 
         epoch_loss = 0.0
         epoch_rec = 0.0
+        epoch_bg_p = 0.0
+        epoch_mot = 0.0
         epoch_temp = 0.0
         epoch_cross = 0.0
         epoch_fam = 0.0
@@ -606,6 +612,8 @@ def train_streaming_bmb(args):
             if math.isfinite(loss_dict["loss_total"]):
                 epoch_loss += loss_dict["loss_total"]
                 epoch_rec += loss_dict["loss_rec"]
+                epoch_bg_p += loss_dict.get("loss_bg_prior", 0.0)
+                epoch_mot += loss_dict.get("loss_motion_guide", 0.0)
                 epoch_temp += loss_dict["loss_temp_bg"]
                 epoch_cross += loss_dict["loss_cross"]
                 epoch_fam += loss_dict["loss_fam"]
@@ -617,7 +625,8 @@ def train_streaming_bmb(args):
             pbar.set_postfix({
                 "loss": f"{loss_dict['loss_total']:.4f}",
                 "rec": f"{loss_dict['loss_rec']:.4f}",
-                "temp": f"{loss_dict['loss_temp_bg']:.4f}",
+                "bg_p": f"{loss_dict.get('loss_bg_prior', 0.0):.3f}",
+                "mot": f"{loss_dict.get('loss_motion_guide', 0.0):.3f}",
                 "cross": f"{loss_dict['loss_cross']:.4f}",
                 "fam": f"{loss_dict['loss_fam']:.4f}",
                 "sig": f"{loss_dict['mean_sigma']:.3f}",
@@ -627,6 +636,8 @@ def train_streaming_bmb(args):
         num_batches = max(1, batches_valid_in_epoch)
         avg_loss = epoch_loss / num_batches
         avg_rec = epoch_rec / num_batches
+        avg_bg_p = epoch_bg_p / num_batches
+        avg_mot = epoch_mot / num_batches
         avg_temp = epoch_temp / num_batches
         avg_cross = epoch_cross / num_batches
         avg_fam = epoch_fam / num_batches
@@ -637,6 +648,8 @@ def train_streaming_bmb(args):
         history["epochs"].append(epoch + 1)
         history["loss_total"].append(float(avg_loss))
         history["loss_rec"].append(float(avg_rec))
+        history["loss_bg_prior"].append(float(avg_bg_p))
+        history["loss_motion_guide"].append(float(avg_mot))
         history["loss_temp_bg"].append(float(avg_temp))
         history["loss_cross"].append(float(avg_cross))
         history["loss_fam"].append(float(avg_fam))
@@ -647,7 +660,7 @@ def train_streaming_bmb(args):
 
         print(
             f"📊 Epoch [{epoch+1:02d}/{args.epochs:02d}] — Total: {avg_loss:.4f} "
-            f"(Rec: {avg_rec:.4f}, TempBG: {avg_temp:.4f}, Cross: {avg_cross:.4f}, Fam: {avg_fam:.4f}, Sigma: {avg_sigma:.3f})"
+            f"(Rec: {avg_rec:.4f}, BgPrior: {avg_bg_p:.4f}, MotGuide: {avg_mot:.4f}, Cross: {avg_cross:.4f}, Fam: {avg_fam:.4f}, Sigma: {avg_sigma:.3f})"
         )
 
         # Xuất trực quan hóa chuỗi
@@ -768,9 +781,13 @@ def train_streaming_bmb(args):
 
     # 8. Vẽ biểu đồ các thành phần hàm mất mát
     try:
-        plt.figure(figsize=(11, 6), dpi=150)
+        plt.figure(figsize=(12, 6), dpi=150)
         plt.plot(history["epochs"], history["loss_total"], "b-o", linewidth=2, label="Total Loss")
         plt.plot(history["epochs"], history["loss_rec"], "r--s", linewidth=1.5, label="Recon Loss")
+        if "loss_bg_prior" in history and len(history["loss_bg_prior"]) > 0:
+            plt.plot(history["epochs"], history["loss_bg_prior"], "k-.*", linewidth=1.5, label="BG Median Prior")
+        if "loss_motion_guide" in history and len(history["loss_motion_guide"]) > 0:
+            plt.plot(history["epochs"], history["loss_motion_guide"], "y--v", linewidth=1.5, label="Motion Pseudo-Mask")
         plt.plot(history["epochs"], history["loss_temp_bg"], "g-.^", linewidth=1.5, label="Temporal BG Loss")
         plt.plot(history["epochs"], history["loss_cross"], "c-.*", linewidth=1.5, label="Cross-Frame BG Loss")
         plt.plot(history["epochs"], history["loss_fam"], "m:d", linewidth=1.5, label="Familiarity Loss")
@@ -832,6 +849,18 @@ def parse_args():
     parser.add_argument("--lambda_bin", type=float, default=0.05)
     parser.add_argument("--lambda_cost", type=float, default=0.10, help="Chi phí gán pixel phương tiện (lambda_cost) trong công thức Robust Matting")
     parser.add_argument("--lambda_robust", type=float, default=1.0, help="Trọng số mất mát Robust Background Explanation nội khung hình")
+    parser.add_argument(
+        "--lambda_bg_prior",
+        type=float,
+        default=1.0,
+        help="Trọng số ràng buộc tiên nghiệm nền trung vị theo thời gian (Temporal Median Background Prior) chống suy biến nền",
+    )
+    parser.add_argument(
+        "--lambda_motion_guide",
+        type=float,
+        default=1.0,
+        help="Trọng số hướng dẫn phân đoạn chuyển động tự giám sát (Self-Supervised Motion/Difference Pseudo-Mask) chống suy biến alpha",
+    )
     parser.add_argument("--freeze_backbone", action="store_true", default=True)
     parser.add_argument("--unfreeze_last_blocks", type=int, default=0)
     parser.add_argument(

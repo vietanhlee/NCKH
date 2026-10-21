@@ -398,23 +398,29 @@ class StreamingDecompositionNet(nn.Module):
         feat_map = cond_tokens.transpose(1, 2).contiguous().view(B, self.embed_dim, Hp, Wp)
 
         # 3. Upsample Decoder từ conditioned memory features
-        # CHỐNG SHORTCUT CHO NHÁNH NỀN B:
+        # CHỐNG SHORTCUT TOÀN DIỆN CHO CẢ NỀN B VÀ TIỀN CẢNH F:
         # dec_feat_base: Thuần túy là biểu diễn được tái tạo từ Spatio-Temporal Background Memory Bank.
-        # rgb_skip(x) chứa toàn bộ chi tiết cao tần của xe cộ hiện tại.
-        # Do đó:
-        # - Head B và Head Sigma CHỈ nhận dec_feat_base (ép mạng phải phục hồi nền từ bộ nhớ)
-        # - Chỉ Head F và Head Alpha mới nhận rgb_skip(x) để phục hồi chi tiết biên dạng xe cộ
+        # Head B và Head Sigma CHỈ nhận dec_feat_base (ép mạng phải phục hồi nền từ bộ nhớ).
         dec_feat_base = self.decoder(feat_map, target_hw=(H, W))
-        dec_feat_fg = dec_feat_base + self.rgb_skip(x)
 
         # Background Familiarity upsample lên kích thước ảnh (H, W)
         bg_fam_map = bg_fam.transpose(1, 2).contiguous().view(B, 1, Hp, Wp)
         bg_fam_upsampled = F.interpolate(bg_fam_map, size=(H, W), mode="bilinear", align_corners=False)
 
-        # 4. Dự đoán 4 Heads
-        alpha_in = torch.cat([dec_feat_fg, bg_fam_upsampled], dim=1)
+        # 4. Dự đoán 4 Heads:
+        # 4a. Alpha Matte: Dự đoán từ đặc trưng giải mã decoder kết hợp bản đồ quen thuộc BMB
+        alpha_in = torch.cat([dec_feat_base, bg_fam_upsampled], dim=1)
         alpha_mask = torch.nan_to_num(self.head_alpha(alpha_in), nan=0.5).clamp(0.0, 1.0)
+
+        # 4b. Gated RGB Skip Connection cho Foreground F:
+        # BỊT KÍN SHORTCUT: dec_feat_fg chỉ được nhận chi tiết RGB cao tần ở những vùng nghi là CÓ XE
+        # (được gate bởi alpha_mask.detach()). Vùng nền đường sạch (alpha = 0) bị triệt tiêu skip connection,
+        # head_fg KHÔNG THỂ gian lận sao chép mặt đường!
+        skip_feat = self.rgb_skip(x)
+        dec_feat_fg = dec_feat_base + skip_feat * alpha_mask.detach()
         pred_fg = torch.nan_to_num(self.head_fg(dec_feat_fg), nan=0.5).clamp(0.0, 1.0)
+
+        # 4c. Clean Road Background B và Uncertainty Sigma (thuần túy từ memory conditioning)
         pred_bg = torch.nan_to_num(self.head_bg(dec_feat_base), nan=0.5).clamp(0.0, 1.0)
 
         # Sigma: softplus trơn tru + 0.01 đảm bảo gradient không bao giờ bị triệt tiêu
