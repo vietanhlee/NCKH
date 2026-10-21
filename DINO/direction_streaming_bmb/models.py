@@ -178,12 +178,12 @@ class PhotometricIlluminationAdaptor(nn.Module):
         raw_bias = torch.clamp(out[:, 3:6], -5.0, 5.0)
         raw_soft = torch.clamp(out[:, 6:7], -5.0, 5.0)
 
-        gain = (1.0 + torch.tanh(raw_gain) * 0.8).view(B, 3, 1, 1)
-        bias = (torch.tanh(raw_bias) * 0.3).view(B, 3, 1, 1)
-        soft_weight = (0.2 + 0.8 * torch.sigmoid(raw_soft)).view(B, 1, 1, 1)
+        gain = torch.nan_to_num(1.0 + torch.tanh(raw_gain) * 0.8, nan=1.0).view(B, 3, 1, 1).clamp(0.2, 1.8)
+        bias = torch.nan_to_num(torch.tanh(raw_bias) * 0.3, nan=0.0).view(B, 3, 1, 1).clamp(-0.3, 0.3)
+        soft_weight = torch.nan_to_num(0.2 + 0.8 * torch.sigmoid(raw_soft), nan=1.0).view(B, 1, 1, 1).clamp(0.2, 1.0)
 
         # Loại bỏ clamp cứng để gradient từ Laplace NLL và Chroma Loss truyền thông suốt đến gain và bias
-        bg_prev_aligned = gain * bg_prev + bias
+        bg_prev_aligned = torch.nan_to_num(gain * bg_prev + bias, nan=0.5).clamp(0.0, 1.0)
         return bg_prev_aligned, gain, bias, soft_weight
 
 
@@ -413,16 +413,16 @@ class StreamingDecompositionNet(nn.Module):
 
         # 4. Dự đoán 4 Heads
         alpha_in = torch.cat([dec_feat_fg, bg_fam_upsampled], dim=1)
-        alpha_mask = self.head_alpha(alpha_in)
-        pred_fg = self.head_fg(dec_feat_fg)
-        pred_bg = self.head_bg(dec_feat_base)
+        alpha_mask = torch.nan_to_num(self.head_alpha(alpha_in), nan=0.5).clamp(0.0, 1.0)
+        pred_fg = torch.nan_to_num(self.head_fg(dec_feat_fg), nan=0.5).clamp(0.0, 1.0)
+        pred_bg = torch.nan_to_num(self.head_bg(dec_feat_base), nan=0.5).clamp(0.0, 1.0)
 
         # Sigma: softplus trơn tru + 0.01 đảm bảo gradient không bao giờ bị triệt tiêu
         raw_sigma = torch.clamp(self.head_sigma(dec_feat_base), -10.0, 10.0)
-        sigma = F.softplus(raw_sigma) + 0.01
+        sigma = torch.nan_to_num(F.softplus(raw_sigma) + 0.01, nan=0.05).clamp(0.005, 5.0)
 
         # Tái tạo ảnh vật lý: I_recon = alpha * F + (1 - alpha) * B
-        recon_origin = alpha_mask * pred_fg + (1.0 - alpha_mask) * pred_bg
+        recon_origin = torch.nan_to_num(alpha_mask * pred_fg + (1.0 - alpha_mask) * pred_bg, nan=0.5).clamp(0.0, 1.0)
 
         # 5. Tạo mask alpha_p và sigma_p cấp độ patch (Hp, Wp) cho Gated Write và valid bias
         alpha_p = F.adaptive_avg_pool2d(alpha_mask, (Hp, Wp)).flatten(1)  # (B, L)

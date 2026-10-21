@@ -249,6 +249,7 @@ def train_streaming_bmb(args):
             batch_size_per_gpu=args.batch_size,
             base_lr=args.lr,
             device_arg=args.device,
+            scale_lr=getattr(args, "scale_lr", False),
         )
 
     raw_model = unwrap_model(model)
@@ -269,10 +270,17 @@ def train_streaming_bmb(args):
     use_bf16 = use_amp and is_native_bf16_supported()
     amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
     # Tương thích PyTorch 2.x (torch.amp) và PyTorch 1.x (torch.cuda.amp)
+    # Cấu hình init_scale=2048.0 để chống tràn định kỳ của GradScaler trên Turing / Tesla T4
+    scaler_kwargs = {
+        "enabled": (use_amp and not use_bf16),
+        "init_scale": 2048.0,
+        "growth_factor": 1.5,
+        "backoff_factor": 0.5,
+    }
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
-        scaler = torch.amp.GradScaler("cuda", enabled=(use_amp and not use_bf16))
+        scaler = torch.amp.GradScaler("cuda", **scaler_kwargs)
     else:
-        scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and not use_bf16))
+        scaler = torch.cuda.amp.GradScaler(**scaler_kwargs)
 
     def get_autocast(enabled_flag, dtype_val):
         if hasattr(torch, "amp") and hasattr(torch.amp, "autocast"):
@@ -536,7 +544,10 @@ def train_streaming_bmb(args):
 
                 # [Active NaN Guard] Tầng 1: Kiểm tra tính hữu hạn của tổng hàm mất mát
                 if not torch.isfinite(total_loss):
-                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item()}) tại step {batch_idx + 1}. Bỏ qua batch để bảo vệ mô hình và giải phóng memory bank!")
+                    rec_v = loss_dict.get("loss_rec", 0.0)
+                    temp_v = loss_dict.get("loss_temp_bg", 0.0)
+                    cross_v = loss_dict.get("loss_cross", 0.0)
+                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item():.4f} | rec={rec_v:.4f}, temp={temp_v:.4f}, cross={cross_v:.4f}) tại step {batch_idx + 1}. Bỏ qua batch và giải phóng memory bank!")
                     optimizer.zero_grad()
                     raw_model.reset_memory()
                     continue
@@ -544,7 +555,7 @@ def train_streaming_bmb(args):
                 if not use_bf16:
                     scaler.scale(total_loss).backward()
                     scaler.unscale_(optimizer)
-                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=0.8)
                     # [Active NaN Guard] Tầng 2: Kiểm tra bùng nổ gradient sau khi unscale
                     if not torch.isfinite(grad_norm):
                         print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số và điều chỉnh hạ scale factor!")
@@ -556,7 +567,7 @@ def train_streaming_bmb(args):
                     scaler.update()
                 else:
                     total_loss.backward()
-                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=0.8)
                     if not torch.isfinite(grad_norm):
                         print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số!")
                         optimizer.zero_grad()
@@ -574,13 +585,16 @@ def train_streaming_bmb(args):
                 )
 
                 if not torch.isfinite(total_loss):
-                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item()}) tại step {batch_idx + 1}. Bỏ qua batch!")
+                    rec_v = loss_dict.get("loss_rec", 0.0)
+                    temp_v = loss_dict.get("loss_temp_bg", 0.0)
+                    cross_v = loss_dict.get("loss_cross", 0.0)
+                    print(f"\n⚠️ [Active NaN Guard] Phát hiện loss không hợp lệ (total_loss={total_loss.item():.4f} | rec={rec_v:.4f}, temp={temp_v:.4f}, cross={cross_v:.4f}) tại step {batch_idx + 1}. Bỏ qua batch!")
                     optimizer.zero_grad()
                     raw_model.reset_memory()
                     continue
 
                 total_loss.backward()
-                grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(trainable_params, max_norm=0.8)
                 if not torch.isfinite(grad_norm):
                     print(f"\n⚠️ [Active NaN Guard] Phát hiện gradient không hợp lệ (grad_norm={grad_norm.item()}) tại step {batch_idx + 1}. Bỏ qua cập nhật trọng số!")
                     optimizer.zero_grad()
@@ -862,6 +876,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Ép chạy trên duy nhất 1 GPU ngay cả khi hệ thống có nhiều GPU (Mặc định: False - tự động nhận diện và sử dụng toàn bộ GPU)",
+    )
+    parser.add_argument(
+        "--scale_lr",
+        action="store_true",
+        default=False,
+        help="Tự động nhân LR theo số GPU khi dùng DataParallel (Mặc định: False để bảo toàn tính ổn định cho Vision Transformer)",
     )
     parser.add_argument(
         "--data_parallel",

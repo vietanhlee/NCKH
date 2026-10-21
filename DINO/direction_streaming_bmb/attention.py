@@ -142,24 +142,24 @@ class MemoryCrossAttention(nn.Module):
         V = self.v_proj(mem_norm).view(B, T, L, self.num_heads, self.head_dim)
 
         # 3. Point-wise Temporal Attention theo trục T tại cùng vị trí L:
-        # Einsum: Q(B, L, H, d) x K(B, T, L, H, d) -> s(B, H, L, T)
-        s = torch.einsum("blhd,btlhd->bhlt", Q, K) * self.scale
+        # Tính toán trên float32 để chống tràn FP16 (nơi tổng dot product có thể vượt 65504)
+        s = torch.einsum("blhd,btlhd->bhlt", Q.float(), K.float()) * self.scale
 
         # 4. Gated Valid Bias: log(valid.clamp_min(1e-3))
         # valid: (B, T, L) -> permute(0, 2, 1): (B, L, T) -> unsqueeze(1): (B, 1, L, T)
         # Token có valid ~ 0 (đang có xe) sẽ nhận bias ~ -6.91 -> bị triệt tiêu sau Softmax
-        valid_clamped = valid.clamp_min(1e-3)
+        valid_clamped = valid.float().clamp_min(1e-3)
         valid_bias = torch.log(valid_clamped).permute(0, 2, 1).unsqueeze(1)  # (B, 1, L, T)
         s = s + valid_bias
 
-        # 5. Softmax dọc theo trục thời gian T (tính trên float32 để chống tràn số trong FP16/AMP)
-        w = F.softmax(s.float(), dim=-1).to(s.dtype)  # (B, H, L, T)
+        # 5. Softmax dọc theo trục thời gian T trên float32
+        w = F.softmax(s, dim=-1)  # (B, H, L, T)
         w = torch.nan_to_num(w, nan=1.0 / max(1, T))
         w = self.attn_dropout(w)
 
         # 6. Tập hợp giá trị (Attention Aggregation):
-        # Einsum: w(B, H, L, T) x V(B, T, L, H, d) -> out(B, L, H, d) -> reshape (B, L, D)
-        out = torch.einsum("bhlt,btlhd->blhd", w, V).contiguous().reshape(B, L, D)
+        out = torch.einsum("bhlt,btlhd->blhd", w, V.float()).to(q_tokens.dtype).contiguous().reshape(B, L, D)
+        out = torch.nan_to_num(out, nan=0.0)
         out = self.proj_dropout(self.out_proj(out))
 
         # Cổng tin cậy tổng thể của patch (Patch-wise Validity Gate):
@@ -184,9 +184,12 @@ class MemoryCrossAttention(nn.Module):
 
         with torch.no_grad():
             q_sim_norm = self.norm_q(source_q_for_sim)
-            q_unit = F.normalize(q_sim_norm, p=2, dim=-1)                          # (B, L, D)
+            # Tính normalize trên float32 với eps=1e-6 để chống underflow 1e-12 về 0.0 trong FP16
+            q_unit = F.normalize(q_sim_norm.float(), p=2, dim=-1, eps=1e-6).to(source_q_for_sim.dtype)
+            q_unit = torch.nan_to_num(q_unit, nan=0.0)
             mem_raw_norm = self.norm_mem(source_mem_for_sim)
-            mem_unit = F.normalize(mem_raw_norm, p=2, dim=-1)                      # (B, T, L, D)
+            mem_unit = F.normalize(mem_raw_norm.float(), p=2, dim=-1, eps=1e-6).to(source_mem_for_sim.dtype)
+            mem_unit = torch.nan_to_num(mem_unit, nan=0.0)
 
             # Cosine similarity tại cùng vị trí l: (B, T, L)
             sim_pointwise = (q_unit.unsqueeze(1) * mem_unit).sum(dim=-1)          # (B, T, L)
@@ -224,20 +227,23 @@ class MemoryCrossAttention(nn.Module):
         K = self.k_proj(mem_norm).view(B, L_mem, self.num_heads, self.head_dim).transpose(1, 2)
         V = self.v_proj(mem_norm).view(B, L_mem, self.num_heads, self.head_dim).transpose(1, 2)
 
-        attn_scores = torch.matmul(Q, K.transpose(-2, -1)) * self.scale
-        attn_weights = F.softmax(attn_scores.float(), dim=-1).to(attn_scores.dtype)
+        attn_scores = torch.matmul(Q.float(), K.float().transpose(-2, -1)) * self.scale
+        attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = torch.nan_to_num(attn_weights, nan=1.0 / max(1, L_mem))
         attn_weights = self.attn_dropout(attn_weights)
 
-        attn_out = torch.matmul(attn_weights, V).transpose(1, 2).contiguous().view(B, L_q, D)
+        attn_out = torch.matmul(attn_weights, V.float()).to(q_tokens.dtype).transpose(1, 2).contiguous().view(B, L_q, D)
+        attn_out = torch.nan_to_num(attn_out, nan=0.0)
         attn_out = self.proj_dropout(self.out_proj(attn_out))
 
         x = q_tokens + attn_out
         x = x + self.mlp(self.norm_mlp(x))
 
         with torch.no_grad():
-            q_unit = F.normalize(q_norm, p=2, dim=-1)
-            mem_unit = F.normalize(mem_norm, p=2, dim=-1)
+            q_unit = F.normalize(q_norm.float(), p=2, dim=-1, eps=1e-6).to(q_tokens.dtype)
+            q_unit = torch.nan_to_num(q_unit, nan=0.0)
+            mem_unit = F.normalize(mem_norm.float(), p=2, dim=-1, eps=1e-6).to(mem_tokens.dtype)
+            mem_unit = torch.nan_to_num(mem_unit, nan=0.0)
             sim_matrix = torch.bmm(q_unit, mem_unit.transpose(1, 2))
             max_sim, _ = torch.max(sim_matrix, dim=-1, keepdim=True)
             temp = (F.softplus(self.fam_temp) + 1.0).clamp(max=20.0)

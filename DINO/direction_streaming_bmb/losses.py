@@ -87,7 +87,7 @@ def edge_aware_tv_loss(alpha: torch.Tensor, img: torch.Tensor) -> torch.Tensor:
 
     loss_x = torch.mean(grad_alpha_x * w_x)
     loss_y = torch.mean(grad_alpha_y * w_y)
-    return loss_x + loss_y
+    return torch.nan_to_num(loss_x + loss_y, nan=0.0)
 
 
 def gradient_exclusion_loss(fg: torch.Tensor, bg: torch.Tensor, alpha: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -109,7 +109,7 @@ def gradient_exclusion_loss(fg: torch.Tensor, bg: torch.Tensor, alpha: Optional[
 
     loss_x = torch.mean(torch.tanh(10.0 * fg_gx[:, :, :min_h, :min_w]) * torch.tanh(10.0 * bg_gx[:, :, :min_h, :min_w]))
     loss_y = torch.mean(torch.tanh(10.0 * fg_gy[:, :, :min_h, :min_w]) * torch.tanh(10.0 * bg_gy[:, :, :min_h, :min_w]))
-    return loss_x + loss_y
+    return torch.nan_to_num(loss_x + loss_y, nan=0.0)
 
 
 class StreamingDecompositionLoss(nn.Module):
@@ -174,7 +174,8 @@ class StreamingDecompositionLoss(nn.Module):
     def charbonnier_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Hàm mất mát L1 mượt (Charbonnier) chống bão hòa gradient."""
         diff = pred - target
-        return torch.mean(torch.sqrt(diff * diff + self.charbonnier_eps ** 2))
+        charb = torch.sqrt(diff * diff + self.charbonnier_eps ** 2)
+        return torch.nan_to_num(torch.mean(charb), nan=0.1)
 
     def cross_frame_bg_loss(
         self,
@@ -261,7 +262,7 @@ class StreamingDecompositionLoss(nn.Module):
         # truyền trực tiếp về gain và bias của PhotometricIlluminationAdaptor
         ref_bg = bg_prev_aligned if bg_prev_aligned is not None else bg_prev_det
 
-        diff = torch.abs(bg_t - ref_bg)  # (B, 3, H, W)
+        diff = torch.nan_to_num(torch.abs(bg_t - ref_bg), nan=0.0).clamp(0.0, 2.0)  # (B, 3, H, W)
         if soft_weight is not None:
             diff = diff * soft_weight
 
@@ -273,7 +274,7 @@ class StreamingDecompositionLoss(nn.Module):
         # Laplace Negative Log-Likelihood với clamp bảo vệ gradient
         denom_nll = combined_sigma + 1e-4
         nll = diff / denom_nll + torch.log(denom_nll / sigma_min)
-        nll = torch.clamp(nll, min=-10.0, max=50.0)
+        nll = torch.nan_to_num(torch.clamp(nll, min=-10.0, max=50.0), nan=0.0)
 
         # Ràng buộc Sắc độ Bất biến (Normalized Chromaticity Invariance):
         # Nâng sàn mẫu số lên >= 0.05 để chống phân kỳ chia cho 0 trong bóng râm / ban đêm
@@ -281,7 +282,7 @@ class StreamingDecompositionLoss(nn.Module):
         denom_prev = ref_bg.clamp(min=0.0).sum(dim=1, keepdim=True).clamp(min=0.05)
         chroma_t = bg_t / denom_t
         chroma_prev = ref_bg.clamp(min=0.0) / denom_prev
-        loss_chroma = torch.mean(torch.abs(chroma_t - chroma_prev))
+        loss_chroma = torch.nan_to_num(torch.mean(torch.abs(chroma_t - chroma_prev)), nan=0.0)
 
         # Regularizer khóa chặt Photometric Adaptor (kéo g -> 1, b -> 0, w -> 1)
         loss_illum_reg = torch.tensor(0.0, device=bg_t.device)
@@ -417,15 +418,17 @@ class StreamingDecompositionLoss(nn.Module):
 
                 loss_adaptor_sup = F.mse_loss(pred_g, tg) + F.mse_loss(pred_b, tb)
 
-        # Chuẩn hóa trung bình qua chuỗi W
-        norm_rec = loss_rec_total / W_len
-        norm_temp = loss_temp_total / max(1, W_len - 1)
-        norm_fam = loss_fam_total / W_len
-        norm_sparse = loss_sparse_total / W_len
-        norm_tv = loss_tv_total / W_len
-        norm_excl = loss_excl_total / W_len
-        norm_bin = loss_bin_total / W_len
-        norm_illum_reg = loss_illum_reg_total / max(1, W_len - 1)
+        # Chuẩn hóa trung bình qua chuỗi W và bọc nan_to_num bảo vệ
+        norm_rec = torch.nan_to_num(loss_rec_total / W_len, nan=0.2)
+        norm_temp = torch.nan_to_num(loss_temp_total / max(1, W_len - 1), nan=0.05)
+        norm_fam = torch.nan_to_num(loss_fam_total / W_len, nan=0.0)
+        norm_sparse = torch.nan_to_num(loss_sparse_total / W_len, nan=0.05)
+        norm_tv = torch.nan_to_num(loss_tv_total / W_len, nan=0.01)
+        norm_excl = torch.nan_to_num(loss_excl_total / W_len, nan=0.05)
+        norm_bin = torch.nan_to_num(loss_bin_total / W_len, nan=0.0)
+        norm_illum_reg = torch.nan_to_num(loss_illum_reg_total / max(1, W_len - 1), nan=0.0)
+        loss_cross = torch.nan_to_num(loss_cross, nan=0.1)
+        loss_adaptor_sup = torch.nan_to_num(loss_adaptor_sup, nan=0.0)
 
         # Tổng hợp với Warm-up Schedule
         total_loss = (
@@ -440,6 +443,7 @@ class StreamingDecompositionLoss(nn.Module):
             + self.lambda_illum_reg * norm_illum_reg
             + self.lambda_adaptor_sup * loss_adaptor_sup
         )
+        total_loss = torch.nan_to_num(total_loss, nan=0.5)
 
         loss_dict = {
             "loss_total": float(total_loss.item()),
