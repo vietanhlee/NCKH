@@ -584,10 +584,91 @@ def render_fig4_singular_value_spectrum(
 
 
 # =============================================================================
+# FIGURE 5: TRAINING LOSS DYNAMICS & CONVERGENCE CURVES
+# =============================================================================
+def render_fig_loss_curves(checkpoint_path: str, out_path: str) -> bool:
+    """Trích xuất lịch sử loss từ checkpoint và vẽ biểu đồ đường cong hàm mất mát chuẩn bài báo."""
+    print(f"\n📈 [Figure 5] Đang trích xuất lịch sử hàm mất mát từ: {checkpoint_path}")
+    if not os.path.isfile(checkpoint_path):
+        print(f"❌ Không tìm thấy file checkpoint tại: {checkpoint_path}")
+        return False
+
+    try:
+        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    except TypeError:
+        ckpt = torch.load(checkpoint_path, map_location="cpu")
+
+    history = ckpt.get("history", {}) if isinstance(ckpt, dict) else {}
+    if not history or not history.get("total"):
+        metrics_json = os.path.join(os.path.dirname(checkpoint_path), "training_metrics.json")
+        if os.path.isfile(metrics_json):
+            import json
+            try:
+                with open(metrics_json, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    history = data.get("history", {})
+            except Exception:
+                pass
+
+    if not history or not history.get("total"):
+        print("⚠️ Không tìm thấy mảng 'history' hợp lệ trong checkpoint!")
+        return False
+
+    epochs = list(range(1, len(history["total"]) + 1))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5.5), dpi=220)
+
+    # Panel 1: Core SSL Representation Objectives
+    ax1.plot(epochs, history["total"], "b-o", linewidth=2.2, markersize=5, label="Total Objective")
+    if "dino" in history and history["dino"]:
+        ax1.plot(epochs, history["dino"], "g--s", linewidth=1.8, markersize=4, label="DINO [CLS] Distillation")
+    if "ibot" in history and history["ibot"]:
+        ax1.plot(epochs, history["ibot"], "m-.^", linewidth=1.8, markersize=4, label="iBOT Patch Masking")
+
+    ax1.set_title("Core SSL Objectives (Total, DINO, iBOT)", fontsize=12, fontweight="bold", pad=10)
+    ax1.set_xlabel("Epoch", fontsize=10, fontweight="semibold")
+    ax1.set_ylabel("Loss Magnitude", fontsize=10, fontweight="semibold")
+    ax1.grid(True, linestyle="--", alpha=0.5)
+    ax1.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    # Panel 2: Regularization & Disentanglement
+    has_reg = False
+    if "koleo" in history and history["koleo"]:
+        ax2.plot(epochs, history["koleo"], color="#e67e22", linestyle="-", marker="x", linewidth=1.8, markersize=5, label="KoLeo Entropy (Uniformity)")
+        has_reg = True
+    if "ric" in history and history["ric"]:
+        ax2.plot(epochs, history["ric"], color="#9b59b6", linestyle="--", marker="d", linewidth=1.8, markersize=4, label="RIC Invariance (Geometry & Illum)")
+        has_reg = True
+    if "cam_adv" in history and history["cam_adv"]:
+        ax2.plot(epochs, history["cam_adv"], color="#e74c3c", linestyle="-.", marker="v", linewidth=1.8, markersize=4, label="CamAdv Loss (Shortcut Suppression)")
+        has_reg = True
+
+    ax2.set_title("Regularization & Shortcut Elimination (RIC, KoLeo, CamAdv)", fontsize=12, fontweight="bold", pad=10)
+    ax2.set_xlabel("Epoch", fontsize=10, fontweight="semibold")
+    ax2.set_ylabel("Loss Magnitude", fontsize=10, fontweight="semibold")
+    ax2.grid(True, linestyle="--", alpha=0.5)
+    if has_reg:
+        ax2.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    cur_epoch = len(epochs)
+    best_loss = min(history["total"])
+    plt.suptitle(
+        f"Figure 5: Diễn Biến Hội Tụ Các Hàm Mất Mát — Hướng G (DINOv3 Vehicle-Centric SSL)\n"
+        f"Hoàn thành {cur_epoch} Epochs | Best Total Loss = {best_loss:.4f}",
+        fontsize=13, fontweight="bold", y=1.02
+    )
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    plt.savefig(out_path, dpi=250, bbox_inches="tight")
+    plt.close()
+    print(f"✅ [Figure 5 - Loss Curves Hoàn Tất] Đã lưu tại: {os.path.abspath(out_path)}")
+    return True
+
+
+# =============================================================================
 # MAIN CLI DISPATCHER
 # =============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Bộ công cụ xuất 4 biểu đồ trực quan hóa chuẩn bài báo khoa học DINOv3")
+    parser = argparse.ArgumentParser(description="Bộ công cụ xuất biểu đồ trực quan hóa chuẩn bài báo khoa học DINOv3")
     parser.add_argument("--data_dir", type=str, default="/workspace/output", help="Thư mục ảnh giao thông")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/direction1_new/best_checkpoint.pth", help="Checkpoint mô hình Hướng G")
     parser.add_argument("--model_name", type=str, default="dinov3_vits16", help="Tên backbone DINOv3")
@@ -595,9 +676,17 @@ def main():
     parser.add_argument("--hf_token", type=str, default="", help="Hugging Face Token")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--output_dir", type=str, default="paper_figures", help="Thư mục lưu các biểu đồ")
-    parser.add_argument("--mode", type=str, default="all", choices=["all", "pca", "attention", "knn", "rank"], help="Chế độ xuất hình ảnh")
+    parser.add_argument("--mode", type=str, default="all", choices=["all", "pca", "attention", "knn", "rank", "loss"], help="Chế độ xuất hình ảnh")
     parser.add_argument("--tam_cache_dir", type=str, default=None, help="Thư mục cache pi (.npy)")
     args = parser.parse_args()
+
+    # Nếu chỉ xuất đồ thị Loss Curve, thực hiện ngay lập tức không cần tải Dataset hay Backbone
+    if args.mode == "loss":
+        out_loss_path = os.path.join(args.output_dir, "loss_curve.png")
+        success = render_fig_loss_curves(args.checkpoint, out_loss_path)
+        if success:
+            print(f"🎉 Biểu đồ đường cong hàm mất mát đã sẵn sàng tại: {os.path.abspath(out_loss_path)}")
+        sys.exit(0 if success else 1)
 
     device = torch.device(args.device)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -741,6 +830,13 @@ def main():
             device=device,
             out_path=fig4_path,
             max_batches=20,
+        )
+
+    if args.mode in ["all", "loss"]:
+        fig5_path = os.path.join(args.output_dir, "loss_curve.png")
+        render_fig_loss_curves(
+            checkpoint_path=args.checkpoint,
+            out_path=fig5_path,
         )
 
     print("\n" + "=" * 80)

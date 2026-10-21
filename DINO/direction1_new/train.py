@@ -444,28 +444,52 @@ def save_direction_g_visuals(
 
 
 def save_loss_curves(history: Dict[str, List[float]], save_path: str):
-    """Vẽ và lưu biểu đồ đường cong hàm mất mát theo từng epoch."""
-    if not history["total"]:
+    """Vẽ và lưu biểu đồ đường cong hàm mất mát chi tiết (2 panels: Core Objectives & Regularization)."""
+    if not history or not history.get("total"):
         return
     epochs = list(range(1, len(history["total"]) + 1))
-    plt.figure(figsize=(10, 5), dpi=150)
-    plt.plot(epochs, history["total"], "b-o", linewidth=2, label="Total Loss")
-    plt.plot(epochs, history["dino"], "g--s", linewidth=1.5, label="DINO CLS Loss")
-    plt.plot(epochs, history["ibot"], "m-.^", linewidth=1.5, label="iBOT Patch Loss")
-    plt.plot(epochs, history["koleo"], "r:x", linewidth=1.5, label="KoLeo Entropy Loss")
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5.5), dpi=180)
 
-    plt.title("Diễn Biến Hàm Mất Mát Huấn Luyện SSL DINOv3 (Hướng G)", fontsize=13, fontweight="bold")
-    plt.xlabel("Epoch", fontsize=11)
-    plt.ylabel("Loss Value", fontsize=11)
-    plt.grid(True, linestyle="--", alpha=0.5)
-    plt.legend(fontsize=10)
+    # Panel 1: Core SSL Representation Objectives
+    ax1.plot(epochs, history["total"], "b-o", linewidth=2.2, markersize=5, label="Total Objective")
+    if "dino" in history and history["dino"]:
+        ax1.plot(epochs, history["dino"], "g--s", linewidth=1.8, markersize=4, label="DINO [CLS] Distillation")
+    if "ibot" in history and history["ibot"]:
+        ax1.plot(epochs, history["ibot"], "m-.^", linewidth=1.8, markersize=4, label="iBOT Patch Masking")
+
+    ax1.set_title("Core SSL Objectives (Total, DINO, iBOT)", fontsize=12, fontweight="bold", pad=10)
+    ax1.set_xlabel("Epoch", fontsize=10, fontweight="semibold")
+    ax1.set_ylabel("Loss Magnitude", fontsize=10, fontweight="semibold")
+    ax1.grid(True, linestyle="--", alpha=0.5)
+    ax1.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    # Panel 2: Geometric Invariance & Shortcut Elimination
+    has_reg = False
+    if "koleo" in history and history["koleo"]:
+        ax2.plot(epochs, history["koleo"], color="#e67e22", linestyle="-", marker="x", linewidth=1.8, markersize=5, label="KoLeo Entropy (Uniformity)")
+        has_reg = True
+    if "ric" in history and history["ric"]:
+        ax2.plot(epochs, history["ric"], color="#9b59b6", linestyle="--", marker="d", linewidth=1.8, markersize=4, label="RIC Invariance (Geometry & Illum)")
+        has_reg = True
+    if "cam_adv" in history and history["cam_adv"]:
+        ax2.plot(epochs, history["cam_adv"], color="#e74c3c", linestyle="-.", marker="v", linewidth=1.8, markersize=4, label="CamAdv Loss (Shortcut Suppression)")
+        has_reg = True
+
+    ax2.set_title("Regularization & Shortcut Elimination (RIC, KoLeo, CamAdv)", fontsize=12, fontweight="bold", pad=10)
+    ax2.set_xlabel("Epoch", fontsize=10, fontweight="semibold")
+    ax2.set_ylabel("Loss Magnitude", fontsize=10, fontweight="semibold")
+    ax2.grid(True, linestyle="--", alpha=0.5)
+    if has_reg:
+        ax2.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    plt.suptitle("Tiến Trình Hội Tụ Hàm Mất Mát — Hướng G (DINOv3 Vehicle-Centric SSL)", fontsize=14, fontweight="bold", y=0.99)
     plt.tight_layout()
     save_dir = os.path.dirname(save_path)
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
     plt.savefig(save_path, dpi=180, bbox_inches="tight")
     plt.close()
-    print(f"📊 [Đồ Thị] Đã lưu đường cong tổn thất tại: {save_path}")
+    print(f"📊 [Đồ Thị] Đã cập nhật đường cong tổn thất tại: {save_path}")
 
 
 class SyntheticTrafficDataset(Dataset):
@@ -1800,6 +1824,24 @@ def train_direction_g():
                     save_path=vis_save_path,
                     epoch=epoch + 1,
                 )
+
+            # Cập nhật đồ thị đường cong hàm mất mát sau mỗi epoch (Live Loss Curve)
+            loss_curve_path = os.path.join(args.output_dir, "loss_curve.png")
+            save_loss_curves(history, loss_curve_path)
+
+            # Cập nhật file tóm tắt chỉ số Metrics JSON sau mỗi epoch (đảm bảo an toàn khi crash hoặc restart)
+            metrics_path = os.path.join(args.output_dir, "training_metrics.json")
+            try:
+                with open(metrics_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "history": history,
+                        "current_epoch": epoch + 1,
+                        "total_epochs": args.epochs,
+                        "best_loss": best_loss,
+                        "last_lr": cur_lr,
+                    }, f, indent=2, ensure_ascii=False)
+            except Exception as e_json:
+                print(f"⚠️ [JSON Metrics Error] Không thể lưu metrics.json: {e_json}")
 
             # Lưu checkpoint từng epoch: last_checkpoint và latest_checkpoint
             save_g_checkpoint(last_checkpoint_path, epoch_num=epoch)
