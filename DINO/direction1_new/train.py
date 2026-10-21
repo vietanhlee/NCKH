@@ -328,66 +328,59 @@ def save_direction_g_visuals(
     if B == 1:
         axes = np.expand_dims(axes, axis=0)
 
-    # 1. Tiền xử lý PCA toàn batch để màu sắc đồng nhất tuyệt đối giữa các ảnh
-    pca_grid_batch = None
-    fg_grid_batch = None
+    # 1. Tiền xử lý Per-Image PCA chuẩn Meta DINOv2 (Độc lập trên từng ảnh, không bị ám màu ngày/đêm)
+    pca_grid_batch = []
+    fg_grid_batch = []
 
     if patch_features is not None:
         # patch_features: (B_total, 448, D)
         feats_np = patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
-        D_feat = feats_np.shape[-1]
-        all_feats = feats_np.reshape(-1, D_feat)  # (B * 448, D)
+        corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
 
-        # A. Standard PCA toàn batch: màu của mặt đường, cây cối, xe cộ thống nhất qua mọi ảnh
-        mean_all = all_feats.mean(axis=0, keepdims=True)
-        centered_all = all_feats - mean_all
-        _, _, vt_all = np.linalg.svd(centered_all, full_matrices=False)
-        pca3_all = centered_all @ vt_all[:3].T  # (B * 448, 3)
+        for b in range(B):
+            f_b = feats_np[b]  # (448, D)
+            # A. Standard PCA độc lập trên từng ảnh b
+            f_mean = f_b.mean(axis=0, keepdims=True)
+            f_cent = f_b - f_mean
+            _, _, vt = np.linalg.svd(f_cent, full_matrices=False)
+            pca3 = f_cent @ vt[:3].T  # (448, 3)
 
-        # Chuẩn hóa phân vị 1% - 99% chung toàn batch chống bão hòa màu do outlier
-        p_min = np.percentile(pca3_all, 1, axis=0, keepdims=True)
-        p_max = np.percentile(pca3_all, 99, axis=0, keepdims=True)
-        pca3_scaled = np.clip((pca3_all - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
-        pca_grid_batch = pca3_scaled.reshape(B, 16, 28, 3)
+            # Căn chỉnh dấu eigenvector theo 4 góc ảnh (vốn là nền) để màu sắc chuẩn tắc
+            for c in range(3):
+                if pca3[corners_idx, c].mean() > pca3[:, c].mean():
+                    pca3[:, c] = -pca3[:, c]
 
-        # B. Foreground-focused DINOv2 PCA (Bóc tách chi tiết xe cộ, loại bỏ áp đảo của nền)
-        # Thành phần thứ nhất PC1 phản ánh phân tách nền vs tiền cảnh trong ViT
-        pc1 = pca3_all[:, 0]
-        # Căn chỉnh chiều dấu của PC1: kiểm tra 4 góc ảnh (vốn là nền: vỉa hè / cây cối / góc trời)
-        corners_mask = np.zeros((B, 16, 28), dtype=bool)
-        corners_mask[:, :2, :2] = True
-        corners_mask[:, :2, -2:] = True
-        corners_mask[:, -2:, :2] = True
-        corners_mask[:, -2:, -2:] = True
-        corners_flat = corners_mask.reshape(-1)
-        if pc1[corners_flat].mean() > pc1.mean():
-            pc1 = -pc1
+            # Chuẩn hóa phân vị 1% - 99% nội tại ảnh b
+            p_min = np.percentile(pca3, 1, axis=0, keepdims=True)
+            p_max = np.percentile(pca3, 99, axis=0, keepdims=True)
+            pca3_norm = np.clip((pca3 - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
+            pca_grid_batch.append(pca3_norm.reshape(16, 28, 3))
 
-        pi_flat = pi[:B].detach().cpu().numpy().reshape(-1)
-        # Điểm thuộc tiền cảnh: Bóc tách thuần túy dựa trên xác suất xe cộ TAM pi > 0.40
-        # Loại bỏ hoàn toàn bẫy pc1 > percentile(55) gây tràn toàn bộ lòng đường vào tiền cảnh.
-        is_fg = (pi_flat > 0.40)
+            # B. Foreground-focused DINOv2 PCA (SVD bậc 2 trên các patch xe của riêng ảnh b)
+            pi_b = pi[b].detach().cpu().numpy().reshape(-1)
+            fg_mask_b = (pi_b > 0.40)
+            if fg_mask_b.sum() < 4:
+                fg_mask_b = (pi_b >= np.percentile(pi_b, 80))
 
-        fg_grid_batch = np.zeros((B * 448, 3), dtype=np.float32)
-        if np.sum(is_fg) >= 16:
-            fg_feats = all_feats[is_fg]
-            fg_mean = fg_feats.mean(axis=0, keepdims=True)
-            fg_centered = fg_feats - fg_mean
-            _, _, vt_fg = np.linalg.svd(fg_centered, full_matrices=False)
-            fg_pca3 = fg_centered @ vt_fg[:3].T  # (N_fg, 3)
+            fg_map = np.full((448, 3), 0.06, dtype=np.float32)  # Nền tối dịu (dark backdrop)
+            if fg_mask_b.sum() >= 4:
+                f_fg = f_b[fg_mask_b]
+                f_fg_mean = f_fg.mean(axis=0, keepdims=True)
+                f_fg_cent = f_fg - f_fg_mean
+                _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
+                fg_pca3 = f_fg_cent @ vt_fg[:3].T  # (N_fg, 3)
 
-            f_min = np.percentile(fg_pca3, 2, axis=0, keepdims=True)
-            f_max = np.percentile(fg_pca3, 98, axis=0, keepdims=True)
-            fg_scaled = np.clip((fg_pca3 - f_min) / np.maximum(f_max - f_min, 1e-6), 0.0, 1.0)
+                f_min = np.percentile(fg_pca3, 2, axis=0, keepdims=True)
+                f_max = np.percentile(fg_pca3, 98, axis=0, keepdims=True)
+                fg_norm = np.clip((fg_pca3 - f_min) / np.maximum(f_max - f_min, 1e-6), 0.0, 1.0)
+                fg_map[fg_mask_b] = fg_norm
+            else:
+                fg_map = pca3_norm * np.clip(pi_b[:, None] * 2.0, 0.1, 1.0)
 
-            # Nền tối dịu nhẹ (dark backdrop) để xe cộ rực rỡ nổi bật
-            fg_grid_batch[~is_fg] = np.array([0.08, 0.08, 0.10], dtype=np.float32)
-            fg_grid_batch[is_fg] = fg_scaled
-        else:
-            # Fallback nếu quá ít patch tiền cảnh
-            fg_grid_batch = pca3_scaled * np.clip(pi_flat[:, None] * 1.5, 0.1, 1.0)
+            fg_grid_batch.append(fg_map.reshape(16, 28, 3))
 
-        fg_grid_batch = fg_grid_batch.reshape(B, 16, 28, 3)
+        pca_grid_batch = np.stack(pca_grid_batch, axis=0)
+        fg_grid_batch = np.stack(fg_grid_batch, axis=0)
 
     for b in range(B):
         # 1. Ảnh gốc
