@@ -872,14 +872,21 @@ Thực nghiệm trên {q5_results['num_pairs_evaluated']} cặp ảnh ngẫu nhi
 def resolve_default_checkpoint() -> str:
     """Tự động tìm kiếm checkpoint tối ưu nhất hiện có trên hệ thống."""
     candidates = [
+        # Đường dẫn chuẩn trên Server (direction1_new)
+        "/workspace/nckh/DINO/checkpoints/direction1_new/last_checkpoint.pth",
+        "/workspace/nckh/DINO/checkpoints/direction1_new/best_checkpoint.pth",
+        "/workspace/nckh/checkpoints/direction1_new/last_checkpoint.pth",
+        "/workspace/checkpoints/direction1_new/last_checkpoint.pth",
+        # Đường dẫn tương đối khi đứng ở DINO/ hoặc root repo
         "checkpoints/direction1_new/last_checkpoint.pth",
         "checkpoints/direction1_new/best_checkpoint.pth",
+        "DINO/checkpoints/direction1_new/last_checkpoint.pth",
+        "DINO/checkpoints/direction1_new/best_checkpoint.pth",
+        os.path.join(_dino_root, "checkpoints/direction1_new/last_checkpoint.pth"),
+        os.path.join(_dino_root, "checkpoints/direction1_new/best_checkpoint.pth"),
+        # Đường dẫn Windows local
         "g:/checkpoints/direction1_new/last_checkpoint.pth",
         "g:/checkpoints/direction1_new/best_checkpoint.pth",
-        "checkpoints/directionG/last_checkpoint.pth",
-        "checkpoints/directionG/best_checkpoint.pth",
-        os.path.join(_dino_root, "checkpoints/direction1_new/last_checkpoint.pth"),
-        os.path.join(_dino_root, "checkpoints/directionG/last_checkpoint.pth"),
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -888,7 +895,7 @@ def resolve_default_checkpoint() -> str:
                     return c
             except Exception:
                 pass
-    return "checkpoints/directionG/last_checkpoint.pth"
+    return os.path.join(_dino_root, "checkpoints/direction1_new/last_checkpoint.pth")
 
 
 # =============================================================================
@@ -912,16 +919,23 @@ def main():
     print(" 🔍 BẮT ĐẦU QUY TRÌNH KIỂM TOÁN ĐỊNH LƯỢNG HƯỚNG G DINOv3 (5 CÂU HỎI GVHD)")
     print(f"    Thiết bị thực thi       : {device}")
     print(f"    Thư mục ảnh kiểm chuẩn  : {args.data_dir}")
+    print(f"    Checkpoint Student      : {args.checkpoint}")
     print(f"    Số lượng ảnh mẫu        : {args.num_samples}")
     print("=" * 80)
 
     # 1. Nạp danh sách ảnh kiểm toán và nhãn
-    if not os.path.exists(args.labels_csv):
+    has_labels = False
+    if os.path.exists(args.labels_csv):
+        has_labels = True
+        df_labels = pd.read_csv(args.labels_csv)
+    else:
         # Tự động giải nén từ IC4SD-Traffic-HCM.zip nếu có
         candidate_zips = [
             "IC4SD-Traffic-HCM.zip",
             os.path.join(_dino_root, "IC4SD-Traffic-HCM.zip"),
             os.path.join(os.path.dirname(_dino_root), "IC4SD-Traffic-HCM.zip"),
+            "/workspace/IC4SD-Traffic-HCM.zip",
+            "/workspace/nckh/IC4SD-Traffic-HCM.zip",
         ]
         found_zip = None
         for cz in candidate_zips:
@@ -949,19 +963,34 @@ def main():
                         f_out.write(inner_zf.read(ipath))
             sample_df.to_csv(args.labels_csv, index=False)
             print(f"   ✅ Đã trích xuất {len(sample_df)} ảnh mẫu tới: '{args.data_dir}'")
+            df_labels = sample_df
+            has_labels = True
+        elif os.path.isdir(args.data_dir):
+            valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+            all_files = [f for f in os.listdir(args.data_dir) if os.path.splitext(f)[1].lower() in valid_exts]
+            if len(all_files) == 0:
+                raise FileNotFoundError(f"Không tìm thấy file ảnh nào trong thư mục: {args.data_dir}")
+            print(f"📂 Quét được {len(all_files)} ảnh từ thư mục: {args.data_dir}")
+            import random
+            rng = random.Random(42)
+            sampled_files = rng.sample(all_files, min(args.num_samples, len(all_files)))
+            df_labels = pd.DataFrame({"filename": sampled_files})
+            has_labels = False
         else:
-            raise FileNotFoundError(f"Không tìm thấy file nhãn tại: {args.labels_csv} và không tìm thấy IC4SD-Traffic-HCM.zip")
+            raise FileNotFoundError(f"Không tìm thấy file nhãn tại: {args.labels_csv} và không tìm thấy thư mục: {args.data_dir}")
     
-    df_labels = pd.read_csv(args.labels_csv)
     # Lấy mẫu phân tầng để đảm bảo xuất hiện đủ các lớp mức độ giao thông
-    if args.num_samples < len(df_labels):
-        sample_list = []
-        for pl, grp in df_labels.groupby("phan_loai"):
-            n_grp = max(2, int(round(len(grp) / len(df_labels) * args.num_samples)))
-            sample_list.append(grp.sample(n=min(n_grp, len(grp)), random_state=42))
-        eval_df = pd.concat(sample_list).sample(frac=1.0, random_state=42).head(args.num_samples).copy()
+    if has_labels and "phan_loai" in df_labels.columns:
+        if args.num_samples < len(df_labels):
+            sample_list = []
+            for pl, grp in df_labels.groupby("phan_loai"):
+                n_grp = max(2, int(round(len(grp) / len(df_labels) * args.num_samples)))
+                sample_list.append(grp.sample(n=min(n_grp, len(grp)), random_state=42))
+            eval_df = pd.concat(sample_list).sample(frac=1.0, random_state=42).head(args.num_samples).copy()
+        else:
+            eval_df = df_labels.sample(frac=1.0, random_state=42).copy()
     else:
-        eval_df = df_labels.sample(frac=1.0, random_state=42).copy()
+        eval_df = df_labels.head(args.num_samples).copy()
     
     image_tensors = []
     valid_rows = []
@@ -999,6 +1028,23 @@ def main():
 
     total_gt_vehicles = sum(len(d) for d in detections_list)
     print(f"   ✅ Hoàn tất! Phát hiện tổng cộng {total_gt_vehicles} phương tiện trên {N} ảnh.")
+
+    # Bổ sung nhãn ground truth nếu chưa có sẵn trong labels_csv
+    if "tong" not in eval_df.columns:
+        eval_df["tong"] = [len(d) for d in detections_list]
+    if "phan_loai" not in eval_df.columns:
+        def classify_density(n_veh):
+            if n_veh <= 2:
+                return 1
+            elif n_veh <= 6:
+                return 2
+            elif n_veh <= 12:
+                return 3
+            elif n_veh <= 20:
+                return 4
+            else:
+                return 5
+        eval_df["phan_loai"] = eval_df["tong"].apply(classify_density)
 
     # 3. Tạo bản đồ TAM Thô (Raw TAM) và TAM Tinh Chế (Refined TAM)
     print("🧠 Đang tính toán bản đồ xác suất tiền cảnh TAM (Raw vs Refined)...")

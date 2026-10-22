@@ -454,15 +454,27 @@ def main():
     student_ckpt_path = args.checkpoint
     if not student_ckpt_path:
         for candidate_ckpt in [
-            "checkpoints/direction1_new/best_checkpoint.pth",
+            "checkpoints/directionG/checkpoint_last.pth",
+            "checkpoints/directionG/best_checkpoint.pth",
             "checkpoints/direction1_new/checkpoint_last.pth",
+            "checkpoints/direction1_new/best_checkpoint.pth",
+            "/workspace/checkpoints/directionG/checkpoint_last.pth",
+            "/workspace/checkpoints/directionG/best_checkpoint.pth",
+            "/workspace/checkpoints/direction1_new/checkpoint_last.pth",
             "/workspace/checkpoints/direction1_new/best_checkpoint.pth",
+            "/workspace/checkpoint_last.pth",
+            "/workspace/best_checkpoint.pth",
+            "G:\\nckh\\checkpoints\\directionG\\checkpoint_last.pth",
+            "G:\\nckh\\checkpoints\\directionG\\best_checkpoint.pth",
             "G:\\nckh\\DINO\\checkpoints\\direction1_new\\best_checkpoint.pth",
+            "checkpoint_last.pth",
             "best_checkpoint.pth",
         ]:
             if os.path.isfile(candidate_ckpt):
                 student_ckpt_path = candidate_ckpt
                 break
+    elif not os.path.isfile(student_ckpt_path):
+        print(f"❌ [CẢNH BÁO] Không tìm thấy file checkpoint chỉ định: '{student_ckpt_path}'!")
 
     backbone_student = None
     has_student = False
