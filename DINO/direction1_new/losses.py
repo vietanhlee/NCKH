@@ -332,6 +332,10 @@ class CameraAdversarialHead(nn.Module):
         self.hidden_dim = hidden_dim
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.GELU(),
             nn.Linear(hidden_dim, self.num_cams),
         )
@@ -351,16 +355,70 @@ class CameraAdversarialHead(nn.Module):
         self.net[-1] = new_linear
         self.num_cams = new_cams
 
-    def forward(self, cls_feat: torch.Tensor, cids: torch.Tensor, grl_alpha: float = 0.1) -> torch.Tensor:
+    def forward(self, cls_feat: torch.Tensor, cids: torch.Tensor, grl_alpha: float = 0.5) -> torch.Tensor:
         """
         cls_feat: (B, D) Đặc trưng CLS từ Student.
         cids: (B,) Nhãn Camera ID.
-        grl_alpha: Hệ số cường độ đảo chiều gradient.
+        grl_alpha: Hệ số cường độ đảo chiều gradient (mặc định tăng lên để phản kháng hiệu dụng).
         """
         max_cid = int(cids.max().item()) if cids.numel() > 0 else 0
         self.ensure_cam_capacity(max_cid)
-        x_Norm = F.normalize(cls_feat, p=2, dim=-1)
-        x_rev = _GradientReversalFn.apply(x_Norm, grl_alpha)
+        x_norm = F.normalize(cls_feat, p=2, dim=-1)
+        x_rev = _GradientReversalFn.apply(x_norm, grl_alpha)
         logits = self.net(x_rev)
         return F.cross_entropy(logits, cids.long())
+
+
+class PatchVarianceRegularizer(nn.Module):
+    """
+    Điều hòa phương sai mức Patch (VICReg-style Variance Regularizer):
+    Ngăn chặn triệt để hiện tượng Sụp đổ Chiều (Patch Dimensional Collapse),
+    ép các chiều đặc trưng của patch tokens phải phân tán độc lập,
+    tránh việc biểu diễn co cụm về mặt phẳng 2D-3D (Top-3 PC chiếm 88% variance).
+    """
+    def __init__(self, target_std: float = 1.0, eps: float = 1e-4):
+        super().__init__()
+        self.target_std = target_std
+        self.eps = eps
+
+    def forward(self, patch_tokens: torch.Tensor, pi: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        patch_tokens: (B, N, D) Ma trận patch tokens từ Student.
+        pi: (B, N) Bản đồ tiền cảnh TAM (ưu tiên duy trì phương sai vùng phương tiện).
+        """
+        B, N, D = patch_tokens.shape
+        flat_tokens = patch_tokens.view(B * N, D)
+
+        if pi is not None:
+            # Lọc các patch tiền cảnh có xác suất cao
+            fg_mask = (pi.view(-1) > 0.25)
+            if fg_mask.sum() >= max(16, D // 4):
+                flat_tokens = flat_tokens[fg_mask]
+
+        # Tính độ lệch chuẩn theo từng chiều đặc trưng D
+        std = torch.sqrt(flat_tokens.var(dim=0) + self.eps)
+        # Hinge loss: phạt nếu std nhỏ hơn target_std
+        std_loss = torch.mean(F.relu(self.target_std - std))
+        return std_loss
+
+
+class FeatureAnchorLoss(nn.Module):
+    """
+    Neo giữ không gian đặc trưng (Feature Anchoring Loss):
+    Ngăn chặn Student bị trôi dạt quá xa (representation drift) khỏi
+    không gian biểu diễn ngữ nghĩa trù mật ban đầu của DINOv3 Pretrained.
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, student_patches: torch.Tensor, pretrained_patches: torch.Tensor) -> torch.Tensor:
+        """
+        student_patches: (B, N, D) Đặc trưng từ Student.
+        pretrained_patches: (B, N, D) Đặc trưng từ Vanilla DINOv3 Pretrained đóng băng (đã detach).
+        """
+        s_norm = F.normalize(student_patches, p=2, dim=-1)
+        p_norm = F.normalize(pretrained_patches.detach(), p=2, dim=-1)
+        cos_sim = (s_norm * p_norm).sum(dim=-1)  # (B, N)
+        return torch.mean(1.0 - cos_sim)
+
 

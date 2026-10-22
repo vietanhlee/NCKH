@@ -68,6 +68,8 @@ from direction1_new.losses import (
     pool_vehicle_embedding,
     CameraAdversarialHead,
     compute_dann_alpha,
+    PatchVarianceRegularizer,
+    FeatureAnchorLoss,
 )
 from direction1_new.sampler import CameraGroupedSampler
 
@@ -549,6 +551,12 @@ def save_loss_curves(history: Dict[str, List[float]], save_path: str):
     if "cam_adv" in history and history["cam_adv"]:
         ax2.plot(epochs, history["cam_adv"], color="#e74c3c", linestyle="-.", marker="v", linewidth=1.8, markersize=4, label="CamAdv Loss (Shortcut Suppression)")
         has_reg = True
+    if "patch_var" in history and history["patch_var"]:
+        ax2.plot(epochs, history["patch_var"], color="#27ae60", linestyle=":", marker="o", linewidth=1.8, markersize=4, label="Patch Variance (Anti-Collapse)")
+        has_reg = True
+    if "anchor" in history and history["anchor"]:
+        ax2.plot(epochs, history["anchor"], color="#2980b9", linestyle="--", marker="p", linewidth=1.8, markersize=4, label="DINOv3 Anchor (Anti-Drift)")
+        has_reg = True
 
     ax2.set_title("Regularization & Shortcut Elimination (RIC, KoLeo, CamAdv)", fontsize=12, fontweight="bold", pad=10)
     ax2.set_xlabel("Epoch", fontsize=10, fontweight="semibold")
@@ -750,6 +758,11 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--lambda_ric": "lambda_ric",
         "--use_cam_adv": "use_cam_adv", "--no_cam_adv": "use_cam_adv",
         "--lambda_cam_adv": "lambda_cam_adv",
+        "--max_grl_alpha": "max_grl_alpha",
+        "--use_patch_var": "use_patch_var", "--no_patch_var": "use_patch_var",
+        "--lambda_patch_var": "lambda_patch_var",
+        "--use_anchor": "use_anchor", "--no_anchor": "use_anchor",
+        "--lambda_anchor": "lambda_anchor",
         "--use_cam_sampler": "use_cam_sampler", "--no_cam_sampler": "use_cam_sampler",
         "--cams_per_batch": "cams_per_batch",
         "--frames_per_cam": "frames_per_cam",
@@ -812,7 +825,14 @@ def parse_args():
     parser.add_argument("--lambda_ric", type=float, default=0.15, help="Hệ số trọng số RIC Loss")
     parser.add_argument("--use_cam_adv", action="store_true", default=True, help="Bật Camera Adversarial Discriminator (GRL) chống shortcut")
     parser.add_argument("--no_cam_adv", dest="use_cam_adv", action="store_false")
-    parser.add_argument("--lambda_cam_adv", type=float, default=0.05, help="Hệ số trọng số Camera Adversarial Loss")
+    parser.add_argument("--lambda_cam_adv", type=float, default=0.10, help="Hệ số trọng số Camera Adversarial Loss (mặc định nâng lên 0.10 để phản kháng hiệu dụng)")
+    parser.add_argument("--max_grl_alpha", type=float, default=0.5, help="Hệ số alpha cực đại cho Camera Adversarial GRL")
+    parser.add_argument("--use_patch_var", action="store_true", default=True, help="Bật Patch-level Variance Regularizer chống Dimensional Collapse")
+    parser.add_argument("--no_patch_var", dest="use_patch_var", action="store_false")
+    parser.add_argument("--lambda_patch_var", type=float, default=0.10, help="Hệ số trọng số Patch Variance Loss")
+    parser.add_argument("--use_anchor", action="store_true", default=True, help="Bật Feature Anchor Loss chống trôi dạt biểu diễn khỏi DINOv3 gốc")
+    parser.add_argument("--no_anchor", dest="use_anchor", action="store_false")
+    parser.add_argument("--lambda_anchor", type=float, default=0.05, help="Hệ số trọng số Feature Anchor Loss")
     parser.add_argument("--use_cam_sampler", action="store_true", default=True, help="Bật CameraGroupedSampler gom nhóm theo camera")
     parser.add_argument("--no_cam_sampler", dest="use_cam_sampler", action="store_false")
     parser.add_argument("--cams_per_batch", type=int, default=4, help="Số camera trong 1 batch của CameraGroupedSampler")
@@ -1255,6 +1275,8 @@ def train_direction_g():
     dino_loss_fn = DINOLoss(out_dim=args.out_dim, nepochs=args.epochs).to(device)
     ibot_loss_fn = iBOTPatchLoss(out_dim=args.out_dim).to(device)
     koleo_loss_fn = KoLeoLoss().to(device)
+    patch_var_fn = PatchVarianceRegularizer(target_std=1.0).to(device)
+    anchor_fn = FeatureAnchorLoss().to(device)
     ric_loss_fn = RICLoss().to(device)
     cam_adv_head = CameraAdversarialHead(in_dim=embed_dim, num_cams=pos_stats.num_cams).to(device)
 
@@ -1306,7 +1328,7 @@ def train_direction_g():
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
-    history = {"total": [], "dino": [], "ibot": [], "koleo": [], "ric": [], "cam_adv": []}
+    history = {"total": [], "dino": [], "ibot": [], "koleo": [], "patch_var": [], "anchor": [], "ric": [], "cam_adv": []}
 
     resume_target = args.resume
     if resume_target:
@@ -1688,6 +1710,8 @@ def train_direction_g():
             epoch_dino_losses = []
             epoch_ibot_losses = []
             epoch_koleo_losses = []
+            epoch_patch_var_losses = []
+            epoch_anchor_losses = []
             epoch_ric_losses = []
             epoch_cam_adv_losses = []
 
@@ -1704,8 +1728,12 @@ def train_direction_g():
                 cids2 = batch.get("cid2", cids).to(device, non_blocking=(device.type == "cuda"))
                 B = x1.shape[0]
 
-                # Bước A: Xác định bản đồ tiền cảnh TAM (ưu tiên nạp từ cache precomputed để tăng tốc 2.5x)
-                if "pi1" in batch and "pi2" in batch and batch["pi1"] is not None:
+                # Bước A: Xác định bản đồ tiền cảnh TAM (ưu tiên cờ random_pi nếu chạy ablation)
+                if args.random_pi:
+                    # Ablation độc lập: pi ngẫu nhiên, bỏ qua cache
+                    pi1 = torch.rand((B, 16, 28), device=device)
+                    pi2 = torch.rand((B, 16, 28), device=device)
+                elif "pi1" in batch and "pi2" in batch and batch["pi1"] is not None:
                     pi1 = batch["pi1"].to(device, non_blocking=(device.type == "cuda"))
                     pi2 = batch["pi2"].to(device, non_blocking=(device.type == "cuda"))
                 else:
@@ -1724,13 +1752,8 @@ def train_direction_g():
                         if step % args.gmm_refit_steps == 0:
                             calibrator.refit(max_iters=args.gmm_iters)
 
-                        if args.random_pi:
-                            # Ablation: pi ngẫu nhiên
-                            pi1 = torch.rand((B, 16, 28), device=device)
-                            pi2 = torch.rand((B, 16, 28), device=device)
-                        else:
-                            pi1 = calibrator.posterior(a1).view(B, 16, 28)
-                            pi2 = calibrator.posterior(a2).view(B, 16, 28)
+                        pi1 = calibrator.posterior(a1, refine=args.refine_tam).view(B, 16, 28)
+                        pi2 = calibrator.posterior(a2, refine=args.refine_tam).view(B, 16, 28)
 
                         # Gated Update: Bảo vệ cụm tĩnh không bị xe ở làn đông làm sai lệch
                         pos_stats.update(cids, u1_f, gate_pi=pi1.view(B, 448))
@@ -1771,20 +1794,38 @@ def train_direction_g():
                     x_student_vit = x_student
 
                 with torch.amp.autocast(device_type=device_type, dtype=amp_dtype, enabled=use_amp):
-                    # Teacher nhận ảnh x_student_vit (SRS hoán nền) SẠCH KHÔNG CHE
-                    # Đồng bộ hóa bối cảnh giữa Teacher và Student: Cả hai đều nhìn cùng phương tiện trên nền mới,
-                    # triệt tiêu hoàn toàn sự lệ thuộc vào góc máy camera gốc và giải quyết dứt điểm xung đột với CamAdv GRL!
+                    # Teacher nhận ảnh SẠCH GỐC x1_vit (mỏ neo tri thức không che, không hoán nền)
                     with torch.no_grad():
-                        t_cls, t_patches, t_dino_logits, t_ibot_logits = teacher_model(x_student_vit)
+                        t_cls, t_patches, t_dino_logits, t_ibot_logits = teacher_model(x1_vit)
 
-                    # Student nhận ảnh x_student_vit (SRS) cùng mặt nạ che phân tầng masks (AGM iBOT)
+                    # Student nhận ảnh HOÁN NỀN x_student_vit cùng mặt nạ che phân tầng AGM masks
+                    # Ràng buộc bất biến Cross-Context: Student phải tái tạo đặc trưng phương tiện khớp với Teacher gốc!
                     s_cls, s_patches, s_dino_logits, s_ibot_logits = student_model(x_student_vit, masks=mask_batch)
 
                     # Bước E: Tính toán toàn bộ hệ thống Loss
                     loss_dino = dino_loss_fn(s_dino_logits, t_dino_logits, epoch=epoch)
-                    # Kích hoạt nhánh trọng số beta * pi trong iBOT
+                    
+                    # iBOT Patch Loss: Trọng số hóa theo bản đồ tiền cảnh pi1
                     loss_ibot = ibot_loss_fn(s_ibot_logits, t_ibot_logits, mask_batch, pi=pi1.reshape(B, 448), beta=args.ibot_beta)
+                    
+                    # KoLeo Loss trên CLS token
                     loss_koleo = koleo_loss_fn(s_cls)
+
+                    # Patch-level Variance Regularizer: Ngăn chặn triệt để Dimensional Collapse ở mức patch!
+                    if args.use_patch_var:
+                        loss_patch_var = patch_var_fn(s_patches, pi=pi1.reshape(B, 448))
+                    else:
+                        loss_patch_var = torch.tensor(0.0, device=device)
+
+                    # Feature Anchor Loss: Giữ vững không gian biểu diễn DINOv3, chống trôi dạt (representation drift)
+                    if args.use_anchor:
+                        with torch.no_grad():
+                            x1_norm = imagenet_normalize(x1_vit)
+                            _, v_patch_spatial = extract_tokens(frozen_backbone, x1_norm, patch_size=patch_size)
+                            v_patch_tokens_anchor = v_patch_spatial.view(B, -1, embed_dim)
+                        loss_anchor = anchor_fn(s_patches, v_patch_tokens_anchor)
+                    else:
+                        loss_anchor = torch.tensor(0.0, device=device)
 
                     # Regional Instance Contrastive (RIC): ép mô hình tập trung vào xe qua hard-negatives cùng camera
                     if args.use_ric:
@@ -1795,9 +1836,10 @@ def train_direction_g():
                         loss_ric = torch.tensor(0.0, device=device)
 
                     # Camera Adversarial Loss (GRL): ép xóa bỏ thông tin camera ID trong CLS token
+                    # Sửa lỗi đếm tiến độ kép: dùng trực tiếp global step đã theo dõi
                     if args.use_cam_adv:
-                        current_progress = float(epoch * len(loader) + step) / float(max(1, total_train_steps))
-                        current_grl_alpha = compute_dann_alpha(current_progress, max_alpha=0.1, gamma=10.0)
+                        current_progress = float(step) / float(max(1, total_train_steps))
+                        current_grl_alpha = compute_dann_alpha(current_progress, max_alpha=args.max_grl_alpha, gamma=10.0)
                         loss_cam_adv = cam_adv_head(s_cls, cids, grl_alpha=current_grl_alpha)
                     else:
                         loss_cam_adv = torch.tensor(0.0, device=device)
@@ -1806,6 +1848,8 @@ def train_direction_g():
                         loss_dino
                         + 1.0 * loss_ibot
                         + 0.02 * loss_koleo
+                        + args.lambda_patch_var * loss_patch_var
+                        + args.lambda_anchor * loss_anchor
                         + args.lambda_ric * loss_ric
                         + args.lambda_cam_adv * loss_cam_adv
                     )
@@ -1836,6 +1880,8 @@ def train_direction_g():
                 epoch_dino_losses.append(loss_dino.item())
                 epoch_ibot_losses.append(loss_ibot.item())
                 epoch_koleo_losses.append(loss_koleo.item())
+                epoch_patch_var_losses.append(loss_patch_var.item())
+                epoch_anchor_losses.append(loss_anchor.item())
                 epoch_ric_losses.append(loss_ric.item())
                 epoch_cam_adv_losses.append(loss_cam_adv.item())
 
@@ -1889,6 +1935,8 @@ def train_direction_g():
             avg_dino = float(np.mean(epoch_dino_losses)) if epoch_dino_losses else 0.0
             avg_ibot = float(np.mean(epoch_ibot_losses)) if epoch_ibot_losses else 0.0
             avg_koleo = float(np.mean(epoch_koleo_losses)) if epoch_koleo_losses else 0.0
+            avg_patch_var = float(np.mean(epoch_patch_var_losses)) if epoch_patch_var_losses else 0.0
+            avg_anchor = float(np.mean(epoch_anchor_losses)) if epoch_anchor_losses else 0.0
             avg_ric = float(np.mean(epoch_ric_losses)) if epoch_ric_losses else 0.0
             avg_cam_adv = float(np.mean(epoch_cam_adv_losses)) if epoch_cam_adv_losses else 0.0
 
@@ -1896,12 +1944,15 @@ def train_direction_g():
             history["dino"].append(avg_dino)
             history["ibot"].append(avg_ibot)
             history["koleo"].append(avg_koleo)
+            history["patch_var"].append(avg_patch_var)
+            history["anchor"].append(avg_anchor)
             history["ric"].append(avg_ric)
             history["cam_adv"].append(avg_cam_adv)
 
             cur_lr = optimizer.param_groups[0]["lr"]
             print(f"📊 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] LR: {cur_lr:.2e} — Loss TB: {avg_tot:.4f} "
                   f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f}, "
+                  f"PatchVar: {avg_patch_var:.4f}, Anchor: {avg_anchor:.4f}, "
                   f"RIC: {avg_ric:.4f}, CamAdv: {avg_cam_adv:.4f})")
 
             # Giám sát phân bố Teacher-Student để phát hiện sớm bất thường

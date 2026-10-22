@@ -227,22 +227,41 @@ class SimpleTrafficDataset(Dataset):
 
 
 def collect_image_files(input_path: str, max_samples: int = 4) -> List[str]:
-    """Thu thập danh sách file ảnh hợp lệ từ đường dẫn file hoặc thư mục."""
+    """Thu thập danh sách file ảnh hợp lệ, phân bổ đều qua nhiều camera khác nhau (Cross-Camera Diversity)."""
     valid_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-    found_files = []
-
     if os.path.isfile(input_path):
         return [input_path]
 
     if os.path.isdir(input_path):
+        from collections import defaultdict
+        import re
+        cam_to_files = defaultdict(list)
+        all_files = []
+
         for root, _, files in os.walk(input_path):
             for f in sorted(files):
                 if os.path.splitext(f)[1].lower() in valid_exts:
-                    found_files.append(os.path.join(root, f))
-                    if len(found_files) >= max_samples:
-                        return found_files
+                    full_p = os.path.join(root, f)
+                    all_files.append(full_p)
+                    match = re.match(r"^([A-Za-z0-9_-]+?)_\d{8,14}", f)
+                    cam_id = match.group(1) if match else os.path.basename(root)
+                    cam_to_files[cam_id].append(full_p)
 
-    return found_files
+        if len(cam_to_files) > 1:
+            selected = []
+            cam_list = sorted(list(cam_to_files.keys()))
+            idx = 0
+            while len(selected) < max_samples and idx < 100:
+                for c in cam_list:
+                    if len(cam_to_files[c]) > idx:
+                        selected.append(cam_to_files[c][idx])
+                        if len(selected) >= max_samples:
+                            break
+                idx += 1
+            return selected
+        return all_files[:max_samples]
+
+    return []
 
 
 # =============================================================================

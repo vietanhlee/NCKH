@@ -521,10 +521,11 @@ class GMMCalibrator:
             self.std_fg = (1.0 - alpha) * self.std_fg + alpha * cand_std_fg
             self.pi_weight = (1.0 - alpha) * self.pi_weight + alpha * cand_pi
 
-    def posterior(self, a: torch.Tensor) -> torch.Tensor:
+    def posterior(self, a: torch.Tensor, refine: bool = False) -> torch.Tensor:
         """
         Tính xác suất hậu nghiệm tiền cảnh pi_t(p) in [0, 1].
         a: (B, P) Tensor điểm khác thường
+        refine: bool - có áp dụng refine_traffic_foreground_map hay không (mặc định False để tránh làm sắc nét hai lần).
         Returns:
             pi: (B, P) Tensor xác suất tiền cảnh
         """
@@ -532,7 +533,8 @@ class GMMCalibrator:
 
         if not self.is_fitted:
             # Fallback sigmoid chuẩn hóa mềm khi chưa fit
-            return torch.sigmoid(1.5 * (log_a - 0.5))
+            raw_pi = torch.sigmoid(1.5 * (log_a - 0.5))
+            return refine_traffic_foreground_map(raw_pi) if refine else raw_pi
 
         # Tính mật độ Gaussian của 2 thành phần
         log_p_bg = -0.5 * ((log_a - self.mu_bg) / self.std_bg) ** 2 - np.log(self.std_bg + 1e-6)
@@ -544,8 +546,10 @@ class GMMCalibrator:
         pi = p_fg / (p_fg + p_bg + 1e-8)
         pi = pi.clamp(0.0, 1.0)
 
-        # Tinh chế làm sắc nét tiền cảnh và khử nhiễu nền
-        return refine_traffic_foreground_map(pi)
+        # Tinh chế làm sắc nét tiền cảnh chỉ khi được yêu cầu tường minh (tránh double-refine)
+        if refine:
+            return refine_traffic_foreground_map(pi)
+        return pi
 
     def state_dict(self) -> dict:
         """Xuất trạng thái GMM Calibrator và snapshot hồ chứa để lưu vào checkpoint."""

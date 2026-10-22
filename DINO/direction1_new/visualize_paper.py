@@ -246,7 +246,8 @@ def extract_cls_attention_maps(backbone: nn.Module, x: torch.Tensor) -> Optional
     # Nhánh 1: DINOv2 chính thống có sẵn get_last_selfattention
     if hasattr(raw_bb, "get_last_selfattention"):
         attn = raw_bb.get_last_selfattention(x)  # (B, num_heads, N, N)
-        cls_attn = attn[:, :, 0, 1:]  # (B, num_heads, 448)
+        num_patches = 16 * 28
+        cls_attn = attn[:, :, 0, -num_patches:]  # Lấy 448 patch tokens cuối cùng (bỏ qua register tokens)
         return cls_attn.view(B, cls_attn.shape[1], 16, 28)
 
     # Nhánh 2: Đăng ký Hook trên block cuối cùng của Vision Transformer
@@ -288,9 +289,20 @@ def extract_cls_attention_maps(backbone: nn.Module, x: torch.Tensor) -> Optional
 
         qkv = attn_mod.qkv(inp_feat).reshape(B_cur, N_tok, 3, num_heads, head_dim).permute(2, 0, 3, 1, 4)
         q, k = qkv[0], qkv[1]
+        
+        # Áp dụng 2D RoPE nếu module có hỗ trợ (DINOv3 RoPE)
+        if hasattr(attn_mod, "rope") and attn_mod.rope is not None:
+            try:
+                q = attn_mod.rope(q)
+                k = attn_mod.rope(k)
+            except Exception:
+                pass
+
         sim = (q @ k.transpose(-2, -1)) * scale
         weights = sim.softmax(dim=-1)  # (B, num_heads, N, N)
-        cls_attn = weights[:, :, 0, 1:]
+        num_patches = 16 * 28
+        # Lấy chính xác 448 spatial patches ở cuối (loại trừ CLS token và 4 storage/register tokens)
+        cls_attn = weights[:, :, 0, -num_patches:]
         return cls_attn.view(B_cur, num_heads, 16, 28)
 
     return None

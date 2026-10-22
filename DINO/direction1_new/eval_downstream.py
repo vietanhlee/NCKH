@@ -43,6 +43,24 @@ from direction1_new.tam import PositionStats, GMMCalibrator
 from direction1_new.train import TrafficCameraDataset, SyntheticTrafficDataset
 
 
+def compute_linear_cka(X: torch.Tensor, Y: torch.Tensor, eps: float = 1e-8) -> float:
+    """
+    Tính Linear Centered Kernel Alignment (CKA - Kornblith et al., ICML 2019).
+    Đo độ tương đồng cấu trúc hình học giữa 2 không gian biểu diễn (Student vs Vanilla).
+    CKA in [0, 1]: 1.0 = cấu trúc hình học đồng dạng hoàn hảo; 0.0 = trực giao.
+    """
+    X = X.float() - X.float().mean(dim=0, keepdim=True)
+    Y = Y.float() - Y.float().mean(dim=0, keepdim=True)
+
+    # Dạng Frobenius norm qua Gram ma trận không gian đặc trưng D1 x D2 (tối ưu bộ nhớ O(N*D^2))
+    dot_xy = torch.norm(Y.t() @ X, p="fro") ** 2
+    norm_xx = torch.norm(X.t() @ X, p="fro")
+    norm_yy = torch.norm(Y.t() @ Y, p="fro")
+
+    cka = dot_xy / (norm_xx * norm_yy + eps)
+    return float(cka.item())
+
+
 def compute_effective_rank(features: torch.Tensor, eps: float = 1e-12) -> float:
     """
     Tính bậc hiệu dụng (Effective Rank - Roy & Vetterli) từ ma trận đặc trưng (N, D).
@@ -50,11 +68,9 @@ def compute_effective_rank(features: torch.Tensor, eps: float = 1e-12) -> float:
     """
     X = features.float()
     X = X - X.mean(dim=0, keepdim=True)
-    # Singular Value Decomposition
     try:
         _, S, _ = torch.linalg.svd(X, full_matrices=False)
         S_norm = S / (S.sum() + eps)
-        # Shannon Entropy của phân phối singular values
         p = S_norm.clamp(min=eps)
         entropy = -torch.sum(p * torch.log(p)).item()
         erank = float(np.exp(entropy))
@@ -71,13 +87,14 @@ def evaluate_representation_quality(
     loader,
     device,
     patch_size: int = 16,
-    max_batches: int = 30,
+    max_batches: int = 80,
 ) -> dict:
-    """Đo lường các chỉ số chất lượng biểu diễn xe vs nền."""
+    """Đo lường các chỉ số chất lượng biểu diễn xe vs nền trên tập mẫu đủ lớn (> 384)."""
     backbone.eval()
     frozen_extractor.eval()
 
     cls_tokens_list = []
+    patch_samples_list = []
     fg_tokens_list = []
     bg_tokens_list = []
     cosine_separations = []
@@ -89,7 +106,7 @@ def evaluate_representation_quality(
             cids = batch["cid"].to(device)
             B = x.shape[0]
 
-            # 1. Trích xuất TAM pi (ưu tiên từ batch cache nếu có)
+            # 1. Trích xuất TAM pi
             if "pi1" in batch and batch["pi1"] is not None:
                 pi = batch["pi1"].to(device).view(B, -1)
             else:
@@ -100,11 +117,13 @@ def evaluate_representation_quality(
             # 2. Trích xuất backbone tokens
             x_norm = imagenet_normalize(x)
             cls_tok, patch_spatial = extract_tokens(backbone, x_norm, patch_size=patch_size)
-            # patch_spatial: (B, 16, 28, D) -> (B, 448, D)
             patches = patch_spatial.reshape(B, -1, patch_spatial.shape[-1])
             patches_norm = F.normalize(patches, p=2, dim=-1)
 
             cls_tokens_list.append(cls_tok.cpu())
+            # Lưu mẫu ngẫu nhiên 8 patch mỗi ảnh để đo Patch Effective Rank
+            patch_sub = patches[:, torch.randperm(patches.shape[1])[:8], :].reshape(-1, patches.shape[-1])
+            patch_samples_list.append(patch_sub.cpu())
 
             # 3. Phân nhóm patch Xe (pi > 0.40) vs patch Nền (pi < 0.20)
             for b in range(B):
@@ -114,7 +133,6 @@ def evaluate_representation_quality(
                 fg_mask = (pi_b > 0.40)
                 bg_mask = (pi_b < 0.20)
 
-                # Fallback thích nghi phân vị nếu ngưỡng cứng chưa bắt được
                 if fg_mask.sum() < 2:
                     p_high = torch.quantile(pi_b, 0.80)
                     fg_mask = (pi_b >= p_high)
@@ -128,7 +146,6 @@ def evaluate_representation_quality(
                     fg_vec = F.normalize(fg_vec, p=2, dim=-1)
                     bg_vec = F.normalize(bg_vec, p=2, dim=-1)
 
-                    # Khoảng cách Cosine giữa tâm cụm Xe và tâm cụm Nền (càng lớn càng phân tách tốt)
                     cos_sim = torch.sum(fg_vec * bg_vec).item()
                     cosine_separations.append(1.0 - cos_sim)
 
@@ -139,19 +156,25 @@ def evaluate_representation_quality(
             if batch_count >= max_batches:
                 break
 
-    all_cls = torch.cat(cls_tokens_list, dim=0) if cls_tokens_list else torch.randn(10, 384)
+    all_cls = torch.cat(cls_tokens_list, dim=0) if cls_tokens_list else torch.randn(500, 384)
+    all_patches = torch.cat(patch_samples_list, dim=0) if patch_samples_list else torch.randn(1000, 384)
+
     cls_erank = compute_effective_rank(all_cls)
+    patch_erank = compute_effective_rank(all_patches)
 
     mean_separation = float(np.mean(cosine_separations)) if cosine_separations else 0.0
     median_separation = float(np.median(cosine_separations)) if cosine_separations else 0.0
 
     return {
         "cls_effective_rank": float(f"{cls_erank:.2f}"),
-        "cls_feature_dim": int(all_cls.shape[-1]),
-        "erank_ratio": float(f"{cls_erank / all_cls.shape[-1] * 100:.2f}"),
+        "patch_effective_rank": float(f"{patch_erank:.2f}"),
+        "feature_dim": int(all_cls.shape[-1]),
+        "cls_erank_ratio_pct": float(f"{cls_erank / all_cls.shape[-1] * 100:.2f}"),
+        "patch_erank_ratio_pct": float(f"{patch_erank / all_cls.shape[-1] * 100:.2f}"),
         "vehicle_background_cosine_dist_mean": float(f"{mean_separation:.4f}"),
         "vehicle_background_cosine_dist_median": float(f"{median_separation:.4f}"),
         "num_valid_contrast_frames": len(cosine_separations),
+        "total_evaluated_samples": len(all_cls),
     }
 
 
