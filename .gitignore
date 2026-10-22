@@ -31,14 +31,19 @@ data/
 !DINO/direction_data_article/hcmc_trafficsnap_article.pdf
 *.png
 !DINO/direction_data_article/**/*.png
+!audit_visuals_agm_overlay.png
 *.md
 !README.md
 !research_ideas_ssl.md
+!BAO_CAO_KIEM_TOAN_TAM_AGM_SRS_PROBE.md
 !DINO/*.md
 !DINO/**/README.md
 !DINO/direction_data_article/**/*.md
 *.json
 !DINO/direction_data_article/**/*.json
+
+# Large sample audit dataset images
+sample_test_images/audit_set/
 
 # Direction data article files (CSV, XLSX, NPY)
 !DINO/direction_data_article/**/*.csv
