@@ -361,39 +361,47 @@ class StreamingDecompositionLoss(nn.Module):
             if fov_mask is not None:
                 m_t = fov_mask[:, t] if fov_mask.dim() == 5 else fov_mask
 
-            # 1. Tái tạo ảnh vật lý: Charbonnier L1 + SSIM
-            l1_rec = self.charbonnier_loss(recon, cur_frame)
-            ssim_val = ssim_2d_loss(recon, cur_frame)
-            rec_t = (1.0 - self.ssim_weight) * l1_rec + self.ssim_weight * (1.0 - ssim_val)
+            # 1. Tái tạo ảnh vật lý: Charbonnier L1 + SSIM (chỉ tính trên vùng trường nhìn hợp lệ m_t)
+            diff_rec = torch.sqrt((recon - cur_frame) ** 2 + self.charbonnier_eps ** 2)
+            if m_t is not None:
+                l1_rec = (diff_rec * m_t).sum() / (3.0 * m_t.sum().clamp(min=1.0))
+                rec_t = l1_rec
+            else:
+                l1_rec = torch.mean(diff_rec)
+                ssim_val = ssim_2d_loss(recon, cur_frame)
+                rec_t = (1.0 - self.ssim_weight) * l1_rec + self.ssim_weight * (1.0 - ssim_val)
 
             # 1b. Robust Intra-Frame Background Explanation Loss:
-            # Ép alpha = 0 tại mọi nơi nền pred_bg giải thích được cur_frame.
+            # Nền sạch pred_bg phải giải thích cur_frame ở những vùng không có xe (1 - alpha)
             diff_intra_bg = torch.abs(pred_bg - cur_frame).mean(dim=1, keepdim=True)
-            cost_intra_bg = (1.0 - alpha) * diff_intra_bg + self.lambda_cost * alpha
             if m_t is not None:
-                robust_t = (cost_intra_bg * m_t).sum() / (m_t.sum().clamp(min=1.0))
+                cost_clean_bg = (diff_intra_bg * (1.0 - alpha) * m_t).sum() / ((1.0 - alpha.detach()) * m_t).sum().clamp(min=1.0)
             else:
-                robust_t = torch.mean(cost_intra_bg)
+                cost_clean_bg = (diff_intra_bg * (1.0 - alpha)).sum() / (1.0 - alpha.detach()).sum().clamp(min=1.0)
 
-            loss_rec_total = loss_rec_total + rec_t + self.lambda_robust * robust_t
+            loss_rec_total = loss_rec_total + rec_t + self.lambda_robust * cost_clean_bg
 
-            # 1c. Tiên nghiệm nền mặt đường sạch (Temporal Median Background Prior):
-            # Ép pred_bg bám sát nền mỏ neo median, triệt tiêu hoàn toàn nguy cơ suy biến thành mặt phẳng xám!
-            loss_bg_p_t = self.charbonnier_loss(pred_bg, bg_prior)
-            if m_t is not None:
-                diff_bg_p = torch.sqrt((pred_bg - bg_prior) ** 2 + self.charbonnier_eps ** 2)
-                loss_bg_p_t = (diff_bg_p * m_t).sum() / (3.0 * m_t.sum().clamp(min=1.0))
-            loss_bg_prior_total = loss_bg_prior_total + loss_bg_p_t
-
-            # 1d. Hướng dẫn Chuyển động Tự Giám sát (Self-Supervised Motion/Difference Pseudo-Mask):
-            # Vùng có sai khác quang học rõ rệt so với nền mỏ neo median chắc chắn là phương tiện giao thông!
+            # 1c. Hướng dẫn Chuyển động Tự Giám sát (Self-Supervised Motion/Difference Pseudo-Mask):
+            # Tính sai khác tức thời giữa khung hình t và nền median mỏ neo bg_prior
             diff_motion = torch.abs(cur_frame - bg_prior).mean(dim=1, keepdim=True)
             alpha_pseudo = torch.clamp((diff_motion - 0.04) / 0.12, 0.0, 1.0).detach()
             if m_t is not None:
+                alpha_pseudo = alpha_pseudo * m_t
                 loss_mot_t = (torch.abs(alpha - alpha_pseudo) * m_t).sum() / m_t.sum().clamp(min=1.0)
             else:
                 loss_mot_t = F.l1_loss(alpha, alpha_pseudo)
             loss_motion_guide_total = loss_motion_guide_total + loss_mot_t
+
+            # 1d. Tiên nghiệm nền mặt đường sạch (Temporal Median Background Prior):
+            # Ép pred_bg bám sát nền mỏ neo median ở các vùng đường sạch (1 - alpha_pseudo)
+            diff_bg_p = torch.sqrt((pred_bg - bg_prior) ** 2 + self.charbonnier_eps ** 2)
+            clean_prior_weight = 1.0 - alpha_pseudo.detach()
+            if m_t is not None:
+                clean_prior_weight = clean_prior_weight * m_t
+                loss_bg_p_t = (diff_bg_p * clean_prior_weight).sum() / (3.0 * clean_prior_weight.sum().clamp(min=1.0))
+            else:
+                loss_bg_p_t = (diff_bg_p * clean_prior_weight).sum() / (3.0 * clean_prior_weight.sum().clamp(min=1.0))
+            loss_bg_prior_total = loss_bg_prior_total + loss_bg_p_t
 
             # 2. Ràng buộc bất biến thời gian liên frame (Temporal Uncertainty Consistency)
             if t > 0:

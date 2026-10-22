@@ -508,6 +508,7 @@ def train_streaming_bmb(args):
                 sample_batch_cache = {
                     "frames": batch["frames"][:1].clone(),
                     "timestamps": batch["timestamps"][:1].clone() if "timestamps" in batch else None,
+                    "fov_mask": batch["fov_mask"][:1].clone() if "fov_mask" in batch and batch["fov_mask"] is not None else None,
                 }
 
             frames = batch["frames"].to(device, non_blocking=True)  # (B, W, 3, H, W)
@@ -539,7 +540,7 @@ def train_streaming_bmb(args):
             optimizer.zero_grad()
             if use_amp:
                 with get_autocast(use_amp, amp_dtype):
-                    step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
+                    step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory, fov_mask=fov_mask)
                     total_loss, loss_dict = loss_fn(
                         step_outputs,
                         frames,
@@ -581,7 +582,7 @@ def train_streaming_bmb(args):
                         continue
                     optimizer.step()
             else:
-                step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory)
+                step_outputs = model(frames, timestamps=timestamps, reset_memory=reset_memory, fov_mask=fov_mask)
                 total_loss, loss_dict = loss_fn(
                     step_outputs,
                     frames,
@@ -668,14 +669,16 @@ def train_streaming_bmb(args):
             if sample_batch_cache is not None:
                 sample_frames = sample_batch_cache["frames"].to(device)
                 sample_ts = sample_batch_cache["timestamps"].to(device) if sample_batch_cache["timestamps"] is not None else None
+                sample_fov = sample_batch_cache["fov_mask"].to(device) if ("fov_mask" in sample_batch_cache and sample_batch_cache["fov_mask"] is not None) else None
             else:
                 sample_batch = next(iter(train_loader))
                 sample_frames = sample_batch["frames"][:1].to(device)
                 sample_ts = sample_batch["timestamps"][:1].to(device) if "timestamps" in sample_batch else None
+                sample_fov = sample_batch["fov_mask"][:1].to(device) if ("fov_mask" in sample_batch and sample_batch["fov_mask"] is not None) else None
 
             try:
                 with get_autocast(use_amp, amp_dtype):
-                    sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True)
+                    sample_outputs = raw_model(sample_frames, timestamps=sample_ts, reset_memory=True, fov_mask=sample_fov)
 
                 epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
                 progress_path = os.path.join(args.save_dir, "streaming_progress.png")
@@ -703,7 +706,7 @@ def train_streaming_bmb(args):
                     v_ts = val_batch["timestamps"].to(device, non_blocking=True) if "timestamps" in val_batch else None
                     v_fov = val_batch["fov_mask"].to(device, non_blocking=True) if "fov_mask" in val_batch and val_batch["fov_mask"] is not None else None
                     with get_autocast(use_amp, amp_dtype):
-                        v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True)
+                        v_outs = raw_model(v_frames, timestamps=v_ts, reset_memory=True, fov_mask=v_fov)
                         v_loss, v_dict = loss_fn(v_outs, v_frames, fov_mask=v_fov)
                     if torch.isfinite(v_loss):
                         val_loss_acc += v_loss.item()

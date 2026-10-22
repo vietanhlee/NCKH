@@ -582,7 +582,7 @@ class TestStreamingBMB(unittest.TestCase):
         self.assertIsNotNone(alpha_grad, "Alpha mask bắt buộc phải nhận gradient từ cross_frame_bg_loss!")
         self.assertGreater(alpha_grad.norm().item(), 0.0, "Norm gradient của alpha mask từ cross_frame phải khác 0!")
 
-        # 3. Kiểm tra Head B không nhận shortcut rgb_skip
+        # 3. Kiểm tra Prior-Guided Dual-Skip và FOV-Mask Gating
         backbone = DummyBackbone(embed_dim=self.backbone_dim, patch_size=self.patch_size)
         model = StreamingDecompositionNet(
             backbone=backbone,
@@ -591,13 +591,22 @@ class TestStreamingBMB(unittest.TestCase):
             patch_size=self.patch_size,
         )
         x = torch.rand(1, 3, self.img_size, self.img_size, requires_grad=True)
-        out = model.forward_single_step(x, update_memory=False)
+        bg_p = torch.rand(1, 3, self.img_size, self.img_size, requires_grad=True)
+        # Giả sử nửa trên là hợp lệ (1.0), nửa dưới là padding viền đen (0.0)
+        fov_test = torch.zeros(1, 1, self.img_size, self.img_size)
+        fov_test[:, :, :self.img_size // 2, :] = 1.0
 
-        # Backward từ pred_bg
-        out["pred_bg"].sum().backward(retain_graph=True)
-        # rgb_skip không được nhận gradient từ pred_bg!
+        out = model.forward_single_step(x, update_memory=False, bg_prior=bg_p, fov_mask=fov_test)
+
+        # Kiểm tra FOV-Mask Gating: Nửa dưới padding bắt buộc alpha_mask = 0.0 tuyệt đối!
+        self.assertTrue(torch.all(out["alpha_mask"][:, :, self.img_size // 2:, :] == 0.0))
+        # Nửa dưới padding bắt buộc recon_origin = 0.0 tuyệt đối!
+        self.assertTrue(torch.all(out["recon_origin"][:, :, self.img_size // 2:, :] == 0.0))
+
+        # Backward từ pred_bg: kiểm tra gradient truyền về rgb_skip và head_bg
+        out["pred_bg"].sum().backward()
         skip_param_has_grad = any(p.grad is not None and p.grad.norm().item() > 0 for p in model.rgb_skip.parameters())
-        self.assertFalse(skip_param_has_grad, "rgb_skip tuyệt đối không được cấp thông tin hoặc nhận gradient từ pred_bg!")
+        self.assertTrue(skip_param_has_grad, "rgb_skip phải nhận được gradient hợp lệ từ pred_bg!")
 
         # 4. Kiểm tra FOV Mask
         fov_mask = get_letterbox_fov_mask(320, 240, 256)

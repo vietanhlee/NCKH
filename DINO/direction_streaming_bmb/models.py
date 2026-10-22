@@ -266,9 +266,9 @@ class StreamingDecompositionNet(nn.Module):
         )
 
         # 4 Chuyên biệt Heads:
-        # Alpha Matte
+        # Alpha Matte: 32 kênh dec_feat_base + 1 kênh bg_familiarity + 1 kênh diff_map sai khác tức thời
         self.head_alpha = nn.Sequential(
-            nn.Conv2d(32 + 1, 16, kernel_size=3, padding=1),  # +1 kênh từ bg_familiarity upsample
+            nn.Conv2d(32 + 1 + 1, 16, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(16, 1, kernel_size=3, padding=1),
             nn.Sigmoid(),
@@ -356,13 +356,16 @@ class StreamingDecompositionNet(nn.Module):
         timestamp: Optional[Union[float, torch.Tensor]] = None,
         precomputed_visual_tokens: Optional[torch.Tensor] = None,
         precomputed_raw_tokens: Optional[torch.Tensor] = None,
+        bg_prior: Optional[torch.Tensor] = None,
+        fov_mask: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
         """
-        Xử lý 1 khung hình đơn lẻ trong luồng streaming:
+        Xử lý 1 khung hình đơn lẻ trong luồng streaming với Prior-Guided Dual-Skip:
           1. READ: Point-wise Temporal Attention truy vấn BMB.
           2. PREDICT: MultiScale Decoder sinh alpha, FG, BG, Sigma (softplus).
-             BỊT SHORTCUT: Head B và Head Sigma CHỈ nhận dec_feat_base từ memory-conditioned decoder.
-             Chỉ Head F và Head Alpha mới nhận rgb_skip(x) để phục hồi chi tiết xe cộ!
+             - Tiền cảnh FG: Nhận dec_feat_base + rgb_skip(x) để phục hồi chi tiết xe cộ thực tế.
+             - Nền sạch BG: Nhận dec_feat_base + rgb_skip(bg_prior) để bảo tồn vạch kẻ đường và kết cấu mặt đường.
+             - Mặt nạ Alpha: Phân đoạn từ ngữ nghĩa DINO, độ quen thuộc BMB và sai khác tức thời diff_map.
           3. WRITE: Gated Write có cổng, token detached vào BMB với DINO tokens đồng bộ không gian.
         """
         B, C, H, W = x.shape
@@ -398,37 +401,42 @@ class StreamingDecompositionNet(nn.Module):
         feat_map = cond_tokens.transpose(1, 2).contiguous().view(B, self.embed_dim, Hp, Wp)
 
         # 3. Upsample Decoder từ conditioned memory features
-        # CHỐNG SHORTCUT TOÀN DIỆN CHO CẢ NỀN B VÀ TIỀN CẢNH F:
-        # dec_feat_base: Thuần túy là biểu diễn được tái tạo từ Spatio-Temporal Background Memory Bank.
-        # Head B và Head Sigma CHỈ nhận dec_feat_base (ép mạng phải phục hồi nền từ bộ nhớ).
         dec_feat_base = self.decoder(feat_map, target_hw=(H, W))
 
         # Background Familiarity upsample lên kích thước ảnh (H, W)
         bg_fam_map = bg_fam.transpose(1, 2).contiguous().view(B, 1, Hp, Wp)
         bg_fam_upsampled = F.interpolate(bg_fam_map, size=(H, W), mode="bilinear", align_corners=False)
 
-        # 4. Dự đoán 4 Heads:
-        # 4a. Alpha Matte: Dự đoán từ đặc trưng giải mã decoder kết hợp bản đồ quen thuộc BMB
-        alpha_in = torch.cat([dec_feat_base, bg_fam_upsampled], dim=1)
-        alpha_mask = torch.nan_to_num(self.head_alpha(alpha_in), nan=0.5).clamp(0.0, 1.0)
+        # Chuẩn bị nền mỏ neo và bản đồ sai khác điểm ảnh tức thời
+        ref_bg = bg_prior.detach() if bg_prior is not None else x.detach()
+        diff_map = torch.abs(x - ref_bg).mean(dim=1, keepdim=True).detach()  # (B, 1, H, W)
 
-        # 4b. Gated RGB Skip Connection cho Foreground F:
-        # BỊT KÍN SHORTCUT: dec_feat_fg chỉ được nhận chi tiết RGB cao tần ở những vùng nghi là CÓ XE
-        # (được gate bởi alpha_mask.detach()). Vùng nền đường sạch (alpha = 0) bị triệt tiêu skip connection,
-        # head_fg KHÔNG THỂ gian lận sao chép mặt đường!
-        skip_feat = self.rgb_skip(x)
-        dec_feat_fg = dec_feat_base + skip_feat * alpha_mask.detach()
+        # 4. Dự đoán 4 Heads với Prior-Guided Dual-Skip:
+        # 4a. Alpha Matte: Kết hợp đặc trưng giải mã ngữ nghĩa DINO (32) + Familiarity BMB (1) + Diff Map tức thời (1) = 34 kênh
+        alpha_in = torch.cat([dec_feat_base, bg_fam_upsampled, diff_map], dim=1)
+        alpha_mask = torch.nan_to_num(self.head_alpha(alpha_in), nan=0.5).clamp(0.0, 1.0)
+        if fov_mask is not None:
+            # Triệt tiêu tuyệt đối alpha tại 2 dải viền đen letterbox padding
+            alpha_mask = alpha_mask * fov_mask
+
+        # 4b. Tiền cảnh FG: Tận dụng chi tiết cao tần từ khung hình hiện tại x
+        skip_fg = self.rgb_skip(x)
+        dec_feat_fg = dec_feat_base + skip_fg
         pred_fg = torch.nan_to_num(self.head_fg(dec_feat_fg), nan=0.5).clamp(0.0, 1.0)
 
-        # 4c. Clean Road Background B và Uncertainty Sigma (thuần túy từ memory conditioning)
-        pred_bg = torch.nan_to_num(self.head_bg(dec_feat_base), nan=0.5).clamp(0.0, 1.0)
+        # 4c. Nền sạch BG: Tận dụng chi tiết mặt đường từ nền mỏ neo ref_bg kết hợp tinh chỉnh BMB
+        skip_bg = self.rgb_skip(ref_bg)
+        dec_feat_bg = dec_feat_base + skip_bg
+        pred_bg = torch.nan_to_num(self.head_bg(dec_feat_bg), nan=0.5).clamp(0.0, 1.0)
 
-        # Sigma: softplus trơn tru + 0.01 đảm bảo gradient không bao giờ bị triệt tiêu
-        raw_sigma = torch.clamp(self.head_sigma(dec_feat_base), -10.0, 10.0)
+        # 4d. Optical Uncertainty Sigma: Ước lượng độ bất định từ đặc trưng nền
+        raw_sigma = torch.clamp(self.head_sigma(dec_feat_bg), -10.0, 10.0)
         sigma = torch.nan_to_num(F.softplus(raw_sigma) + 0.01, nan=0.05).clamp(0.005, 5.0)
 
         # Tái tạo ảnh vật lý: I_recon = alpha * F + (1 - alpha) * B
         recon_origin = torch.nan_to_num(alpha_mask * pred_fg + (1.0 - alpha_mask) * pred_bg, nan=0.5).clamp(0.0, 1.0)
+        if fov_mask is not None:
+            recon_origin = recon_origin * fov_mask
 
         # 5. Tạo mask alpha_p và sigma_p cấp độ patch (Hp, Wp) cho Gated Write và valid bias
         alpha_p = F.adaptive_avg_pool2d(alpha_mask, (Hp, Wp)).flatten(1)  # (B, L)
@@ -438,9 +446,6 @@ class StreamingDecompositionNet(nn.Module):
         if update_memory:
             # Token Detach BẮT BUỘC: Cắt đứt gradient lịch sử chống rò rỉ BPTT
             if getattr(self, "use_dino_memory_encoder", True):
-                # Trích xuất DINO tokens trực tiếp từ pred_bg không cộng spatial PE
-                # (vì memory_bank.read() sẽ tự động cộng spatial PE và temporal PE khi đọc).
-                # Query và Memory lúc này nằm trên CÙNG MỘT KHÔNG GIAN BIỂU DIỄN NGỮ NGHĨA DINO!
                 with torch.no_grad():
                     new_bg_tokens, _ = self.extract_visual_tokens(pred_bg.detach(), add_spatial_pe=False)
             else:
@@ -478,6 +483,7 @@ class StreamingDecompositionNet(nn.Module):
         frames: torch.Tensor,
         timestamps: Optional[torch.Tensor] = None,
         reset_memory: bool = True,
+        fov_mask: Optional[torch.Tensor] = None,
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Xử lý chuỗi W khung hình liên tiếp của cùng camera.
@@ -486,12 +492,19 @@ class StreamingDecompositionNet(nn.Module):
             frames: Tensor shape (B, W, 3, H, W).
             timestamps: Tensor timestamps shape (B, W) hoặc None.
             reset_memory: Boolean xóa bộ nhớ trước khi xử lý chuỗi.
+            fov_mask: Tensor mặt nạ trường nhìn loại bỏ viền đen letterbox padding.
         Returns:
             step_outputs: Danh sách W kết quả dự đoán.
         """
         B, W_len, C, H, W = frames.shape
         if reset_memory:
             self.memory_bank.reset(frames.device)
+
+        # Tính tiên nghiệm nền mỏ neo trung vị của toàn chuỗi W frames
+        if W_len > 1:
+            bg_prior = torch.median(frames, dim=1).values.detach()
+        else:
+            bg_prior = frames[:, 0].detach()
 
         # Tối ưu hóa GPU: Batch trích xuất đặc trưng của toàn bộ W frames cùng lúc (B * W, C, H, W)
         # thay vì gọi backbone tuần tự W lần, tận dụng tối đa song song hóa của GPU và Tensor Cores
@@ -504,6 +517,7 @@ class StreamingDecompositionNet(nn.Module):
         for t in range(W_len):
             cur_frame = frames[:, t]
             cur_ts = timestamps[:, t] if timestamps is not None else None
+            cur_fov = fov_mask[:, t] if (fov_mask is not None and fov_mask.dim() == 5) else fov_mask
             # Frame đầu tiên t=0 khởi tạo anchor ban đầu, các frame sau tự động cập nhật per-sample nếu sạch hơn
             is_anchor = (t == 0)
 
@@ -514,6 +528,8 @@ class StreamingDecompositionNet(nn.Module):
                 timestamp=cur_ts,
                 precomputed_visual_tokens=all_vis_tokens[:, t],
                 precomputed_raw_tokens=all_raw_tokens[:, t],
+                bg_prior=bg_prior,
+                fov_mask=cur_fov,
             )
 
             if t == 0:
@@ -547,6 +563,7 @@ class StreamingDecompositionNet(nn.Module):
         x: torch.Tensor,
         timestamps: Optional[torch.Tensor] = None,
         reset_memory: bool = False,
+        fov_mask: Optional[torch.Tensor] = None,
     ) -> Union[Dict[str, torch.Tensor], List[Dict[str, torch.Tensor]]]:
         """
         Hàm forward đa năng:
@@ -554,11 +571,11 @@ class StreamingDecompositionNet(nn.Module):
         - 4D (B, 3, H, W): Chạy `forward_single_step`.
         """
         if x.dim() == 5:
-            return self.forward_sequence(x, timestamps=timestamps, reset_memory=reset_memory)
+            return self.forward_sequence(x, timestamps=timestamps, reset_memory=reset_memory, fov_mask=fov_mask)
         elif x.dim() == 4:
             if reset_memory:
                 self.memory_bank.reset(x.device)
-            return self.forward_single_step(x, update_memory=True, timestamp=timestamps)
+            return self.forward_single_step(x, update_memory=True, timestamp=timestamps, fov_mask=fov_mask)
         else:
             raise ValueError(f"Tensor đầu vào không hợp lệ: shape={x.shape}. Cần 4D hoặc 5D.")
 
