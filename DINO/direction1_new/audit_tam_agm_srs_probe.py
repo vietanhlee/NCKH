@@ -869,15 +869,38 @@ Thực nghiệm trên {q5_results['num_pairs_evaluated']} cặp ảnh ngẫu nhi
     return md_content
 
 
+def resolve_default_checkpoint() -> str:
+    """Tự động tìm kiếm checkpoint tối ưu nhất hiện có trên hệ thống."""
+    candidates = [
+        "checkpoints/direction1_new/last_checkpoint.pth",
+        "checkpoints/direction1_new/best_checkpoint.pth",
+        "g:/checkpoints/direction1_new/last_checkpoint.pth",
+        "g:/checkpoints/direction1_new/best_checkpoint.pth",
+        "checkpoints/directionG/last_checkpoint.pth",
+        "checkpoints/directionG/best_checkpoint.pth",
+        os.path.join(_dino_root, "checkpoints/direction1_new/last_checkpoint.pth"),
+        os.path.join(_dino_root, "checkpoints/directionG/last_checkpoint.pth"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            try:
+                if os.path.getsize(c) > 10 * 1024 * 1024: # > 10MB
+                    return c
+            except Exception:
+                pass
+    return "checkpoints/directionG/last_checkpoint.pth"
+
+
 # =============================================================================
 # 8. HÀM MAIN ĐIỀU PHỐI (ORCHESTRATOR)
 # =============================================================================
 def main():
+    default_ckpt = resolve_default_checkpoint()
     parser = argparse.ArgumentParser(description="Kiểm toán định lượng toàn diện Hướng G DINOv3 SSL")
     parser.add_argument("--data_dir", type=str, default="sample_test_images/audit_set", help="Thư mục chứa tập ảnh kiểm toán")
     parser.add_argument("--labels_csv", type=str, default="sample_test_images/audit_set/sample_labels.csv", help="File CSV nhãn ground truth")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/directionG/last_checkpoint.pth", help="Checkpoint student để đánh giá")
-    parser.add_argument("--num_samples", type=int, default=100, help="Số lượng ảnh sử dụng để kiểm toán")
+    parser.add_argument("--checkpoint", type=str, default=default_ckpt, help="Checkpoint student để đánh giá")
+    parser.add_argument("--num_samples", type=int, default=60, help="Số lượng ảnh sử dụng để kiểm toán (mặc định 60 ảnh)")
     parser.add_argument("--output_md", type=str, default="BAO_CAO_KIEM_TOAN_TAM_AGM_SRS_PROBE.md", help="Đường dẫn file Markdown báo cáo")
     parser.add_argument("--output_visual", type=str, default="audit_visuals_agm_overlay.png", help="Đường dẫn ảnh trực quan hóa AGM")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị chạy")
