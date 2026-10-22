@@ -569,6 +569,32 @@ class TestDirection1New(unittest.TestCase):
         self.assertGreater(diff_val, 5.0)
         self.assertGreaterEqual(int(swap_mask.sum().item()), 20)
 
+    def test_25_patch_variance_and_anchor_loss_non_contiguous(self):
+        """Kiểm tra PatchVarianceRegularizer và FeatureAnchorLoss với non-contiguous tensors (DataParallel safe)."""
+        from direction1_new.losses import PatchVarianceRegularizer, FeatureAnchorLoss
+        pvar = PatchVarianceRegularizer()
+        anchor = FeatureAnchorLoss()
+
+        # Tạo non-contiguous tensor bằng permute mô phỏng DataParallel gather output
+        raw_leaf = torch.randn(4, 384, 448, requires_grad=True)
+        s_patches = raw_leaf.permute(0, 2, 1)  # (4, 448, 384)
+        s_patches.retain_grad()
+        self.assertFalse(s_patches.is_contiguous())
+
+        pi = torch.rand(4, 28, 16).permute(0, 2, 1).reshape(4, 448)  # non-contiguous -> reshape
+        loss_pvar = pvar(s_patches, pi=pi)
+        self.assertTrue(torch.isfinite(loss_pvar))
+        loss_pvar.backward(retain_graph=True)
+        self.assertIsNotNone(s_patches.grad)
+        self.assertIsNotNone(raw_leaf.grad)
+
+        # Feature Anchor Loss với non-contiguous
+        pretrained = torch.randn(4, 384, 448).permute(0, 2, 1)
+        loss_anc = anchor(s_patches, pretrained)
+        self.assertTrue(torch.isfinite(loss_anc))
+        loss_anc.backward()
+        self.assertTrue(torch.isfinite(raw_leaf.grad).all())
+
 
 if __name__ == "__main__":
     unittest.main()

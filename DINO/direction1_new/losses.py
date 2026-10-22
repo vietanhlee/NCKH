@@ -387,11 +387,12 @@ class PatchVarianceRegularizer(nn.Module):
         pi: (B, N) Bản đồ tiền cảnh TAM (ưu tiên duy trì phương sai vùng phương tiện).
         """
         B, N, D = patch_tokens.shape
-        flat_tokens = patch_tokens.view(B * N, D)
+        # Sử dụng reshape hoặc contiguous().view để chống lỗi RuntimeError khi chạy Multi-GPU DataParallel
+        flat_tokens = patch_tokens.reshape(B * N, D)
 
         if pi is not None:
             # Lọc các patch tiền cảnh có xác suất cao
-            fg_mask = (pi.view(-1) > 0.25)
+            fg_mask = (pi.reshape(-1) > 0.25)
             if fg_mask.sum() >= max(16, D // 4):
                 flat_tokens = flat_tokens[fg_mask]
 

@@ -454,7 +454,7 @@ def save_direction_g_visuals(
         axes[b, 1].axis("off")
 
         # 3. AGM Mask (448 patches -> 16x28)
-        mask_np = mask[b].view(16, 28).detach().cpu().numpy().astype(float)
+        mask_np = mask[b].reshape(16, 28).detach().cpu().numpy().astype(float)
         axes[b, 2].imshow(mask_np, cmap="gray", vmin=0, vmax=1)
         axes[b, 2].set_title("Mặt Nạ Che Phân Tầng AGM", fontsize=10, fontweight="bold")
         axes[b, 2].axis("off")
@@ -1752,11 +1752,11 @@ def train_direction_g():
                         if step % args.gmm_refit_steps == 0:
                             calibrator.refit(max_iters=args.gmm_iters)
 
-                        pi1 = calibrator.posterior(a1, refine=args.refine_tam).view(B, 16, 28)
-                        pi2 = calibrator.posterior(a2, refine=args.refine_tam).view(B, 16, 28)
+                        pi1 = calibrator.posterior(a1, refine=args.refine_tam).reshape(B, 16, 28)
+                        pi2 = calibrator.posterior(a2, refine=args.refine_tam).reshape(B, 16, 28)
 
                         # Gated Update: Bảo vệ cụm tĩnh không bị xe ở làn đông làm sai lệch
-                        pos_stats.update(cids, u1_f, gate_pi=pi1.view(B, 448))
+                        pos_stats.update(cids, u1_f, gate_pi=pi1.reshape(B, 448))
 
                 # Bước B: Áp dụng SRS với xác suất p_srs
                 x_student = x1.clone()
@@ -1774,7 +1774,7 @@ def train_direction_g():
                 masks = []
                 for b in range(B):
                     m_b = agm_sample(
-                        pi=pi1[b].view(-1),
+                        pi=pi1[b].reshape(-1),
                         ratio=args.mask_ratio,
                         phi=args.phi,
                         q_max=args.q_max,
@@ -1822,7 +1822,7 @@ def train_direction_g():
                         with torch.no_grad():
                             x1_norm = imagenet_normalize(x1_vit)
                             _, v_patch_spatial = extract_tokens(frozen_backbone, x1_norm, patch_size=patch_size)
-                            v_patch_tokens_anchor = v_patch_spatial.view(B, -1, embed_dim)
+                            v_patch_tokens_anchor = v_patch_spatial.reshape(B, -1, embed_dim)
                         loss_anchor = anchor_fn(s_patches, v_patch_tokens_anchor)
                     else:
                         loss_anchor = torch.tensor(0.0, device=device)
@@ -1892,7 +1892,7 @@ def train_direction_g():
                     x1_vis = x1[:B_vis].to(device)
                     x1_vis_norm = imagenet_normalize(x1_vis)
                     _, v_patch_spatial = extract_tokens(frozen_backbone, x1_vis_norm, patch_size=patch_size)
-                    v_patch_tokens = v_patch_spatial.view(B_vis, -1, embed_dim).cpu().float()
+                    v_patch_tokens = v_patch_spatial.reshape(B_vis, -1, embed_dim).cpu().float()
 
                     # Đảm bảo các mẫu visual luôn được áp dụng SRS để hiển thị tác động hoán nền thực tế
                     x_srs_vis = x_student[:B_vis].clone()
