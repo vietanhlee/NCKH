@@ -1,0 +1,314 @@
+họ c riê ng biệ t củ a ô tô và xe má y.
+3. Thiếu phân tích thực nghiệm về lan truyền sai số nhận dạng: Cá c nghiê n cứu
+trước đâ y thường giả định dữ liệ u đau và o là chı́nh xá c tuyệ t đoi. Van đe sai so
+nhậ n dạ ng từ camera ả nh hưởng như the nà o đen độ chı́nh xá c dự bá o đa bước
+và cơ che kien trú c nà o giú p nâ ng cao độ ben vững với nhieu van chưa được khả o
+sá t đay đủ .
+
+13
+
+CHƯƠNG 2
+
+CƠ SỞ LÝ THUYẾT VÀ NỀN TẢNG TOÁN HỌC
+
+Chương nà y trı̀nh bà y hệ thong cá c nen tả ng toá n họ c, đạ i so đo thị pho và lý thuyet họ c
+sâ u là m cơ sở cho toà n bộ kien trú c hai giai đoạ n củ a đe tà i. Nộ i dung tậ p trung và o
+hai trụ cộ t cot lõ i: nguyê n lý hoi quy trực tiep so lượng phương tiệ n từ ả nh thị giá c ở
+Giai đoạ n 1 và kien trú c mạ ng đo thị tı́ch chậ p khô ng – thời gian ket hợp cơ che chú ý
+(TA‑STGCN) ở Giai đoạ n 2. Cá c mô hı̀nh và giả i thuậ t được phâ n tı́ch từ cá c định lý giả i
+tı́ch ma trậ n, cô ng thức toi ưu hó a vi tı́ch phâ n và lý thuyet lan truyen sai so thong kê
+nham đả m bả o tı́nh chặ t chẽ ve mặ t khoa họ c.
+
+2.1
+
+Biểu diễn không – thời gian của mạng lưới giao thông
+
+Trong bà i toá n dự bá o giao thô ng trê n quy mô đô thị, mạ ng lưới cá c trạ m quan trac khô ng
+the được mô hı̀nh hó a đơn giả n bang khô ng gian Euclid phang (như lưới điem ả nh 2D).
+Dò ng giao thô ng trê n thực te bị rà ng buộ c chặ t chẽ bởi cau trú c hı̀nh họ c củ a mạ ng lưới
+đường bộ , hướng lưu thô ng và khoả ng cá ch vậ t lý giữa cá c giao lộ .
+Mạ ng lưới quan trac gom N = 608 vị trı́ camera được mô hı̀nh hó a dưới dạ ng mộ t
+đo thị có hướng và có trọ ng so G = (V, E, W), trong đó :
+• V = {v1 , v2 , . . . , vN } là tậ p hợp N đı̉nh, moi đı̉nh tương ứng với mộ t camera giá m
+sá t tạ i mộ t là n đường hoặ c hướng tiep cậ n giao lộ .
+• E ⊆ V × V là tậ p hợp cá c cạ nh định hướng, the hiệ n khả nă ng lưu thô ng hợp lệ
+củ a dò ng phương tiệ n từ nú t vi đen nú t vj dựa trê n cau trú c đường thực te (được
+trı́ch xuat từ dữ liệ u OpenStreetMap).
+• W ∈ RN ×N là ma trậ n trọ ng so khô ng gian, trong đó phan tử Wij > 0 bieu thị
+mức độ liê n ket khô ng gian giữa nú t vi và vj , và Wij = 0 neu giữa hai nú t khô ng
+có liê n ket trực tiep hoặ c khoả ng cá ch vượt quá bá n kı́nh ả nh hưởng.
+Tạ i moi bước thời gian t, trạ ng thá i giao thô ng trê n toà n bộ mạ ng lưới được bieu dien
+bởi mộ t ma trậ n hoặ c tensor tı́n hiệ u Xt ∈ RN ×C , trong đó C là so lượng đặ c trưng quan
+sá t tạ i moi nú t (trong nghiê n cứu nà y C = 1, tương ứng với so lượng phương tiệ n quy
+đoi hoặ c lưu lượng đem được trong chu kỳ 5 phú t).
+Xé t mộ t cửa so quan sá t lịch sử gom Tin = 24 bước thời gian liê n tiep (tương đương
+2 giờ quan sá t), dữ liệ u đau và o củ a bà i toá n dự bá o là tensor bậ c ba:
+X = [Xt−Tin +1 , Xt−Tin +2 , . . . , Xt ] ∈ RTin ×N ×C
+
+14
+
+(2.1)
+
+Mụ c tiê u củ a mô hı̀nh dự bá o khô ng – thời gian là tı̀m á nh xạ hà m họ c được FΘ :
+RTin ×N ×C → RH×N ×C với tậ p tham so Θ, nham ước lượng trạ ng thá i giao thô ng trong
+tương lai qua H = 6 bước thời gian (tương ứng với 30 phú t tiep theo):
+Ŷ = [X̂t+1 , X̂t+2 , . . . , X̂t+H ] = FΘ (X ; G)
+
+2.2
+
+(2.2)
+
+Lý thuyết đồ thị phổ và toán tử tích chập Chebyshev
+
+Đe trı́ch xuat cá c tương quan khô ng gian phức tạ p trê n đo thị phi Euclid G, lý thuyet đo
+thị pho cung cap nen tả ng toá n họ c cho phé p định nghı̃a phé p bien đoi Fourier và phé p
+tı́ch chậ p trê n đo thị.
+2.2.1
+
+Toán tử Laplacian trên đồ thị
+
+Cho ma trậ n trọ ng so khô ng â m W ∈ RN ×N . Ma trậ n bậ c đường ché o D ∈ RN ×N được
+định nghı̃a bởi:
+N
+X
+Dii =
+Wij , Dij = 0 (∀i ̸= j)
+(2.3)
+j=1
+
+Toá n tử Laplacian đoi xứng chuan hó a L ∈ RN ×N được xá c định theo cô ng thức:
+L = IN − D−1/2 WD−1/2
+
+(2.4)
+
+trong đó IN là ma trậ n đơn vị cap N .
+Đặc tính đại số của toán tử Laplacian:
+1. L là ma trậ n thực, đoi xứng và nửa xá c định dương: với mọ i vector tı́n hiệ u đo thị
+x ∈ RN :
+!2
+N X
+N
+X
+1
+x
+x
+i
+j
+xT Lx =
+−p
+≥0
+(2.5)
+Wij √
+2 i=1 j=1
+Dii
+Djj
+Do đó , toà n bộ cá c giá trị riê ng củ a L đeu là so thực khô ng â m.
+2. Pho giá trị riê ng củ a L bị chặ n trong đoạ n hữu hạ n:
+0 = λ 1 ≤ λ 2 ≤ · · · ≤ λN ≤ 2
+
+(2.6)
+
+Nhờ tı́nh chat đoi xứng thực nửa xá c định dương, L có the phâ n rã pho trực chuan:
+L = U�UT
+
+(2.7)
+
+trong đó U = [u1 , u2 , . . . , uN ] ∈ RN ×N là ma trậ n trực giao chứa cá c vector riê ng thỏ a
+mã n UUT = UT U = IN , và � = diag(λ1 , λ2 , . . . , λN ) là ma trậ n đường ché o chứa cá c giá
+trị riê ng tương ứng.
+
+15
+
+2.2.2
+
+Biến đổi Fourier và định lý tích chập trên đồ thị
+
+Cá c vector riê ng uk đó ng vai trò như cá c hà m só ng đieu hò a cơ sở trê n đo thị. Phé p bien
+đoi Fourier trê n đo thị củ a mộ t tı́n hiệ u x ∈ RN và phé p bien đoi nghịch đả o được định
+nghı̃a lan lượt là :
+x̂ = UT x, x = Ux̂
+(2.8)
+Theo định lý tı́ch chậ p trong mien pho, phé p tı́ch chậ p giữa tı́n hiệ u x và bộ lọ c gθ được
+bieu dien bang phé p nhâ n từng phan tử trong mien tan so:
+
+x ∗G gθ = U (UT x) ⊙ (UT gθ ) = Ugθ (�)UT x
+
+(2.9)
+
+trong đó gθ (�) = diag(gθ (λ1 ), . . . , gθ (λN )) là ma trậ n chứa cá c hệ so đá p ứng tan so củ a
+bộ lọ c.
+Hạn chế tính toán: Việ c tı́nh toá n trực tiep cô ng thức trê n đò i hỏ i:
+1. Phâ n rã trị riê ng củ a ma trậ n Laplacian với độ phức tạ p O(N 3 ), khô ng khả thi với
+đo thị lớn (N = 608).
+2. Phé p nhâ n ma trậ n vector riê ng U có độ phức tạ p O(N 2 ) và khô ng mang tı́nh định
+vị cụ c bộ (non‑localized), nghı̃a là mộ t nú t có the nhậ n thô ng tin từ mọ i nú t trê n
+toà n mạ ng ngay tạ i tang tı́ch chậ p đau tiê n.
+2.2.3
+
+Phép xấp xỉ đa thức Chebyshev (ChebNet)
+
+Đe giả i quyet triệ t đe hai hạ n che trê n, Defferrard et al. đe xuat phương phá p xap xı̉ bộ
+lọ c pho gθ (�) bang chuoi đa thức Chebyshev loạ i I cat cụ t.
+Đa thức Chebyshev loạ i I Tk (x) được định nghı̃a trê n đoạ n [−1, 1] thô ng qua hệ thức
+truy hoi De Moivre:
+T0 (x) = 1,
+
+Tk (x) = 2xTk−1 (x) − Tk−2 (x)
+
+T1 (x) = x,
+
+(∀k ≥ 2)
+
+(2.10)
+
+Do pho trị riê ng củ a L nam trong đoạ n [0, λmax ], ta thực hiệ n phé p co giã n af ine đe đưa
+cá c trị riê ng ve đoạ n [−1, 1]:
+˜=
+�
+
+2
+λmax
+
+� − IN ,
+
+L̃ =
+
+2
+λmax
+
+L − IN
+
+(2.11)
+
+Bộ lọ c pho gθ được xap xı̉ bởi đa thức Chebyshev bậ c K − 1:
+gθ (�) ≈
+
+K−1
+X
+k=0
+
+16
+
+˜
+θk Tk (�)
+
+(2.12)
+
+với θ ∈ RK là vector gom K tham so họ c được. Ap dụ ng và o phé p tı́ch chậ p đo thị:
+g θ ∗G x ≈
+
+K−1
+X
+
+θk Tk (L̃)x
+
+(2.13)
+
+k=0
+
+Định lý 2.1 (Tính định vị K‑hop): Toá n tử ChebNet bậ c K − 1 đả m bả o tı́nh định
+vị cụ c bộ trong phạ m vi đú ng K − 1 bước nhả y lâ n cậ n trê n đo thị.
+Proof. Ma trậ n co giã n L̃ là hà m bậ c nhat củ a ma trậ n ke W. Với hai nú t i và j bat kỳ, neu
+khoả ng cá ch ngan nhat giữa chú ng trê n đo thị dG (i, j) > k, thı̀ phan tử [L̃k ]ij = 0. Vı̀
+Tk (L̃) là đa thức bậ c k củ a L̃, nó được bieu dien thà nh to hợp tuyen tı́nh củ a cá c lũ y thừa
+L̃m với m ≤ k. Do đó [Tk (L̃)]ij = 0 khi dG (i, j) > k. Với K = 3, thô ng tin giao thô ng
+chı̉ lan truyen trong bá n kı́nh 2‑hop lâ n cậ n, hoà n toà n phù hợp với thực te vậ t lý dò ng
+xe.
+Định lý 2.2 (Độ phức tạp tính toán tuyến tính): Phé p tı́ch chậ p ChebNet có độ
+phức tạ p thời gian O(K · |E|).
+Proof. Đạ i lượng zk = Tk (L̃)x được tı́nh toá n đệ quy: z0 = x, z1 = L̃x, zk = 2L̃zk−1 −zk−2 .
+Moi bước đệ quy chı̉ bao gom phé p nhâ n ma trậ n thưa L̃ với vector zk−1 . Với đo thị giao
+thô ng thực te có |E| = 2.452 ≪ N 2 = 369.664, chi phı́ cho K bước đệ quy là O(K · |E|),
+loạ i bỏ hoà n toà n chi phı́ O(N 3 ) củ a phé p phâ n rã pho.
+
+2.3
+
+Tích chập thời gian có cổng và kiểm soát dòng thông tin
+
+2.3.1
+
+Hạn chế của mô hình hồi quy tuần tự trên đồ thị lớn
+
+Mặ c dù cá c mạ ng hoi quy tuan tự như LSTM hay GRU được ứng dụ ng rộ ng rã i trong mô
+hı̀nh hó a chuoi thời gian, việ c tı́ch hợp RNN và o mạ ng đo thị quy mô lớn (N = 608) bộ c
+lộ hai rà o cả n kỹ thuậ t lớn:
+1. Nghẽn tính toán tuần tự (Sequential Bottleneck): Trạ ng thá i an tạ i bước t phụ
+thuộ c tuan tự và o bước t − 1: ht = f (ht−1 , xt ), khô ng the tậ n dụ ng khả nă ng tı́nh
+toá n song song trê n GPU, dan đen thời gian huan luyệ n mộ t chu kỳ bị ké o dà i.
+2. Suy thoái gradient qua các bước thời gian dài: Khi lan truyen ngược qua chuoi
+thời gian nhieu bước, gradient de gặ p hiệ n tượng bù ng no hoặ c triệ t tiê u do nhâ n
+liê n tiep cá c ma trậ n trọ ng so hoi quy.
+2.3.2
+
+Cơ chế cổng tuyến tính (Gated Linear Units – GLU)
+
+Đe trı́ch xuat cá c đặ c trưng chuoi thời gian song song và on định luong gradient, mô hı̀nh
+sử dụ ng phé p tı́ch chậ p thời gian 1D ket hợp cơ che cong tuyen tı́nh (GLU).
+Xé t tensor đặ c trưng củ a mộ t nú t trê n chieu thời gian X ∈ RT ×Cin . Tang tı́ch chậ p
+thời gian á p dụ ng hai bộ lọ c 1D độ c lậ p �1 , �2 ∈ RKt ×Cin ×Cout với kı́ch thước kernel thời
+
+17
+
+gian Kt :
+Γ ∗T X = (X ⋆ �1 + b1 ) ⊙ σ(X ⋆ �2 + b2 )
+
+(2.14)
+
+trong đó ⊙ là phé p nhâ n Hadamard từng phan tử, và σ(z) = 1+e1−z là hà m kı́ch hoạ t
+Sigmoid đó ng vai trò van cong đieu tiet.
+Phân tích luồng gradient của GLU: Đặ t P = X ⋆ �1 + b1 là thà nh phan tuyen tı́nh
+và Q = X ⋆ �2 + b2 là thà nh phan đieu khien cong. Đau ra củ a cong là Y = P ⊙ σ(Q).
+Gradient củ a Y đoi với thà nh phan tuyen tı́nh P là :
+∂Y
+= σ(Q)
+∂P
+
+(2.15)
+
+Khi cong mở (σ(Q) ≈ 1), gradient ∂L
+truyen thang trực tiep ve P mà khô ng bị triệ t tiê u
+∂Y
+bởi đạ o hà m củ a cá c hà m phi tuyen tı́nh (như tanh hay sigmoid trong RNN truyen thong).
+Nhờ đó , mạ ng tı́ch chậ p GLU có the huan luyệ n sâ u hơn, hộ i tụ on định hơn và hoà n toà n
+có the tı́nh toá n song song dọ c theo chieu thời gian.
+
+2.4
+
+Kiến trúc mạng đồ thị tích chập không – thời gian tiêu chuẩn (STGCN)
+
+Mạ ng đo thị tı́ch chậ p khô ng – thời gian tiê u chuan (Spatio‑Temporal Graph Convolu‑
+tional Network – STGCN) được Yu et al. đe xuat nham xử lý đong thời moi tương quan
+khô ng gian và thời gian trong mạ ng lưới giao thô ng mà khô ng can dựa và o cá c te bà o
+tuan hoà n RNN.
+2.4.1
+
+Cấu trúc khối tích chập không – thời gian dạng sandwich
+
+Kien trú c STGCN nguyê n bả n được cau thà nh từ hai khoi tı́ch chậ p khô ng – thời gian (ST‑
+Conv Block) xep chong lê n nhau, ket thú c bang mộ t khoi xuat ket quả (Output Layer).
+Moi khoi ST‑Conv có cau trú c sandwich gom ba tang xử lý liê n tiep: “Temporal Gated‑
+Conv → Spatial Graph‑Conv → Temporal Gated‑Conv”, viet tat là T‑S‑T:
+1. Tầng tích chập thời gian thứ nhất (T): Đau và o X(l) được đưa qua mộ t tang
+Gated Convolution 1D dọ c theo trụ c thời gian với kernel Kt . Tang nà y trı́ch xuat
+cá c đặ c trưng độ ng họ c cụ c bộ củ a chuoi thời gian tạ i từng nú t, là m giả m chieu
+thời gian từ T xuong T − Kt + 1.
+2. Tầng tích chập không gian (S): Ap dụ ng toá n tử ChebNet với bậ c K = 3 trê n ma
+trậ n ke chuan hó a L̃. Tang nà y tong hợp thô ng tin từ cá c nú t lâ n cậ n trong phạ m
+vi 2‑hop trê n đo thị mạ ng lưới đường bộ :
+S(l) = ReLU
+
+K−1
+X
+
+!
+θk Tk (L̃)Z(l)
+
+(2.16)
+
+k=0
+
+với Z(l) là tensor đặ c trưng đau ra từ tang tı́ch chậ p thời gian thứ nhat.
+3. Tầng tích chập thời gian thứ hai (T): Tı́n hiệ u khô ng gian tiep tụ c đi qua mộ t
+18
+
+

@@ -1,798 +1,419 @@
-\chapter{CƠ SỞ LÝ THUYẾT VÀ NỀN TẢNG TOÁN HỌC}
+\chapter{Cơ sở lý thuyết và nền tảng toán học}
 \label{chap:co_so_ly_thuyet}
 
-Chương này trình bày toàn diện và có hệ thống các nền tảng toán học, đại số đồ thị phổ và lý thuyết học sâu làm cơ sở trực tiếp cho việc thiết kế khung làm việc hai giai đoạn (Two-Stage Pipeline) và mô hình TA-STGCN. Để đảm bảo tính chặt chẽ học thuật, từng thành phần lý thuyết được phân tích từ các tiên đề, định lý giải tích ma trận và các công thức vi tích phân tường minh.
-
-\section{Cơ sở Toán học của Thị giác Máy tính và Mạng Nơ-ron Tích chập}
-\subsection{Toán tử Tích chập 2D và Tính chất Bất biến Tịnh tiến}
-Trong bài toán xử lý ảnh số, một bức ảnh tĩnh được biểu diễn dưới dạng một tensor bậc 3: $\mathbf{I} \in \mathbb{R}^{H \times W \times C_{\text{in}}}$, trong đó $H, W$ lần lượt là chiều cao, chiều rộng và $C_{\text{in}}$ là số kênh màu (ví dụ $C_{\text{in}} = 3$ đối với hệ màu RGB). 
-
-Toán tử tích chập 2D rời rạc (2D Discrete Convolution) giữa tensor đầu vào $\mathbf{I}$ và một bộ lọc (Kernel) có trọng số học được $\mathbf{K} \in \mathbb{R}^{K_h \times K_w \times C_{\text{in}}}$ để tạo ra bản đồ đặc trưng (Feature Map) đầu ra $\mathbf{O} \in \mathbb{R}^{H' \times W'}$ tại vị trí tọa độ $(i, j)$ được định nghĩa bởi:
-\begin{equation}
-    \mathbf{O}(i, j) = (\mathbf{I} \star \mathbf{K})(i, j) = \sum_{c=1}^{C_{\text{in}}} \sum_{m=-k_h}^{k_h} \sum_{n=-k_w}^{k_w} \mathbf{I}(i \cdot s + m, j \cdot s + n, c) \cdot \mathbf{K}(m + k_h, n + k_w, c) + b
-\end{equation}
-trong đó:
-\begin{itemize}
-    \item $k_h = \lfloor K_h / 2 \rfloor$ và $k_w = \lfloor K_w / 2 \rfloor$ là bán kính không gian của kernel.
-    \item $s$ là bước trượt (Stride).
-    \item $b \in \mathbb{R}$ là tham số độ lệch (Bias).
-\end{itemize}
-
-\textbf{Ý nghĩa toán học cốt lõi:} Toán tử tích chập sở hữu hai đặc tính đại số mang tính quyết định:
+Chương này trình bày hệ thống các nền tảng toán học, giải tích đồ thị phổ và lý thuyết học sâu làm cơ sở khoa học cho toàn bộ khung làm việc hai giai đoạn của đề tài. Nội dung được tổ chức tập trung vào hai trụ cột công nghệ cốt lõi:
 \begin{enumerate}
-    \item \textbf{Chia sẻ trọng số (Weight Sharing):} Cùng một bộ lọc $\mathbf{K}$ được trượt quét qua mọi vị trí trên ảnh, giúp số lượng tham số học được độc lập hoàn toàn với kích thước ảnh đầu vào, giảm thiểu nguy cơ quá khớp (Overfitting).
-    \item \textbf{Tính bất biến tịnh tiến cục bộ (Equivariance to Translation):} Nếu dịch chuyển một cụm phương tiện trên khung hình một khoảng $(\Delta x, \Delta y)$, bản đồ đặc trưng kích hoạt tương ứng cũng sẽ dịch chuyển một khoảng tương đương mà không làm biến dạng biểu diễn đặc trưng:
-    \begin{equation}
-        f(\mathcal{T}_{(\Delta x, \Delta y)}(\mathbf{I})) = \mathcal{T}_{(\Delta x, \Delta y)}(f(\mathbf{I}))
-    \end{equation}
-    Đặc tính này là nền tảng giúp mạng nơ-ron nhận dạng chính xác phương tiện dù chúng xuất hiện ở góc trái, góc phải hay trung tâm làn đường.
+    \item \textbf{Lý thuyết thị giác máy tính và mô hình hồi quy đếm xe trực tiếp (Giai đoạn 1):} Trình bày nguyên lý trích xuất đặc trưng của mạng nơ-ron tích chập (CNN), kiến trúc mạng xương sống mở rộng đồng thời EfficientNet và cơ chế hồi quy trực tiếp số lượng phương tiện theo phân lớp nhằm vượt qua rào cản che khuất của dòng xe máy.
+    \item \textbf{Lý thuyết đồ thị phổ và kiến trúc mạng nơ-ron đồ thị không -- thời gian TA-STGCN (Giai đoạn 2):} Phân rã bài bản từ các toán tử đại số đồ thị nền tảng (toán tử Laplacian, khai triển đa thức trực giao Chebyshev, tích chập thời gian có cổng GLU) đến kiến trúc STGCN tiêu chuẩn và kiến trúc đề xuất TA-STGCN tích hợp cơ chế chú ý thời gian đa đầu (Multi-Head Temporal Self-Attention).
 \end{enumerate}
 
-\subsection{Lý thuyết Trường Tiếp nhận (Receptive Field Calculation)}
-Trường tiếp nhận (Receptive Field -- RF) của một nơ-ron tại tầng thứ $l$ là kích thước vùng không gian trên ảnh đầu vào mà nơ-ron đó có thể "nhìn thấy" và chịu ảnh hưởng. Đối với một chuỗi $L$ tầng tích chập liên tiếp với kích thước kernel $k_l$ và bước trượt $s_l$, kích thước trường tiếp nhận $RF_l$ được tính toán đệ quy theo công thức:
-\begin{equation}
-    RF_0 = 1, \quad RF_l = RF_{l-1} + (k_l - 1) \cdot J_{l-1}
-\end{equation}
-trong đó $J_l$ là bước nhảy tích lũy (Cumulative Jump) của mạng:
-\begin{equation}
-    J_0 = 1, \quad J_l = J_{l-1} \cdot s_l
-\end{equation}
-Để đếm chính xác số lượng phương tiện trong một khung cảnh rộng lớn có góc chụp bao quát toàn bộ ngã tư, mạng nơ-ron bắt buộc phải có trường tiếp nhận đủ lớn ($RF \ge 224$ pixels) để bao quát toàn cảnh giao thông và mối tương quan không gian giữa các dòng phương tiện.
+% ==============================================================================
+\section{Nền tảng mạng nơ-ron tích chập (CNN) trong thị giác máy tính}
+\label{sec:nen_tang_cnn}
 
-\subsection{Kỹ thuật Chuẩn hóa: Batch Normalization so với Layer Normalization}
-Trong quá trình tối ưu hóa các mạng tích chập sâu, hiện tượng dịch chuyển phân phối nội tại (Internal Covariate Shift) khiến các tầng sâu liên tục phải thích ứng với sự thay đổi phân phối đầu ra của các tầng trước. Hai cơ chế chuẩn hóa chính được sử dụng:
+Mạng nơ-ron tích chập (Convolutional Neural Networks -- CNN) là nền tảng cốt lõi của thị giác máy tính hiện đại, cho phép tự động học các biểu diễn phân cấp của dữ liệu hình ảnh từ các cạnh, góc sơ cấp đến các cấu trúc ngữ nghĩa phức tạp của đối tượng phương tiện giao thông.
 
-\subsubsection{1. Batch Normalization (BatchNorm)}
-Được áp dụng phổ biến trong các mạng tích chập truyền thống (ResNet, EfficientNet). Với một mini-batch gồm $B$ mẫu, xét một kênh đặc trưng cụ thể $x \in \mathbb{R}^{B \times H \times W}$, BatchNorm tính toán kỳ vọng $\mu_{\mathcal{B}}$ và phương sai $\sigma_{\mathcal{B}}^2$ trên toàn bộ batch:
+\subsection{Phép tích chập không gian hai chiều và trường thụ cảm}
+Cho ảnh đầu vào hai chiều $\mathbf{I} \in \mathbb{R}^{H \times W}$ (hoặc tensor ảnh đa kênh $\mathbf{I} \in \mathbb{R}^{C_{\text{in}} \times H \times W}$) và một bộ lọc hạt nhân (kernel) $\mathbf{K} \in \mathbb{R}^{k_h \times k_w}$. Phép tích chập rời rạc hai chiều tại vị trí tọa độ $(i, j)$ trên bản đồ đặc trưng đầu ra được xác định bởi:
 \begin{equation}
-    \mu_{\mathcal{B}} = \frac{1}{B \cdot H \cdot W} \sum_{b=1}^{B} \sum_{i=1}^{H} \sum_{j=1}^{W} x_{b, i, j}, \quad \sigma_{\mathcal{B}}^2 = \frac{1}{B \cdot H \cdot W} \sum_{b=1}^{B} \sum_{i=1}^{H} \sum_{j=1}^{W} (x_{b, i, j} - \mu_{\mathcal{B}})^2
+    (\mathbf{I} \ast \mathbf{K})(i, j) = \sum_{m=0}^{k_h - 1} \sum_{n=0}^{k_w - 1} \mathbf{I}(i + m, j + n) \mathbf{K}(m, n)
 \end{equation}
-Giá trị kích hoạt được chuẩn hóa và biến đổi affine có thể học được:
+Đối với tensor đầu vào có $C_{\text{in}}$ kênh và tầng tích chập áp dụng $C_{\text{out}}$ bộ lọc độc lập, giá trị kích hoạt tại kênh ngõ ra thứ $c$ được biểu diễn:
 \begin{equation}
-    \hat{x}_{b, i, j} = \frac{x_{b, i, j} - \mu_{\mathcal{B}}}{\sqrt{\sigma_{\mathcal{B}}^2 + \epsilon}}, \quad y_{b, i, j} = \gamma \hat{x}_{b, i, j} + \beta
+    \mathbf{O}_c(i, j) = b_c + \sum_{k=1}^{C_{\text{in}}} \sum_{m=0}^{k_h - 1} \sum_{n=0}^{k_w - 1} \mathbf{I}_k(i \cdot S + m - P, j \cdot S + n - P) \mathbf{K}_{c, k}(m, n)
 \end{equation}
-với $\gamma, \beta$ là các tham số co giãn và dịch chuyển học được, $\epsilon > 0$ là hằng số bảo vệ độ ổn định số học.
-
-\subsubsection{2. Layer Normalization (LayerNorm)}
-Trái ngược với BatchNorm vốn phụ thuộc vào kích thước mini-batch $B$, LayerNorm tính toán trung bình và phương sai trên toàn bộ các kênh đặc trưng $C$ của một mẫu duy nhất tại từng vị trí:
+trong đó $S$ là độ dài bước trượt (stride), $P$ là độ dày vùng đệm viền (padding), $b_c$ là hệ số điều chỉnh (bias), và kích thước bản đồ đặc trưng ngõ ra có quan hệ hình học:
 \begin{equation}
-    \mu_{L} = \frac{1}{C} \sum_{c=1}^{C} x_c, \quad \sigma_{L}^2 = \frac{1}{C} \sum_{c=1}^{C} (x_c - \mu_{L})^2
+    H_{\text{out}} = \left\lfloor \frac{H_{\text{in}} - k_h + 2P}{S} \right\rfloor + 1, \quad W_{\text{out}} = \left\lfloor \frac{W_{\text{in}} - k_w + 2P}{S} \right\rfloor + 1
 \end{equation}
-LayerNorm hoàn toàn độc lập với kích thước batch, trở thành chuẩn mực bắt buộc trong các khối Transformer và các bài toán hồi quy đồ thị chuỗi thời gian.
 
-\subsection{Khối Kết nối tắt Residual và Cơ chế Chống Suy thoái Gradient}
-Khi xếp chồng hàng chục tầng tích chập sâu, mạng nơ-ron gặp phải vấn đề suy thoái độ chính xác (Degradation Problem): sai số huấn luyện tăng lên không phải do quá khớp mà do gradient bị suy giảm khi lan truyền ngược qua quá nhiều phép nhân ma trận.
+\textbf{Hai đặc tính kiến trúc ưu việt của phép tích chập:}
+\begin{enumerate}
+    \item \textbf{Trọng số chia sẻ (Weight Sharing):} Cùng một bộ lọc kernel được quét trên toàn bộ diện tích ảnh, giúp giảm mạnh số lượng tham số so với mạng kết nối đầy đủ (Dense Layer), ngăn ngừa quá khớp và đảm bảo tính bất biến với phép tịnh tiến cục bộ (Translation Equivariance).
+    \item \textbf{Trường thụ cảm hiệu dụng (Effective Receptive Field -- ERF):} Mỗi nơ-ron ở tầng sâu chỉ phản ứng với một vùng không gian hữu hạn trên ảnh gốc. Khi xếp chồng liên tiếp các tầng tích chập kernel nhỏ $3 \times 3$, trường thụ cảm tăng dần tuyến tính theo chiều sâu mạng ($R_{l} = R_{l-1} + (k - 1) \cdot \prod_{i=1}^{l-1} S_i$), giúp mô hình bao quát ngữ cảnh không gian rộng lớn của ngã tư mà vẫn bảo đảm chi phí tính toán gọn nhẹ.
+\end{enumerate}
 
-Kiến trúc Residual Network (He et al., CVPR 2016) giải quyết triệt để vấn đề này bằng cách thiết lập một đường truyền tắt định danh (Identity Shortcut Connection):
+\subsection{Hàm kích hoạt phi tuyến và cơ chế chuẩn hóa tầng}
+Các phép biến đổi tích chập thuần túy là các phép biến đổi tuyến tính. Để mạng nơ-ron có khả năng xấp xỉ các quan hệ phi tuyến phức tạp giữa cường độ điểm ảnh và số lượng xe, các hàm kích hoạt phi tuyến được áp dụng sau mỗi phép tích chập:
+\begin{itemize}
+    \item \textbf{Hàm ReLU (Rectified Linear Unit):} $\text{ReLU}(z) = \max(0, z)$. Đơn giản, tính toán nhanh và khắc phục triệt để hiện tượng triệt tiêu gradient ở miền dương.
+    \item \textbf{Hàm Swish / SiLU (Sigmoid Linear Unit):} Được ứng dụng rộng rãi trong các kiến trúc hiện đại (như EfficientNet):
+    \begin{equation}
+        \text{Swish}(z) = z \cdot \sigma(\beta z) = \frac{z}{1 + e^{-\beta z}}
+    \end{equation}
+    với $\beta$ là tham số học được hoặc hằng số $\beta = 1$. Khác với ReLU bị chặn gắt tại 0, hàm Swish mượt mà (smooth) và không đơn điệu (non-monotonic), cho phép một lượng nhỏ gradient âm truyền qua khi $z < 0$, giúp duy trì tính linh hoạt của các nơ-ron trong quá trình tối ưu hóa.
+\end{itemize}
+
+Để ổn định phân phối giá trị kích hoạt giữa các tầng và tăng tốc độ hội tụ, cơ chế \textbf{Chuẩn hóa theo lô (Batch Normalization)} được áp dụng:
 \begin{equation}
-    \mathbf{y} = \mathcal{F}(\mathbf{x}, \{\mathbf{W}_i\}) + \mathbf{x}
+    \hat{x}_i = \frac{x_i - \mu_{\mathcal{B}}}{\sqrt{\sigma_{\mathcal{B}}^2 + \epsilon}}, \quad y_i = \gamma \hat{x}_i + \beta
 \end{equation}
-trong đó $\mathbf{x}, \mathbf{y}$ lần lượt là vector đầu vào và đầu ra của khối, $\mathcal{F}$ là hàm biến đổi phi tuyến cần học.
+trong đó $\mu_{\mathcal{B}}$ và $\sigma_{\mathcal{B}}^2$ là giá trị kỳ vọng và phương sai tính toán trên mini-batch $\mathcal{B}$, còn $\gamma, \beta$ là các tham số co giãn và dịch chuyển học được.
 
-\textbf{Chứng minh toán học về luồng gradient bảo toàn:} Xét một chuỗi gồm $L$ khối Residual liên tiếp từ tầng $l$ đến tầng $L$:
+\subsection{Tầng gộp trung bình toàn cục (Global Average Pooling -- GAP)}
+Trong các mạng CNN cổ điển (như VGG, AlexNet), các bản đồ đặc trưng sau tầng tích chập cuối cùng được làm phẳng (Flatten) và nối vào các tầng Fully Connected (FC) dày đặc. Cách thiết kế này bộc lộ hai nhược điểm chí tử:
+\begin{enumerate}
+    \item Chiếm tới $80\% - 90\%$ tổng số tham số của toàn bộ mô hình, khiến mạng rất dễ rơi vào trạng thái quá khớp (overfitting).
+    \item Đòi hỏi kích thước ảnh đầu vào phải cố định tuyệt đối, phá vỡ tính bất biến vị trí của đối tượng trong khung hình.
+\end{enumerate}
+
+Để khắc phục nhược điểm trên, đề tài áp dụng kỹ thuật \textbf{Gộp trung bình toàn cục (Global Average Pooling -- GAP)}. Cho tensor đặc trưng tại tầng tích chập cuối cùng là $\mathbf{F} \in \mathbb{R}^{C \times H \times W}$. Tầng GAP chuyển đổi toàn bộ bản đồ không gian của mỗi kênh thành một giá trị vô hướng duy nhất bằng phép lấy trung bình số học:
 \begin{equation}
-    \mathbf{x}_L = \mathbf{x}_l + \sum_{i=l}^{L-1} \mathcal{F}(\mathbf{x}_i, \mathcal{W}_i)
+    f_c = \text{GAP}(\mathbf{F}_c) = \frac{1}{H \cdot W} \sum_{i=1}^{H} \sum_{j=1}^{W} \mathbf{F}_c(i, j) \quad (\forall c = 1, \dots, C)
 \end{equation}
-Áp dụng quy tắc đạo hàm chuỗi (Chain Rule) để tính gradient của hàm mất mát $\mathcal{E}$ đối với đầu vào $\mathbf{x}_l$:
+Vector đặc trưng thu được $\mathbf{f} = [f_1, f_2, \dots, f_C]^T \in \mathbb{R}^C$ hoàn toàn không chứa tham số học được, phản ánh mức độ hiện diện trung bình của các đặc trưng ngữ nghĩa (như bánh xe, thân xe, mũ bảo hiểm) trên toàn bức ảnh, đồng thời tạo ra biểu diễn cô đọng, ổn định trước các biến đổi góc chụp camera.
+
+% ==============================================================================
+\section{Kiến trúc mạng xương sống mở rộng đồng thời (EfficientNet)}
+\label{sec:kien_truc_efficientnet}
+
+\subsection{Nguyên lý mở rộng đồng thời (Compound Scaling)}
+Hiệu năng của một mạng nơ-ron tích chập phụ thuộc vào ba chiều kích thước cơ bản:
+\begin{enumerate}
+    \item \textbf{Chiều sâu mạng ($d$):} Số lượng tầng nơ-ron trong mạng. Mạng sâu hơn có thể nắm bắt các đặc trưng trừu tượng hơn nhưng dễ gặp hiện tượng suy thoái gradient.
+    \item \textbf{Chiều rộng kênh ($w$):} Số lượng kênh đặc trưng trong mỗi tầng. Mạng rộng hơn có thể nắm bắt nhiều biến thể chi tiết hạt mịn nhưng khó trích xuất đặc trưng bậc cao.
+    \item \textbf{Độ phân giải ảnh ($r$):} Chiều cao và chiều rộng của ảnh đầu vào ($H \times W$). Ảnh nét hơn cung cấp nhiều chi tiết hơn nhưng chi phí tính toán FLOPs tăng theo hàm bậc hai ($r^2$).
+\end{enumerate}
+
+Các nghiên cứu trước đây thường chỉ mở rộng độc lập một trong ba chiều. Tan và Le đã chứng minh bằng thực nghiệm rằng ba chiều kích thước này có mối quan hệ phụ thuộc chặt chẽ: khi độ phân giải ảnh tăng lên, mạng cần thêm nhiều tầng tích chập hơn để mở rộng trường thụ cảm, đồng thời cần thêm nhiều kênh hơn để chứa đựng các chi tiết bề mặt. Từ đó, tác giả đề xuất \textbf{Nguyên lý mở rộng đồng thời (Compound Scaling)}:
 \begin{equation}
-    \frac{\partial \mathcal{E}}{\partial \mathbf{x}_l} = \frac{\partial \mathcal{E}}{\partial \mathbf{x}_L} \cdot \frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_l} = \frac{\partial \mathcal{E}}{\partial \mathbf{x}_L} \left( \mathbf{I} + \frac{\partial}{\partial \mathbf{x}_l} \sum_{i=l}^{L-1} \mathcal{F}(\mathbf{x}_i, \mathcal{W}_i) \right)
+    \text{depth: } d = \alpha^\phi, \quad \text{width: } w = \beta^\phi, \quad \text{resolution: } r = \gamma^\phi
 \end{equation}
-Thành phần ma trận đơn vị $\mathbf{I}$ đảm bảo rằng tín hiệu gradient $\frac{\partial \mathcal{E}}{\partial \mathbf{x}_L}$ từ tầng ngõ ra có thể truyền ngược trực tiếp về bất kỳ tầng nông $\mathbf{x}_l$ nào mà không bị suy hao hoặc phụ thuộc vào độ lớn của trọng số trọng số $\mathcal{W}_i$, triệt tiêu hoàn toàn hiện tượng triệt tiêu gradient.
-
-\subsection{Nguyên lý Tỷ lệ Đồng thời (Compound Scaling) của EfficientNet}
-Theo truyền thống, việc mở rộng quy mô mạng nơ-ron tích chập thường thực hiện theo một chiều đơn lẻ: tăng độ sâu tầng $d$ (như ResNet-152), tăng độ rộng kênh $w$ (như WideResNet) hoặc tăng độ phân giải ảnh $r$.
-
-EfficientNet (Tan \& Le, ICML 2019) chứng minh bằng thực nghiệm và lý thuyết rằng ba chiều này có mối tương quan chặt chẽ: khi độ phân giải ảnh tăng, mạng cần nhiều tầng hơn để mở rộng trường tiếp nhận và cần nhiều kênh hơn để trích xuất các họa tiết chi tiết. Nguyên lý Compound Scaling đề xuất mở rộng đồng thời cả ba chiều theo hệ số tỷ lệ đồng dạng $\phi$:
-\begin{align}
-    \text{Depth: } d &= \alpha^\phi \\
-    \text{Width: } w &= \beta^\phi \\
-    \text{Resolution: } r &= \gamma^\phi
-\end{align}
-dưới các ràng buộc tối ưu hóa tài nguyên:
+với ràng buộc cân bằng lượng phép tính FLOPs:
 \begin{equation}
     \alpha \cdot \beta^2 \cdot \gamma^2 \approx 2, \quad \alpha \ge 1, \ \beta \ge 1, \ \gamma \ge 1
 \end{equation}
-Lý do có số mũ bậc hai đối với $\beta$ và $\gamma$ là vì số phép toán dấu phẩy động (FLOPs) tỷ lệ bậc nhất với độ sâu $d$ nhưng tỷ lệ bậc hai với độ rộng kênh $w$ và độ phân giải ảnh $r$. Nhờ tối ưu hóa có hệ số ràng buộc, EfficientNet-B5 đạt được biểu diễn đặc trưng cực kỳ phong phú trong khi tiết kiệm $43.0\%$ lượng phép tính FLOPs so với ResNet-50.
+trong đó $\phi$ là hệ số mở rộng do người dùng điều chỉnh tùy theo năng lực phần cứng. Khi $\phi$ tăng thêm 1 đơn vị, tổng lượng phép tính FLOPs của mô hình tăng gấp đúng 2 lần. Nhờ tối ưu hóa phối hợp cả ba chiều, kiến trúc EfficientNet-B5 đạt được độ chính xác nhận dạng vượt trội trong khi chỉ tiêu tốn 75.3 GFLOPs, tiết kiệm $43.0\%$ lượng phép tính so với ResNet-50 (132.2 GFLOPs).
 
-\subsection{Cơ sở Toán học của Thuật toán Giải thích Thị giác Grad-CAM++}
-Để kiểm chứng việc mô hình hồi quy đếm xe thực sự tập trung vào các phương tiện giao thông thay vì học vẹt theo các đặc trưng cảnh nền, nghiên cứu áp dụng thuật toán Grad-CAM++ (Chattopadhay et al., 2018).
+\subsection{Cấu trúc khối MBConv và tích chập tách rời theo chiều sâu}
+Trọng tâm cấu trúc của EfficientNet là khối \textbf{MBConv (Mobile Inverted Bottleneck Convolution)}, kết hợp hai kỹ thuật kiến trúc tiên tiến:
 
-Xét bản đồ đặc trưng thứ $k$ tại tầng tích chập cuối cùng $\mathbf{A}^k \in \mathbb{R}^{U \times V}$ và giá trị dự đoán số lượng xe phân lớp $c$ là $Y^c$. Thuật toán tính toán trọng số tầm quan trọng $\alpha_{ij}^{kc}$ cho từng vị trí không gian $(i, j)$ của bản đồ $\mathbf{A}^k$ thông qua các đạo hàm bậc cao:
-\begin{equation}
-    \alpha_{ij}^{kc} = \frac{\frac{\partial^2 Y^c}{(\partial A_{ij}^k)^2}}{2 \frac{\partial^2 Y^c}{(\partial A_{ij}^k)^2} + \sum_{a=1}^{U} \sum_{b=1}^{V} A_{ab}^k \frac{\partial^3 Y^c}{(\partial A_{ij}^k)^3}}
-\end{equation}
-Trọng số toàn cục $w_k^c$ của kênh đặc trưng $k$ đối với lớp $c$ được tổng hợp bằng tổ hợp tuyến tính các giá trị gradient dương:
-\begin{equation}
-    w_k^c = \sum_{i=1}^{U} \sum_{j=1}^{V} \alpha_{ij}^{kc} \cdot \text{ReLU}\left(\frac{\partial Y^c}{\partial A_{ij}^k}\right)
-\end{equation}
-Bản đồ nhiệt kích hoạt thị giác cuối cùng $L_{\text{Grad-CAM++}}^c$ được tính bởi tổ hợp trọng số các bản đồ đặc trưng, đi qua hàm ReLU để chỉ giữ lại các đặc trưng có đóng góp tích cực vào dự đoán số đếm:
-\begin{equation}
-    L_{\text{Grad-CAM++}}^c = \text{ReLU}\left(\sum_k w_k^c \mathbf{A}^k\right)
-\end{equation}
-
-\subsection{Tích chập Tách rời theo Chiều sâu và Khối MBConv}
-Mạng EfficientNet sử dụng cấu trúc khối cơ bản là Mobile Inverted Bottleneck Convolution (MBConv) thừa kế từ MobileNetV2 kết hợp cơ chế Squeeze-and-Excitation (SE). Nền tảng toán học của khối MBConv là phép Tích chập Tách rời theo Chiều sâu (Depthwise Separable Convolution), giúp giảm mạnh số lượng tham số và phép tính so với tích chập 2D tiêu chuẩn.
-
-\textbf{1. Phép tích chập theo chiều sâu (Depthwise Convolution):}
-Thay vì kết hợp đồng thời tất cả các kênh vào như tích chập chuẩn, Depthwise Convolution áp dụng một bộ lọc không gian $K_h \times K_w$ duy nhất cho từng kênh độc lập. Với tensor đầu vào $\mathbf{X} \in \mathbb{R}^{H \times W \times C_{\text{in}}}$ và bộ lọc $\mathbf{K}_{\text{dw}} \in \mathbb{R}^{K_h \times K_w \times C_{\text{in}}}$:
-\begin{equation}
-    \mathbf{O}_{\text{dw}}(i, j, c) = \sum_{m=-k_h}^{k_h} \sum_{n=-k_w}^{k_w} \mathbf{X}(i \cdot s + m, j \cdot s + n, c) \cdot \mathbf{K}_{\text{dw}}(m + k_h, n + k_w, c)
-\end{equation}
-
-\textbf{2. Phép tích chập theo điểm (Pointwise Convolution):}
-Tiếp sau Depthwise Convolution, một phép tích chập $1 \times 1$ với bộ lọc $\mathbf{K}_{\text{pw}} \in \mathbb{R}^{1 \times 1 \times C_{\text{in}} \times C_{\text{out}}}$ được sử dụng để tổng hợp tuyến tính thông tin liên kênh và ánh xạ sang không gian $C_{\text{out}}$ chiều:
-\begin{equation}
-    \mathbf{O}_{\text{pw}}(i, j, k) = \sum_{c=1}^{C_{\text{in}}} \mathbf{O}_{\text{dw}}(i, j, c) \cdot \mathbf{K}_{\text{pw}}(1, 1, c, k) + b_k
-\end{equation}
-
-\textbf{Định lý 2.0 (Tỷ lệ tiết kiệm tính toán của Depthwise Separable Convolution):}
-Chi phí tính toán FLOPs của tích chập 2D tiêu chuẩn với kernel $K \times K$ là:
-\begin{equation}
-    \text{FLOPs}_{\text{std}} = H \cdot W \cdot C_{\text{in}} \cdot C_{\text{out}} \cdot K^2
-\end{equation}
-Trong khi đó, chi phí tính toán của Depthwise Separable Convolution là:
-\begin{equation}
-    \text{FLOPs}_{\text{sep}} = H \cdot W \cdot C_{\text{in}} \cdot K^2 + H \cdot W \cdot C_{\text{in}} \cdot C_{\text{out}} \cdot 1^2
-\end{equation}
-Tỷ số suy giảm lượng tính toán đạt được:
-\begin{equation}
-    \frac{\text{FLOPs}_{\text{sep}}}{\text{FLOPs}_{\text{std}}} = \frac{H \cdot W \cdot C_{\text{in}} \cdot K^2 + H \cdot W \cdot C_{\text{in}} \cdot C_{\text{out}}}{H \cdot W \cdot C_{\text{in}} \cdot C_{\text{out}} \cdot K^2} = \frac{1}{C_{\text{out}}} + \frac{1}{K^2}
-\end{equation}
-Với kích thước kernel phổ biến $K = 3$ và số kênh đầu ra $C_{\text{out}} \ge 64$, tỷ số này xấp xỉ $\frac{1}{9} \approx 0.11$. Tức là Depthwise Separable Convolution giúp cắt giảm tới \textbf{$89\%$ số phép tính}, cho phép EfficientNet-B5 trích xuất các biểu diễn đặc trưng cấp cao trên ảnh độ phân giải lớn với tốc độ suy luận vượt trội.
-
-\subsection{Cơ chế Tái cân chỉnh Kênh Squeeze-and-Excitation (SE Block)}
-Khối SE (Hu et al., CVPR 2018) được tích hợp trong mỗi khối MBConv nhằm mô hình hóa rõ ràng mối quan hệ phụ thuộc lẫn nhau giữa các kênh đặc trưng. Quy trình gồm hai bước toán học:
-\begin{enumerate}
-    \item \textbf{Thao tác Nén (Squeeze):} Sử dụng tầng Global Average Pooling để nén toàn bộ thông tin không gian của kênh $c$ thành một giá trị vô hướng biểu thị thống kê toàn cục $z_c$:
-    \begin{equation}
-        z_c = \mathbf{F}_{\text{sq}}(\mathbf{u}_c) = \frac{1}{H \times W} \sum_{i=1}^{H} \sum_{j=1}^{W} u_c(i, j) \implies \mathbf{z} \in \mathbb{R}^{C}
-    \end{equation}
-    \item \textbf{Thao tác Kích thích (Excitation):} Một mạng MLP hai tầng có hệ số nghẽn $r$ (thường $r = 4$ trong EfficientNet) ánh xạ vector $\mathbf{z}$ qua hàm phi tuyến để học trọng số chú ý kênh $\mathbf{s}$:
-    \begin{equation}
-        \mathbf{s} = \mathbf{F}_{\text{ex}}(\mathbf{z}, \mathbf{W}) = \sigma(\mathbf{W}_2 \cdot \delta(\mathbf{W}_1 \mathbf{z}))
-    \end{equation}
-    trong đó $\mathbf{W}_1 \in \mathbb{R}^{\frac{C}{r} \times C}$, $\mathbf{W}_2 \in \mathbb{R}^{C \times \frac{C}{r}}$, $\delta$ là hàm kích hoạt Swish và $\sigma$ là hàm Sigmoid đưa giá trị về khoảng $(0, 1)$.
-\end{enumerate}
-Tensor đặc trưng cuối cùng được tái cân chỉnh bằng tích vô hướng từng phần tử giữa bản đồ không gian và trọng số kênh:
-\begin{equation}
-    \tilde{\mathbf{x}}_c = s_c \cdot \mathbf{u}_c \quad (\forall c = 1, \dots, C)
-\end{equation}
-Nhờ đó, mạng tự động khuếch đại các kênh đặc trưng nhận diện các hình khối phương tiện giao thông (bánh xe, đầu xe, cụm người điều khiển xe máy) và triệt tiêu các kênh đáp ứng với cảnh nền mặt đường hoặc cây cối ven đường.
-
-\subsection{Hàm Kích hoạt Phi tuyến Swish (SiLU)}
-Trong toàn bộ cấu trúc của EfficientNet, hàm kích hoạt truyền thống ReLU được thay thế bởi hàm Swish (Ramachandran et al., 2017), còn được gọi là SiLU (Sigmoid Linear Unit):
-\begin{equation}
-    \text{Swish}(x) = x \cdot \sigma(\beta x) = \frac{x}{1 + e^{-\beta x}}
-\end{equation}
-với $\beta = 1.0$ là tham số mặc định.
-
-\textbf{Phân tích vi tích phân và đặc tính đạo hàm:}
-Đạo hàm bậc nhất của hàm Swish có dạng:
-\begin{align}
-    \text{Swish}'(x) &= \frac{d}{dx} \left( x \sigma(x) \right) = \sigma(x) + x \sigma'(x) \nonumber \\
-    &= \sigma(x) + x \sigma(x) (1 - \sigma(x)) = \sigma(x) \left( 1 + x (1 - \sigma(x)) \right) \nonumber \\
-    &= \sigma(x) + \text{Swish}(x) (1 - \sigma(x))
-\end{align}
-Swish sở hữu ba đặc tính giải tích vượt trội so với ReLU:
+\textbf{1. Tích chập tách rời theo chiều sâu (Depthwise Separable Convolution):}
+Tách phép tích chập chuẩn $C_{\text{in}} \times C_{\text{out}} \times k \times k$ thành hai bước độc lập:
 \begin{itemize}
-    \item \textbf{Trơn tru và khả vi vô hạn ($C^\infty$ Smoothness):} Khác với ReLU có điểm gãy tại $x=0$ (nơi đạo hàm không xác định), Swish trơn tru trên toàn bộ trục số thực $\mathbb{R}$, giúp cảnh quan hàm mục tiêu (Loss Landscape) mượt mà hơn, cải thiện tốc độ hội tụ của thuật toán tối ưu hóa Gradient Descent.
-    \item \textbf{Không bị chặn trên (Unbounded Above):} Cho phép tín hiệu kích hoạt lớn truyền qua tự do mà không gặp phải hiện tượng bão hòa gradient (Gradient Saturation).
-    \item \textbf{Bị chặn dưới nhưng không đơn điệu (Bounded Below and Non-monotonic):} Tại miền âm ($x < 0$), hàm Swish đạt cực tiểu cục bộ tại $x \approx -1.28$ với giá trị $\text{Swish}(-1.28) \approx -0.278$ trước khi tiệm cận về 0. Đặc tính phi đơn điệu này cho phép một luồng gradient nhỏ âm được truyền qua, ngăn ngừa triệt để hiện tượng "chết nơ-ron" (Dying ReLU Problem) thường gặp khi các trọng số bị cập nhật âm lớn trong giai đoạn đầu huấn luyện.
+    \item \textit{Depthwise Convolution:} Áp dụng một kernel $k \times k$ cho từng kênh đầu vào độc lập, không trộn kênh ($C_{\text{in}}$ bộ lọc $k \times k \times 1$).
+    \item \textit{Pointwise Convolution:} Áp dụng phép tích chập $1 \times 1$ để tổ hợp tuyến tính các kênh không gian lại với nhau ($C_{\text{out}}$ bộ lọc $1 \times 1 \times C_{\text{in}}$).
+\end{itemize}
+Tỷ lệ cắt giảm chi phí tính toán đạt được là:
+\begin{equation}
+    \frac{k \cdot k \cdot C_{\text{in}} \cdot H \cdot W + C_{\text{in}} \cdot C_{\text{out}} \cdot H \cdot W}{k \cdot k \cdot C_{\text{in}} \cdot C_{\text{out}} \cdot H \cdot W} = \frac{1}{C_{\text{out}}} + \frac{1}{k^2}
+\end{equation}
+Với kernel $k=3$, phép tích chập MBConv cắt giảm xấp xỉ $89\%$ lượng phép tính so với tích chập 2D tiêu chuẩn.
+
+\textbf{2. Cơ chế chú ý kênh Squeeze-and-Excitation (SE):}
+Khối SE tự động học trọng số thích nghi để làm nổi bật các kênh đặc trưng mang thông tin phương tiện và ức chế các kênh đáp ứng với cảnh nền mặt đường. Cơ chế hoạt động qua hai pha:
+\begin{align}
+    \mathbf{z} &= \text{GAP}(\mathbf{X}) \in \mathbb{R}^C \quad \text{(Pha Squeeze: nén thông tin toàn cục)} \\
+    \mathbf{s} &= \sigma\left( \mathbf{W}_2 \cdot \text{ReLU}(\mathbf{W}_1 \mathbf{z}) \right) \in \mathbb{R}^C \quad \text{(Pha Excitation: học trọng số kênh)}
+\end{align}
+với $\mathbf{W}_1 \in \mathbb{R}^{\frac{C}{r} \times C}$ là ma trận giảm chiều kênh (tỷ lệ co ranh $r=4$) và $\mathbf{W}_2 \in \mathbb{R}^{C \times \frac{C}{r}}$ là ma trận khôi phục chiều kênh. Bản đồ đặc trưng đầu ra được tái cân chỉnh theo từng phần tử:
+\begin{equation}
+    \tilde{\mathbf{X}}_c = s_c \cdot \mathbf{X}_c \quad (\forall c = 1, \dots, C)
+\end{equation}
+
+% ==============================================================================
+\section{Cơ chế hồi quy đếm xe trực tiếp từ ảnh thị giác (Direct Regression)}
+\label{sec:nguyen_ly_hoi_quy_dem_xe}
+
+\subsection{Nguyên lý ánh xạ trực tiếp và giải quyết bài toán che khuất dòng xe máy}
+Các giải pháp thị giác máy tính truyền thống trong giám sát giao thông thường dựa trên khung làm việc \textit{Tracking-by-Detection} (phát hiện bounding box qua YOLO/Faster R-CNN kết hợp bám vết liên khung hình). Tuy nhiên, trong bối cảnh giao thông đặc thù tại các đô thị Việt Nam với trên $80\%$ là xe máy, phương pháp bám vết theo hộp bộc lộ các rào cản nghiêm trọng:
+\begin{enumerate}
+    \item \textbf{Hiện tượng che khuất tương hỗ dày đặc:} Dòng xe máy di chuyển thành các cụm dày đặc, các phương tiện đi sát nhau che khuất một phần lớn thân xe. Mô hình phát hiện bounding box dễ gặp hiện tượng bỏ sót hoặc gộp nhiều xe máy kề nhau vào cùng một hộp nhận dạng.
+    \item \textbf{Nút thắt tính toán của thuật toán NMS:} Khi số lượng xe trong khung hình vượt quá 100 xe, mô hình sinh ra hàng nghìn bounding box ứng viên. Thuật toán triệt tiêu cực đại cục bộ (Non-Maximum Suppression -- NMS) với độ phức tạp $\mathcal{O}(M^2)$ trở thành điểm nghẽn tính toán lớn trên các thiết bị xử lý tại biên.
+\end{enumerate}
+
+Để giải quyết triệt để vấn đề này, đề tài xây dựng mô hình \textbf{Hồi quy đếm xe trực tiếp theo phân lớp}. Thay vì cố gắng định vị tọa độ từng bounding box riêng lẻ, mô hình học ánh xạ hàm phi tuyến trực tiếp từ toàn bộ không gian ảnh sang vector số lượng phương tiện hai chiều:
+\begin{equation}
+    f_\theta: \mathbf{I} \in \mathbb{R}^{3 \times H \times W} \longrightarrow \hat{\mathbf{c}} = \begin{bmatrix} \hat{c}_{\text{car}} \\ \hat{c}_{\text{bike}} \end{bmatrix} \in \mathbb{R}^2
+\end{equation}
+Cách tiếp cận này loại bỏ hoàn toàn khâu hậu xử lý NMS, xử lý độc lập từng ảnh tĩnh với độ trễ suy luận ổn định dưới 35 ms, đồng thời bảo toàn tách biệt số lượng ô tô con và xe máy.
+
+\subsection{Đầu hồi quy MLP đa tầng nén đặc trưng (Bottleneck MLP Head)}
+Từ vector biểu diễn ngữ nghĩa $\mathbf{f} \in \mathbb{R}^{2048}$ xuất ra từ tầng GAP của EfficientNet-B5, đầu hồi quy đa tầng được thiết kế theo cấu trúc phễu nén đặc trưng (bottleneck compression):
+\begin{align}
+    \mathbf{h}_1 &= \text{LayerNorm}(\mathbf{W}_1 \mathbf{f} + \mathbf{b}_1), \quad \mathbf{W}_1 \in \mathbb{R}^{128 \times 2048}, \ \mathbf{b}_1 \in \mathbb{R}^{128} \\
+    \mathbf{h}_2 &= \text{ReLU}(\mathbf{h}_1) \in \mathbb{R}^{128} \\
+    \hat{\mathbf{c}} &= \mathbf{W}_2 \mathbf{h}_2 + \mathbf{b}_2, \quad \mathbf{W}_2 \in \mathbb{R}^{2 \times 128}, \ \mathbf{b}_2 \in \mathbb{R}^{2}
+\end{align}
+
+\textbf{Ý nghĩa thiết kế của tầng thắt cổ chai 128 chiều:}
+\begin{itemize}
+    \item Việc ép chiều đặc trưng từ 2048 chiều xuống 128 chiều đóng vai trò như một cơ chế điều chuẩn thông tin (Information Bottleneck), buộc mạng phải chắt lọc các biểu diễn cô đọng nhất liên quan đến mật độ phương tiện và loại bỏ các đặc trưng thừa thãi về cảnh nền (màu sắc vỉa hè, biển quảng cáo, bóng cây).
+    \item Tầng LayerNorm được bố trí trước hàm kích hoạt ReLU giúp chuẩn hóa phân phối giá trị kích hoạt qua từng mẫu ảnh, ngăn ngừa hiện tượng nơ-ron bị bão hòa khi điều kiện ánh sáng môi trường thay đổi đột ngột giữa các khung giờ ngày và đêm.
 \end{itemize}
 
-% ------------------------------------------------------------------------------
-\section{Cơ sở Toán học của Lý thuyết Đồ thị Phổ (Spectral Graph Theory)}
-Trong bài toán giao thông, mạng lưới đường phố không nằm trên một lưới Euclid phẳng đồng nhất (như các điểm ảnh trong bức ảnh 2D), mà có cấu trúc phi Euclid phức tạp. Lý thuyết đồ thị phổ cung cấp công cụ toán học để thực hiện phép biến đổi Fourier và phép tích chập trên các không gian phi Euclid này.
+\subsection{Hàm mất mát bền vững Smooth L1 (Huber Loss) cho bài toán đếm xe}
+Trong quá trình quan sát thực tế từ camera công cộng, dữ liệu ảnh thường xuyên chịu ảnh hưởng bởi các yếu tố gây nhiễu đột biến (lóa đèn pha ban đêm, nước mưa đọng trên ống kính hoặc camera bị rung lắc do gió lớn), dẫn đến sự xuất hiện của các điểm ngoại lai (outliers).
 
-\subsection{Đại số Đồ thị và Toán tử Laplacian}
-Xét đồ thị có hướng và có trọng số $\mathcal{G} = (\mathcal{V}, \mathcal{E}, W)$, trong đó $\mathcal{V}$ là tập hợp $N = |\mathcal{V}|$ đỉnh (các trạm camera), $\mathcal{E}$ là tập hợp các cạnh định hướng (các hành lang đường phố) và $W \in \mathbb{R}^{N \times N}$ là ma trận trọng số không âm, với $W_{ij} > 0$ nếu tồn tại luồng di chuyển hợp lệ từ nút $i$ đến nút $j$.
+Nếu sử dụng hàm mất mát bình phương tối thiểu ($L_2$ Loss / MSE): $\mathcal{L}_2(e) = \frac{1}{2} e^2$, gradient $\frac{\partial \mathcal{L}_2}{\partial e} = e$ tăng tuyến tính theo độ lớn sai số. Khi gặp một ảnh ngoại lai có sai số đếm lớn (ví dụ $|e| = 40$ xe máy), gradient bùng nổ sẽ kéo lệch toàn bộ các vector trọng số, phá vỡ tính ổn định của mô hình. Ngược lại, hàm mất mát sai số tuyệt đối ($L_1$ Loss): $\mathcal{L}_1(e) = |e|$ không khả vi tại điểm tối ưu $e = 0$, gây hiện tượng dao động số học quanh cực tiểu.
 
-Ma trận bậc đường chéo $D \in \mathbb{R}^{N \times N}$ được định nghĩa bởi:
-\begin{equation}
-    D_{ii} = \sum_{j=1}^{N} W_{ij}, \quad D_{ij} = 0 \ (\forall i \neq j)
-\end{equation}
-Ba dạng toán tử Laplacian đồ thị phổ biến trong giải tích ma trận bao gồm:
-\begin{enumerate}
-    \item \textbf{Toán tử Laplacian không chuẩn hóa (Unnormalized Graph Laplacian):}
-    \begin{equation}
-        L = D - W
-    \end{equation}
-    \item \textbf{Toán tử Laplacian đối xứng chuẩn hóa (Symmetric Normalized Laplacian):}
-    \begin{equation}
-        L_{\text{sym}} = D^{-1/2} L D^{-1/2} = I_N - D^{-1/2} W D^{-1/2}
-    \end{equation}
-    \item \textbf{Toán tử Laplacian bước ngẫu nhiên (Random Walk Laplacian):}
-    \begin{equation}
-        L_{\text{rw}} = D^{-1} L = I_N - D^{-1} W
-    \end{equation}
-\end{enumerate}
-
-\subsection{Tính chất Toán học và Phân rã Phổ của Toán tử Laplacian}
-Toán tử Laplacian đối xứng chuẩn hóa $L_{\text{sym}}$ sở hữu các tính chất đại số quan trọng:
-\begin{enumerate}
-    \item \textbf{Tính đối xứng và nửa xác định dương (Symmetric Positive Semi-Definite):} Với mọi vector tín hiệu đồ thị $\mathbf{x} \in \mathbb{R}^N$:
-    \begin{equation}
-        \mathbf{x}^T L_{\text{sym}} \mathbf{x} = \frac{1}{2} \sum_{i=1}^{N} \sum_{j=1}^{N} W_{ij} \left( \frac{x_i}{\sqrt{D_{ii}}} - \frac{x_j}{\sqrt{D_{jj}}} \right)^2 \ge 0
-    \end{equation}
-    Do đó, toàn bộ các giá trị riêng của $L_{\text{sym}}$ đều là các số thực không âm.
-    \item \textbf{Phổ giá trị riêng bị chặn (Bounded Spectrum):} Các giá trị riêng của $L_{\text{sym}}$ luôn nằm trong đoạn hữu hạn:
-    \begin{equation}
-        0 = \lambda_1 \le \lambda_2 \le \dots \le \lambda_N \le 2
-    \end{equation}
-    Giá trị riêng $\lambda_1 = 0$ ứng với vector riêng $u_1 = D^{1/2} \mathbf{1}$, và số lượng giá trị riêng bằng 0 bằng đúng số thành phần liên thông của đồ thị.
-\end{enumerate}
-
-Nhờ tính chất đối xứng thực nửa xác định dương, toán tử $L_{\text{sym}}$ luôn có thể phân rã phổ trực chuẩn (Spectral Eigendecomposition):
-\begin{equation}
-    L_{\text{sym}} = \mathbf{U} \mathbf{\Lambda} \mathbf{U}^T
-\end{equation}
-trong đó $\mathbf{U} = [\mathbf{u}_1, \mathbf{u}_2, \dots, \mathbf{u}_N] \in \mathbb{R}^{N \times N}$ là ma trận trực giao chứa các vector riêng thỏa mãn $\mathbf{U} \mathbf{U}^T = \mathbf{U}^T \mathbf{U} = \mathbf{I}_N$, và $\mathbf{\Lambda} = \text{diag}(\lambda_1, \lambda_2, \dots, \lambda_N)$ là ma trận đường chéo chứa các giá trị riêng sắp xếp theo thứ tự tăng dần.
-
-\subsection{Biến đổi Fourier Đồ thị (Graph Fourier Transform)}
-Trong giải tích Fourier cổ điển, các hàm điều hòa cơ sở $e^{-i \omega t}$ chính là các hàm riêng của toán tử vi phân Laplace $\Delta = -\frac{d^2}{dt^2}$. Tương tự trên đồ thị, các vector riêng $\mathbf{u}_k$ của toán tử Laplacian rời rạc đóng vai trò như các hàm sóng cơ sở không gian.
-
-\textbf{Định nghĩa 2.1 (Biến đổi Fourier Đồ thị):} Cho một tín hiệu trên đồ thị $\mathbf{x} \in \mathbb{R}^N$, biến đổi Fourier đồ thị của $\mathbf{x}$ là phép chiếu của $\mathbf{x}$ lên hệ cơ sở vector riêng trực chuẩn $\mathbf{U}$:
-\begin{equation}
-    \hat{\mathbf{x}}(\lambda_k) = \langle \mathbf{x}, \mathbf{u}_k \rangle = \mathbf{u}_k^T \mathbf{x} \implies \hat{\mathbf{x}} = \mathbf{U}^T \mathbf{x} \in \mathbb{R}^N
-\end{equation}
-
-\textbf{Định nghĩa 2.2 (Biến đổi Fourier Đồ thị Nghịch đảo):} Tín hiệu không gian ban đầu $\mathbf{x}$ có thể được khôi phục hoàn hảo từ miền phổ thông qua biến đổi nghịch đảo:
-\begin{equation}
-    \mathbf{x} = \sum_{k=1}^{N} \hat{\mathbf{x}}(\lambda_k) \mathbf{u}_k \implies \mathbf{x} = \mathbf{U} \hat{\mathbf{x}}
-\end{equation}
-
-\textbf{Ý nghĩa vật lý của tần số đồ thị:} Giá trị riêng $\lambda_k$ đại diện cho tần số dao động không gian (Spatial Frequency). Giá trị riêng $\lambda_k$ nhỏ ứng với vector riêng $\mathbf{u}_k$ biến thiên rất mượt mà qua các nút kề cận trên mạng đường phố (tần số thấp, phản ánh lưu lượng nền toàn thành phố). Ngược lại, giá trị riêng $\lambda_k$ lớn ứng với vector riêng dao động dữ dội giữa các nút cạnh nhau (tần số cao, phản ánh sự xung đột hoặc biến động đột ngột giữa các nút giao).
-
-\subsection{Định lý Tích chập Đồ thị trong Miền Phổ}
-Dựa trên Định lý Tích chập (Convolution Theorem), phép tích chập giữa tín hiệu đồ thị $\mathbf{x}$ và một bộ lọc $g_\theta$ tương đương với phép nhân từng phần tử trong miền tần số Fourier:
-\begin{equation}
-    \widehat{\mathbf{x} \star_{\mathcal{G}} g_\theta} = \hat{\mathbf{x}} \odot \hat{g}_\theta
-\end{equation}
-Áp dụng biến đổi Fourier nghịch đảo:
-\begin{equation}
-    \mathbf{x} \star_{\mathcal{G}} g_\theta = \mathbf{U} \left( (\mathbf{U}^T \mathbf{x}) \odot (\mathbf{U}^T g_\theta) \right) = \mathbf{U} g_\theta(\mathbf{\Lambda}) \mathbf{U}^T \mathbf{x}
-\end{equation}
-trong đó $g_\theta(\mathbf{\Lambda}) = \text{diag}(g_\theta(\lambda_1), \dots, g_\theta(\lambda_N))$ là ma trận đường chéo chứa các hệ số phản hồi tần số của bộ lọc.
-
-\textbf{Điểm nghẽn tính toán cốt tử:} Việc tính toán trực tiếp tích chập phổ theo công thức trên gặp phải hai rào cản nghiêm trọng:
-\begin{enumerate}
-    \item Đòi hỏi phép phân rã trị riêng của ma trận Laplacian có độ phức tạp tính toán $\mathcal{O}(N^3)$, hoàn toàn bất khả thi đối với mạng lưới đồ thị đô thị lớn ($N=608$).
-    \item Phép nhân với ma trận vector riêng đầy đủ $\mathbf{U}$ có độ phức tạp $\mathcal{O}(N^2)$ và không đảm bảo tính định vị cục bộ (Non-localized), tức là một nút có thể nhận thông tin từ mọi nút khác trên toàn thành phố ngay tại tầng đầu tiên mà không bị ràng buộc bởi khoảng cách địa lý.
-\end{enumerate}
-
-% ------------------------------------------------------------------------------
-\section{Phép Xấp xỉ Bộ lọc Phổ ChebNet (Chebyshev Spectral Convolutions)}
-Để khắc phục hoàn toàn hai rào cản trên, Defferrard et al. (NeurIPS 2016) đề xuất xấp xỉ hàm phản hồi tần số $g_\theta(\mathbf{\Lambda})$ bằng chuỗi đa thức trực giao Chebyshev cắt cụt.
-
-\subsection{Đa thức Trực giao Chebyshev Loại I}
-Đa thức Chebyshev loại I, ký hiệu là $T_k(x)$, là một họ các đa thức trực giao được định nghĩa trên đoạn $[-1, 1]$ thông qua phương trình lượng giác:
-\begin{equation}
-    T_k(\cos \theta) = \cos(k \theta) \quad (\text{với } x = \cos \theta, \ x \in [-1, 1])
-\end{equation}
-Từ công thức lượng giác $\cos((k+1)\theta) + \cos((k-1)\theta) = 2 \cos \theta \cos(k\theta)$, ta suy ra hệ thức truy hồi đệ quy De Moivre nổi tiếng:
-\begin{align}
-    T_0(x) &= 1 \\
-    T_1(x) &= x \\
-    T_k(x) &= 2x T_{k-1}(x) - T_{k-2}(x) \quad (\forall k \ge 2)
-\end{align}
-
-\textbf{Tính chất trực giao:} Họ đa thức $T_k(x)$ tạo thành một hệ cơ sở trực giao hoàn chỉnh trong không gian Hilbert $L^2([-1, 1])$ với hàm trọng số $w(x) = \frac{1}{\sqrt{1 - x^2}}$:
-\begin{equation}
-    \int_{-1}^{1} T_m(x) T_n(x) \frac{dx}{\sqrt{1 - x^2}} =
-    \begin{cases}
-    0, & \text{khi } m \neq n, \\
-    \pi, & \text{khi } m = n = 0, \\
-    \frac{\pi}{2}, & \text{khi } m = n \ge 1.
-    \end{cases}
-\end{equation}
-
-\subsection{Phép Co giãn Toán tử Laplacian và Xấp xỉ ChebNet}
-Vì các đa thức Chebyshev chỉ hội tụ trực giao trên miền $[-1, 1]$, trong khi các giá trị riêng của Laplacian $\mathbf{\Lambda}$ nằm trong đoạn $[0, \lambda_{\max}]$, ta thực hiện phép co giãn affine đối với ma trận trị riêng và ma trận Laplacian:
-\begin{equation}
-    \tilde{\mathbf{\Lambda}} = \frac{2}{\lambda_{\max}} \mathbf{\Lambda} - \mathbf{I}_N, \quad \tilde{\mathbf{L}} = \frac{2}{\lambda_{\max}} \mathbf{L} - \mathbf{I}_N
-\end{equation}
-Bộ lọc phổ $g_\theta(\mathbf{\Lambda})$ được xấp xỉ bằng đa thức Chebyshev cắt cụt bậc $K-1$:
-\begin{equation}
-    g_\theta(\mathbf{\Lambda}) \approx \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{\Lambda}})
-\end{equation}
-trong đó $\theta \in \mathbb{R}^K$ là vector gồm $K$ hệ số Chebyshev có thể học được.
-
-Thay thế vào định lý tích chập đồ thị:
-\begin{align}
-    g_\theta \star_{\mathcal{G}} \mathbf{x} &= \mathbf{U} g_\theta(\mathbf{\Lambda}) \mathbf{U}^T \mathbf{x} \approx \mathbf{U} \left( \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{\Lambda}}) \right) \mathbf{U}^T \mathbf{x} \nonumber \\
-    &= \sum_{k=0}^{K-1} \theta_k \left( \mathbf{U} T_k(\tilde{\mathbf{\Lambda}}) \mathbf{U}^T \right) \mathbf{x}
-\end{align}
-Do tính chất $T_k(\mathbf{U} \tilde{\mathbf{\Lambda}} \mathbf{U}^T) = \mathbf{U} T_k(\tilde{\mathbf{\Lambda}}) \mathbf{U}^T$, công thức tích chập ChebNet rút gọn về dạng:
-\begin{equation}
-    \mathbf{y} = g_\theta \star_{\mathcal{G}} \mathbf{x} \approx \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{x}
-\end{equation}
-
-\subsection{Chứng minh Tính chất Định vị Cục bộ và Độ phức tạp Tuyến tính}
-\textbf{Định lý 2.1 (Tính định vị $K$-hop):} Toán tử ChebNet bậc $K-1$ đảm bảo tính định vị cục bộ trong phạm vi đúng $K-1$ bước nhảy ($K-1$ hops) lân cận của mỗi nút trên đồ thị.
-
-\textbf{Chứng minh:} 
-Ma trận co giãn $\tilde{\mathbf{L}} = \frac{2}{\lambda_{\max}} (I - D^{-1/2} W D^{-1/2}) - I$ là một hàm bậc nhất của ma trận kề $W$. Do đó, với hai nút $i$ và $j$ bất kỳ, nếu khoảng cách ngắn nhất giữa chúng trên đồ thị $d_{\mathcal{G}}(i, j) > k$, thì phần tử thứ $(i, j)$ của lũy thừa ma trận $[\tilde{\mathbf{L}}^k]_{ij} = 0$.
-
-Vì $T_k(\tilde{\mathbf{L}})$ là một đa thức bậc $k$ của $\tilde{\mathbf{L}}$, nó có thể được biểu diễn dưới dạng tổ hợp tuyến tính của các lũy thừa: $T_k(\tilde{\mathbf{L}}) = \sum_{m=0}^{k} c_m \tilde{\mathbf{L}}^m$. Khi đó:
-\begin{equation}
-    [T_k(\tilde{\mathbf{L}})]_{ij} = 0 \quad \text{nếu } d_{\mathcal{G}}(i, j) > k
-\end{equation}
-Do đó, giá trị đặc trưng mới của nút $i$ sau phép tích chập chỉ phụ thuộc nghiêm ngặt vào trạng thái của các nút nằm trong quả cầu lân cận bán kính $K-1$ bước nhảy: $\mathcal{N}_{K-1}(i) = \{j \in \mathcal{V} \mid d_{\mathcal{G}}(i, j) \le K-1\}$. Với $K=3$, thông tin giao thông chỉ lan truyền trong phạm vi 2-hop lân cận, hoàn toàn phù hợp với thực tế vật lý rằng tắc nghẽn giao thông lan tỏa dần qua các nút kế cận chứ không dịch chuyển tức thời. $\blacksquare$
-
-\textbf{Định lý 2.2 (Độ phức tạp tính toán):} Phép tích chập ChebNet có độ phức tạp thời gian tuyến tính $\mathcal{O}(K \cdot |\mathcal{E}|)$.
-
-\textbf{Chứng minh:}
-Để tính vector $\mathbf{y} = \sum_{k=0}^{K-1} \theta_k \mathbf{z}_k$ với $\mathbf{z}_k = T_k(\tilde{\mathbf{L}}) \mathbf{x}$, ta áp dụng hệ thức truy hồi đệ quy trực tiếp:
-\begin{align}
-    \mathbf{z}_0 &= \mathbf{x} \\
-    \mathbf{z}_1 &= \tilde{\mathbf{L}} \mathbf{x} \\
-    \mathbf{z}_k &= 2 \tilde{\mathbf{L}} \mathbf{z}_{k-1} - \mathbf{z}_{k-2} \quad (\forall k \ge 2)
-\end{align}
-Ở mỗi bước đệ quy, phép tính duy nhất là phép nhân ma trận thưa $\tilde{\mathbf{L}}$ với vector $\mathbf{z}_{k-1}$. Vì ma trận kề giao thông đường bộ rất thưa (số cạnh $|\mathcal{E}| = 2.452 \ll N^2 = 369.664$), phép nhân ma trận thưa với vector chỉ tốn chi phí $\mathcal{O}(|\mathcal{E}|)$. Tổng chi phí tính toán cho $K$ bước đệ quy là $\mathcal{O}(K \cdot |\mathcal{E}|)$, hoàn toàn loại bỏ việc phân rã trị riêng $\mathcal{O}(N^3)$ và phép nhân ma trận dày $\mathcal{O}(N^2)$. $\blacksquare$
-
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Mô hình hóa Chuỗi Thời gian và Tích chập Gated Linear Units (GLU)}
-\subsection{Hạn chế của RNN/LSTM trong Huấn luyện Chuỗi Đồ thị Lớn}
-Mặc dù các mạng hồi quy tuần tự như LSTM hay GRU rất phổ biến trong xử lý chuỗi thời gian, việc kết hợp RNN với mạng đồ thị trên quy mô lớn ($N=608$) bộc lộ những hạn chế kiến trúc cố hữu:
-\begin{enumerate}
-    \item \textbf{Không thể tính toán song song (Sequential Bottleneck):} Bản chất của tế bào RNN là trạng thái ẩn tại thời điểm $t$ bắt buộc phải chờ trạng thái ẩn tại thời điểm $t-1$: $\mathbf{h}_t = f(\mathbf{h}_{t-1}, \mathbf{x}_t)$. Điều này cản trở việc tận dụng năng lực tính toán song song hàng nghìn lõi của GPU hiện đại, khiến thời gian huấn luyện một epoch bị kéo dài nghiêm trọng.
-    \item \textbf{Suy thoái luồng gradient qua thời gian dài (Backpropagation Through Time -- BPTT):} Khi lan truyền ngược qua 24 bước thời gian, gradient liên tục bị nhân qua ma trận trọng số hồi quy, dễ gây ra hiện tượng bùng nổ hoặc triệt tiêu gradient đối với các chuỗi có dao động mạnh.
-\end{enumerate}
-
-\subsection{Tích chập Thời gian 1D Nhân quả (1D Causal Convolution)}
-Tích chập thời gian 1D áp dụng bộ lọc trượt dọc theo chiều thời gian. Để đảm bảo nguyên lý nhân quả (tương lai không thể ảnh hưởng đến quá khứ), bộ lọc sử dụng kỹ thuật đệm nhân quả (Causal Padding), tức là chỉ lấy thông tin từ các bước thời gian $t, t-1, \dots, t-K_t+1$. Toàn bộ chuỗi thời gian được đưa vào mạng cùng một lúc và tính toán song song hoàn toàn.
-
-\subsection{Cơ chế Cổng Tuyến tính Gated Linear Units (GLU)}
-Để nâng cao năng lực kiểm soát thông tin phi tuyến tính mà không làm triệt tiêu gradient, Dauphin et al. (ICML 2017) đề xuất cơ chế Cổng tuyến tính (Gated Linear Units -- GLU).
-
-Xét tensor đầu vào $\mathbf{X} \in \mathbb{R}^{C_{\text{in}} \times T}$. Tầng tích chập thời gian áp dụng hai bộ lọc tích chập 1D độc lập $\mathbf{\Theta}_1, \mathbf{\Theta}_2 \in \mathbb{R}^{C_{\text{out}} \times C_{\text{in}} \times K_t}$ với kích thước kernel $K_t$:
-\begin{equation}
-    \Gamma \star_{\mathcal{T}} \mathbf{X} = (\mathbf{X} \star \mathbf{\Theta}_1 + \mathbf{b}_1) \odot \sigma(\mathbf{X} \star \mathbf{\Theta}_2 + \mathbf{b}_2)
-\end{equation}
-trong đó $\odot$ là phép nhân Hadamard từng phần tử và $\sigma(z) = \frac{1}{1 + e^{-z}}$ là hàm kích hoạt Sigmoid đóng vai trò như một van điều tiết (Gate).
-
-\textbf{Phân tích giải tích luồng Gradient của GLU:}
-Đặt $\mathbf{P} = \mathbf{X} \star \mathbf{\Theta}_1 + \mathbf{b}_1$ (thành phần tuyến tính chính) và $\mathbf{Q} = \mathbf{X} \star \mathbf{\Theta}_2 + \mathbf{b}_2$ (thành phần điều khiển cổng). Đầu ra là $\mathbf{Y} = \mathbf{P} \odot \sigma(\mathbf{Q})$. Gradient của $\mathbf{Y}$ đối với $\mathbf{P}$ được tính bởi:
-\begin{equation}
-    \frac{\partial \mathbf{Y}}{\partial \mathbf{P}} = \sigma(\mathbf{Q})
-\end{equation}
-Khác với hàm kích hoạt $\tanh(z)$ vốn có đạo hàm $\frac{d}{dz}\tanh(z) = 1 - \tanh^2(z) \to 0$ khi $|z|$ lớn, thành phần tuyến tính của GLU không bị nhân qua đạo hàm của hàm kích hoạt phi tuyến. Nếu cổng $\sigma(\mathbf{Q}) \approx 1$ (cổng mở), gradient $\frac{\partial \mathcal{L}}{\partial \mathbf{Y}}$ có thể truyền thẳng trực tiếp về $\mathbf{P}$ mà không hề bị suy giảm biên độ. Điều này giải thích tại sao khối GLU huấn luyện cực kỳ nhanh, hội tụ mượt mà và chống triệt tiêu gradient vượt trội so với các tế bào RNN truyền thống.
-
-% ------------------------------------------------------------------------------
-\section{Cơ sở Toán học của Cơ chế Chú ý Tự thân (Self-Attention Mechanism)}
-\subsection{Nguyên lý Scaled Dot-Product Attention}
-Cho một chuỗi đầu vào gồm $T$ vector đặc trưng $\mathbf{Z} \in \mathbb{R}^{T \times C}$. Cơ chế Chú ý tự thân (Vaswani et al., NeurIPS 2017) ánh xạ chuỗi này thành ba ma trận đại diện thông qua các phép chiếu tuyến tính học được:
-\begin{align}
-    \mathbf{Q} &= \mathbf{Z} \mathbf{W}^Q \in \mathbb{R}^{T \times d_k} \quad (\text{Query -- Ma trận Truy vấn}) \\
-    \mathbf{K} &= \mathbf{Z} \mathbf{W}^K \in \mathbb{R}^{T \times d_k} \quad (\text{Key -- Ma trận Khóa}) \\
-    \mathbf{V} &= \mathbf{Z} \mathbf{W}^V \in \mathbb{R}^{T \times d_v} \quad (\text{Value -- Ma trận Giá trị})
-\end{align}
-với $\mathbf{W}^Q, \mathbf{W}^K \in \mathbb{R}^{C \times d_k}$ và $\mathbf{W}^V \in \mathbb{R}^{C \times d_v}$.
-
-Ma trận trọng số chú ý $\mathbf{A} \in \mathbb{R}^{T \times T}$ được tính toán bằng tích vô hướng chuẩn hóa đi qua hàm Softmax:
-\begin{equation}
-    \mathbf{A} = \text{Softmax}\left( \frac{\mathbf{Q} \mathbf{K}^T}{\sqrt{d_k}} \right)
-\end{equation}
-Đầu ra của tầng Attention là tổ hợp tuyến tính của các vector giá trị:
-\begin{equation}
-    \text{Attention}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \mathbf{A} \mathbf{V} = \text{Softmax}\left( \frac{\mathbf{Q} \mathbf{K}^T}{\sqrt{d_k}} \right) \mathbf{V}
-\end{equation}
-
-\subsection{Chứng minh Toán học Vai trò của Hệ số Co giãn \texorpdfstring{$\frac{1}{\sqrt{d_k}}$}{1/sqrt(dk)}}
-\textbf{Định lý 2.3:} Hệ số co giãn $\frac{1}{\sqrt{d_k}}$ có vai trò bắt buộc để duy trì phương sai của tích vô hướng ở mức đơn vị, ngăn chặn hiện tượng bão hòa gradient của hàm Softmax.
-
-\textbf{Chứng minh:}
-Giả sử các thành phần của vector truy vấn $q \in \mathbb{R}^{d_k}$ và vector khóa $k \in \mathbb{R}^{d_k}$ là các biến ngẫu nhiên độc lập, cùng phân phối với kỳ vọng bằng 0 và phương sai bằng 1:
-\begin{equation}
-    \mathbb{E}[q_i] = \mathbb{E}[k_i] = 0, \quad \text{Var}(q_i) = \text{Var}(k_i) = 1 \quad (\forall i = 1, \dots, d_k)
-\end{equation}
-Xét tích vô hướng $S = q \cdot k = \sum_{i=1}^{d_k} q_i k_i$. Kỳ vọng của $S$ là:
-\begin{equation}
-    \mathbb{E}[S] = \sum_{i=1}^{d_k} \mathbb{E}[q_i k_i] = \sum_{i=1}^{d_k} \mathbb{E}[q_i] \mathbb{E}[k_i] = 0
-\end{equation}
-Phương sai của $S$ được tính bởi:
-\begin{align}
-    \text{Var}(S) &= \sum_{i=1}^{d_k} \text{Var}(q_i k_i) = \sum_{i=1}^{d_k} \left( \mathbb{E}[(q_i k_i)^2] - (\mathbb{E}[q_i k_i])^2 \right) \nonumber \\
-    &= \sum_{i=1}^{d_k} \mathbb{E}[q_i^2] \mathbb{E}[k_i^2] = \sum_{i=1}^{d_k} (1) \cdot (1) = d_k
-\end{align}
-Như vậy, độ lớn tuyệt đối của tích vô hướng $S$ tăng tỉ lệ thuận với $\sqrt{d_k}$. Khi số chiều đặc trưng $d_k$ lớn (ví dụ $d_k = 80$), các giá trị đầu vào của hàm Softmax sẽ có độ lệch rất lớn. Hàm Softmax sẽ bị đẩy vào các vùng cực đoan (gần 0 hoặc gần 1), nơi đạo hàm bậc nhất của nó tiệm cận về 0:
-\begin{equation}
-    \frac{\partial \text{Softmax}(z_i)}{\partial z_j} = \text{Softmax}(z_i) (\delta_{ij} - \text{Softmax}(z_j)) \longrightarrow 0
-\end{equation}
-Điều này khiến gradient bị triệt tiêu nghiêm trọng (Gradient Vanishing). Bằng cách chia cho $\sqrt{d_k}$, phương sai của biến ngẫu nhiên chuẩn hóa $S / \sqrt{d_k}$ được đưa về mức chuẩn:
-\begin{equation}
-    \text{Var}\left( \frac{S}{\sqrt{d_k}} \right) = \frac{1}{d_k} \text{Var}(S) = \frac{d_k}{d_k} = 1
-\end{equation}
-giữ cho giá trị đầu vào Softmax luôn nằm trong vùng đạo hàm dốc nhất, đảm bảo gradient truyền ngược mạnh mẽ và ổn định. $\blacksquare$
-
-\subsection{Cơ chế Multi-Head Attention và Không gian Chiếu Đa diện}
-Thay vì chỉ tính toán một ma trận chú ý đơn lẻ trên không gian $C$ chiều, Multi-Head Attention chia nhỏ không gian kênh thành $h$ không gian con độc lập (với $d_k = C/h$):
-\begin{align}
-    \text{head}_i &= \text{Attention}(\mathbf{Z} \mathbf{W}_i^Q, \mathbf{Z} \mathbf{W}_i^K, \mathbf{Z} \mathbf{W}_i^V) \in \mathbb{R}^{T \times d_k} \quad (i = 1, \dots, h) \\
-    \text{MultiHead}(\mathbf{Z}) &= \left[ \text{head}_1 \,\|\, \text{head}_2 \,\|\, \dots \,\|\, \text{head}_h \right] \mathbf{W}^O \in \mathbb{R}^{T \times C}
-\end{align}
-với $\|$ là phép ghép nối kênh và $\mathbf{W}^O \in \mathbb{R}^{C \times C}$.
-
-\textbf{Lợi ích học thuật:} Mỗi đầu chú ý (Head) có thể tự do học và chuyên môn hóa để ghi nhận một loại hình tương quan thời gian khác nhau:
-\begin{itemize}
-    \item Head 1 có thể tập trung vào mối quan hệ trong ngắn hạn (Short-term trend: các bước $t-1, t-2$).
-    \item Head 2 có thể nắm bắt các dao động chu kỳ tương đồng với bước trước đó 15--20 phút.
-    \item Head 3 và 4 đóng vai trò điều hòa toàn cục và lọc bỏ các điểm nhiễu ngoại lai.
-\end{itemize}
-
-\subsection{So sánh Lý thuyết: Spatial vs Temporal vs Joint Spatio-Temporal Attention}
-Để hiểu rõ lý do lựa chọn cơ chế Chú ý thời gian tách rời (Decoupled Temporal Attention) trong TA-STGCN, Bảng \ref{tab:so_sanh_attention_types} phân tích chi phí bộ nhớ và độ phức tạp tính toán giữa các phương án thiết kế.
-
-\begin{table}[htbp]
-\centering
-\caption{Phân tích độ phức tạp tính toán và bộ nhớ kích hoạt của các cơ chế Attention.}
-\label{tab:so_sanh_attention_types}
-\small
-\begin{tabularx}{\textwidth}{l c c X}
-\toprule
-\textbf{Cơ chế Attention} & \textbf{Độ phức tạp Thời gian} & \textbf{Bộ nhớ Kích hoạt} & \textbf{Đánh giá Ứng dụng trên Đồ thị $N=608$} \\
-\midrule
-Joint Spatio-Temporal & $\mathcal{O}((N \cdot T)^2 \cdot C)$ & $\mathcal{O}((N \cdot T)^2)$ & Bùng nổ bộ nhớ ($>24\text{ GB}$ VRAM), không thể huấn luyện batch lớn. \\
-Spatial Attention & $\mathcal{O}(T \cdot N^2 \cdot C)$ & $\mathcal{O}(T \cdot N^2)$ & Ma trận $608 \times 608$ tại mỗi bước thời gian làm tăng mạnh số tham số (ASTGCN). \\
-\textbf{Temporal Attention (Ours)} & $\mathbf{\mathcal{O}(N \cdot T^2 \cdot C)}$ & $\mathbf{\mathcal{O}(N \cdot T^2)}$ & \textbf{Cực kỳ tiết kiệm ($T=24 \ll N=608$), chạy song song độc lập cho từng nút.} \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Bằng cách áp dụng Attention độc lập trên chiều thời gian ($T=24$) cho mỗi nút, độ phức tạp ma trận chú ý chỉ là $24 \times 24 = 576$ phần tử cho mỗi nút, nhỏ hơn hàng trăm lần so với ma trận không gian $608 \times 608 = 369.664$ phần tử. Đây chính là chìa khóa giúp TA-STGCN đạt được năng lực biểu diễn toàn cục mà vẫn duy trì tính kinh tế phần cứng tuyệt vời.
-
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Ước lượng Thống kê Bền vững và Hàm Mất mát Huber Loss}
-Trong các hệ thống ITS thực tế dựa trên camera, dữ liệu số đếm luôn chứa đựng các điểm ngoại lai (Outliers) bắt nguồn từ:
-\begin{itemize}
-    \item Hiện tượng đèn pha xe rọi thẳng vào ống kính vào ban đêm gây lóa tạm thời.
-    \item Xe tải lớn hoặc xe buýt đỗ sát camera che khuất hoàn toàn tầm nhìn trong một vài chu kỳ đèn.
-    \item Rung lắc camera do gió lớn hoặc mưa bão làm thay đổi góc quan sát.
-\end{itemize}
-
-\subsection{Hạn chế của Hàm Mất mát Bình phương Tối thiểu \texorpdfstring{($L_2$ Loss)}{(L2 Loss)}}
-Hàm mất mát truyền thống Mean Squared Error (MSE hay $L_2$ Loss) được định nghĩa bởi:
-\begin{equation}
-    \mathcal{L}_2(e) = \frac{1}{2} e^2 \quad (\text{với } e = y - \hat{y})
-\end{equation}
-Đạo hàm bậc nhất (Gradient) của $L_2$ Loss tỷ lệ thuận tuyến tính với độ lớn sai số:
-\begin{equation}
-    \frac{\partial \mathcal{L}_2}{\partial e} = e
-\end{equation}
-Khi gặp phải một điểm dữ liệu ngoại lai mang sai số lớn (ví dụ $|e| = 50$ xe), gradient sẽ bùng nổ cực lớn ($\nabla = 50$), kéo lệch toàn bộ các vector trọng số của mạng nơ-ron về phía điểm ngoại lai đó, phá vỡ sự ổn định hội tụ trên các mẫu dữ liệu bình thường.
-
-\subsection{Hạn chế của Hàm Mất mát Trị Tuyệt đối \texorpdfstring{($L_1$ Loss)}{(L1 Loss)}}
-Hàm mất mát Mean Absolute Error (MAE hay $L_1$ Loss):
-\begin{equation}
-    \mathcal{L}_1(e) = |e| \implies \frac{\partial \mathcal{L}_1}{\partial e} = \text{sign}(e) \quad (\forall e \neq 0)
-\end{equation}
-Mặc dù $L_1$ Loss có khả năng chống ngoại lai tốt hơn vì đạo hàm bị chặn bởi hằng số $\pm 1$, hàm số này lại không khả vi tại điểm cực trị $e = 0$. Gradient luôn có độ lớn bằng $1$ ngay cả khi sai số đã rất nhỏ ($|e| = 0.01$), khiến thuật toán tối ưu hóa liên tục bị dao động quanh điểm cực tiểu mà không thể hội tụ trơn tru.
-
-\subsection{Hàm Mất mát Huber Loss \texorpdfstring{(Smooth $L_1$)}{(Smooth L1)}}
-Nhà toán học Peter J. Huber (Annals of Mathematical Statistics, 1964) đã đề xuất hàm mất mát hỗn hợp kết hợp ưu điểm của cả $L_2$ và $L_1$:
+Mô hình hồi quy đếm xe áp dụng hàm mất mát \textbf{Huber Loss} (Smooth $L_1$) kết hợp ưu thế của cả hai hàm số:
 \begin{equation}
 \mathcal{L}_{\mathrm{Huber}}(e) =
 \begin{cases}
 \frac{1}{2} e^2, & \text{khi } |e| < \delta, \\
-\delta \left( |e| - \frac{1}{2} \delta \right), & \text{khi } |e| \ge \delta.
+\delta \left( |e| - \frac{1}{2} \delta \right), & \text{khi } |e| \ge \delta
 \end{cases}
 \end{equation}
-với $\delta > 0$ là ngưỡng chuyển tiếp (đề tài thiết lập chuẩn $\delta = 1.0$).
+với ngưỡng chuyển tiếp chuẩn $\delta = 1.0$.
 
-Đạo hàm bậc nhất (Hàm ảnh hưởng -- Influence Function $\psi(e)$) của Huber Loss có dạng:
+Hàm ảnh hưởng (Influence Function -- đạo hàm bậc nhất) của Huber Loss có dạng:
 \begin{equation}
 \psi(e) = \frac{\partial \mathcal{L}_{\mathrm{Huber}}}{\partial e} =
 \begin{cases}
 e, & \text{khi } |e| < \delta, \\
-\delta \cdot \text{sign}(e), & \text{khi } |e| \ge \delta.
+\delta \cdot \text{sign}(e), & \text{khi } |e| \ge \delta
 \end{cases}
 \end{equation}
+Tại vùng sai số nhỏ ($|e| < \delta$), hàm hoạt động như $L_2$ Loss cho phép gradient suy giảm mượt mà về 0 giúp mô hình hội tụ chính xác. Tại vùng sai số lớn ($|e| \ge \delta$), gradient bị chặn tuyệt đối bởi hằng số $\pm \delta = \pm 1.0$, bảo đảm mô hình duy trì tính bền vững trước các điểm ảnh ngoại lai cực đoan.
 
-\textbf{Phân tích đặc tính thống kê vượt trội:}
-\begin{enumerate}
-    \item \textbf{Vùng sai số nhỏ ($|e| < \delta$):} Hàm số hoạt động như $L_2$ Loss, trơn tru, khả vi liên tục bậc hai ($\psi'(e) = 1$), cho phép gradient suy giảm mượt mà về 0 giúp mô hình hội tụ chính xác tại cực tiểu toàn cục.
-    \item \textbf{Vùng sai số lớn ($|e| \ge \delta$):} Hàm số chuyển sang dạng tuyến tính như $L_1$ Loss, với đạo hàm bị chặn tuyệt đối bởi ngưỡng $\pm \delta$ (với $\delta=1.0$, $|\psi(e)| \le 1.0$). Khi gặp ngoại lai cực lớn, gradient không bị bùng nổ, bảo vệ các tầng nơ-ron không bị biến dạng biểu diễn đặc trưng.
-\end{enumerate}
-
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Lan truyền Sai số và Hiệu ứng Giảm Phương sai của Attention}
-\subsection{Mô hình Toán học Tín hiệu Giao thông Mang Sai số Cảm biến}
-Xét chuỗi thời gian số lượng xe thực tế chân thực tại một nút giao thông là $\mathbf{s} = [s_1, s_2, \dots, s_{T_{\text{in}}}]^T \in \mathbb{R}^{T_{\text{in}}}$. Do khâu nhận dạng thị giác tại Giai đoạn 1 bị ảnh hưởng bởi che khuất và điều kiện thời tiết, tín hiệu quan sát đầu vào đưa vào Giai đoạn 2 thực chất là:
+Hàm mất mát tổng thể huấn luyện Giai đoạn 1 là:
 \begin{equation}
-    \mathbf{x} = \mathbf{s} + \boldsymbol{\eta} \in \mathbb{R}^{T_{\text{in}}}
-\end{equation}
-trong đó $\boldsymbol{\eta} = [\eta_1, \eta_2, \dots, \eta_{T_{\text{in}}}]^T$ là vector sai số nhận dạng ngẫu nhiên với kỳ vọng $\mathbb{E}[\eta_t] = 0$ và phương sai $\text{Var}(\eta_t) = \sigma_\eta^2$.
-
-\subsection{Chứng minh Hiệu ứng Giảm Phương sai qua Cửa sổ Chú ý Hiệu dụng}
-\textbf{Định lý 2.4 (Hiệu ứng Giảm phương sai của Attention):} 
-Xét một tầng Attention có vector trọng số chú ý tại bước truy vấn $\tau$ là $\boldsymbol{\alpha} = [\alpha_1, \alpha_2, \dots, \alpha_{T_{\text{in}}}]^T \in \Delta^{T_{\text{in}}-1}$ thỏa mãn ràng buộc đơn thể:
-\begin{equation}
-    \sum_{t=1}^{T_{\text{in}}} \alpha_t = 1, \quad \alpha_t \ge 0 \ (\forall t = 1, \dots, T_{\text{in}})
-\end{equation}
-Giả sử conditionally trên trọng số $\boldsymbol{\alpha}$, các thành phần sai số $\eta_t$ là độc lập và cùng phương sai $\sigma_\eta^2$. Khi đó, phương sai của tín hiệu sau khi tổng hợp qua tầng chú ý giảm tỉ lệ nghịch với độ rộng của cửa sổ chú ý hiệu dụng:
-\begin{equation}
-    \text{Var}\left( \sum_{t=1}^{T_{\text{in}}} \alpha_t \eta_t \right) = \frac{\sigma_\eta^2}{T_{\text{eff}}}
-\end{equation}
-trong đó $T_{\text{eff}} = \frac{1}{\|\boldsymbol{\alpha}\|_2^2} = \frac{1}{\sum_{t=1}^{T_{\text{in}}} \alpha_t^2} \in [1, T_{\text{in}}]$ là \textbf{Cửa sổ Chú ý Hiệu dụng (Effective Attention Window)}.
-
-\textbf{Chứng minh:}
-Vì các biến ngẫu nhiên $\eta_t$ là độc lập từng đôi một, phương sai của tổ hợp tuyến tính bằng tổng phương sai các thành phần:
-\begin{align}
-    \text{Var}\left( \sum_{t=1}^{T_{\text{in}}} \alpha_t \eta_t \right) &= \sum_{t=1}^{T_{\text{in}}} \text{Var}(\alpha_t \eta_t) = \sum_{t=1}^{T_{\text{in}}} \alpha_t^2 \text{Var}(\eta_t) \nonumber \\
-    &= \sigma_\eta^2 \sum_{t=1}^{T_{\text{in}}} \alpha_t^2 = \sigma_\eta^2 \|\boldsymbol{\alpha}\|_2^2
-\end{align}
-Định nghĩa $T_{\text{eff}} = \frac{1}{\|\boldsymbol{\alpha}\|_2^2}$, ta thu được trực tiếp:
-\begin{equation}
-    \text{Var}\left( \sum_{t=1}^{T_{\text{in}}} \alpha_t \eta_t \right) = \frac{\sigma_\eta^2}{T_{\text{eff}}} \quad \blacksquare
+    \mathcal{L}_{\text{Stage 1}} = \frac{1}{2} \left( \mathcal{L}_{\mathrm{Huber}}(c_{\text{car}} - \hat{c}_{\text{car}}) + \mathcal{L}_{\mathrm{Huber}}(c_{\text{bike}} - \hat{c}_{\text{bike}}) \right)
 \end{equation}
 
-\textbf{Phân tích ý nghĩa giới hạn của $T_{\text{eff}}$:}
-\begin{enumerate}
-    \item \textbf{Trường hợp tệ nhất (Trọng số suy biến):} Nếu mô hình chỉ chú ý duy nhất vào một bước thời gian gần nhất: $\boldsymbol{\alpha} = [0, \dots, 0, 1]^T$, khi đó $\|\boldsymbol{\alpha}\|_2^2 = 1 \implies T_{\text{eff}} = 1$. Phương sai giữ nguyên $\text{Var} = \sigma_\eta^2$, toàn bộ nhiễu cảm biến được truyền nguyên vẹn sang tầng dự báo.
-    \item \textbf{Trường hợp tối ưu (Trọng số phân bổ đều):} Nếu mô hình phân bổ đều trọng số trên toàn bộ cửa sổ lịch sử: $\alpha_t = \frac{1}{T_{\text{in}}} = \frac{1}{24} \ (\forall t)$, khi đó:
-    \begin{equation}
-        \|\boldsymbol{\alpha}\|_2^2 = \sum_{t=1}^{24} \left(\frac{1}{24}\right)^2 = 24 \cdot \frac{1}{576} = \frac{1}{24} \implies T_{\text{eff}} = 24
-    \end{equation}
-    Phương sai của nhiễu nhận dạng giảm tới \textbf{24 lần}: $\text{Var} = \frac{\sigma_\eta^2}{24}$.
-\end{enumerate}
-Kết quả lý thuyết này chứng minh một luận điểm khoa học có giá trị cốt lõi: \textbf{Cơ chế Temporal Self-Attention hoạt động như một bộ lọc thông thấp thích ứng dữ liệu (Data-Adaptive Low-Pass Filter)}. Bằng cách tự động phân tán trọng số chú ý ra nhiều bước thời gian lân cận khi phát hiện tín hiệu bị nhiễu động, mô hình triệt tiêu một cách tự nhiên phương sai của sai số nhận dạng camera, bảo vệ các tầng nơ-ron dự báo phía sau không bị sốc tín hiệu.
+% ==============================================================================
+\section{Biểu diễn không -- thời gian của mạng lưới giao thông trên đồ thị}
+\label{sec:bieu_dien_khong_gian_thoi_gian}
 
-\subsection{Mô hình Nhiễu Cảm biến Thực nghiệm (Heteroscedastic Gamma Noise)}
-Để mô phỏng chân thực sai số nhận dạng thực tế từ camera Giai đoạn 1 trong các thử nghiệm độ bền vững, sai số không thể được lấy ngẫu nhiên từ phân phối Gaussian đối xứng lý thuyết vì:
+Bước sang Giai đoạn 2, chuỗi các vector số lượng xe ước lượng từ toàn bộ 608 camera được tích hợp thành đồ thị không gian mạng lưới đường bộ đô thị. Dòng giao thông vận hành trên mạng lưới đường phố liên thông có cấu trúc hình học phi Euclid, trong đó các tuyến đường một chiều, dải phân cách cứng và khoảng cách vật lý giữa các giao lộ quy định chặt chẽ khả năng lan truyền của phương tiện.
+
+Mạng lưới quan trắc gồm $N = 608$ vị trí camera được mô hình hóa dưới dạng một đồ thị có hướng và có trọng số $\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathbf{W})$, trong đó:
 \begin{itemize}
-    \item Sai số nhận dạng thực tế mang tính dị biệt (Heteroscedasticity): Lưu lượng xe tại nút càng lớn, hiện tượng che khuất càng nhiều, biên độ sai số tuyệt đối càng tăng.
-    \item Sai số mang tính bất đối xứng mạnh (Asymmetry): Xe máy bị che khuất dẫn đến xu hướng đếm thiếu (Undercounting) chiếm đa số áp đảo so với đếm thừa.
+    \item $\mathcal{V} = \{v_1, v_2, \dots, v_N\}$ là tập hợp $N$ đỉnh, mỗi đỉnh tương ứng với một trạm camera giám sát tại một ngã tư hoặc hướng tiếp cận giao lộ.
+    \item $\mathcal{E} \subseteq \mathcal{V} \times \mathcal{V}$ là tập hợp các cạnh định hướng, thể hiện hành lang lưu thông hợp lệ của dòng phương tiện từ nút $v_i$ đến nút $v_j$ dựa trên cấu trúc đường thực tế (được trích xuất từ bản đồ OpenStreetMap).
+    \item $\mathbf{W} \in \mathbb{R}^{N \times N}$ là ma trận trọng số không gian, trong đó phần tử $W_{ij} > 0$ biểu thị mức độ liên kết không gian giữa nút $v_i$ và $v_j$, và $W_{ij} = 0$ nếu giữa hai nút không có kết nối trực tiếp.
 \end{itemize}
 
-Do đó, nhóm nghiên cứu mô hình hóa nhiễu cảm biến thông qua phân phối Gamma dị biệt có độ lệch âm $80\%$:
+Tại mỗi bước thời gian $t$, trạng thái giao thông trên toàn bộ mạng lưới được biểu diễn bởi ma trận tín hiệu $\mathbf{X}_t \in \mathbb{R}^{N \times C}$, trong đó $C=1$ hoặc $C=2$ (tương ứng với số lượng ô tô con và xe máy trong chu kỳ 5 phút). 
+
+Xét một cửa sổ quan sát lịch sử gồm $T_{\text{in}} = 24$ bước thời gian liên tiếp (tương đương 2 giờ quan sát), dữ liệu đầu vào của bài toán dự báo là tensor bậc ba:
 \begin{equation}
-    \eta_{i,t} \sim - \text{Gamma}\left( k = 2, \theta_{i,t} = \frac{\Delta\text{MAE} \cdot y_{i,t}}{2 \bar{y}} \right)
+    \mathcal{X} = [\mathbf{X}_{t-T_{\text{in}}+1}, \mathbf{X}_{t-T_{\text{in}}+2}, \dots, \mathbf{X}_t] \in \mathbb{R}^{T_{\text{in}} \times N \times C}
 \end{equation}
-trong đó $k=2$ là tham số hình dạng, $\theta_{i,t}$ là tham số tỷ lệ biến thiên theo lưu lượng tức thời $y_{i,t}$, $\bar{y}$ là lưu lượng trung bình toàn mạng và $\Delta\text{MAE}$ là mức độ nhiễu danh định cần tiêm vào hệ thống.
+Mục tiêu của mô hình dự báo không -- thời gian là tìm ánh xạ hàm học được $\mathcal{F}_{\Theta}: \mathbb{R}^{T_{\text{in}} \times N \times C} \to \mathbb{R}^{H \times N \times C}$ với tập tham số $\Theta$, nhằm ước lượng trạng thái giao thông tương lai qua $H = 6$ bước thời gian kế tiếp (30 phút tiếp theo):
+\begin{equation}
+    \hat{\mathcal{Y}} = [\hat{\mathbf{X}}_{t+1}, \hat{\mathbf{X}}_{t+2}, \dots, \hat{\mathbf{X}}_{t+H}] = \mathcal{F}_{\Theta}(\mathcal{X}; \mathcal{G})
+\end{equation}
 
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Không gian Metric và Hàm Nhân Cơ sở Xuyên tâm (RBF Kernel)}
-Để mô hình hóa cấu trúc mạng lưới giao thông đường bộ từ tọa độ địa lý thực của 608 camera, lý thuyết không gian metric và hàm nhân đối xứng đóng vai trò nền tảng.
+% ==============================================================================
+\section{Lý thuyết đồ thị phổ và toán tử tích chập Chebyshev (ChebNet)}
+\label{sec:ly_thuyet_do_thi_pho}
 
-\subsection{Khoảng cách Địa lý Cầu trên Mặt Trái Đất (Haversine Metric)}
-Tọa độ địa lý của mỗi trạm camera được xác định bởi cặp giá trị vĩ độ và kinh độ $(\phi_i, \lambda_i)$ theo hệ quy chiếu trắc địa WGS-84. Vì Trái Đất có dạng hình cầu với bán kính trung bình $R \approx 6.371\text{ km}$, khoảng cách đường chim bay giữa hai trạm camera $i$ và $j$ dọc theo cung tròn lớn (Great-Circle Distance) được tính toán bằng công thức Haversine:
-\begin{align}
-    \Delta \phi &= \phi_j - \phi_i, \quad \Delta \lambda = \lambda_j - \lambda_i \\
-    a &= \sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_i) \cos(\phi_j) \sin^2\left(\frac{\Delta \lambda}{2}\right) \\
-    d_{\text{geo}}(i, j) &= 2 R \cdot \arcsin\left(\sqrt{a}\right)
-\end{align}
-Hàm khoảng cách $d_{\text{geo}}: \mathcal{V} \times \mathcal{V} \to [0, \infty)$ thỏa mãn đầy đủ ba tiên đề của một metric hợp lệ:
+Để trích xuất các tương quan không gian phức tạp trên đồ thị phi Euclid $\mathcal{G}$, lý thuyết đồ thị phổ cung cấp nền tảng toán học cho phép định nghĩa phép biến đổi Fourier và phép tích chập trên đồ thị.
+
+\subsection{Toán tử Laplacian trên đồ thị}
+Cho ma trận trọng số không âm $\mathbf{W} \in \mathbb{R}^{N \times N}$. Ma trận bậc đường chéo $\mathbf{D} \in \mathbb{R}^{N \times N}$ được định nghĩa bởi:
+\begin{equation}
+    D_{ii} = \sum_{j=1}^{N} W_{ij}, \quad D_{ij} = 0 \quad (\forall i \neq j)
+\end{equation}
+Toán tử Laplacian đối xứng chuẩn hóa $\mathbf{L} \in \mathbb{R}^{N \times N}$ được xác định theo công thức:
+\begin{equation}
+    \mathbf{L} = \mathbf{I}_N - \mathbf{D}^{-1/2} \mathbf{W} \mathbf{D}^{-1/2}
+\end{equation}
+trong đó $\mathbf{I}_N$ là ma trận đơn vị cấp $N$.
+
+\textbf{Đặc tính đại số của toán tử Laplacian:}
 \begin{enumerate}
-    \item Tính xác định dương: $d_{\text{geo}}(i, j) \ge 0$, và $d_{\text{geo}}(i, j) = 0 \iff i = j$.
-    \item Tính đối xứng: $d_{\text{geo}}(i, j) = d_{\text{geo}}(j, i)$.
-    \item Bất đẳng thức tam giác: $d_{\text{geo}}(i, j) \le d_{\text{geo}}(i, k) + d_{\text{geo}}(k, j) \quad (\forall i, j, k \in \mathcal{V})$.
-\end{enumerate}
-
-\subsection{Hàm Nhân Cơ sở Xuyên tâm Gaussian RBF}
-Để chuyển đổi ma trận khoảng cách vật lý sang ma trận trọng số tương quan không gian, nghiên cứu áp dụng hàm nhân cơ sở xuyên tâm (Radial Basis Function -- RBF Kernel):
-\begin{equation}
-    K(i, j) = \exp\left( - \frac{d(i, j)^2}{\sigma^2} \right)
-\end{equation}
-trong đó $\sigma > 0$ là tham số độ rộng băng thông (Bandwidth Parameter) đại diện cho phạm vi lan tỏa tương quan không gian.
-
-\textbf{Định lý 2.5 (Tính xác định dương của Ma trận Gram RBF):}
-Ma trận Gram $\mathbf{K} \in \mathbb{R}^{N \times N}$ với các phần tử $K_{ij} = \exp\left(-\frac{\|x_i - x_j\|^2}{\sigma^2}\right)$ là một ma trận đối xứng xác định dương (Symmetric Positive Definite) với mọi tập hợp các điểm phân biệt $\{x_1, \dots, x_N\}$.
-
-\textbf{Chứng minh:}
-Dựa trên Định lý Bochner trong giải tích hàm, một hàm nhân dừng $K(x, y) = \phi(x - y)$ là xác định dương khi và chỉ khi $\phi$ là biến đổi Fourier của một độ đo Borel hữu hạn, không âm trên $\mathbb{R}^d$:
-\begin{equation}
-    \phi(\Delta x) = \int_{\mathbb{R}^d} e^{i \omega^T \Delta x} \, d\mu(\omega)
-\end{equation}
-Hàm nhân Gaussian $\phi(\Delta x) = \exp\left(-\frac{\|\Delta x\|^2}{\sigma^2}\right)$ có biến đổi Fourier là một hàm Gaussian khác trong miền tần số:
-\begin{equation}
-    \mathcal{F}\{\phi\}(\omega) = \left(\pi \sigma^2\right)^{d/2} \exp\left( - \frac{\sigma^2 \|\omega\|^2}{4} \right) > 0 \quad (\forall \omega \in \mathbb{R}^d)
-\end{equation}
-Vì mật độ phổ luôn dương trên toàn không gian, ma trận Gram $\mathbf{K}$ luôn đối xứng xác định dương. Điều này đảm bảo rằng toán tử Laplacian đồ thị xây dựng từ ma trận RBF luôn có phổ ổn định và các phép phân rã phổ luôn khả thi về mặt số học. $\blacksquare$
-
-\subsection{Cơ chế Cắt ngưỡng (Epsilon-Thresholding) Bảo toàn Tính Thưa}
-Nếu sử dụng trực tiếp ma trận RBF đầy đủ, đồ thị sẽ trở thành đồ thị đầy đủ ($N^2 = 369.664$ liên kết), phá vỡ bản chất cục bộ của mạng lưới đường bộ thực tế và làm bùng nổ chi phí tính toán tích chập đồ thị. Nhóm nghiên cứu áp dụng quy tắc cắt ngưỡng nhị cấp:
-\begin{equation}
-    W_{ij} =
-    \begin{cases}
-    \exp\left( - \left(\frac{d(i, j)}{\sigma}\right)^2 \right), & \text{khi } d(i, j) \le \tau \text{ và } (i, j) \text{ liên thông trên OSM}, \\
-    0, & \text{ngược lại.}
-    \end{cases}
-\end{equation}
-với $\tau$ là ngưỡng khoảng cách cắt cụt. Bằng cách kết hợp ngưỡng khoảng cách với khả năng lưu thông thực tế trên mạng OpenStreetMap (bảo đảm đường một chiều và tính có hướng của dòng phương tiện), ma trận kề $W$ được nén thành ma trận thưa với đúng \textbf{2.452 cạnh có hướng} (mật độ thưa $99.34\%$), giảm độ phức tạp tính toán tích chập ChebNet xuống mức tối thiểu.
-
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Chuỗi Thời gian Phi dừng và Chuẩn hóa Z-Score Cục bộ theo Nút}
-\subsection{Đặc tính Phi dừng của Dòng Giao thông Đô thị}
-Chuỗi thời gian lưu lượng giao thông tại mỗi nút quan trắc $i$ là một quá trình ngẫu nhiên phi dừng (Non-Stationary Stochastic Process):
-\begin{equation}
-    y_i(t) = \mu_i(t) + s_i(t) + \epsilon_i(t)
-\end{equation}
-trong đó $\mu_i(t)$ là xu hướng dài hạn biến thiên chậm, $s_i(t)$ là thành phần chu kỳ ngày đêm (Diurnal periodicity) có biên độ dao động cực lớn (từ 0 xe vào ban đêm lên tới hàng trăm xe vào giờ cao điểm sáng và chiều), và $\epsilon_i(t)$ là thành phần nhiễu ngẫu nhiên.
-
-Hơn nữa, các nút giao thông khác nhau có năng lực thông hành (Roadway Capacity) rất dị biệt: một nút giao trên trục đại lộ chính (như Điện Biên Phủ hoặc Võ Văn Kiệt) có lưu lượng trung bình cao gấp 5 đến 10 lần một nút giao trên đường nhánh nội bộ.
-
-\subsection{So sánh Chuẩn hóa Toàn cục so với Chuẩn hóa Cục bộ theo Nút}
-\textbf{1. Chuẩn hóa toàn cục (Global Normalization):}
-Tính toán kỳ vọng chung $\mu_{\text{all}}$ và độ lệch chuẩn chung $\sigma_{\text{all}}$ trên toàn bộ dữ liệu của tất cả các nút:
-\begin{equation}
-    z_{i,t} = \frac{y_{i,t} - \mu_{\text{all}}}{\sigma_{\text{all}}}
-\end{equation}
-\textit{Hạn chế cốt tử:} Các nút có lưu lượng nhỏ sẽ bị ép về các giá trị gần sát 0, khiến gradient của chúng bị triệt tiêu trong quá trình tối ưu hóa. Ngược lại, các nút lưu lượng lớn sẽ chi phối hoàn toàn hàm mất mát, khiến mô hình chỉ tập trung dự báo các trục đại lộ mà bỏ rơi mạng lưới đường nhánh.
-
-\textbf{2. Chuẩn hóa Z-Score cục bộ theo nút (Node-Specific Z-Score Normalization):}
-Nghiên cứu áp dụng kỹ thuật tính toán tham số thống kê độc lập cho từng nút $i \in \{1, \dots, N\}$ dựa riêng trên tập huấn luyện:
-\begin{equation}
-    \mu_i = \frac{1}{|T_{\text{train}}|} \sum_{t \in T_{\text{train}}} y_{i,t}, \quad \sigma_i = \sqrt{ \frac{1}{|T_{\text{train}}|} \sum_{t \in T_{\text{train}}} (y_{i,t} - \mu_i)^2 + \epsilon_{\text{norm}} }
-\end{equation}
-Dữ liệu chuẩn hóa đưa vào mạng học sâu có dạng:
-\begin{equation}
-    x_{i,t} = \frac{y_{i,t} - \mu_i}{\sigma_i} \sim \mathcal{N}(0, 1)
-\end{equation}
-
-\textbf{Định lý 2.6 (Bảo toàn Tương quan Chuỗi không gian):}
-Phép chuẩn hóa Z-Score cục bộ theo từng nút bảo toàn hoàn hảo hệ số tương quan tuyến tính Pearson giữa hai chuỗi thời gian tại hai nút bất kỳ.
-
-\textbf{Chứng minh:}
-Xét hai chuỗi thời gian gốc $\mathbf{y}_i, \mathbf{y}_j \in \mathbb{R}^T$ tại nút $i$ và nút $j$. Hệ số tương quan Pearson giữa chúng là:
-\begin{equation}
-    \rho(\mathbf{y}_i, \mathbf{y}_j) = \frac{\sum_{t=1}^T (y_{i,t} - \mu_i)(y_{j,t} - \mu_j)}{\sqrt{\sum_{t=1}^T (y_{i,t} - \mu_i)^2} \sqrt{\sum_{t=1}^T (y_{j,t} - \mu_j)^2}}
-\end{equation}
-Sau khi thực hiện phép biến đổi affine Z-Score cục bộ: $\mathbf{x}_i = \frac{\mathbf{y}_i - \mu_i}{\sigma_i}$ và $\mathbf{x}_j = \frac{\mathbf{y}_j - \mu_j}{\sigma_j}$ với $\sigma_i, \sigma_j > 0$:
-\begin{align}
-    \rho(\mathbf{x}_i, \mathbf{x}_j) &= \frac{\sum_{t=1}^T (x_{i,t} - 0)(x_{j,t} - 0)}{\sqrt{\sum_{t=1}^T x_{i,t}^2} \sqrt{\sum_{t=1}^T x_{j,t}^2}} \nonumber \\
-    &= \frac{\sum_{t=1}^T \left(\frac{y_{i,t} - \mu_i}{\sigma_i}\right) \left(\frac{y_{j,t} - \mu_j}{\sigma_j}\right)}{\sqrt{\sum_{t=1}^T \left(\frac{y_{i,t} - \mu_i}{\sigma_i}\right)^2} \sqrt{\sum_{t=1}^T \left(\frac{y_{j,t} - \mu_j}{\sigma_j}\right)^2}} \nonumber \\
-    &= \frac{\frac{1}{\sigma_i \sigma_j} \sum_{t=1}^T (y_{i,t} - \mu_i)(y_{j,t} - \mu_j)}{\frac{1}{\sigma_i} \sqrt{\sum_{t=1}^T (y_{i,t} - \mu_i)^2} \cdot \frac{1}{\sigma_j} \sqrt{\sum_{t=1}^T (y_{j,t} - \mu_j)^2}} = \rho(\mathbf{y}_i, \mathbf{y}_j)
-\end{align}
-Điều này chứng minh rằng chuẩn hóa cục bộ không làm biến dạng cấu trúc tương quan không gian giữa các nút trên đồ thị, đồng thời đưa tín hiệu tại mọi nút về cùng thang đo đơn vị, tạo điều kiện lý tưởng cho sự hội tụ đồng đều của mô hình STGNN. $\blacksquare$
-
-% ------------------------------------------------------------------------------
-\section{Mã hóa Vị trí Thời gian Tuần hoàn (Temporal Positional Encoding)}
-Trong cơ chế Attention, phép tính tích vô hướng $\mathbf{Q} \mathbf{K}^T$ có tính chất giao hoán đối với thứ tự các phần tử: nếu xáo trộn ngẫu nhiên thứ tự các bước thời gian trong cửa sổ lịch sử, đầu ra của Attention vẫn không đổi (Permutation Invariance). Tuy nhiên, trong chuỗi thời gian giao thông, bước thời gian $t-1$ (ngay trước đó 5 phút) mang tính phụ thuộc nhân quả hoàn toàn khác bước $t-24$ (cách đó 2 giờ).
-
-Để đưa thông tin thứ tự thời gian vào mô hình, cơ chế Mã hóa Vị trí Thời gian (Temporal Positional Encoding -- PE) được áp dụng.
-
-\subsection{Mã hóa Vị trí Hình sin (Sinusoidal Positional Encoding)}
-Mỗi vị trí thời gian $pos \in \{1, 2, \dots, T_{\text{in}}\}$ được ánh xạ sang một vector $d$-chiều thông qua các hàm sóng hình sin và cosin ở các tần số khác nhau:
-\begin{align}
-    \text{PE}_{(pos, 2i)} &= \sin\left( \frac{pos}{10000^{2i/d}} \right) \\
-    \text{PE}_{(pos, 2i+1)} &= \cos\left( \frac{pos}{10000^{2i/d}} \right)
-\end{align}
-với $i \in \{0, 1, \dots, \lfloor d/2 \rfloor - 1\}$ là chỉ số chiều đặc trưng.
-
-\textbf{Ý nghĩa toán học của chu kỳ sóng:}
-Các bước sóng hình thành một cấp số nhân hình học từ $2\pi$ đến $10000 \cdot 2\pi$. Các chiều tần số cao (chỉ số $i$ nhỏ) biến thiên nhanh chóng, giúp mô hình phân biệt chính xác sự sai khác giữa các bước thời gian liền kề ($t$ và $t-1$). Trong khi đó, các chiều tần số thấp (chỉ số $i$ lớn) biến thiên chậm chạp, cung cấp thông tin về vị trí tương đối trên quy mô toàn cửa sổ quan sát.
-
-\textbf{Định lý 2.7 (Phép biến đổi Tuyến tính dịch chuyển Thời gian):}
-Với bất kỳ khoảng dịch chuyển thời gian cố định $k$, vector mã hóa vị trí tại bước $pos + k$ luôn có thể biểu diễn dưới dạng một phép biến đổi tuyến tính affine của vector tại bước $pos$:
-\begin{equation}
-    \text{PE}_{pos + k} = \mathbf{M}_k \cdot \text{PE}_{pos}
-\end{equation}
-trong đó $\mathbf{M}_k$ là một ma trận trực giao khối đường chéo độc lập với vị trí $pos$.
-
-\textbf{Chứng minh:}
-Dựa trên công thức lượng giác cộng góc:
-\begin{align}
-    \sin(\omega (pos + k)) &= \sin(\omega \cdot pos) \cos(\omega k) + \cos(\omega \cdot pos) \sin(\omega k) \\
-    \cos(\omega (pos + k)) &= \cos(\omega \cdot pos) \cos(\omega k) - \sin(\omega \cdot pos) \sin(\omega k)
-\end{align}
-Biểu diễn dưới dạng ma trận xoay 2D cho mỗi cặp kênh $(2i, 2i+1)$:
-\begin{equation}
-    \begin{bmatrix}
-    \text{PE}_{(pos+k, 2i)} \\
-    \text{PE}_{(pos+k, 2i+1)}
-    \end{bmatrix}
-    =
-    \begin{bmatrix}
-    \cos(\omega_i k) & \sin(\omega_i k) \\
-    -\sin(\omega_i k) & \cos(\omega_i k)
-    \end{bmatrix}
-    \begin{bmatrix}
-    \text{PE}_{(pos, 2i)} \\
-    \text{PE}_{(pos, 2i+1)}
-    \end{bmatrix}
-\end{equation}
-với $\omega_i = \frac{1}{10000^{2i/d}}$. Vì ma trận xoay là tuyến tính và hoàn toàn độc lập với $pos$, cơ chế Self-Attention có thể dễ dàng học cách tham chiếu các khoảng cách thời gian tương đối ($k$ bước trước) thông qua việc chiếu tuyến tính các ma trận truy vấn $\mathbf{Q}$ và khóa $\mathbf{K}$. $\blacksquare$
-
-% ------------------------------------------------------------------------------
-\section{Lý thuyết Tối ưu hóa và Động học Suy giảm Trọng số (Optimization Dynamics)}
-Quá trình huấn luyện các mạng nơ-ron sâu trong đề tài đòi hỏi các thuật toán tối ưu hóa thích ứng mạnh mẽ để vượt qua các điểm yên ngựa (Saddle Points) và cực tiểu cục bộ xấu trên cảnh quan hàm mục tiêu nhiều chiều.
-
-\subsection{Thuật toán Tối ưu hóa Adam}
-Thuật toán Adam (Kingma \& Ba, ICLR 2015) kết hợp ý tưởng của Động lượng (Momentum) và RMSProp thông qua việc ước lượng moment bậc nhất (kỳ vọng) và moment bậc hai không định tâm (phương sai chưa trừ trung bình) của vector gradient $g_t = \nabla_\theta \mathcal{L}(\theta_t)$:
-\begin{align}
-    m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \quad (\text{Moment bậc 1, } \beta_1 = 0.9) \\
-    v_t &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 \quad (\text{Moment bậc 2, } \beta_2 = 0.999)
-\end{align}
-Để hiệu chỉnh độ lệch khởi tạo (Bias Correction) khi $m_0 = v_0 = 0$:
-\begin{equation}
-    \hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}
-\end{equation}
-Quy tắc cập nhật tham số:
-\begin{equation}
-    \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t
-\end{equation}
-
-\subsection{Cơ chế Suy giảm Trọng số Tách rời AdamW}
-Trong triển khai truyền thống của Adam với chính quy hóa $L_2$, số hạng phạt $L_2$ thường được cộng trực tiếp vào hàm mất mát: $\mathcal{L}_{\text{total}}(\theta) = \mathcal{L}(\theta) + \frac{\lambda}{2} \|\theta\|^2$. Khi đó gradient mở rộng trở thành $g_t' = g_t + \lambda \theta_t$. 
-
-Loshchilov \& Hutter (ICLR 2019) đã chỉ ra rằng việc đưa $\lambda \theta_t$ vào gradient sẽ khiến số hạng chính quy hóa bị chia cho $\sqrt{\hat{v}_t}$. Đối với các trọng số có gradient lịch sử lớn, $\hat{v}_t$ lớn dẫn đến mức độ phạt trọng số bị triệt tiêu; ngược lại đối với trọng số có gradient nhỏ, mức độ phạt lại bị phóng đại. Điều này làm mất đi bản chất của cơ chế suy giảm trọng số (Weight Decay).
-
-Thuật toán \textbf{AdamW} giải quyết triệt để lỗi này bằng cách tách rời hoàn toàn phép suy giảm trọng số ra khỏi việc tính toán moment gradient:
-\begin{equation}
-    \theta_{t+1} = \theta_t - \eta \lambda \theta_t - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t
-\end{equation}
-Nhờ đó, mỗi bước cập nhật sẽ trực tiếp co tỉ lệ vector trọng số một lượng $\eta \lambda$, giúp kiểm soát chuẩn Frobenius của ma trận trọng số một cách chuẩn xác, cải thiện đáng kể khả năng tổng quát hóa trên tập kiểm thử độc lập của EfficientNet-B5 ở Giai đoạn 1.
-
-\subsection{Chiến lược Lập lịch Tốc độ học Cosine Annealing}
-Để mô hình hội tụ mượt mà vào đáy vực sâu phẳng (Flat Minima) -- nơi có khả năng tổng quát hóa cao nhất, nghiên cứu áp dụng chiến lược điều chỉnh tốc độ học Cosine Annealing (Loshchilov \& Hutter, 2016):
-\begin{equation}
-    \eta_t = \eta_{\min} + \frac{1}{2} (\eta_{\max} - \eta_{\min}) \left( 1 + \cos\left( \frac{t}{T_{\max}} \pi \right) \right)
-\end{equation}
-trong đó $\eta_{\max} = 3 \times 10^{-4}$ là tốc độ học ban đầu, $\eta_{\min} = 1 \times 10^{-6}$ là tốc độ học sàn và $T_{\max} = 120$ là tổng số epoch huấn luyện. Tốc độ học giảm dần theo đường cong hàm cosin mềm mại, cho phép mô hình khám phá rộng rãi không gian nghiệm ở các epoch đầu và tinh chỉnh các tham số ở các epoch cuối cùng mà không bị dao động số học.
-
-% ------------------------------------------------------------------------------
-\section{Cơ sở Lý thuyết của Kiểm định Thống kê Phi tham số và Kích thước Hiệu ứng}
-Để khẳng định các kết luận so sánh mô hình trong đề tài đạt độ tin cậy khoa học tuyệt đối, các công cụ kiểm định thống kê suy diễn chuẩn mực được thiết lập chặt chẽ.
-
-\subsection{Kiểm định Phi tham số Friedman Omnibus}
-Khi so sánh hiệu năng của $K$ thuật toán trên $N_d$ mẫu dữ liệu hoặc kịch bản kiểm thử khác nhau, giả định về tính phân phối chuẩn thường bị vi phạm nghiêm trọng bởi sai số giao thông. Kiểm định Friedman (Friedman, 1937) là một kiểm định xếp hạng phi tham số hai chiều tương đương với ANOVA lặp lại.
-
-Giả thuyết không ($H_0$): Tất cả các thuật toán có hiệu năng tương đương nhau, tức là thứ hạng trung bình của các thuật toán là như nhau.
-
-Quy trình tính toán:
-\begin{enumerate}
-    \item Với mỗi mẫu kiểm thử $i \in \{1, \dots, N_d\}$, xếp hạng $K$ thuật toán từ 1 (tốt nhất) đến $K$ (kém nhất), ký hiệu thứ hạng của thuật toán $j$ trên mẫu $i$ là $r_i^j$.
-    \item Tính thứ hạng trung bình của từng thuật toán:
+    \item $\mathbf{L}$ là ma trận thực, đối xứng và nửa xác định dương: với mọi vector tín hiệu đồ thị $\mathbf{x} \in \mathbb{R}^{N}$:
     \begin{equation}
-        R_j = \frac{1}{N_d} \sum_{i=1}^{N_d} r_i^j
+        \mathbf{x}^T \mathbf{L} \mathbf{x} = \frac{1}{2} \sum_{i=1}^{N} \sum_{j=1}^{N} W_{ij} \left( \frac{x_i}{\sqrt{D_{ii}}} - \frac{x_j}{\sqrt{D_{jj}}} \right)^2 \ge 0
     \end{equation}
-    \item Thống kê kiểm định Friedman $\chi_F^2$ được tính bởi:
+    Do đó, toàn bộ các giá trị riêng của $\mathbf{L}$ đều là số thực không âm.
+    \item Phổ giá trị riêng của $\mathbf{L}$ bị chặn trong đoạn hữu hạn:
     \begin{equation}
-        \chi_F^2 = \frac{12 N_d}{K(K + 1)} \left[ \sum_{j=1}^K R_j^2 - \frac{K(K + 1)^2}{4} \right]
+        0 = \lambda_1 \le \lambda_2 \le \dots \le \lambda_N \le 2
     \end{equation}
 \end{enumerate}
-Dưới giả thuyết $H_0$, đại lượng $\chi_F^2$ tuân theo phân phối Chi-bình phương với $K - 1$ bậc tự do khi $N_d > 10$. Nếu giá trị $p < 0.05$, giả thuyết $H_0$ bị bác bỏ, khẳng định có sự khác biệt có ý nghĩa thống kê giữa các thuật toán được so sánh.
 
-\subsection{Kiểm định Cặp Wilcoxon Signed-Rank và Hiệu chỉnh Holm-Bonferroni}
-Sau khi kiểm định Friedman bác bỏ $H_0$, kiểm định hậu nghiệm (Post-hoc analysis) được thực hiện để so sánh từng cặp thuật toán. Kiểm định có dấu Wilcoxon (Wilcoxon Signed-Rank Test) là phương pháp phi tham số lý tưởng cho dữ liệu ghép cặp.
-
-Với $n$ cặp quan sát sai số $(x_i, y_i)$, tính hiệu số $d_i = x_i - y_i$. Loại bỏ các cặp có $d_i = 0$ và xếp hạng các giá trị tuyệt đối $|d_i|$ từ nhỏ đến lớn. Tổng thứ hạng dương $W^+$ và âm $W^-$ được tính bởi:
+Nhờ tính chất đối xứng thực nửa xác định dương, $\mathbf{L}$ có thể phân rã phổ trực chuẩn:
 \begin{equation}
-    W^+ = \sum_{d_i > 0} \text{rank}(|d_i|), \quad W^- = \sum_{d_i < 0} \text{rank}(|d_i|)
+    \mathbf{L} = \mathbf{U} \boldsymbol{\Lambda} \mathbf{U}^T
 \end{equation}
-Thống kê kiểm định $W = \min(W^+, W^-)$.
+trong đó $\mathbf{U} = [\mathbf{u}_1, \mathbf{u}_2, \dots, \mathbf{u}_N] \in \mathbb{R}^{N \times N}$ là ma trận trực giao chứa các vector riêng thỏa mãn $\mathbf{U} \mathbf{U}^T = \mathbf{U}^T \mathbf{U} = \mathbf{I}_N$, và $\boldsymbol{\Lambda} = \text{diag}(\lambda_1, \lambda_2, \dots, \lambda_N)$ là ma trận đường chéo chứa các giá trị riêng tương ứng.
 
-\textbf{Kiểm soát tỷ lệ sai lầm loại I bằng hiệu chỉnh Holm-Bonferroni:}
-Khi thực hiện $M$ phép so sánh cặp đồng thời, nguy cơ phạm sai lầm loại I (Family-Wise Error Rate -- FWER) tăng vọt: $\alpha_{\text{FWER}} = 1 - (1 - \alpha)^M$. Thủ tục tuần tự Holm-Bonferroni kiểm soát FWER ở mức $\alpha = 0.05$ bằng cách sắp xếp các giá trị $p$ theo thứ tự tăng dần: $p_{(1)} \le p_{(2)} \le \dots \le p_{(M)}$ và so sánh tuần tự với ngưỡng điều chỉnh:
+\subsection{Biến đổi Fourier và định lý tích chập trên đồ thị}
+Các vector riêng $\mathbf{u}_k$ đóng vai trò như các hàm sóng điều hòa cơ sở trên đồ thị. Phép biến đổi Fourier trên đồ thị của một tín hiệu $\mathbf{x} \in \mathbb{R}^N$ và phép biến đổi nghịch đảo được định nghĩa lần lượt là:
 \begin{equation}
-    p_{(k)} \le \frac{\alpha}{M - k + 1} \quad (k = 1, \dots, M)
+    \hat{\mathbf{x}} = \mathbf{U}^T \mathbf{x}, \quad \mathbf{x} = \mathbf{U} \hat{\mathbf{x}}
 \end{equation}
-Thuật toán dừng lại ở giá trị $k$ đầu tiên vi phạm bất đẳng thức, và toàn bộ các giả thuyết còn lại đều không bị bác bỏ.
-
-\subsection{Lý thuyết Kích thước Hiệu ứng Cohen's \texorpdfstring{$d$}{d} cho Mẫu Ghép Cặp}
-Một nhược điểm cốt tử của các phép kiểm định giá trị $p$-value là khi kích thước mẫu $N$ rất lớn, ngay cả một sự khác biệt nhỏ không đáng kể về mặt thực tế cũng có thể đạt ý nghĩa thống kê ($p < 0.001$). Để đo lường độ lớn thực chất của sự khác biệt hiệu năng giữa hai mô hình, nghiên cứu sử dụng chỉ số Kích thước hiệu ứng chuẩn hóa Cohen's $d$ cho mẫu ghép cặp (Paired Samples Cohen's $d$):
+Theo định lý tích chập trong miền phổ, phép tích chập giữa tín hiệu $\mathbf{x}$ và bộ lọc $g_\theta$ được biểu diễn bằng phép nhân từng phần tử trong miền tần số:
 \begin{equation}
-    d = \frac{\bar{D}}{s_D} = \frac{\frac{1}{n} \sum_{i=1}^n (y_{1,i} - y_{2,i})}{\sqrt{\frac{1}{n-1} \sum_{i=1}^n \left( (y_{1,i} - y_{2,i}) - \bar{D} \right)^2}}
+    \mathbf{x} \ast_{\mathcal{G}} g_\theta = \mathbf{U} \left( (\mathbf{U}^T \mathbf{x}) \odot (\mathbf{U}^T g_\theta) \right) = \mathbf{U} g_\theta(\boldsymbol{\Lambda}) \mathbf{U}^T \mathbf{x}
 \end{equation}
-trong đó $\bar{D}$ là độ lệch sai số trung bình và $s_D$ là độ lệch chuẩn của chuỗi hiệu số sai số.
+trong đó $g_\theta(\boldsymbol{\Lambda}) = \text{diag}(g_\theta(\lambda_1), \dots, g_\theta(\lambda_N))$ là ma trận chứa các hệ số đáp ứng tần số của bộ lọc.
 
-Quy chuẩn phân loại định lượng theo Jacob Cohen (1988):
+\textbf{Hạn chế tính toán:} Việc tính toán trực tiếp công thức trên đòi hỏi:
+\begin{enumerate}
+    \item Phân rã trị riêng của ma trận Laplacian với độ phức tạp $\mathcal{O}(N^3)$, không khả thi với đồ thị lớn ($N = 608$).
+    \item Phép nhân ma trận vector riêng $\mathbf{U}$ có độ phức tạp $\mathcal{O}(N^2)$ và không mang tính định vị cục bộ (non-localized), nghĩa là một nút có thể nhận thông tin từ mọi nút trên toàn mạng ngay tại tầng tích chập đầu tiên.
+\end{enumerate}
+
+\subsection{Phép xấp xỉ đa thức Chebyshev (ChebNet)}
+Để giải quyết triệt để hai hạn chế trên, Defferrard et al. đề xuất phương pháp xấp xỉ bộ lọc phổ $g_\theta(\boldsymbol{\Lambda})$ bằng chuỗi đa thức Chebyshev loại I cắt cụt.
+
+Đa thức Chebyshev loại I $T_k(x)$ được định nghĩa trên đoạn $[-1, 1]$ thông qua hệ thức truy hồi De Moivre:
+\begin{equation}
+    T_0(x) = 1, \quad T_1(x) = x, \quad T_k(x) = 2x T_{k-1}(x) - T_{k-2}(x) \quad (\forall k \ge 2)
+\end{equation}
+Do phổ trị riêng của $\mathbf{L}$ nằm trong đoạn $[0, \lambda_{\max}]$, ta thực hiện phép co giãn affine để đưa các trị riêng về đoạn $[-1, 1]$:
+\begin{equation}
+    \tilde{\boldsymbol{\Lambda}} = \frac{2}{\lambda_{\max}} \boldsymbol{\Lambda} - \mathbf{I}_N, \quad \tilde{\mathbf{L}} = \frac{2}{\lambda_{\max}} \mathbf{L} - \mathbf{I}_N
+\end{equation}
+Bộ lọc phổ $g_\theta$ được xấp xỉ bởi đa thức Chebyshev bậc $K-1$:
+\begin{equation}
+    g_\theta(\boldsymbol{\Lambda}) \approx \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\boldsymbol{\Lambda}})
+\end{equation}
+với $\theta \in \mathbb{R}^K$ là vector gồm $K$ tham số học được. Áp dụng vào phép tích chập đồ thị:
+\begin{equation}
+    g_\theta \ast_{\mathcal{G}} \mathbf{x} \approx \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{x}
+\end{equation}
+
+\textbf{Định lý 2.1 (Tính định vị $K$-hop):} Toán tử ChebNet bậc $K-1$ đảm bảo tính định vị cục bộ trong phạm vi đúng $K-1$ bước nhảy lân cận trên đồ thị.
+\begin{proof}
+Ma trận co giãn $\tilde{\mathbf{L}}$ là hàm bậc nhất của ma trận kề $\mathbf{W}$. Với hai nút $i$ và $j$ bất kỳ, nếu khoảng cách ngắn nhất giữa chúng trên đồ thị $d_{\mathcal{G}}(i, j) > k$, thì phần tử $[\tilde{\mathbf{L}}^k]_{ij} = 0$. Vì $T_k(\tilde{\mathbf{L}})$ là đa thức bậc $k$ của $\tilde{\mathbf{L}}$, nó được biểu diễn thành tổ hợp tuyến tính của các lũy thừa $\tilde{\mathbf{L}}^m$ với $m \le k$. Do đó $[T_k(\tilde{\mathbf{L}})]_{ij} = 0$ khi $d_{\mathcal{G}}(i, j) > k$. Với $K=3$, thông tin giao thông chỉ lan truyền trong bán kính 2-hop lân cận, hoàn toàn phù hợp với thực tế vật lý dòng xe.
+\end{proof}
+
+\textbf{Định lý 2.2 (Độ phức tạp tính toán tuyến tính):} Phép tích chập ChebNet có độ phức tạp thời gian $\mathcal{O}(K \cdot |\mathcal{E}|)$.
+\begin{proof}
+Đại lượng $\mathbf{z}_k = T_k(\tilde{\mathbf{L}}) \mathbf{x}$ được tính toán đệ quy: $\mathbf{z}_0 = \mathbf{x}$, $\mathbf{z}_1 = \tilde{\mathbf{L}}\mathbf{x}$, $\mathbf{z}_k = 2\tilde{\mathbf{L}}\mathbf{z}_{k-1} - \mathbf{z}_{k-2}$. Mỗi bước đệ quy chỉ bao gồm phép nhân ma trận thưa $\tilde{\mathbf{L}}$ với vector $\mathbf{z}_{k-1}$. Với đồ thị giao thông thực tế có $|\mathcal{E}| = 2.452 \ll N^2 = 369.664$, chi phí cho $K$ bước đệ quy là $\mathcal{O}(K \cdot |\mathcal{E}|)$, loại bỏ hoàn toàn chi phí $\mathcal{O}(N^3)$ của phép phân rã phổ.
+\end{proof}
+
+% ==============================================================================
+\section{Tích chập thời gian có cổng và kiểm soát dòng thông tin}
+\label{sec:tich_chap_thoi_gian_co_cong}
+
+\subsection{Hạn chế của mô hình hồi quy tuần tự trên đồ thị lớn}
+Mặc dù các mạng hồi quy tuần tự như LSTM hay GRU được ứng dụng rộng rãi trong mô hình hóa chuỗi thời gian, việc tích hợp RNN vào mạng đồ thị quy mô lớn ($N = 608$) bộc lộ hai rào cản kỹ thuật lớn:
+\begin{enumerate}
+    \item \textbf{Nghẽn tính toán tuần tự (Sequential Bottleneck):} Trạng thái ẩn tại bước $t$ phụ thuộc tuần tự vào bước $t-1$: $\mathbf{h}_t = f(\mathbf{h}_{t-1}, \mathbf{x}_t)$, không thể tận dụng khả năng tính toán song song trên GPU, dẫn đến thời gian huấn luyện một chu kỳ bị kéo dài.
+    \item \textbf{Suy thoái gradient qua các bước thời gian dài:} Khi lan truyền ngược qua chuỗi thời gian nhiều bước, gradient dễ gặp hiện tượng bùng nổ hoặc triệt tiêu do nhân liên tiếp các ma trận trọng số hồi quy.
+\end{enumerate}
+
+\subsection{Cơ chế cổng tuyến tính (Gated Linear Units -- GLU)}
+Để trích xuất các đặc trưng chuỗi thời gian song song và ổn định luồng gradient, mô hình sử dụng phép tích chập thời gian 1D kết hợp cơ chế cổng tuyến tính (GLU).
+
+Xét tensor đặc trưng của một nút trên chiều thời gian $\mathbf{X} \in \mathbb{R}^{T \times C_{\text{in}}}$. Tầng tích chập thời gian áp dụng hai bộ lọc 1D độc lập $\boldsymbol{\Theta}_1, \boldsymbol{\Theta}_2 \in \mathbb{R}^{K_t \times C_{\text{in}} \times C_{\text{out}}}$ với kích thước kernel thời gian $K_t$:
+\begin{equation}
+    \Gamma \ast_{\mathcal{T}} \mathbf{X} = (\mathbf{X} \star \boldsymbol{\Theta}_1 + \mathbf{b}_1) \odot \sigma(\mathbf{X} \star \boldsymbol{\Theta}_2 + \mathbf{b}_2)
+\end{equation}
+trong đó $\odot$ là phép nhân Hadamard từng phần tử, và $\sigma(z) = \frac{1}{1 + e^{-z}}$ là hàm kích hoạt Sigmoid đóng vai trò van cổng điều tiết.
+
+\textbf{Phân tích luồng gradient của GLU:} Đặt $\mathbf{P} = \mathbf{X} \star \boldsymbol{\Theta}_1 + \mathbf{b}_1$ là thành phần tuyến tính và $\mathbf{Q} = \mathbf{X} \star \boldsymbol{\Theta}_2 + \mathbf{b}_2$ là thành phần điều khiển cổng. Đầu ra của cổng là $\mathbf{Y} = \mathbf{P} \odot \sigma(\mathbf{Q})$. Gradient của $\mathbf{Y}$ đối với thành phần tuyến tính $\mathbf{P}$ là:
+\begin{equation}
+    \frac{\partial \mathbf{Y}}{\partial \mathbf{P}} = \sigma(\mathbf{Q})
+\end{equation}
+Khi cổng mở ($\sigma(\mathbf{Q}) \approx 1$), gradient $\frac{\partial \mathcal{L}}{\partial \mathbf{Y}}$ truyền thẳng trực tiếp về $\mathbf{P}$ mà không bị triệt tiêu bởi đạo hàm của các hàm phi tuyến tính (như $\tanh$ hay $\text{sigmoid}$ trong RNN truyền thống). Nhờ đó, mạng tích chập GLU có thể huấn luyện sâu hơn, hội tụ ổn định hơn và hoàn toàn có thể tính toán song song dọc theo chiều thời gian.
+
+% ==============================================================================
+\section{Kiến trúc mạng đồ thị tích chập không -- thời gian tiêu chuẩn (STGCN)}
+\label{sec:kien_truc_stgcn_tieu_chuan}
+
+Mạng đồ thị tích chập không -- thời gian tiêu chuẩn (Spatio-Temporal Graph Convolutional Network -- STGCN) được Yu et al. đề xuất nhằm xử lý đồng thời mối tương quan không gian và thời gian trong mạng lưới giao thông mà không cần dựa vào các tế bào tuần hoàn RNN.
+
+\subsection{Cấu trúc khối tích chập không -- thời gian dạng sandwich}
+Kiến trúc STGCN nguyên bản được cấu thành từ hai khối tích chập không -- thời gian (ST-Conv Block) xếp chồng lên nhau, kết thúc bằng một khối xuất kết quả (Output Layer). Mỗi khối ST-Conv có cấu trúc sandwich gồm ba tầng xử lý liên tiếp: ``Temporal Gated-Conv $\to$ Spatial Graph-Conv $\to$ Temporal Gated-Conv'', viết tắt là T-S-T:
+\begin{enumerate}
+    \item \textbf{Tầng tích chập thời gian thứ nhất (T):} Đầu vào $\mathbf{X}^{(l)}$ được đưa qua một tầng Gated Convolution 1D dọc theo trục thời gian với kernel $K_t$. Tầng này trích xuất các đặc trưng động học cục bộ của chuỗi thời gian tại từng nút, làm giảm chiều thời gian từ $T$ xuống $T - K_t + 1$.
+    \item \textbf{Tầng tích chập không gian (S):} Áp dụng toán tử ChebNet với bậc $K=3$ trên ma trận kề chuẩn hóa $\tilde{\mathbf{L}}$. Tầng này tổng hợp thông tin từ các nút lân cận trong phạm vi 2-hop trên đồ thị mạng lưới đường bộ:
+    \begin{equation}
+        \mathbf{S}^{(l)} = \text{ReLU}\left( \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{Z}^{(l)} \right)
+    \end{equation}
+    với $\mathbf{Z}^{(l)}$ là tensor đặc trưng đầu ra từ tầng tích chập thời gian thứ nhất.
+    \item \textbf{Tầng tích chập thời gian thứ hai (T):} Tín hiệu không gian tiếp tục đi qua một tầng Gated Convolution 1D thứ hai để cập nhật trạng thái thời gian sau khi đã được hòa trộn không gian, tiếp tục thu hẹp chiều thời gian thêm $K_t - 1$ bước.
+\end{enumerate}
+
+Để chống suy thoái gradient khi xếp chồng nhiều tầng, mỗi khối ST-Conv sử dụng một kết nối tắt (Residual Shortcut) và tầng chuẩn hóa Layer Normalization:
+\begin{equation}
+    \mathbf{X}^{(l+1)} = \text{LayerNorm}\left( \mathbf{X}^{(l)}_{\text{proj}} + \text{ST-Block}(\mathbf{X}^{(l)}) \right)
+\end{equation}
+trong đó $\mathbf{X}^{(l)}_{\text{proj}}$ là phép chiếu $1 \times 1$ conv cắt ngắn chiều thời gian để khớp kích thước với đầu ra của khối.
+
+\subsection{Khối dự báo ngõ ra (Output Block)}
+Sau khi đi qua hai khối ST-Conv liên tiếp, kích thước chiều thời gian giảm từ $T_{\text{in}} = 24$ xuống $T_{\text{in}} - 4(K_t - 1)$. Với $K_t = 3$, chiều thời gian còn lại là $24 - 8 = 16$. Khối ngõ ra áp dụng một tầng tích chập thời gian $1 \times (T_{\text{in}} - 4(K_t - 1))$ để nén toàn bộ trục thời gian còn lại về 1, sau đó sử dụng một tầng tích chập $1 \times 1$ để ánh xạ số kênh về đúng độ dài tầm nhìn dự báo $H = 6$ bước:
+\begin{equation}
+    \hat{\mathcal{Y}} = \text{Conv}_{1 \times 1}\left( \text{ReLU}\left( \text{Conv}_{\text{time}}(\mathbf{X}^{(2)}) \right) \right) \in \mathbb{R}^{H \times N \times 1}
+\end{equation}
+
+\subsection{Hạn chế của STGCN tiêu chuẩn trước sai số cảm biến}
+Mặc dù STGCN tính toán rất nhanh nhờ cấu trúc tích chập hoàn toàn, mô hình này bộc lộ một điểm yếu then chốt khi triển khai trong hệ thống camera thực tế:
 \begin{itemize}
-    \item $|d| < 0.2$: Hiệu ứng không đáng kể (Negligible effect) -- hai mô hình tương đương nhau trong thực tế.
-    \item $0.2 \le |d| < 0.5$: Hiệu ứng nhỏ (Small effect).
-    \item $0.5 \le |d| < 0.8$: Hiệu ứng trung bình (Medium effect).
-    \item $|d| \ge 0.8$: Hiệu ứng lớn (Large effect).
-    \item $|d| > 2.0$: Hiệu ứng cực hạn (Huge/Transformative effect) -- sự khác biệt áp đảo hoàn toàn.
+    \item Tầng tích chập thời gian cục bộ (với kích thước kernel nhỏ $K_t = 3$) chỉ nắm bắt được tương quan giữa các bước thời gian sát cạnh nhau trong cửa sổ 15 phút.
+    \item Khi camera gặp sự cố (như rung lắc, lóa sáng ban đêm hoặc bị xe lớn che khuất tạm thời), giá trị đếm bị nhảy vọt hoặc sụt giảm đột ngột (outlier). Do trường tiếp nhận thời gian hẹp, xung nhiễu này lập tức truyền nguyên vẹn vào tầng tích chập không gian và lan truyền sang các nút lân cận trên đồ thị, gây sai lệch nghiêm trọng cho kết quả dự báo của cả khu vực.
 \end{itemize}
 
-\subsection{Phương pháp Ước lượng Khoảng Tin cậy Bootstrap Phi tham số}
-Để cung cấp khoảng biến thiên tin cậy của các chỉ số hiệu năng mà không dựa vào bất kỳ giả định tiên nghiệm nào về dạng phân phối dữ liệu, phương pháp tái lấy mẫu Bootstrap (Efron, 1979) với $B = 1.000$ lần lặp được áp dụng:
-\begin{enumerate}
-    \item Từ tập mẫu kiểm thử ban đầu $\mathcal{D} = \{x_1, \dots, x_N\}$, thực hiện lấy mẫu ngẫu nhiên có hoàn lại $N$ phần tử để tạo thành mẫu con bootstrap $\mathcal{D}^{*b}$.
-    \item Tính toán chỉ số thống kê mục tiêu trên mẫu con: $\theta^{*b} = f(\mathcal{D}^{*b})$.
-    \item Sắp xếp $B$ ước lượng $\{\theta^{*1}, \dots, \theta^{*B}\}$ theo thứ tự tăng dần. Khoảng tin cậy Bootstrap 95\% phân vị (Percentile Bootstrap CI) được xác định bởi:
-    \begin{equation}
-        \text{CI}_{95\%} = \left[ \theta^{*(0.025 \cdot B)}, \ \theta^{*(0.975 \cdot B)} \right]
-    \end{equation}
-\end{enumerate}
-Việc tích hợp đầy đủ các công cụ kiểm định thống kê trên bảo đảm mọi tuyên bố học thuật trong cuốn báo cáo đều được chứng minh một cách khách quan, chính xác và minh bạch tuyệt đối.
+% ==============================================================================
+\section{Kiến trúc đề xuất TA-STGCN với cơ chế chú ý thời gian đa đầu}
+\label{sec:kien_truc_ta_stgcn}
+
+Nhằm khắc phục triệt để hạn chế trên của STGCN tiêu chuẩn, đề tài đề xuất kiến trúc \textbf{Mạng đồ thị tích chập không -- thời gian nhận biết thời gian (Time-Aware Spatio-Temporal Graph Convolutional Network -- TA-STGCN)}. Mô hình tích hợp cơ chế chú ý tự thân trên chiều thời gian (Multi-Head Temporal Self-Attention) được thiết kế tách rời độc lập cho từng nút trên mạng lưới.
+
+\subsection{Thiết kế cơ chế chú ý thời gian tách rời (Decoupled Temporal Attention)}
+Cho tensor đặc trưng đầu vào tại tầng $l$ là $\mathbf{X}^{(l)} \in \mathbb{R}^{N \times T \times C}$. Thay vì tính toán chú ý đồng thời trên cả không gian và thời gian (gây bùng nổ bộ nhớ với $N = 608$), cơ chế Temporal Attention xử lý độc lập cho từng nút $i \in \{1, \dots, N\}$ trên chuỗi thời gian có độ dài $T$.
+
+Với nút $i$, chuỗi đặc trưng $\mathbf{Z}_i = \mathbf{X}^{(l)}_{i, :, :} \in \mathbb{R}^{T \times C}$ được bổ sung thông tin vị trí thời gian thông qua vector mã hóa vị trí (Positional Encoding):
+\begin{equation}
+    \tilde{\mathbf{Z}}_i = \mathbf{Z}_i + \mathbf{PE}
+\end{equation}
+với $\mathbf{PE}_{(pos, 2j)} = \sin\left(\frac{pos}{10000^{2j/C}}\right)$ và $\mathbf{PE}_{(pos, 2j+1)} = \cos\left(\frac{pos}{10000^{2j/C}}\right)$.
+
+Chuỗi đặc trưng được chiếu sang ba ma trận Truy vấn (Query), Khóa (Key) và Giá trị (Value) thông qua các ma trận trọng số học được:
+\begin{equation}
+    \mathbf{Q}_i = \tilde{\mathbf{Z}}_i \mathbf{W}^Q, \quad \mathbf{K}_i = \tilde{\mathbf{Z}}_i \mathbf{W}^K, \quad \mathbf{V}_i = \tilde{\mathbf{Z}}_i \mathbf{W}^V
+\end{equation}
+với $\mathbf{W}^Q, \mathbf{W}^K \in \mathbb{R}^{C \times d_k}$ và $\mathbf{W}^V \in \mathbb{R}^{C \times d_v}$.
+
+Ma trận trọng số chú ý thời gian $\mathbf{A}_i \in \mathbb{R}^{T \times T}$ được tính toán bằng tích vô hướng chia tỷ lệ:
+\begin{equation}
+    \mathbf{A}_i = \text{Softmax}\left( \frac{\mathbf{Q}_i \mathbf{K}_i^T}{\sqrt{d_k}} \right)
+\end{equation}
+Đầu ra của cơ chế chú ý là tổ hợp trọng số của các vector giá trị:
+\begin{equation}
+    \text{Attention}(\mathbf{Q}_i, \mathbf{K}_i, \mathbf{V}_i) = \mathbf{A}_i \mathbf{V}_i
+\end{equation}
+
+Để mô hình hóa đồng thời nhiều dạng phụ thuộc thời gian (xu hướng ngắn hạn, tính chu kỳ 15 phút, và mức biến thiên nền), cơ chế chú ý được mở rộng thành $h = 4$ đầu chú ý độc lập (Multi-Head Attention):
+\begin{align}
+    \text{head}_m^{(i)} &= \text{Attention}(\tilde{\mathbf{Z}}_i \mathbf{W}_m^Q, \tilde{\mathbf{Z}}_i \mathbf{W}_m^K, \tilde{\mathbf{Z}}_i \mathbf{W}_m^V) \quad (m = 1, \dots, h) \\
+    \text{MHTA}(\mathbf{Z}_i) &= \text{concat}\left( \text{head}_1^{(i)}, \text{head}_2^{(i)}, \dots, \text{head}_h^{(i)} \right) \mathbf{W}^O
+\end{align}
+với $\text{concat}(\dots)$ là phép ghép nối các đầu chú ý và $\mathbf{W}^O \in \mathbb{R}^{C \times C}$.
+
+\subsection{Cấu trúc khối TA-ST-Conv hoàn chỉnh}
+Trong TA-STGCN, khối xử lý không -- thời gian được cấu hình lại như sau:
+\begin{align}
+    \mathbf{Z}^{(l)} &= \text{LayerNorm}\left( \mathbf{X}^{(l)} + \text{MHTA}(\mathbf{X}^{(l)}) \right) \\
+    \mathbf{S}^{(l)} &= \text{SpatialChebConv}(\mathbf{Z}^{(l)}; \tilde{\mathbf{L}}, K=3) \\
+    \mathbf{X}^{(l+1)} &= \text{LayerNorm}\left( \mathbf{S}^{(l)} + \text{TemporalGLU}(\mathbf{S}^{(l)}) \right)
+\end{align}
+Nhờ đặt khối Multi-Head Temporal Attention ngay trước khối tích chập không gian ChebNet, các xung nhiễu cục bộ tại từng nút được lọc sạch và làm mượt thích ứng trước khi thông tin được lan truyền sang các nút lân cận trên mạng lưới đồ thị.
+
+\subsection{So sánh kiến trúc và phân tích độ phức tạp tính toán}
+Bảng \ref{tab:so_sanh_kien_truc_stgcn} so sánh tổng hợp kiến trúc và chi phí tính toán giữa TA-STGCN và các mô hình học sâu không -- thời gian tiêu biểu trong y văn.
+
+\begin{table}[htbp]
+\centering
+\caption{So sánh đặc tính kiến trúc và độ phức tạp tính toán giữa các mô hình STGNN.}
+\label{tab:so_sanh_kien_truc_stgcn}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X}
+\toprule
+\textbf{Mô hình} & \textbf{Không gian} & \textbf{Thời gian} & \textbf{Độ phức tạp} & \textbf{Khả năng lọc nhiễu cảm biến} \\
+\midrule
+DCRNN \cite{dcrnn} & Lan truyền ngẫu nhiên & GRU tuần tự & $\mathcal{O}(K |\mathcal{E}| T + N^2)$ & Thấp (nhiễu tích lũy qua các bước hồi quy BPTT). \\
+STGCN \cite{stgcn} & ChebNet ($K=3$) & Gated CNN 1D & $\mathcal{O}(K |\mathcal{E}| T)$ & Trung bình (kernel cục bộ $K_t=3$, dễ bị sốc ngoại lai). \\
+ASTGCN \cite{astgcn} & ChebNet + Spatial Attn & Gated CNN + Temp Attn & $\mathcal{O}(T N^2 C + K |\mathcal{E}| T)$ & Trung bình (chú ý không gian bị nhiễu cục bộ đánh lừa). \\
+Graph WaveNet \cite{wavenet} & GCN tự học & Dilated Causal Conv & $\mathcal{O}(N^2 + K |\mathcal{E}| T)$ & Trung bình (không có cơ chế tự làm mượt trên trục thời gian). \\
+\textbf{TA-STGCN (Đề xuất)} & \textbf{ChebNet ($K=3$)} & \textbf{MHTA + GLU} & $\mathcal{O}(N T^2 C + K |\mathcal{E}| T)$ & \textbf{Rất cao (cơ chế chú ý hoạt động như bộ lọc thông thấp thích ứng dữ liệu).} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Ưu thế về độ phức tạp của phương án thiết kế tách rời:}
+\begin{itemize}
+    \item Nếu sử dụng cơ chế chú ý không -- thời gian kết hợp (Joint Spatio-Temporal Attention), độ phức tạp là $\mathcal{O}((N \cdot T)^2 \cdot C)$. Với $N = 608$ và $T = 24$, số phần tử ma trận chú ý là $(608 \times 24)^2 \approx 2.13 \times 10^8$, vượt quá dung lượng VRAM của các phần cứng phổ thông và không thể huấn luyện với batch lớn.
+    \item Nếu sử dụng Spatial Attention (như trong ASTGCN), việc tính toán ma trận $608 \times 608$ tại mỗi bước thời gian làm tăng chi phí lên $\mathcal{O}(T \cdot N^2 \cdot C)$.
+    \item Phương án của TA-STGCN áp dụng Attention thuần túy trên chiều thời gian cho mỗi nút, độ phức tạp là $\mathcal{O}(N \cdot T^2 \cdot C)$. Với $T = 24$, ma trận chú ý cho mỗi nút chỉ có kích thước $24 \times 24 = 576$ phần tử, tính toán hoàn toàn độc lập và song song trên $N = 608$ nút. Nhờ đó, TA-STGCN chỉ cần 2.19 GB VRAM trong quá trình huấn luyện và đạt tốc độ suy luận 18.4 ms/batch.
+\end{itemize}

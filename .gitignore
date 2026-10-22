@@ -59,4 +59,8 @@ data/
 *.blg
 *.spl
 texput.log
+*.bak
+*.nav
+*.snm
+*.vrb
 

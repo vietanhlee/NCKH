@@ -1,207 +1,176 @@
-\chapter{TỔNG QUAN VÀ BỐI CẢNH NGHIÊN CỨU}
+\chapter{Tổng quan và bối cảnh nghiên cứu}
 \label{chap:tong_quan}
 
-\section{Tổng quan về Hệ thống Giao thông Thông minh (ITS)}
-Hệ thống Giao thông Thông minh (Intelligent Transportation Systems -- ITS) là sự tích hợp toàn diện giữa công nghệ thông tin, điện tử, viễn thông và các thuật toán điều khiển hiện đại vào mạng lưới giao thông vận tải nhằm nâng cao hiệu quả vận hành, bảo đảm an toàn giao thông, tối ưu hóa năng lượng và giảm thiểu tác động tiêu cực đến môi trường sinh thái đô thị.
+\section{Tổng quan về hệ thống giao thông thông minh (ITS)}
+Hệ thống giao thông thông minh (Intelligent Transportation Systems -- ITS) là sự kết hợp giữa công nghệ thông tin, truyền thông và các thuật toán điều khiển hiện đại nhằm nâng cao hiệu quả vận hành mạng lưới giao thông, bảo đảm an toàn, tối ưu hóa năng lượng và giảm thiểu ô nhiễm môi trường đô thị.
 
-Theo khung kiến trúc chuẩn mực quốc tế (ISO 14813 và IEEE ITS Standards), một hệ thống ITS đô thị hoàn chỉnh bao gồm ba phân hệ nòng cốt liên kết chặt chẽ:
+Theo các khung kiến trúc chuẩn mực quốc tế (như ISO 14813), một hệ thống ITS đô thị thường gồm ba phân hệ chính:
 \begin{enumerate}
-    \item \textbf{Hệ thống Quản lý Giao thông Nâng cao (Advanced Traffic Management Systems -- ATMS):} Đóng vai trò giám sát thời gian thực trạng thái mạng lưới đường bộ thông qua mạng lưới cảm biến, phát hiện sự cố giao thông tự động, điều khiển đèn tín hiệu giao thông thích ứng và điều phối lực lượng chức năng xử lý tình huống khẩn cấp.
-    \item \textbf{Hệ thống Thông tin Người tham gia Giao thông Nâng cao (Advanced Traveler Information Systems -- ATIS):} Cung cấp các thông tin cập nhật liên tục về tình trạng lưu thông, dự báo thời gian hành trình, các tuyến đường tắc nghẽn và khuyến cáo định tuyến tối ưu tới người điều khiển phương tiện thông qua hệ thống biển báo điện tử VMS, ứng dụng di động thông minh và đài phát thanh giao thông.
-    \item \textbf{Hệ thống Vận tải Hành khách Công cộng Nâng cao (Advanced Public Transportation Systems -- APTS):} Tối ưu hóa biểu đồ vận hành xe buýt, metro, cung cấp thời gian đến bến dự kiến (Estimated Time of Arrival -- ETA) và điều phối quyền ưu tiên qua nút giao cho phương tiện công cộng.
+    \item \textbf{Hệ thống quản lý giao thông nâng cao (ATMS):} Giám sát trạng thái mạng lưới đường bộ thời gian thực qua hệ thống cảm biến, phát hiện sự cố tự động, điều khiển đèn tín hiệu thích ứng và điều phối lực lượng xử lý tình huống phát sinh.
+    \item \textbf{Hệ thống thông tin người tham gia giao thông (ATIS):} Cung cấp thông tin cập nhật liên tục về tình trạng lưu thông, thời gian hành trình dự kiến và hướng dẫn lộ trình tối ưu thông qua biển báo điện tử VMS, ứng dụng di động và đài phát thanh giao thông.
+    \item \textbf{Hệ thống vận tải công cộng nâng cao (APTS):} Hỗ trợ quản lý và tối ưu biểu đồ chạy xe buýt, metro, cung cấp thời gian đến bến dự kiến (ETA) và điều phối ưu tiên qua nút giao cho phương tiện công cộng.
 \end{enumerate}
 
-Tại trung tâm của phân hệ ATMS và ATIS, bài toán \textbf{Dự báo dòng giao thông đô thị (Urban Traffic Forecasting)} được xem như "trái tim thuật toán". Một hệ thống ITS không thể được gọi là "thông minh" nếu nó chỉ phản ứng thụ động với các điểm tắc nghẽn đã xảy ra. Bản chất của điều hành giao thông hiện đại là tính \textbf{chủ động đón đầu (Proactive Management)}: phát hiện sớm nguy cơ tắc nghẽn trước 15 đến 30 phút, từ đó can thiệp sớm bằng các giải pháp kỹ thuật trước khi sự cố tích tụ thành thảm họa ùn tắc trên diện rộng.
+Trong đó, bài toán \textbf{dự báo dòng giao thông đô thị (urban traffic forecasting)} đóng vai trò trung tâm trong phân hệ ATMS và ATIS. Việc dự báo chính xác trạng thái mạng lưới trước 15 đến 30 phút cho phép các nhà quản lý chuyển từ trạng thái phản ứng bị động sang điều hành chủ động, kịp thời điều chỉnh chu kỳ đèn tín hiệu và phân luồng từ xa trước khi ùn tắc lan rộng.
 
-\subsection{Tiến trình Lịch sử Phát triển của Hệ thống Giao thông Thông minh}
-Tiến trình phát triển của ITS trên thế giới có thể được chia thành ba thế hệ công nghệ mang tính bước ngoặt:
+\subsection{Tiến trình phát triển của hệ thống giao thông thông minh}
+Quá trình phát triển của ITS trải qua ba giai đoạn công nghệ chính:
 \begin{enumerate}
-    \item \textbf{Thế hệ ITS 1.0 (Giai đoạn 1970 -- 1990): Kỷ nguyên Cảm biến Cơ điện Cố định.}
-    Giai đoạn này gắn liền với sự ra đời của các cảm biến vòng từ cảm ứng (Inductive Loop Detectors), cảm biến áp điện và hệ thống tín hiệu đèn giao thông phối hợp cố định theo thời gian trong ngày (Fixed-time Traffic Signals như Webster's Method). Dữ liệu thu nhận chỉ giới hạn ở mức độ từng làn xe riêng lẻ trên các tuyến đường cao tốc, thiếu hoàn toàn khả năng liên kết mạng lưới không gian và không có năng lực nhận diện phân loại phương tiện.
-    \item \textbf{Thế hệ ITS 2.0 (Giai đoạn 1990 -- 2015): Kỷ nguyên Viễn thông Không dây và Định vị Vệ tinh.}
-    Sự phổ biến của hệ thống định vị toàn cầu GPS, mạng thông tin di động (2G/3G/4G) và các cảm biến đo tốc độ radar đã mở ra kỷ nguyên thu thập dữ liệu di động (Floating Car Data -- FCD). Các hệ thống điều khiển đèn tín hiệu thích ứng nổi tiếng như SCOOT (Split Cycle Offset Optimisation Technique) của Anh và SCATS (Sydney Co-ordinated Adaptive Traffic System) của Úc bắt đầu ứng dụng các thuật toán điều hòa lưu lượng dựa trên mô hình hồi quy tuyến tính cổ điển. Tuy nhiên, chi phí bản quyền và hạ tầng của các hệ thống này cực kỳ đắt đỏ, chỉ phù hợp với các quốc gia phát triển có dòng xe ô tô chiếm ưu thế tuyệt đối.
-    \item \textbf{Thế hệ ITS 3.0 (Từ 2015 đến nay): Kỷ nguyên AIoT, Thị giác Máy tính và Học sâu Không -- Thời gian.}
-    Sự bùng nổ của Trí tuệ Nhân tạo Vạn vật (AIoT), năng lực tính toán đồ họa GPU và mạng nơ-ron học sâu sâu rộng đã thúc đẩy chuyển dịch căn bản: chuyển từ việc phụ thuộc vào cảm biến vật lý xâm lấn mặt đường sang khai thác các mạng lưới camera giám sát công cộng (CCTV) có sẵn. Dữ liệu thị giác được biến đổi thành các luồng thông tin không gian -- thời gian số hóa liên tục, kết hợp với các mạng nơ-ron đồ thị (STGNNs) để dự báo toàn mạng lưới đô thị thời gian thực với chi phí vận hành tối thiểu.
+    \item \textbf{Thế hệ ITS 1.0 (1970 -- 1990): Kỷ nguyên cảm biến cơ điện cố định.}
+    Giai đoạn này gắn liền với các cảm biến vòng từ (inductive loop detectors) chôn dưới mặt đường và hệ thống đèn tín hiệu phối hợp cố định theo thời gian trong ngày (như phương pháp Webster). Dữ liệu thu được chủ yếu phục vụ các tuyến cao tốc, thu thập lưu lượng tổng hợp trên từng làn và chưa có khả năng liên kết mạng lưới không gian cũng như phân loại phương tiện.
+    \item \textbf{Thế hệ ITS 2.0 (1990 -- 2015): Kỷ nguyên truyền thông không dây và định vị vệ tinh.}
+    Sự phổ biến của hệ thống GPS và mạng di động mở ra nguồn dữ liệu từ phương tiện di động (Floating Car Data -- FCD). Các hệ thống điều khiển đèn thích ứng như SCOOT (Anh) và SCATS (Úc) bắt đầu ứng dụng mô hình hồi quy để điều hòa lưu lượng. Tuy nhiên, chi phí đầu tư và bản quyền của các giải pháp này rất lớn, chủ yếu thiết kế cho dòng xe ô tô chiếm ưu thế tại các quốc gia phát triển.
+    \item \textbf{Thế hệ ITS 3.0 (Từ 2015 đến nay): Kỷ nguyên AIoT, thị giác máy tính và học sâu đồ thị.}
+    Sự phát triển mạnh mẽ của thị giác máy tính và mạng nơ-ron học sâu giúp tận dụng trực tiếp hạ tầng camera giám sát công cộng (CCTV) sẵn có tại các đô thị. Dữ liệu hình ảnh được chuyển hóa thành các luồng số liệu giao thông liên tục, kết hợp với các mô hình mạng nơ-ron đồ thị không -- thời gian (STGNN) để dự báo toàn mạng lưới theo thời gian thực với chi phí phần cứng hợp lý.
 \end{enumerate}
 
-\section{Động học Dòng Giao thông Đô thị và Bài toán Dự báo Đa bước}
-\subsection{Đặc tính Động học Phi tuyến và Tính phụ thuộc Không -- Thời gian}
-Dòng giao thông đô thị là một hệ thống động học phi tuyến tính phức tạp (Non-linear Dynamical System) bị chi phối đồng thời bởi hai trục tương quan:
+\section{Động học dòng giao thông đô thị và bài toán dự báo đa bước}
+\subsection{Đặc tính động học phi tuyến và tính phụ thuộc không -- thời gian}
+Dòng giao thông đô thị là một hệ thống động học phi tuyến phức tạp, chịu sự chi phối đồng thời của hai yếu tố tương quan:
 \begin{enumerate}
-    \item \textbf{Tương quan theo Chiều Thời gian (Temporal Dependencies):} Lưu lượng giao thông tại một vị trí thể hiện tính quy luật chu kỳ ngày đêm (Diurnal periodicity), chu kỳ tuần (Weekly pattern giữa ngày làm việc và ngày cuối tuần), đồng thời chịu sự chi phối mạnh mẽ của tính trễ và tính quán tính trong ngắn hạn (Short-term trend). Khi một luồng xe đông đúc bắt đầu xuất hiện, nó sẽ tiếp tục duy trì trạng thái đông đúc trong các bước thời gian kế tiếp trước khi giải tỏa.
-    \item \textbf{Tương quan theo Chiều Không gian (Spatial Dependencies):} Giao thông đô thị không diễn ra tại các điểm cô lập mà vận hành trên một mạng lưới đường phố liên thông có cấu trúc đồ thị. Trạng thái lưu thông tại một nút giao cắt phụ thuộc trực tiếp vào dòng xe đổ về từ các nút giao thượng lưu (Upstream intersections) và khả năng thoát xe của các nút giao hạ lưu (Downstream intersections). Sự tương quan không gian này bị ràng buộc nghiêm ngặt bởi cấu trúc vật lý của mạng lưới: khoảng cách đường bộ, hướng tuyến một chiều, dung lượng mặt cắt đường và số lượng làn xe.
+    \item \textbf{Tương quan thời gian (temporal dependencies):} Lưu lượng xe mang tính quy luật rõ rệt theo chu kỳ ngày đêm và chu kỳ tuần (giữa ngày làm việc và ngày nghỉ), đồng thời có quán tính ngắn hạn. Khi dòng phương tiện đông đúc xuất hiện tại một thời điểm, trạng thái này có xu hướng duy trì trong các khoảng thời gian kế tiếp trước khi giải tỏa.
+    \item \textbf{Tương quan không gian (spatial dependencies):} Giao thông vận hành trên mạng lưới đường phố liên thông có cấu trúc đồ thị. Trạng thái lưu thông tại một nút giao phụ thuộc trực tiếp vào dòng xe từ các nút thượng lưu đổ về và khả năng thoát xe tại các nút hạ lưu. Mối tương quan này bị ràng buộc bởi hình học mạng lưới, khoảng cách giữa các giao lộ, quy định đường một chiều và số làn xe.
 \end{enumerate}
 
-\subsection{Đặc thù Dòng Giao thông Hỗn hợp và Động học Bầy đàn của Xe máy}
-Tại các quốc gia Đông Nam Á, tiêu biểu là Việt Nam, dòng giao thông mang những đặc tính động học hoàn toàn khác biệt so với các lý thuyết giao thông phương Tây:
+\subsection{Đặc thù dòng giao thông hỗn hợp và động học di chuyển của xe máy}
+Tại các đô thị ở Việt Nam, dòng giao thông mang những đặc thù khác biệt đáng kể so với mô hình giao thông tại các nước phát triển:
 \begin{itemize}
-    \item \textbf{Đặc tính phi làn đường (Non-lane Based Traffic Flow):} Trong khi các lý thuyết giao thông cổ điển (như Lighthill-Whitham-Richards hay General Motors Car-Following Model) giả định phương tiện di chuyển bám làn nghiêm ngặt thành hàng dọc, xe máy tại Việt Nam di chuyển theo dạng dòng chảy hạt tự do (Granular Flow). Người điều khiển xe máy liên tục luồn lách vào các khoảng trống giữa các xe ô tô, biến mặt đường thành một không gian chuyển động liên tục hai chiều.
-    \item \textbf{Hành vi bầy đàn (Swarm Behavior):} Khi dừng chờ đèn đỏ tại các giao lộ lớn (như Ngã tư Hàng Xanh hay Vòng xoay Dân Chủ), hàng trăm xe máy dồn ứ lại thành một khối đặc quánh phía trước các xe ô tô. Khi tín hiệu đèn chuyển sang xanh, khối xe máy này đồng loạt bứt tốc tạo thành một "làn sóng giải tỏa" (Discharge Wave) có gia tốc lớn và độ tản mát không gian cực cao, gây ra biến động lưu lượng tức thời cực kỳ dữ dội trong các chu kỳ 5 phút.
-    \item \textbf{Hệ số xe con quy đổi (PCU) biến thiên động:} Trong điều kiện giao thông thông thoáng, một xe máy có hệ số cản trở dòng chảy tương đương $0.2 - 0.25$ PCU (tức 4--5 xe máy bằng 1 ô tô). Tuy nhiên trong điều kiện ùn ứ tốc độ thấp, tính linh hoạt luồn lách của xe máy khiến hệ số PCU giảm xuống $0.15$, trong khi xe ô tô bị bất động hoàn toàn chiếm diện tích mặt đường tương đương $6 - 8$ xe máy. Do đó, việc tách biệt rạch ròi giữa số lượng ô tô và xe máy là yêu cầu sống còn để nắm bắt chính xác động học dòng chảy.
+    \item \textbf{Dòng chảy phi làn (non-lane based flow):} Khác với giả định phương tiện di chuyển bám làn thành hàng dọc trong các lý thuyết giao thông cổ điển, xe máy tại Việt Nam di chuyển linh hoạt theo dòng chảy tự do, liên tục tận dụng các khoảng trống giữa các xe ô tô để vượt lên.
+    \item \textbf{Đặc thù di chuyển theo cụm mật độ cao:} Khi dừng chờ đèn đỏ tại các ngã tư, hàng trăm xe máy dồn ứ lại thành cụm dày đặc phía trước ô tô. Khi đèn chuyển xanh, cụm xe này đồng loạt bứt tốc với gia tốc lớn, tạo ra dao động lưu lượng đột biến trong chu kỳ quan sát 5 phút.
+    \item \textbf{Hệ số xe con quy đổi biến thiên:} Trong điều kiện lưu thông bình thường, một xe máy tương đương khoảng 0.2 -- 0.25 xe con quy đổi (PCU). Tuy nhiên trong điều kiện ùn ứ tốc độ thấp, xe máy luồn lách dễ dàng hơn trong khi ô tô chiếm dụng diện tích mặt đường lớn. Do đó, việc tách biệt chính xác số lượng ô tô và xe máy là yêu cầu quan trọng để phản ánh đúng hiện trạng tải trọng đường bộ.
 \end{itemize}
 
-\subsection{Ý nghĩa Sống còn của Tầm nhìn Dự báo 15--30 Phút}
-Trong lý thuyết điều khiển giao thông đô thị, bài toán dự báo dòng giao thông đa bước (Multi-Horizon Forecasting) đặt ra mục tiêu ước lượng lưu lượng phương tiện qua $H$ bước thời gian liên tiếp trong tương lai:
+\subsection{Ý nghĩa của tầm nhìn dự báo 15--30 phút}
+Bài toán dự báo dòng giao thông đa bước đặt mục tiêu ước lượng lưu lượng phương tiện qua $H$ bước thời gian liên tiếp trong tương lai:
 \begin{equation}
     \hat{\mathbf{Y}}_{t+1}, \hat{\mathbf{Y}}_{t+2}, \dots, \hat{\mathbf{Y}}_{t+H}
 \end{equation}
-với chu kỳ lấy mẫu tiêu chuẩn $\Delta t = 5$ phút, tầm nhìn dự báo $H = 6$ bước tương ứng với khoảng thời gian 30 phút tới.
+với chu kỳ lấy mẫu tiêu chuẩn $\Delta t = 5$ phút, tầm nhìn dự báo $H = 6$ bước tương ứng với 30 phút tới.
 
-Khoảng thời gian dự báo nhìn trước 15--30 phút giữ vai trò quyết định vì hai lý do khoa học:
+Tầm nhìn dự báo 15--30 phút có ý nghĩa thực tiễn quan trọng:
 \begin{itemize}
-    \item \textbf{Thời gian thích ứng của chu kỳ đèn tín hiệu (Signal Plan Transition Lag):} Các hệ thống điều khiển đèn tín hiệu phối hợp như SCOOT hay SCATS cần từ 3 đến 5 chu kỳ đèn liên tiếp (mỗi chu kỳ kéo dài 90--180 giây) để chuyển đổi mượt mà từ một kế hoạch phối hợp pha này sang một kế hoạch phối hợp pha khác mà không gây xung đột dòng xe. Nếu thông tin dự báo chỉ có độ trễ 5 phút ($t+1$), thời gian can thiệp là quá ngắn, khiến thuật toán điều khiển rơi vào trạng thái đuổi theo quá khứ. Tầm nhìn 15--30 phút cung cấp đủ thời gian để bộ điều khiển trung tâm tối ưu hóa thời lượng đèn xanh đón đầu dòng xe đang tiếp cận từ các trục xuyên tâm.
-    \item \textbf{Mô hình truyền sóng xung kích (Shockwave Propagation under CTM):} Dựa trên Mô hình Truyền sóng Thủy động lực học Lighthill-Whitham-Richards (LWR) và Cell Transmission Model (CTM), khi lưu lượng vượt quá dung lượng bão hòa của nút giao, một sóng xung kích mật độ cao (Shockwave) sẽ lan truyền ngược chiều dòng xe với vận tốc $v_{\text{shock}} \approx 15 - 25\text{ km/h}$. Trong vòng 15--30 phút, sóng tắc nghẽn có thể lan truyền ngược từ 4 đến 12 km, bóp nghẹt hàng loạt ngã ba, ngã tư lân cận. Dự báo chính xác trước 30 phút cho phép hệ thống kịp thời phát tín hiệu điều tiết từ xa, phân luồng phương tiện chuyển hướng sang các trục vành đai trước khi phương tiện đi vào "vùng bẫy tắc nghẽn".
+    \item \textbf{Thời gian đáp ứng của chu kỳ đèn tín hiệu:} Các giải pháp điều khiển đèn phối hợp cần khoảng thời gian tương đương 3 đến 5 chu kỳ đèn để chuyển đổi kế hoạch pha mượt mà mà không gây gián đoạn dòng xe. Dự báo trước 15--30 phút giúp trung tâm điều hành kịp thời điều chỉnh thời lượng đèn xanh đón đầu dòng xe đang tiếp cận.
+    \item \textbf{Mô hình lan truyền sóng tắc nghẽn:} Theo mô hình thủy động lực học giao thông (LWR), khi lưu lượng vượt quá dung lượng mặt đường, sóng tắc nghẽn sẽ lan truyền ngược chiều dòng xe với vận tốc khoảng 15--25 km/h. Dự báo sớm 30 phút cho phép hệ thống kịp thời thông báo và điều tiết từ xa, hỗ trợ phân luồng phương tiện trước khi điểm nghẽn hình thành.
 \end{itemize}
 
-\section{Khảo cứu các Kỹ thuật Nhận dạng và Đếm Phương tiện từ Camera}
-Để cung cấp dữ liệu số đếm phương tiện cho các mô hình dự báo dòng giao thông, khâu thu nhận thị giác đóng vai trò là "cảm biến đầu vào". Trong lịch sử thị giác máy tính, bài toán đếm phương tiện qua hình ảnh đã trải qua ba thế hệ tiếp cận chính:
+\section{Khảo cứu các kỹ thuật nhận dạng và đếm phương tiện từ camera}
+Để cung cấp số liệu lưu lượng cho các mô hình dự báo mạng lưới, khâu thị giác máy tính đóng vai trò thu thập tín hiệu đầu vào. Hiện nay có ba hướng tiếp cận chính:
 
-\subsection{Tiếp cận 1: Bám vết theo Phát hiện (Tracking-by-Detection)}
-Trường phái truyền thống kết hợp mạng nơ-ron phát hiện vật thể (như dòng họ YOLO, Faster R-CNN) với các thuật toán bám vết liên khung hình (như ByteTrack, DeepSORT, FairMOT). 
+\subsection{Tiếp cận bám vết theo phát hiện (tracking-by-detection)}
+Phương pháp này kết hợp mô hình phát hiện vật thể (như YOLO, Faster R-CNN) với thuật toán bám vết liên khung hình (như ByteTrack, DeepSORT).
 \begin{itemize}
-    \item \textbf{Cơ chế hoạt động:} Tại mỗi khung hình, mạng phát hiện sinh ra một tập hợp các hộp giới hạn (Bounding Box) $B_k = (x_k, y_k, w_k, h_k)$ cùng xác suất phân loại lớp. Thuật toán bám vết sử dụng bộ lọc Kalman để ước lượng quỹ đạo chuyển động và sử dụng thuật toán Hungarian để giải bài toán gán cặp tối ưu dựa trên ma trận khoảng cách giao nhau trên hợp (Intersection-over-Union -- IoU):
-    \begin{equation}
-        \text{IoU}(B_i, B_j) = \frac{\text{Area}(B_i \cap B_j)}{\text{Area}(B_i \cup B_j)}
-    \end{equation}
-    Khi quỹ đạo của một phương tiện cắt qua một vạch đếm ảo định sẵn (Virtual Detection Line), bộ đếm sẽ ghi nhận thêm một phương tiện thuộc phân lớp tương ứng.
-    \item \textbf{Những thất bại nghiêm trọng trong giao thông hỗn hợp xe máy:}
+    \item \textbf{Nguyên lý:} Tại mỗi khung hình, mô hình phát hiện xác định các bounding box của từng xe. Thuật toán bám vết liên kết quỹ đạo phương tiện qua các khung hình liên tiếp dựa trên bộ lọc Kalman và chỉ số IoU (Intersection-over-Union). Khi một quỹ đạo cắt qua vạch ảo định sẵn, hệ thống ghi nhận một lượt xe.
+    \item \textbf{Hạn chế trong giao thông xe máy mật độ cao:}
     \begin{enumerate}
-        \item \textit{Hiện tượng che khuất tương hỗ nghiêm trọng (Catastrophic Mutual Occlusion):} Tại các giao lộ ở Việt Nam vào giờ cao điểm, hàng trăm xe máy chen chúc ở cự ly chỉ từ 10 đến 30 cm. Hiện tượng che khuất lẫn nhau diễn ra trên 80--90\% số lượng xe trong khung hình. Các mạng phát hiện vật thể bị suy giảm độ tin cậy nghiêm trọng, dẫn đến việc bỏ sót hoặc phát hiện nhầm các mảnh ghép thân xe.
-        \item \textit{Điểm nghẽn tính toán bậc hai của thuật toán NMS:} Khi hàng trăm xe máy tập trung dày đặc, tầng suy luận sinh ra hàng nghìn hộp giới hạn ứng viên ($M > 2000$). Thuật toán triệt tiêu cực đại cục bộ (Non-Maximum Suppression -- NMS) có độ phức tạp thời gian bậc hai $\mathcal{O}(M^2)$ do phải so sánh chỉ số IoU từng cặp, trở thành điểm nghẽn độ trễ tính toán nghiêm trọng trên các thiết bị nhúng biên. Hơn nữa, việc ngưỡng IoU quá chặt sẽ xóa nhầm các xe máy đứng sát nhau, còn ngưỡng quá lỏng sẽ giữ lại các hộp trùng lặp.
-        \item \textit{Đứt gãy chuỗi thời gian liên tục (Temporal Discontinuity):} Các hệ thống camera giao thông công cộng truyền ảnh tĩnh với chu kỳ thưa (ví dụ 60 giây/ảnh) để tiết kiệm băng thông hạ tầng mạng. Khoảng cách thời gian 60 giây giữa hai khung hình liên tiếp phá vỡ hoàn toàn giả định về tính liên tục của chuyển động, khiến các thuật toán bám vết dựa trên bộ lọc Kalman mất dấu hoàn toàn.
+        \item \textit{Hiện tượng che khuất lẫn nhau:} Vào giờ cao điểm, các xe máy đi sát nhau khiến tỷ lệ che khuất thân xe rất lớn, dẫn đến việc mô hình phát hiện bỏ sót hoặc sinh ra các hộp nhận dạng sai lệch.
+        \item \textit{Chi phí tính toán của khâu NMS:} Khi số lượng xe trong khung hình lên tới hàng trăm, mô hình sinh ra hàng nghìn bounding box ứng viên. Thuật toán triệt tiêu cực đại cục bộ (NMS) với độ phức tạp $\mathcal{O}(M^2)$ trở thành điểm nghẽn tính toán trên các thiết bị biên.
+        \item \textit{Gián đoạn thời gian trên camera công cộng:} Để tiết kiệm băng thông hạ tầng mạng, nhiều camera giao thông chỉ truyền ảnh tĩnh định kỳ (ví dụ 60 giây/ảnh), làm mất tính liên tục khung hình và khiến các thuật toán bám vết mất dấu chuyển động.
     \end{enumerate}
 \end{itemize}
 
-\subsection{Tiếp cận 2: Ước lượng Bản đồ Mật độ (Density Map Estimation)}
-Xuất phát từ bài toán đếm đám đông (Crowd Counting), các mạng nơ-ron như MCNN, CSRNet, CAN và DM-Count chuyển đổi bài toán đếm rời rạc thành bài toán hồi quy liên tục:
+\subsection{Tiếp cận ước lượng bản đồ mật độ (density map estimation)}
+Xuất phát từ bài toán đếm đám đông (crowd counting), các mô hình như CSRNet, CAN chuyển đổi bài toán đếm rời rạc thành bài toán hồi quy bản đồ mật độ liên tục:
 \begin{itemize}
-    \item \textbf{Cơ chế hoạt động:} Mỗi phương tiện được biểu diễn bởi một điểm tọa độ tâm $(x_i, y_i)$. Bản đồ mật độ chân thực $D(p)$ được tạo ra thông qua phép tích chập giữa tín hiệu xung Delta Dirac với hàm Gaussian Kernel:
-    \begin{equation}
-        D(p) = \sum_{i=1}^{M} \delta(p - p_i) \star \mathcal{N}(p; 0, \sigma_i^2)
-    \end{equation}
-    Tổng số lượng phương tiện được tính bằng tích phân toàn phần trên toàn bộ không gian ảnh:
-    \begin{equation}
-        \text{Count} = \iint D(x, y) \, dx \, dy
-    \end{equation}
-    \item \textbf{Nhược điểm cốt tử trong bài toán giao thông thông minh:}
-    \begin{enumerate}
-        \item \textit{Tính chất vô thức về phân lớp phương tiện (Class-Agnostic Nature):} Bản đồ mật độ chỉ cho biết mức độ tập trung điểm ảnh mà không thể phân biệt được đâu là xe ô tô con và đâu là xe máy. Trong kỹ thuật giao thông, một xe ô tô có kích thước chiếm dụng mặt đường và tác động cản trở dòng chảy tương đương 4 đến 6 xe máy (tính theo hệ số xe con quy đổi -- Passenger Car Unit, PCU). Việc mất mát thông tin phân lớp khiến các mô hình dự báo và điều khiển tín hiệu phía sau không thể phân bổ chu kỳ đèn chính xác.
-        \item \textit{Chi phí đánh nhãn điểm cực kỳ tốn kém:} Việc gán nhãn chấm điểm tâm cho hàng chục nghìn xe trên 608 góc camera đòi hỏi hàng nghìn giờ công lao động thủ công và phải tái hiệu chỉnh (re-calibration) khi góc quay camera bị rung lắc do gió hoặc thay đổi tiêu cự.
-    \end{enumerate}
+    \item \textbf{Nguyên lý:} Mỗi phương tiện được biểu diễn bằng một điểm tâm, bản đồ mật độ được tạo ra qua phép tích chập với hàm Gaussian. Tổng số lượng xe được tính bằng tích phân trên toàn bộ bức ảnh.
+    \item \textbf{Hạn chế:} Bản đồ mật độ không phân biệt được cụ thể loại phương tiện (ô tô hay xe máy). Trong khi đó, việc mất thông tin phân lớp gây khó khăn cho việc đánh giá tải trọng giao thông. Ngoài ra, việc gán nhãn điểm tâm cho tập dữ liệu lớn đòi hỏi chi phí nhân công đáng kể.
 \end{itemize}
 
-\subsection{Tiếp cận 3: Hồi quy Trực tiếp Số lượng Phương tiện (Direct Regression)}
-Để vượt qua các rào cản kỹ thuật của hai trường phái trên, đề tài này lựa chọn và phát triển hướng tiếp cận \textbf{Hồi quy trực tiếp số lượng phương tiện theo phân lớp (Direct Category-Specific Vehicle Counting)}. 
+\subsection{Tiếp cận hồi quy đếm xe trực tiếp (direct regression)}
+Nhằm khắc phục các nhược điểm trên, đề tài lựa chọn và phát triển hướng tiếp cận \textbf{hồi quy đếm xe trực tiếp theo phân lớp}.
 \begin{itemize}
-    \item \textbf{Cơ chế hoạt động:} Mô hình học sâu nhận đầu vào là một ảnh tĩnh đơn lẻ $I \in \mathbb{R}^{H \times W \times 3}$ và ánh xạ trực tiếp sang một vector hai chiều biểu thị số lượng từng loại phương tiện:
+    \item \textbf{Nguyên lý:} Mô hình học sâu nhận đầu vào là ảnh tĩnh $\mathbf{I} \in \mathbb{R}^{H \times W \times 3}$ và ánh xạ trực tiếp sang vector số lượng hai chiều:
     \begin{equation}
         f_\theta(I) \longrightarrow \hat{\mathbf{c}} = \begin{bmatrix} \hat{c}_{\text{car}} \\ \hat{c}_{\text{bike}} \end{bmatrix} \in \mathbb{R}^2
     \end{equation}
-    \item \textbf{Ưu thế công nghệ vượt trội:}
+    \item \textbf{Ưu điểm:}
     \begin{enumerate}
-        \item \textit{Triệt tiêu hoàn toàn thuật toán NMS:} Không cần sinh bounding box, loại bỏ triệt để điểm nghẽn tính toán $\mathcal{O}(M^2)$, giúp tốc độ suy luận đạt dưới 35 ms/ảnh trên phần cứng tiêu chuẩn.
-        \item \textit{Bảo toàn phân lớp tuyệt đối:} Đầu ra phân tách rạch ròi giữa số lượng xe ô tô con và xe máy, bảo toàn thông tin phân lớp cho mô hình dự báo không -- thời gian.
-        \item \textit{Tương thích với chu kỳ ảnh thưa:} Mô hình xử lý độc lập từng ảnh tĩnh đơn lẻ, hoàn toàn không phụ thuộc vào chu kỳ lấy mẫu liên tục của camera.
-        \item \textit{Kiểm soát hiện tượng bám nền (Context Overfitting):} Rủi ro mô hình học bám vào bối cảnh mặt đường được triệt tiêu thông qua kỹ thuật tăng cường dữ liệu ngẫu nhiên (Color Jittering, Random Erasing) và kiểm chứng tính tập trung đặc trưng thông qua bản đồ nhiệt Grad-CAM++.
+        \item \textit{Không cần khâu NMS:} Mô hình không sinh bounding box, loại bỏ độ phức tạp tính toán bậc hai và đạt tốc độ xử lý nhanh (dưới 35 ms/ảnh trên phần cứng phổ thông).
+        \item \textit{Bảo toàn phân lớp phương tiện:} Tách biệt rõ ràng số lượng ô tô và xe máy, cung cấp đầu vào chính xác cho mô hình dự báo không -- thời gian.
+        \item \textit{Phù hợp với luồng ảnh tĩnh định kỳ:} Xử lý độc lập trên từng ảnh, không đòi hỏi video liên tục băng thông cao.
+        \item \textit{Khắc phục hiện tượng học bám cảnh nền:} Áp dụng các kỹ thuật tăng cường dữ liệu ngẫu nhiên (Color Jittering, Random Erasing) và kiểm chứng sự tập trung đặc trưng qua bản đồ nhiệt Grad-CAM++.
     \end{enumerate}
 \end{itemize}
 
-\section{Khảo cứu các Mô hình Dự báo Chuỗi Thời gian Giao thông}
-Bài toán dự báo dòng giao thông không -- thời gian đã trải qua nhiều giai đoạn phát triển kiến trúc:
+\section{Khảo cứu các mô hình dự báo chuỗi thời gian giao thông}
+Bài toán dự báo dòng giao thông không -- thời gian đã trải qua các giai đoạn phát triển chính:
 
-\subsection{Giai đoạn 1: Các Mô hình Thống kê Truyền thống}
-Trong giai đoạn đầu, các phương pháp thống kê chuỗi thời gian cổ điển giữ vai trò chủ đạo:
+\subsection{Các mô hình thống kê truyền thống}
+Trong giai đoạn đầu, các phương pháp thống kê cổ điển giữ vai trò chủ đạo:
 \begin{itemize}
-    \item \textbf{ARIMA (AutoRegressive Integrated Moving Average) và SARIMA (Seasonal ARIMA):} Mô hình hóa chuỗi thời gian dựa trên các thành phần tự hồi quy (AR), tích phân sai phân (I) và trung bình trượt (MA). Mô hình giả định chuỗi thời gian có tính dừng (Stationarity) và có cấu trúc tuyến tính.
-    \item \textbf{VAR (Vector AutoRegression):} Mở rộng ARIMA sang trường hợp đa biến, cho phép mô hình hóa tương quan chéo giữa một vài nút giao lân cận.
-    \item \textbf{SVR (Support Vector Regression) và Gradient Boosting (XGBoost, LightGBM):} Ứng dụng các hàm nhân phi tuyến (RBF Kernel) để ánh xạ đặc trưng lịch sử sang không gian chiều cao để hồi quy lưu lượng.
+    \item \textbf{ARIMA và SARIMA:} Phân tích chuỗi thời gian dựa trên các thành phần tự hồi quy, sai phân và trung bình trượt dưới giả định chuỗi dừng và tuyến tính.
+    \item \textbf{VAR (Vector AutoRegression):} Mở rộng ARIMA cho trường hợp đa biến, mô hình hóa tương quan giữa một số nút lân cận.
+    \item \textbf{SVR và Gradient Boosting (XGBoost, LightGBM):} Ứng dụng các hàm nhân phi tuyến hoặc cây quyết định để hồi quy lưu lượng từ các đặc trưng trễ trong quá khứ.
 \end{itemize}
-\textbf{Hạn chế cốt tử:} Các phương pháp thống kê truyền thống hoàn toàn thất bại khi quy mô mạng lưới mở rộng lên hàng trăm nút ($N=608$). Số lượng tham số của VAR bùng nổ theo bậc hai $\mathcal{O}(N^2)$, trong khi các mô hình này không có cơ chế biểu diễn tri thức không gian (Spatial Topology) của mạng lưới đường bộ.
+Tuy nhiên, các phương pháp này gặp khó khăn khi mạng lưới mở rộng lên hàng trăm nút ($N = 608$) do số lượng tham số tăng nhanh, đồng thời thiếu cơ chế biểu diễn mối quan hệ topo không gian của mạng lưới đường bộ.
 
-\subsection{Giai đoạn 2: Các Mô hình Học sâu Tuần tự (RNN/LSTM/GRU)}
-Với sự bùng nổ của học sâu, các kiến trúc mạng nơ-ron hồi quy tuần tự được áp dụng rộng rãi:
+\subsection{Các mô hình học sâu tuần tự (RNN, LSTM, GRU)}
+Với sự phát triển của học sâu, các kiến trúc mạng hồi quy tuần tự được áp dụng:
 \begin{itemize}
-    \item \textbf{LSTM (Long Short-Term Memory) và GRU (Gated Recurrent Unit):} Khắc phục hiện tượng triệt tiêu gradient (Vanishing Gradient) của RNN truyền thống thông qua các cổng điều tiết thông tin (Input, Forget, Output Gates), cho phép ghi nhớ các phụ thuộc thời gian dài hạn.
-    \item \textbf{TCN (Temporal Convolutional Networks):} Sử dụng tích chập 1D giãn nở nhân quả (Dilated Causal Convolutions) cho phép tính toán song song hoàn toàn trên GPU và mở rộng trường tiếp nhận theo cấp số nhân.
+    \item \textbf{LSTM và GRU:} Khắc phục hiện tượng triệt tiêu gradient của RNN truyền thống qua các cơ chế cổng điều tiết thông tin, ghi nhớ các phụ thuộc thời gian dài hạn hơn.
+    \item \textbf{TCN (Temporal Convolutional Networks):} Sử dụng tích chập 1D giãn nở nhân quả, cho phép tính toán song song trên GPU và mở rộng trường tiếp nhận theo cấp số nhân.
 \end{itemize}
-\textbf{Hạn chế:} Các mô hình tuần tự thuần túy chỉ tập trung vào chiều thời gian độc lập tại từng nút hoặc xem toàn bộ mạng lưới như một vector phẳng không cấu trúc, bỏ qua hoàn toàn thông tin hình học và liên kết vật lý giữa các tuyến đường.
+Mặc dù vậy, các mô hình này chủ yếu xử lý độc lập từng nút hoặc làm phẳng toàn bộ mạng lưới thành một vector không có cấu trúc, bỏ qua thông tin hình học và liên kết vật lý giữa các tuyến đường.
 
-\subsection{Giai đoạn 3: Mạng Nơ-ron Đồ thị Không -- Thời gian (STGNNs)}
-Để mô hình hóa đồng thời cả hai chiều không gian và thời gian, trường phái mạng nơ-ron đồ thị không -- thời gian (Spatio-Temporal Graph Neural Networks -- STGNNs) đã ra đời và nhanh chóng thống trị các bảng xếp hạng học thuật. Sự tiến hóa của STGNNs có thể được chia thành sáu trường phái kiến trúc chính:
-
+\subsection{Mạng nơ-ron đồ thị không -- thời gian (STGNN)}
+Để mô hình hóa đồng thời cả chiều không gian và thời gian, mạng nơ-ron đồ thị không -- thời gian (STGNN) đã ra đời và trở thành hướng nghiên cứu chủ đạo. Các kiến trúc STGNN tiêu biểu gồm:
 \begin{enumerate}
-    \item \textbf{Trường phái 1 -- Tích chập phổ trên đồ thị tĩnh (Spectral Graph Convolutions):}
-    Tiêu biểu là STGCN (Yu et al., IJCAI 2018). STGCN sử dụng xấp xỉ ChebNet bậc $K$ trên toán tử Laplacian đối xứng của đồ thị khoảng cách tĩnh, kết hợp với các khối tích chập 1D Gated Linear Units (GLU) theo chiều thời gian. Ưu điểm nổi bật là tốc độ tính toán cực nhanh và khả năng định vị $K$-hop chặt chẽ, nhưng hạn chế là phụ thuộc cứng nhắc vào đồ thị tĩnh định sẵn.
-    
-    \item \textbf{Trường phái 2 -- Quá trình khuếch tán ngẫu nhiên có hướng (Directed Diffusion Convolutions):}
-    Tiêu biểu là DCRNN (Li et al., ICLR 2018). DCRNN mô hình hóa dòng giao thông như một quá trình bước ngẫu nhiên (Random Walk) có hướng trên đồ thị thông qua toán tử chuyển tiếp Markov. Kiến trúc kết hợp tích chập khuếch tán với tế bào GRU theo mô hình Encoder-Decoder. Nhược điểm chính là tốc độ huấn luyện rất chậm do tính tuần tự của GRU và cơ chế Scheduled Sampling phức tạp.
-    
-    \item \textbf{Trường phái 3 -- Ma trận kề thích ứng tự sinh (Adaptive Graph Learning):}
-    Tiêu biểu là GraphWaveNet (Wu et al., IJCAI 2019) và AGCRN (Bai et al., NeurIPS 2020). Nhận thấy đồ thị khoảng cách vật lý không phản ánh đầy đủ mối tương quan tiềm ẩn (ví dụ hai nút ở xa nhau nhưng cùng có lưu lượng tăng đột biến vào giờ cao điểm), GraphWaveNet đề xuất ma trận kề thích ứng tự học: $\mathbf{A}_{\text{adp}} = \text{Softmax}\left(\text{ReLU}\left(\mathbf{E}_1 \mathbf{E}_2^T\right)\right)$, kết hợp với Dilated Causal Convolution (TCN). Nhược điểm là ma trận $\mathbf{A}_{\text{adp}}$ là ma trận dày (Dense Matrix) làm tăng chi phí bộ nhớ khi số nút lớn ($N=608$) và dễ bị quá khớp với dữ liệu huấn luyện sạch.
-    
-    \item \textbf{Trường phái 4 -- Cơ chế chú ý không gian và thời gian phân tách (Decoupled Spatio-Temporal Attention):}
-    Tiêu biểu là ASTGCN (Guo et al., AAAI 2019) và GMAN (Zheng et al., AAAI 2020). Thay vì chỉ dùng tích chập cố định, các mô hình này tính toán ma trận chú ý động tại từng bước thời gian và giữa các nút không gian. GMAN sử dụng cơ chế Transformative Attention với bộ mã hóa không gian -- thời gian kết hợp. Điểm nghẽn là số lượng tham số bùng nổ (ASTGCN có 1.53 triệu tham số) và chi phí tính toán bậc hai theo số nút $\mathcal{O}(N^2)$.
-    
-    \item \textbf{Trường phái 5 -- Đồ thị động và đồ thị Meta nhận biết cấu trúc (Dynamic Meta-Graphs):}
-    Tiêu biểu là DSTAGNN (Lan et al., ICML 2022) và MegaCRN (Jiang et al., AAAI 2023). DSTAGNN xây dựng đồ thị tương quan động dựa trên khoảng cách Wasserstein kết hợp Transformer thời gian. MegaCRN đề xuất học đồ thị Meta bằng cách phân tách biểu diễn đồ thị toàn cục và đặc trưng cục bộ. Các mô hình này đạt độ chính xác cao trên các bộ dữ liệu cao tốc Mỹ nhưng cực kỳ nhạy cảm với nhiễu ngoại lai khi tín hiệu đầu vào bị rung lắc.
-    
-    \item \textbf{Trường phái 6 -- Kỷ nguyên Transformers không -- thời gian (Spatio-Temporal Transformers):}
-    Các công trình gần đây như STAEformer (Liu et al., CIKM 2023), PDFormer (Jiang et al., AAAI 2023) và iTransformer (Liu et al., ICLR 2024) đưa kiến trúc Transformer thuần túy vào bài toán giao thông. STAEformer áp dụng Spatio-Temporal Adaptive Embedding giúp Transformer tiêu chuẩn vượt qua STGNNs trên tập PeMS. iTransformer đảo ngược góc nhìn, áp dụng Attention trên chiều biến số (nút) và MLP trên chiều thời gian. Tuy nhiên, các kiến trúc này đòi hỏi dung lượng bộ nhớ đồ họa VRAM đỉnh rất lớn ($>11\text{ GB}$ trên đồ thị 608 nút) và có xu hướng suy thoái sai số nhanh ở các bước dự báo xa khi dữ liệu đầu vào mang nhiễu cảm biến thực tế.
+    \item \textbf{Tích chập phổ trên đồ thị tĩnh:} Tiêu biểu là STGCN (Yu et al., 2018), sử dụng xấp xỉ ChebNet bậc $K=3$ trên ma trận Laplacian của đồ thị khoảng cách, kết hợp với các khối tích chập thời gian 1D Gated Linear Units (GLU). STGCN có tốc độ tính toán nhanh và khả năng định vị cục bộ tốt, nhưng phụ thuộc vào cấu trúc đồ thị tĩnh ban đầu.
+    \item \textbf{Tích chập khuếch tán có hướng:} Tiêu biểu là DCRNN (Li et al., 2018), mô hình hóa dòng giao thông như một quá trình bước ngẫu nhiên có hướng trên đồ thị, kết hợp với tế bào GRU theo kiến trúc Encoder-Decoder. Hạn chế là tốc độ huấn luyện chậm do tính tuần tự của GRU.
+    \item \textbf{Học ma trận kề thích ứng:} Tiêu biểu là GraphWaveNet (Wu et al., 2019), bổ sung ma trận kề tự học để nắm bắt tương quan tiềm ẩn giữa các nút xa nhau, kết hợp với tích chập thời gian giãn nở (TCN). Nhược điểm là ma trận kề tự học dạng dày làm tăng chi phí bộ nhớ khi số nút lớn và nhạy cảm với nhiễu.
+    \item \textbf{Cơ chế chú ý không gian và thời gian phân tách:} Tiêu biểu là ASTGCN (Guo et al., 2019), tính toán ma trận chú ý động theo cả chiều không gian và thời gian. Tuy nhiên số lượng tham số lớn (1.53 triệu tham số) và chi phí tính toán tăng nhanh theo số lượng nút.
+    \item \textbf{Đồ thị động và đồ thị meta:} Tiêu biểu là DSTAGNN (Lan et al., 2022) và MegaCRN (Jiang et al., 2023), xây dựng đồ thị tương quan động dựa trên khoảng cách Wasserstein hoặc phân tách biểu diễn đồ thị meta. Các mô hình này đạt độ chính xác tốt trên dữ liệu chuẩn nhưng dễ bị suy giảm khi đầu vào có nhiễu cảm biến lớn.
+    \item \textbf{Mô hình Transformer không -- thời gian:} Các công trình như STAEformer (Liu et al., 2023) và iTransformer (Liu et al., 2024) ứng dụng cơ chế chú ý tự thân trên toàn chuỗi hoặc đảo ngược theo chiều biến số. Mặc dù có năng lực biểu diễn cao, các mô hình này đòi hỏi bộ nhớ VRAM đỉnh lớn (trên 11 GB với đồ thị 608 nút) và dễ bị suy thoái sai số ở các bước dự báo xa khi dữ liệu đầu vào mang nhiễu thực tế.
 \end{enumerate}
 
-\section{Lý thuyết về Hiện tượng Lan truyền Sai số trong Hệ thống Trí tuệ Nhân tạo Nối tầng}
-Trong các hệ thống học máy nối tiếp (Cascaded Machine Learning Pipelines), kết quả đầu ra của mô hình thứ nhất đóng vai trò là dữ liệu đầu vào trực tiếp cho mô hình thứ hai:
+\section{Hiện tượng lan truyền sai số trong hệ thống học máy nối tầng}
+Trong các hệ thống học máy nối tầng, kết quả đầu ra của khâu nhận dạng đóng vai trò là dữ liệu đầu vào trực tiếp cho khâu dự báo:
 \begin{equation}
     \mathbf{I} \xrightarrow{\quad f_{\theta_1} \quad} \hat{\mathbf{Y}} = \mathbf{Y}^* + \boldsymbol{\eta} \xrightarrow{\quad g_{\theta_2} \quad} \hat{\mathbf{Z}}
 \end{equation}
-Hiện tượng \textbf{Lan truyền Sai số (Error Propagation hay Error Cascading)} xảy ra khi sai số nhận dạng $\boldsymbol{\eta}$ từ khâu $f_{\theta_1}$ không bị tiêu biến mà bị khuếch đại (Amplification) hoặc làm méo mó nghiêm trọng các biểu diễn đặc trưng trong khâu $g_{\theta_2}$.
+Hiện tượng \textbf{lan truyền sai số (error propagation)} xuất hiện khi sai số nhận dạng $\boldsymbol{\eta}$ từ khâu $f_{\theta_1}$ không bị triệt tiêu mà lan truyền qua các tầng nơ-ron của khâu $g_{\theta_2}$, làm lệch lạc kết quả dự báo lưu lượng.
 
-\subsection{Cơ chế Khuếch đại Sai số trong Dự báo Chuỗi Không -- Thời gian}
-Trong bài toán giao thông đô thị, hiện tượng lan truyền sai số diễn ra theo hai cơ chế nguy hiểm:
+\subsection{Cơ chế tích lũy và khuếch đại sai số qua các bước thời gian}
+Trong bài toán giao thông, hiện tượng này thể hiện ở hai khía cạnh:
 \begin{enumerate}
-    \item \textbf{Khuếch đại theo Chiều Không gian qua Tích chập Đồ thị (Spatial Noise Spillover):}
-    Toán tử tích chập đồ thị $g_\theta \star_{\mathcal{G}} \mathbf{x} = \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{x}$ lan truyền thông tin trạng thái của một nút sang toàn bộ quả cầu lân cận $K$-hop. Nếu nút $i$ gặp lỗi nhận dạng lớn (ví dụ xe máy bị che khuất khiến số đếm thực tế bị hụt 30 xe), thông tin sai lệch này sẽ bị "bơm" trực tiếp sang các nút lân cận $j \in \mathcal{N}_K(i)$. Nếu mô hình không có cơ chế lọc nhiễu, toàn bộ vùng lân cận sẽ bị kéo tụt dự báo lưu lượng, gây ra hiện tượng "nhiễm độc không gian" (Spatial Pollution).
-    \item \textbf{Tích lũy Sai số theo Chiều Thời gian qua Dự báo Đa bước (Temporal Error Compounding):}
-    Khi mô hình thực hiện dự báo đa bước nhìn trước từ $t+1$ đến $t+6$, các sai lệch về xu hướng ở bước đầu tiên sẽ đóng vai trò như độ dốc ban đầu (Initial Slope). Nếu cửa sổ quan sát lịch sử 24 bước bị nhiễm nhiễu bất đối xứng (phần lớn là đếm thiếu do xe máy che khuất), mạng nơ-ron sẽ lầm tưởng rằng lưu lượng toàn thành phố đang có xu hướng suy giảm đột ngột, dẫn đến việc đưa ra các dự báo bi quan quá mức ở các bước xa ($t+5, t+6$).
+    \item \textbf{Lan truyền sai số theo chiều không gian:} Phép tích chập đồ thị $g_\theta \star_{\mathcal{G}} \mathbf{x} = \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{x}$ khuếch tán thông tin trạng thái của một nút sang các nút lân cận $(K-1)$-hop. Nếu một camera bị lỗi nhận dạng cục bộ (ví dụ do mưa lớn hoặc lóa đèn pha), sai số này sẽ lan sang các nút xung quanh nếu mô hình không có cơ chế lọc phù hợp.
+    \item \textbf{Tích lũy sai số theo chiều thời gian:} Khi dự báo đa bước từ $t+1$ đến $t+6$, sai lệch nhận dạng trong cửa sổ lịch sử 24 bước có thể làm biến dạng xu hướng ngắn hạn, dẫn đến việc ước lượng sai lệch tăng dần ở các bước nhìn xa.
 \end{enumerate}
 
-\subsection{Yêu cầu Khoa học về Độ Bền vững với Nhiễu (Noise Robustness)}
-Chính vì hiện tượng lan truyền sai số nêu trên, việc đánh giá các mô hình STGNNs chỉ dựa trên "dữ liệu sạch" (Ground Truth đo bằng vòng từ lý tưởng) trong các nghiên cứu truyền thống là hoàn toàn không đầy đủ và thiếu tính thực tiễn đối với hệ thống ITS vận hành bằng camera. Một mô hình STGNN xuất sắc trong thực tế không chỉ cần đạt sai số thấp trên dữ liệu lý tưởng, mà quan trọng hơn gấp bội, nó phải sở hữu \textbf{Khả năng Chống chịu Nhiễu bền bỉ (Noise Robustness)}: khả năng tự động cô lập, làm mượt và triệt tiêu phương sai sai số nhận dạng camera ngay trong kiến trúc nội tại của mình. Đây chính là mục tiêu thiết kế cốt lõi của kiến trúc TA-STGCN được đề xuất trong đề tài này.
+\subsection{Yêu cầu về độ bền vững với nhiễu nhận dạng}
+Do đó, việc chỉ đánh giá mô hình trên dữ liệu sạch lý tưởng là chưa đủ đối với các hệ thống camera thực tế. Mô hình dự báo cần có \textbf{độ bền vững với nhiễu (noise robustness)}, tức năng lực tự động làm mượt và giảm thiểu ảnh hưởng của sai số đầu vào ngay trong cấu trúc nơ-ron. Đây là mục tiêu thiết kế then chốt của mô hình TA-STGCN.
 
-
-\section{Phân tích Đối sánh Chi tiết các Kiến trúc Tiên tiến (SOTA Baselines)}
-Để định vị rõ ràng đóng góp học thuật của đề tài, Bảng \ref{tab:so_sanh_sota_toan_dien} phân tích chi tiết các kiến trúc đại diện cho các trường phái STGNNs tiên tiến nhất hiện nay.
+\section{Đối sánh các kiến trúc dự báo giao thông tiêu biểu}
+Để làm rõ bối cảnh nghiên cứu, Bảng \ref{tab:so_sanh_sota_toan_dien} tổng hợp các đặc tính kỹ thuật chính giữa các kiến trúc tiêu biểu hiện nay và mô hình đề xuất trong đề tài.
 
 \begin{table}[htbp]
 \centering
-\caption{Đối sánh toàn diện các kiến trúc dự báo giao thông không -- thời gian tiêu biểu.}
+\footnotesize
+\caption{Đối sánh đặc điểm các kiến trúc dự báo giao thông không -- thời gian tiêu biểu.}
 \label{tab:so_sanh_sota_toan_dien}
-\scriptsize
-\setlength{\tabcolsep}{2pt}
 \renewcommand{\arraystretch}{1.2}
-\begin{tabularx}{\textwidth}{l p{2.2cm} p{2.5cm} p{2.2cm} p{2.5cm} X}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}p{2.3cm} c >{\raggedright\arraybackslash}X c}
 \toprule
-\textbf{Kiến trúc} & \textbf{Cơ chế Không gian} & \textbf{Cơ chế Thời gian} & \textbf{Loại Cảm biến} & \textbf{Dạng Giao thông} & \textbf{Bảo toàn Phân lớp} \\
+\textbf{Mô hình} & \textbf{Cấu trúc không gian} & \textbf{Cơ chế thời gian} & \textbf{Cảm biến} & \textbf{Bối cảnh thực nghiệm} & \textbf{Phân loại} \\
 \midrule
-DCRNN (2018) & Khuếch tán có hướng (Random Walk) & GRU Tuần tự mã hóa/giải mã & Vòng từ & Ô tô cao tốc Mỹ (METR-LA) & Không \\
-STGCN (2018) & ChebNet ($K=3$) trên đồ thị tĩnh & 1D Gated GLU ($K_t=3$) & Vòng từ & Ô tô cao tốc Mỹ (PeMS) & Không \\
-GraphWaveNet (2019) & Ma trận kề tự học (Adaptive GCN) & Dilated Causal TCN & Vòng từ & Ô tô cao tốc Mỹ (PeMS) & Không \\
-ASTGCN (2019) & ChebNet + Spatial Attention & 1D Conv + Temporal Attention & Vòng từ & Ô tô cao tốc (PeMS) & Không \\
-DSTAGNN (2022) & Đồ thị Softmax động nhận biết không gian & Temporal Transformer & Vòng từ & Ô tô cao tốc (PeMS) & Không \\
-MegaCRN (2023) & Meta-Graph Embedding & GRU Encoder-Decoder & Vòng từ & Ô tô cao tốc (PeMS) & Không \\
-STAEformer (2023) & Nhúng thích ứng không gian (Spatial Emb) & Spatio-Temporal Transformer ($h=4$) & Vòng từ & Ô tô cao tốc (PeMS) & Không \\
-iTransformer (2024) & Chú ý theo biến số (Variate Attention) & Inverted MLP trên toàn chuỗi & Đa biến tổng quát & Chuỗi thời tiết/tài chính & Không \\
+DCRNN (2018) & Khuếch tán đồ thị & GRU tuần tự & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+STGCN (2018) & ChebNet ($K=3$) & Khối 1D GLU & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+Graph WaveNet (2019) & Đồ thị thích ứng & Dilated TCN & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+ASTGCN (2019) & ChebNet + Chú ý & Chú ý thời gian & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+DSTAGNN (2022) & Đồ thị động đa kênh & Transformer thời gian & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+MegaCRN (2023) & Meta-Graph thích ứng & GRU Encoder--Decoder & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+STAEformer (2023) & Nhúng không gian & ST-Transformer & Vòng từ & Cao tốc ô tô (PeMS) & Không \\
+iTransformer (2024) & Đảo chiều biến số & Inverted MLP & Chuỗi & Chuỗi đa biến chung & Không \\
 \midrule
-\textbf{TA-STGCN (Đề tài)} & \textbf{ChebNet ($K=3$) trên đồ thị OSM thực} & \textbf{1D GLU + Temporal Multi-Head Attention} & \textbf{Mạng Camera CCTV (608 nút)} & \textbf{Hỗn hợp: Xe máy chiếm ưu thế ($>80\%$)} & \textbf{Có (Tách biệt Ô tô \& Xe máy)} \\
+\textbf{TA-STGCN (Đề xuất)} & \textbf{ChebNet ($K=3$) thực} & \textbf{MHTA + GLU} & \textbf{Camera (608 nút)} & \textbf{Đô thị ($>80\%$ xe máy)} & \textbf{Có (2 lớp)} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Khoảng trống Nghiên cứu (Research Gap)}
-Từ quá trình khảo cứu sâu sắc trên, đề tài xác định rõ ba khoảng trống nghiên cứu cốt tử mà y văn học thuật quốc tế hiện nay chưa giải quyết:
+\section{Khoảng trống nghiên cứu}
+Từ khảo cứu trên, đề tài xác định ba khoảng trống nghiên cứu chính:
 \begin{enumerate}
-    \item \textbf{Khoảng trống về Dữ liệu và Bối cảnh Giao thông Hỗn hợp:} Toàn bộ các bộ dữ liệu chuẩn mực được sử dụng phổ biến trong cộng đồng học thuật (như PeMSD3, PeMSD4, PeMSD7, PeMSD8, METR-LA, PeMS-BAY) đều được thu thập từ cảm biến vòng từ đặt trên các tuyến đường cao tốc tại California (Mỹ). Các kịch bản này đặc trưng bởi dòng xe ô tô thuần nhất, tuân thủ kỷ luật làn đường ngặt nghèo và lưu lượng phản ánh hành vi thủy động học tiêu chuẩn. Hoàn toàn không có bộ dữ liệu chuẩn mực nào phản ánh giao thông đô thị hỗn hợp với xe máy chiếm ưu thế ở quy mô toàn thành phố ($N=608$).
-    \item \textbf{Khoảng trống về Bảo toàn Phân loại Phương tiện:} Tất cả các mô hình SOTA hiện nay chỉ xử lý một kênh lưu lượng tổng hợp (Aggregate Volume) hoặc tốc độ trung bình (Average Speed). Trong giao thông hỗn hợp, việc gộp chung xe máy và ô tô làm mất đi thông tin phân bổ tải trọng động, cản trở việc ứng dụng vào các thuật toán điều khiển đèn tín hiệu ITS thực tế.
-    \item \textbf{Khoảng trống về Lan truyền Sai số Nhận dạng (Error Propagation Gap):} Trong các nghiên cứu trước đây, dữ liệu đầu vào luôn được giả định là giá trị cảm biến đo đạc lý tưởng (Ground Truth sạch). Trong hệ thống cảm biến camera thực tế, đầu vào của mô hình dự báo đồ thị ở Giai đoạn 2 thực chất là các giá trị ước lượng mang sai số nhận dạng từ Giai đoạn 1. Chưa có công trình nào tiến hành phân tích toán học và kiểm định thực nghiệm có hệ thống để trả lời câu hỏi: \textbf{Sai số nhận dạng từ camera sẽ lan truyền và suy thoái như thế nào qua các tầng nơ-ron đồ thị đa bước, và cơ chế kiến trúc nào giúp mô hình chống chịu nhiễu bền bỉ nhất?}
+    \item \textbf{Thiếu tập dữ liệu chuẩn mực về giao thông hỗn hợp quy mô lớn:} Các tập dữ liệu phổ biến (PeMSD4, PeMSD8, METR-LA) đều thu thập từ cảm biến vòng từ trên cao tốc tại Mỹ, đặc trưng bởi dòng xe ô tô đơn nhất đi đúng làn. Chưa có tập dữ liệu chuẩn mực nào phục vụ bài toán dự báo toàn diện mạng lưới đô thị hỗn hợp với xe máy chiếm ưu thế trên quy mô toàn thành phố (608 camera).
+    \item \textbf{Mất thông tin phân lớp phương tiện:} Hầu hết các mô hình hiện nay chỉ dự báo một kênh lưu lượng gộp chung hoặc tốc độ trung bình, làm mất đi đặc trưng động học riêng biệt của ô tô và xe máy.
+    \item \textbf{Thiếu phân tích thực nghiệm về lan truyền sai số nhận dạng:} Các nghiên cứu trước đây thường giả định dữ liệu đầu vào là chính xác tuyệt đối. Vấn đề sai số nhận dạng từ camera ảnh hưởng như thế nào đến độ chính xác dự báo đa bước và cơ chế kiến trúc nào giúp nâng cao độ bền vững với nhiễu vẫn chưa được khảo sát đầy đủ.
 \end{enumerate}
-Đề tài này được thực hiện nhằm lấp đầy trọn vẹn các khoảng trống nghiên cứu nêu trên.

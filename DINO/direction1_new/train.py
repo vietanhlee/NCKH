@@ -57,7 +57,7 @@ from common.gpu_utils import (
 )
 from common.logger import setup_training_logger
 from direction1_new.features import FrozenExtractor
-from direction1_new.tam import PositionStats, GMMCalibrator
+from direction1_new.tam import PositionStats, GMMCalibrator, refine_traffic_foreground_map
 from direction1_new.masking import agm_sample
 from direction1_new.srs import static_region_swap
 from direction1_new.losses import (
@@ -198,6 +198,7 @@ class TrafficCameraDataset(Dataset):
         cross_cam_srs: bool = False,
         min_frame_offset: int = 12,
         tam_cache_dir: Optional[str] = None,
+        refine_tam: bool = False,
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -205,6 +206,7 @@ class TrafficCameraDataset(Dataset):
         self.cross_cam_srs = cross_cam_srs
         self.min_frame_offset = min_frame_offset
         self.tam_cache_dir = tam_cache_dir
+        self.refine_tam = refine_tam
         if tam_cache_dir and os.path.isdir(tam_cache_dir):
             print(f"⚡ [TAM Cache] Kích hoạt chế độ đọc trực tiếp bản đồ tiền cảnh pi từ: '{tam_cache_dir}'")
 
@@ -297,8 +299,14 @@ class TrafficCameraDataset(Dataset):
             f_pi2 = os.path.join(self.tam_cache_dir, rel2 + ".npy")
             if os.path.isfile(f_pi1) and os.path.isfile(f_pi2):
                 try:
-                    res["pi1"] = torch.from_numpy(np.load(f_pi1)).float()
-                    res["pi2"] = torch.from_numpy(np.load(f_pi2)).float()
+                    p1 = torch.from_numpy(np.load(f_pi1)).float()
+                    p2 = torch.from_numpy(np.load(f_pi2)).float()
+                    if self.refine_tam:
+                        res["pi1"] = refine_traffic_foreground_map(p1)
+                        res["pi2"] = refine_traffic_foreground_map(p2)
+                    else:
+                        res["pi1"] = p1
+                        res["pi2"] = p2
                 except Exception:
                     pass
 
@@ -313,50 +321,91 @@ def save_direction_g_visuals(
     patch_features: Optional[torch.Tensor],
     save_path: str,
     epoch: int = 1,
+    vanilla_patch_features: Optional[torch.Tensor] = None,
 ):
     """
-    Xuất biểu đồ 6 cột trực quan hóa quá trình học Tự Giám Sát Hướng G:
+    Xuất biểu đồ 8 cột trực quan hóa quá trình học Tự Giám Sát Hướng G đối chiếu DINO gốc:
       Cột 1: Ảnh gốc frame x1
       Cột 2: Bản đồ tiền cảnh bất thường TAM pi (Heatmap)
       Cột 3: Mặt nạ che phân tầng AGM (Mask)
-      Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS
-      Cột 5: Standard PCA (Batch-Consistent: màu sắc nhất quán toàn batch)
-      Cột 6: Foreground DINOv2 PCA (Object-Centric: bóc tách phương tiện xe cộ)
+      Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS (kèm mức sai khác nền Δ)
+      Cột 5: DINOv3 Gốc PCA (Pretrained Baseline - Đối chứng nguyên bản)
+      Cột 6: Student PCA Đồng Bộ (Batch-Consistent: màu nền & xe nhất quán qua các camera)
+      Cột 7: Student PCA Nội Tại (Per-Image: độ tương phản chi tiết riêng từng ảnh)
+      Cột 8: Student Foreground PCA (Object-Centric: bóc tách chi tiết thân xe)
     """
     B = min(4, x_orig.shape[0])
-    fig, axes = plt.subplots(B, 6, figsize=(22, 3.2 * B), dpi=150)
+    fig, axes = plt.subplots(B, 8, figsize=(28, 3.2 * B), dpi=150)
     if B == 1:
         axes = np.expand_dims(axes, axis=0)
 
-    # 1. Tiền xử lý Per-Image PCA chuẩn Meta DINOv2 (Độc lập trên từng ảnh, không bị ám màu ngày/đêm)
-    pca_grid_batch = []
+    corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
+
+    # 1. Tiền xử lý Per-Image PCA cho DINO gốc (Vanilla Pretrained)
+    vanilla_pca_grid_batch = []
+    if vanilla_patch_features is not None:
+        v_feats_np = vanilla_patch_features[:B].detach().cpu().numpy()
+        for b in range(B):
+            f_vb = v_feats_np[b]
+            f_vmean = f_vb.mean(axis=0, keepdims=True)
+            f_vcent = f_vb - f_vmean
+            _, _, vt_v = np.linalg.svd(f_vcent, full_matrices=False)
+            pca3_v = f_vcent @ vt_v[:3].T
+            for c in range(3):
+                if pca3_v[corners_idx, c].mean() > pca3_v[:, c].mean():
+                    pca3_v[:, c] = -pca3_v[:, c]
+            p_vmin = np.percentile(pca3_v, 1, axis=0, keepdims=True)
+            p_vmax = np.percentile(pca3_v, 99, axis=0, keepdims=True)
+            pca3_vnorm = np.clip((pca3_v - p_vmin) / np.maximum(p_vmax - p_vmin, 1e-6), 0.0, 1.0)
+            vanilla_pca_grid_batch.append(pca3_vnorm.reshape(16, 28, 3))
+        vanilla_pca_grid_batch = np.stack(vanilla_pca_grid_batch, axis=0)
+    else:
+        vanilla_pca_grid_batch = None
+
+    # 2. Tiền xử lý PCA cho Student: Cả Batch-Consistent (đồng bộ camera) và Per-Image (nội tại)
+    batch_pca_grid = []
+    per_image_pca_grid = []
     fg_grid_batch = []
 
     if patch_features is not None:
-        # patch_features: (B_total, 448, D)
         feats_np = patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
-        corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
 
+        # A. Batch-Consistent PCA: Chiếu toàn bộ B ảnh lên 1 hệ trục SVD chung -> Đồng bộ màu sắc xuyên camera
+        feats_all = feats_np.reshape(B * 448, -1)
+        all_mean = feats_all.mean(axis=0, keepdims=True)
+        feats_all_cent = feats_all - all_mean
+        _, _, vt_batch = np.linalg.svd(feats_all_cent, full_matrices=False)
+        pca3_batch_all = feats_all_cent @ vt_batch[:3].T  # (B * 448, 3)
+
+        # Căn chỉnh dấu eigenvector theo các góc của toàn bộ batch để nền ổn định
+        corners_batch_idx = [b_idx * 448 + c_idx for b_idx in range(B) for c_idx in corners_idx]
+        for c in range(3):
+            if pca3_batch_all[corners_batch_idx, c].mean() > pca3_batch_all[:, c].mean():
+                pca3_batch_all[:, c] = -pca3_batch_all[:, c]
+
+        bp_min = np.percentile(pca3_batch_all, 1, axis=0, keepdims=True)
+        bp_max = np.percentile(pca3_batch_all, 99, axis=0, keepdims=True)
+        pca3_batch_norm = np.clip((pca3_batch_all - bp_min) / np.maximum(bp_max - bp_min, 1e-6), 0.0, 1.0)
+        batch_pca_grid = pca3_batch_norm.reshape(B, 16, 28, 3)
+
+        # B. Per-Image PCA và Foreground PCA độc lập cho từng ảnh
         for b in range(B):
             f_b = feats_np[b]  # (448, D)
-            # A. Standard PCA độc lập trên từng ảnh b
             f_mean = f_b.mean(axis=0, keepdims=True)
             f_cent = f_b - f_mean
             _, _, vt = np.linalg.svd(f_cent, full_matrices=False)
             pca3 = f_cent @ vt[:3].T  # (448, 3)
 
-            # Căn chỉnh dấu eigenvector theo 4 góc ảnh (vốn là nền) để màu sắc chuẩn tắc
             for c in range(3):
                 if pca3[corners_idx, c].mean() > pca3[:, c].mean():
                     pca3[:, c] = -pca3[:, c]
 
-            # Chuẩn hóa phân vị 1% - 99% nội tại ảnh b
             p_min = np.percentile(pca3, 1, axis=0, keepdims=True)
             p_max = np.percentile(pca3, 99, axis=0, keepdims=True)
             pca3_norm = np.clip((pca3 - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
-            pca_grid_batch.append(pca3_norm.reshape(16, 28, 3))
+            per_image_pca_grid.append(pca3_norm.reshape(16, 28, 3))
 
-            # B. Foreground-focused DINOv2 PCA (SVD bậc 2 trên các patch xe của riêng ảnh b)
+            # Foreground-focused DINOv2 PCA (SVD bậc 2 trên các patch xe)
             pi_b = pi[b].detach().cpu().numpy().reshape(-1)
             fg_mask_b = (pi_b > 0.40)
             if fg_mask_b.sum() < 4:
@@ -379,12 +428,18 @@ def save_direction_g_visuals(
 
             fg_grid_batch.append(fg_map.reshape(16, 28, 3))
 
-        pca_grid_batch = np.stack(pca_grid_batch, axis=0)
+        per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
         fg_grid_batch = np.stack(fg_grid_batch, axis=0)
+    else:
+        batch_pca_grid = None
+        per_image_pca_grid = None
+        fg_grid_batch = None
 
     for b in range(B):
         # 1. Ảnh gốc
         img_np = x_orig[b].permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
+        H_orig, W_orig = img_np.shape[0], img_np.shape[1]
+
         axes[b, 0].imshow(img_np)
         axes[b, 0].set_title(f"Mẫu #{b+1} — Ảnh Gốc $x_1$", fontsize=10, fontweight="bold")
         axes[b, 0].axis("off")
@@ -392,7 +447,7 @@ def save_direction_g_visuals(
         # 2. TAM Heatmap (16, 28) nội suy lên kích thước ảnh
         pi_np = pi[b].detach().cpu().numpy()
         axes[b, 1].imshow(img_np)
-        axes[b, 1].imshow(pi_np, cmap="jet", alpha=0.6, extent=[0, img_np.shape[1], img_np.shape[0], 0])
+        axes[b, 1].imshow(pi_np, cmap="jet", alpha=0.6, extent=[0, W_orig, H_orig, 0])
         axes[b, 1].set_title("Bản Đồ Tiền Cảnh TAM $\\pi$", fontsize=10, fontweight="bold")
         axes[b, 1].axis("off")
 
@@ -409,38 +464,58 @@ def save_direction_g_visuals(
         axes[b, 3].set_title(f"Ảnh Ghép Nền SRS (Δ={diff_val:.1f}%)", fontsize=10, fontweight="bold")
         axes[b, 3].axis("off")
 
-        H_orig, W_orig = img_np.shape[0], img_np.shape[1]
-
-        # 5. Standard PCA Feature Map (Màu sắc đồng bộ toàn batch, nội suy Bilinear mượt mà)
-        if pca_grid_batch is not None:
-            pca_tensor = torch.from_numpy(pca_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
-            pca_smooth = F.interpolate(pca_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
-            pca_smooth_np = pca_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
-            axes[b, 4].imshow(pca_smooth_np)
-            axes[b, 4].set_title("Standard PCA (Toàn Cảnh)", fontsize=10, fontweight="bold")
+        # 5. DINO Gốc PCA (Pretrained Baseline - Đối chứng nguyên bản)
+        if vanilla_pca_grid_batch is not None:
+            v_tensor = torch.from_numpy(vanilla_pca_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
+            v_smooth = F.interpolate(v_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            v_smooth_np = v_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+            axes[b, 4].imshow(v_smooth_np)
+            axes[b, 4].set_title("DINO Gốc PCA (Pretrained)", fontsize=10, fontweight="bold", color="#1f77b4")
         else:
             axes[b, 4].axis("off")
         axes[b, 4].axis("off")
 
-        # 6. Foreground DINOv2 PCA Feature Map (Object-Centric bóc tách chi tiết phương tiện)
-        if fg_grid_batch is not None:
-            fg_tensor = torch.from_numpy(fg_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
-            fg_smooth = F.interpolate(fg_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
-            fg_smooth_np = fg_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
-            axes[b, 5].imshow(fg_smooth_np)
-            axes[b, 5].set_title("DINOv2 Foreground PCA (Xe Cộ)", fontsize=10, fontweight="bold")
+        # 6. Student PCA Đồng Bộ (Batch-Consistent: Màu sắc mặt đường & xe nhất quán giữa các camera)
+        if batch_pca_grid is not None:
+            bp_tensor = torch.from_numpy(batch_pca_grid[b]).permute(2, 0, 1).unsqueeze(0).float()
+            bp_smooth = F.interpolate(bp_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            bp_smooth_np = bp_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+            axes[b, 5].imshow(bp_smooth_np)
+            axes[b, 5].set_title("Student PCA Đồng Bộ Cam", fontsize=10, fontweight="bold", color="#008080")
         else:
             axes[b, 5].axis("off")
         axes[b, 5].axis("off")
 
-    plt.suptitle(f"Tiến Trình Huấn Luyện SSL Hướng G — Epoch {epoch}", fontsize=14, fontweight="bold", y=1.01)
+        # 7. Student PCA Nội Tại (Per-Image: Độ tương phản chi tiết riêng trong từng ảnh)
+        if per_image_pca_grid is not None:
+            pca_tensor = torch.from_numpy(per_image_pca_grid[b]).permute(2, 0, 1).unsqueeze(0).float()
+            pca_smooth = F.interpolate(pca_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            pca_smooth_np = pca_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+            axes[b, 6].imshow(pca_smooth_np)
+            axes[b, 6].set_title("Student PCA Nội Tại", fontsize=10, fontweight="bold", color="#2ca02c")
+        else:
+            axes[b, 6].axis("off")
+        axes[b, 6].axis("off")
+
+        # 8. Student Foreground PCA Feature Map (Object-Centric bóc tách chi tiết phương tiện)
+        if fg_grid_batch is not None:
+            fg_tensor = torch.from_numpy(fg_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
+            fg_smooth = F.interpolate(fg_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
+            fg_smooth_np = fg_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
+            axes[b, 7].imshow(fg_smooth_np)
+            axes[b, 7].set_title("Student Foreground PCA", fontsize=10, fontweight="bold", color="#d62728")
+        else:
+            axes[b, 7].axis("off")
+        axes[b, 7].axis("off")
+
+    plt.suptitle(f"Tiến Trình Huấn Luyện SSL Hướng G — Epoch {epoch} (Đối Chiếu DINO Gốc vs Student)", fontsize=14, fontweight="bold", y=1.01)
     plt.tight_layout()
     save_dir = os.path.dirname(save_path)
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
     plt.savefig(save_path, dpi=180, bbox_inches="tight")
     plt.close()
-    print(f"🖼️ [Trực Quan Hóa] Đã xuất biểu đồ học biểu diễn (6 cột đối chiếu) tại: {save_path}")
+    print(f"🖼️ [Trực Quan Hóa] Đã xuất biểu đồ học biểu diễn (8 cột đối chiếu DINO Gốc vs Student) tại: {save_path}")
 
 
 def save_loss_curves(history: Dict[str, List[float]], save_path: str):
@@ -728,6 +803,8 @@ def parse_args():
     parser.add_argument("--srs_continuous", action="store_true", default=True, help="Hoán đổi toàn bộ nền tĩnh tự nhiên (thay vì chắp vá từng patch)")
     parser.add_argument("--no_srs_continuous", dest="srs_continuous", action="store_false")
     parser.add_argument("--cross_cam_srs", action="store_true", default=False, help="Ablation: Hoán nền từ camera khác để triệt góc máy")
+    parser.add_argument("--refine_tam", action="store_true", default=True, help="Tự động áp dụng bộ lọc làm sắc nét tiền cảnh và khử nhiễu mặt đường khi đọc cache TAM.")
+    parser.add_argument("--no_refine_tam", dest="refine_tam", action="store_false", help="Tắt bộ lọc làm sắc nét tiền cảnh khi đọc cache.")
     parser.add_argument("--random_pi", action="store_true", default=False, help="Ablation: Sử dụng bản đồ pi ngẫu nhiên thay cho TAM")
     parser.add_argument("--ibot_beta", type=float, default=0.5, help="Trọng số tiền cảnh beta trong iBOT Patch Loss (1 + beta * pi)")
     parser.add_argument("--use_ric", action="store_true", default=True, help="Bật Regional Instance Contrastive (RIC) cùng camera")
@@ -1451,6 +1528,7 @@ def train_direction_g():
                 img_size=(256, 448),
                 cross_cam_srs=args.cross_cam_srs,
                 tam_cache_dir=active_tam_cache,
+                refine_tam=args.refine_tam,
             )
             print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
             if dataset.num_cams > pos_stats.num_cams:
@@ -1762,12 +1840,34 @@ def train_direction_g():
                 epoch_cam_adv_losses.append(loss_cam_adv.item())
 
                 # Lưu mẫu dữ liệu visual của batch cuối (dùng t_patches của Teacher - ảnh sạch!)
+                # Đồng thời trích xuất đặc trưng DINO gốc để phục vụ đối chứng 7 cột
+                B_vis = min(4, x1.shape[0])
+                with torch.no_grad():
+                    x1_vis = x1[:B_vis].to(device)
+                    x1_vis_norm = imagenet_normalize(x1_vis)
+                    _, v_patch_spatial = extract_tokens(frozen_backbone, x1_vis_norm, patch_size=patch_size)
+                    v_patch_tokens = v_patch_spatial.view(B_vis, -1, embed_dim).cpu().float()
+
+                    # Đảm bảo các mẫu visual luôn được áp dụng SRS để hiển thị tác động hoán nền thực tế
+                    x_srs_vis = x_student[:B_vis].clone()
+                    for b_idx in range(B_vis):
+                        diff_check = float(torch.abs(x_srs_vis[b_idx] - x1[b_idx]).mean().item() * 100.0)
+                        if diff_check < 0.5:
+                            # Mẫu này bị bỏ qua p_srs trong lúc train, thực hiện swap bổ sung để trực quan hóa
+                            x_sw_vis, _ = static_region_swap(
+                                x1[b_idx].to(device), x2[b_idx].to(device),
+                                pi1[b_idx].to(device), pi2[b_idx].to(device),
+                                ratio=0.7, feather=4, continuous_bg=True, color_match=True,
+                            )
+                            x_srs_vis[b_idx] = x_sw_vis.cpu()
+
                 last_visual_data = {
-                    "x_orig": x1.detach().cpu(),
-                    "pi": pi1.detach().cpu(),
-                    "mask": mask_batch.detach().cpu(),
-                    "x_srs": x_student.detach().cpu(),
-                    "patch_features": t_patches.detach().cpu().float(),
+                    "x_orig": x1[:B_vis].detach().cpu(),
+                    "pi": pi1[:B_vis].detach().cpu(),
+                    "mask": mask_batch[:B_vis].detach().cpu(),
+                    "x_srs": x_srs_vis.detach().cpu(),
+                    "patch_features": t_patches[:B_vis].detach().cpu().float(),
+                    "vanilla_patch_features": v_patch_tokens,
                 }
 
                 step += 1
@@ -1823,6 +1923,7 @@ def train_direction_g():
                     patch_features=last_visual_data["patch_features"],
                     save_path=vis_save_path,
                     epoch=epoch + 1,
+                    vanilla_patch_features=last_visual_data.get("vanilla_patch_features"),
                 )
 
             # Cập nhật đồ thị đường cong hàm mất mát sau mỗi epoch (Live Loss Curve)

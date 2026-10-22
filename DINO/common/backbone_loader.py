@@ -79,11 +79,6 @@ def load_env_credentials(verbose: bool = False) -> str:
     if token:
         os.environ["HF_TOKEN"] = token
         os.environ["HUGGING_FACE_HUB_TOKEN"] = token
-        try:
-            from huggingface_hub import login
-            login(token=token, add_to_git_credential=False)
-        except Exception:
-            pass
 
     return token
 

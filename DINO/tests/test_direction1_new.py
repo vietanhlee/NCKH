@@ -536,6 +536,39 @@ class TestDirection1New(unittest.TestCase):
             )
             self.assertEqual(cached_res, target_cache)
 
+    def test_23_refine_traffic_foreground_map(self):
+        """Kiểm tra hàm refine_traffic_foreground_map dập tắt nhiễu mặt đường và làm nét xe cộ."""
+        from direction1_new.tam import refine_traffic_foreground_map
+        pi_raw = torch.tensor([0.15, 0.25, 0.50, 0.75, 0.90])
+        pi_clean = refine_traffic_foreground_map(pi_raw)
+
+        # 1. Các patch mặt đường yếu (<= 0.25) phải bị dập tắt mạnh về < 0.10
+        self.assertLess(pi_clean[0].item(), 0.05)
+        self.assertLess(pi_clean[1].item(), 0.10)
+
+        # 2. Patch ngưỡng trung bình 0.50 giữ nguyên đối xứng
+        self.assertAlmostEqual(pi_clean[2].item(), 0.50, places=2)
+
+        # 3. Patch tiền cảnh xe cộ (>= 0.75) được khuếch đại sắc nét lên >= 0.85
+        self.assertGreaterEqual(pi_clean[3].item(), 0.85)
+        self.assertGreaterEqual(pi_clean[4].item(), 0.95)
+
+    def test_24_srs_adaptive_fallback_non_zero_delta(self):
+        """Kiểm tra cơ chế Adaptive Fallback của SRS đảm bảo delta > 0 ngay cả khi pi cao khắp nơi."""
+        from direction1_new.srs import static_region_swap
+        x1 = torch.zeros(3, 256, 448)
+        x2 = torch.ones(3, 256, 448)
+        # Tình huống biên cực đoan: cả 2 ảnh đều có pi = 0.45 khắp nơi (trước đây n_eligible == 0 khiến delta = 0%)
+        pi1 = torch.full((16, 28), 0.45)
+        pi2 = torch.full((16, 28), 0.45)
+
+        x_tilde, swap_mask = static_region_swap(x1, x2, pi1, pi2, ratio=0.6, continuous_bg=True)
+        diff_val = float(torch.abs(x_tilde - x1).mean().item() * 100.0)
+
+        # Cam kết kỹ thuật: SRS phải hoán nền thành công, diff_val > 0.0% và số patch swap >= 20
+        self.assertGreater(diff_val, 5.0)
+        self.assertGreaterEqual(int(swap_mask.sum().item()), 20)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,7 +70,7 @@ def static_region_swap(
     if valid2 is None:
         valid2 = torch.ones_like(pi2, dtype=torch.bool)
 
-    # 1. Xác định tập các patch tĩnh ở cả 2 frame
+    # 1. Xác định tập các patch tĩnh ở cả 2 frame theo ngưỡng mặc định
     static_common = (pi < thr) & (pi2 < thr) & valid & valid2
 
     # 2. Loại bỏ các patch kề cận vùng xe của cả hai frame để không chép dính nửa chiếc xe
@@ -79,6 +79,33 @@ def static_region_swap(
     eligible_swap = static_common & (~fg_dilated)
 
     n_eligible = int(eligible_swap.sum().item())
+    min_eligible_needed = max(16, int(0.12 * Hp * Wp))  # Tối thiểu 12% diện tích khung hình (~54 patches)
+
+    # 2b. Cơ chế Ngưỡng Thích ứng Dự phòng (Adaptive Fallback Guarantee):
+    # Khắc phục triệt để hiện tượng n_eligible == 0 khi pi bị nhiễu hoặc mật độ xe cao
+    if n_eligible < min_eligible_needed:
+        # Thử nghiệm fallback cấp 1: Giảm bán kính giãn nở về 0 (chỉ loại bỏ trực tiếp xe, không giãn biên)
+        eligible_swap_fb1 = static_common & (~fg_union)
+        if int(eligible_swap_fb1.sum().item()) >= min_eligible_needed:
+            eligible_swap = eligible_swap_fb1
+            n_eligible = int(eligible_swap.sum().item())
+        else:
+            # Fallback cấp 2: Nới lỏng ngưỡng tĩnh dựa trên phân vị động của ảnh
+            # Tìm các patch có xác suất xe thấp nhất trong cả 2 khung hình
+            combined_fg = torch.maximum(pi, pi2)
+            # Ngưỡng thích ứng tại phân vị 35% thấp nhất
+            flat_fg = combined_fg[valid & valid2].view(-1)
+            if flat_fg.numel() > 0:
+                k_val = max(1, min(int(flat_fg.numel() * 0.35), flat_fg.numel() - 1))
+                adapt_thr = float(torch.kthvalue(flat_fg, k_val).values.item())
+                adapt_thr = max(thr, min(adapt_thr, 0.45))
+                # Chỉ coi là xe chắc chắn nếu pi >= 0.65 (tránh false positive mặt đường)
+                fg_core = (pi >= 0.65) | (pi2 >= 0.65)
+                eligible_swap_fb2 = (pi <= adapt_thr) & (pi2 <= adapt_thr) & valid & valid2 & (~fg_core)
+                if int(eligible_swap_fb2.sum().item()) > 0:
+                    eligible_swap = eligible_swap_fb2
+                    n_eligible = int(eligible_swap.sum().item())
+
     if n_eligible == 0 or ratio <= 0.0:
         return x.clone(), torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
 

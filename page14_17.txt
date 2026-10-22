@@ -1,0 +1,159 @@
+2. Mục tiêu nghiên cứu
+Đe tà i hướng tới việ c giả i quyet đong bộ chuoi bà i toá n từ thu nhậ n hı̀nh ả nh thị giá c
+má y tı́nh đen dự bá o chuoi thời gian trê n đo thị giao thô ng thô ng qua 4 mụ c tiê u cụ the:
+1. Xây dựng bộ dữ liệu chuẩn mực IC4SD‑Traf ic‑HCM: Thu thậ p dữ liệ u thực te
+từ hệ thong camera cô ng cộ ng TP. Ho Chı́ Minh, xâ y dựng bộ dữ liệ u ả nh gá n nhã n
+thủ cô ng theo hai lớp ô tô con và xe má y, cù ng chuoi thời gian liê n tụ c 86 ngà y
+trê n mạ ng lưới 608 nú t camera đe là m chuan đoi sá nh mở cho cộ ng đong nghiê n
+cứu.
+2. Thiết kế khung làm việc hai giai đoạn:
+• Giai đoạn 1: Phá t trien mô hı̀nh hoi quy đem xe trực tiep từ ả nh tı̃nh độ
+phâ n giả i cao, giả i quyet van đe che khuat củ a dò ng xe má y và loạ i bỏ điem
+nghẽ n tı́nh toá n củ a thuậ t toá n triệ t tiê u phi cực đạ i (NMS).
+• Giai đoạn 2: Mô hı̀nh hó a mạ ng lưới đường bộ thà nh đo thị khô ng gian có
+hướng dựa trê n dữ liệ u OpenStreetMap và dự bá o lưu lượng đa bước (t + 1
+đen t + 6).
+3. Đề xuất kiến trúc cải tiến TA‑STGCN: Tı́ch hợp cơ che chú ý thời gian đa đau
+(Multi‑Head Temporal Self‑Attention) và o cau trú c mạ ng nơ‑ron tı́ch chậ p đo thị
+khô ng – thời gian, giú p tă ng cường khả nă ng chong chịu nhieu nhậ n dạ ng và kiem
+soá t toc độ tă ng sai so khi dự bá o dà i hạ n.
+4. Định lượng có hệ thống hiện tượng lan truyền sai số và độ bền vững trước
+nhiễu: Xâ y dựng mô hı̀nh toá n họ c mô phỏ ng sai so cả m bien thực te, thực hiệ n
+cá c kiem định thong kê chuan mực (Friedman, Wilcoxon Signed‑Rank, Cohen’s d)
+đe đá nh giá sự phâ n hó a độ ben vững giữa cá c dò ng kien trú c đo thị khá c nhau.
+
+3. Đối tượng và phạm vi nghiên cứu
+• Đối tượng nghiên cứu:
+– Cá c kien trú c mạ ng nơ‑ron tı́ch chậ p sâ u (CNN) và Vision Transformer cho
+bà i toá n đem phương tiệ n từ ả nh tı̃nh.
+– Lý thuyet đo thị pho và mạ ng nơ‑ron đo thị khô ng – thời gian (STGNN).
+– Cơ che chú ý tự thâ n và lý thuyet ước lượng thong kê ben vững.
+– Cá c mô hı̀nh phâ n phoi sai so nhậ n dạ ng cả m bien trong thực te.
+• Phạm vi nghiên cứu:
+– Không gian: Mạ ng lưới 608 trạ m camera giá m sá t tạ i khu vực nộ i thà nh và
+cá c trụ c giao thô ng chı́nh củ a Thà nh pho Ho Chı́ Minh.
+– Thời gian: Dữ liệ u chuoi thời gian liê n tụ c trong 86 ngà y, từ ngà y
+23/06/2025 đen ngà y 16/09/2025 (tong cộ ng 24.768 bước thời gian với
+chu kỳ 5 phú t).
+
+3
+
+– Phân loại phương tiện: Tậ p trung và o hai nhó m phương tiệ n chı́nh chiem
+trê n 98% lưu lượng đường bộ đô thị: ô tô con và xe má y.
+
+4. Phương pháp luận nghiên cứu khoa học
+Đe tà i ket hợp phương phá p nghiê n cứu thực nghiệ m với mô hı̀nh hó a toá n họ c chặ t chẽ :
+1. Thu thập và xử lý dữ liệu: Thu thậ p tự độ ng qua cong thô ng tin giao thô ng thà nh
+pho; á p dụ ng quy trı̀nh gá n nhã n ba tham định viê n độ c lậ p ket hợp kiem định độ
+tin cậ y bang hệ so tương quan nộ i lớp (ICC); sử dụ ng bộ lọ c trượt ké p nhâ n quả
+đe là m mượt dữ liệ u chuoi mà khô ng gâ y rò rı̉ thô ng tin tương lai.
+2. Mô hình hóa toán học: Bieu dien mạ ng lưới đường bộ thà nh đo thị có hướng dựa
+trê n bả n đo OpenStreetMap; á p dụ ng phé p xap xı̉ ChebNet trê n toá n tử Laplacian
+đe truyen tin khô ng gian cụ c bộ ; chứng minh toá n họ c ve hiệ u ứng giả m phương
+sai nhieu củ a cơ che chú ý thời gian.
+3. Thực nghiệm và kiểm định thống kê: Huan luyệ n tat cả cá c mô hı̀nh qua 5
+seed ngau nhiê n độ c lậ p; đo đạ c sai so trê n giá trị đem xe thực te sau khi giả i
+chuan hó a; sử dụ ng kiem định phi tham so Friedman omnibus và kiem định cặ p
+Wilcoxon Signed‑Rank kè m hiệ u chı̉nh Holm‑Bonferroni; định lượng mức độ ả nh
+hưởng bang chı̉ so Cohen’s d và khoả ng tin cậ y Bootstrap 95%.
+
+5. Những đóng góp khoa học và thực tiễn của đề tài
+1. Xây dựng bộ dữ liệu chuẩn IC4SD‑Traf ic‑HCM: Cô ng bo bộ dữ liệ u giao thô ng
+quy mô đô thị mở đau tiê n cho khu vực Đô ng Nam A bả o toà n phâ n loạ i ô tô con
+và xe má y trê n mạ ng lưới 608 nú t camera, tạ o mô i trường thử nghiệ m chuan mực
+cho cộ ng đong họ c thuậ t.
+2. Cải tiến kỹ thuật đếm xe hỗn hợp: Đe xuat và kiem chứng giả i phá p hoi quy
+đem xe trực tiep bang Ef icientNet‑B5, mang lạ i độ on định cao trước hiệ n tượng
+che khuat và toc độ suy luậ n nhanh so với cá c phương phá p phá t hiệ n dựa trê n
+bounding box trong đieu kiệ n xe má y dà y đặ c.
+3. Đề xuất kiến trúc TA‑STGCN hiệu quả: Thiet ke mô hı̀nh tı́ch hợp cơ che chú ý
+thời gian và o STGCN, đạ t sự câ n bang tot giữa độ chı́nh xá c dự bá o, so lượng tham
+so gọ n nhẹ (453K tham so) và tı́nh kinh te bộ nhớ GPU (tiet kiệ m 25.2% VRAM so
+với STAEformer).
+4. Định lượng hiện tượng lan truyền sai số và cơ chế lọc nhiễu: Cung cap bang
+chứng thực nghiệ m và chứng minh lý thuyet cho thay cơ che chú ý theo trụ c thời
+gian hoạ t độ ng như mộ t bộ lọ c thô ng thap thı́ch ứng, kı̀m hã m toc độ tă ng sai so
+trước bien độ ng cả m bien camera, vượt trộ i cá c mô hı̀nh khô ng có cơ che chú ý
+(Cohen’s d lê n tới +5.84).
+5. Hiện thực hóa kiến trúc Edge–Cloud: Đe xuat mô hı̀nh trien khai phâ n tá n giú p
+
+4
+
+tiet kiệ m bă ng thô ng truyen thô ng tới 62.500 lan và bả o vệ quyen riê ng tư hı̀nh
+ả nh củ a người dâ n theo nguyê n tac Privacy‑by‑Design.
+
+6. Bố cục của báo cáo
+Nộ i dung bá o cá o được to chức thà nh 6 chương chuyê n mô n, phan mở đau, ket luậ n và
+tà i liệ u tham khả o:
+• Phần mở đầu: Giới thiệ u boi cả nh, tı́nh cap thiet, mụ c tiê u, đoi tượng, phương
+phá p luậ n và cá c đó ng gó p cot lõ i củ a đe tà i.
+• Chương 1: Tổng quan và bối cảnh nghiên cứu: Khả o sá t tong quan ve ITS, bà i
+toá n dự bá o dò ng giao thô ng đô thị hon hợp, hiệ n trạ ng cá c phương phá p đem xe,
+cá c kien trú c họ c sâ u khô ng – thời gian và xá c định khoả ng trong nghiê n cứu.
+• Chương 2: Cơ sở lý thuyết và nền tảng toán học: Trı̀nh bà y hệ thong nen tả ng
+toá n họ c ve lý thuyet đo thị pho, toá n tử Chebyshev, tı́ch chậ p thời gian GLU, kien
+trú c STGCN và TA‑STGCN, hà m mat má t Huber Loss và lý thuyet giả m phương sai
+nhieu.
+• Chương 3: Thu thập dữ liệu và xây dựng đồ thị giao thông (IC4SD‑Traf ic‑
+HCM): Trı̀nh bà y quy trı̀nh thu thậ p từ 608 camera, bộ dữ liệ u ả nh gá n nhã n, chuoi
+thời gian 86 ngà y, xâ y dựng đo thị OSM‑RBF và quy trı̀nh kiem soá t rò rı̉ dữ liệ u.
+• Chương 4: Phương pháp nghiên cứu đề xuất: Mô tả chi tiet khung là m việ c
+hai giai đoạ n, mô hı̀nh hoi quy Ef icientNet‑B5 và kien trú c mạ ng nơ‑ron đo thị
+TA‑STGCN cù ng thuậ t toá n huan luyệ n.
+• Chương 5: Thực nghiệm, kết quả và đánh giá: Bá o cá o ket quả đo đạ c Giai
+đoạ n 1 và Giai đoạ n 2 qua 5 seed ngau nhiê n, phâ n tı́ch lan truyen sai so theo mậ t
+độ , nghiê n cứu độ ben vững với nhieu, phâ n tı́ch trọ ng so chú ý và kiem tra loạ i
+trừ thà nh phan.
+• Chương 6: Thảo luận, mô hình triển khai và hướng phát triển: Phâ n tı́ch
+kien trú c Edge–Cloud, tı́nh kinh te bộ nhớ GPU, tı́nh cô ng bang thực nghiệ m, cá c
+hạ n che và định hướng nghiê n cứu tiep noi.
+• Kết luận và kiến nghị: Tong ket cá c ket quả đạ t được và đe xuat giả i phá p ứng
+dụ ng thực tien.
+• Tài liệu tham khảo: Danh mụ c cá c cô ng trı̀nh khoa họ c được trı́ch dan trong bá o
+cá o.
+
+5
+
+CHƯƠNG 1
+
+TỔNG QUAN VÀ BỐI CẢNH NGHIÊN CỨU
+
+1.1
+
+Tổng quan về hệ thống giao thông thông minh (ITS)
+
+Hệ thong giao thô ng thô ng minh (Intelligent Transportation Systems – ITS) là sự ket hợp
+giữa cô ng nghệ thô ng tin, truyen thô ng và cá c thuậ t toá n đieu khien hiệ n đạ i nham nâ ng
+cao hiệ u quả vậ n hà nh mạ ng lưới giao thô ng, bả o đả m an toà n, toi ưu hó a nă ng lượng
+và giả m thieu ô nhiem mô i trường đô thị.
+Theo cá c khung kien trú c chuan mực quoc te (như ISO 14813), mộ t hệ thong ITS đô
+thị thường gom ba phâ n hệ chı́nh:
+1. Hệ thống quản lý giao thông nâng cao (ATMS): Giá m sá t trạ ng thá i mạ ng lưới
+đường bộ thời gian thực qua hệ thong cả m bien, phá t hiệ n sự co tự độ ng, đieu
+khien đè n tı́n hiệ u thı́ch ứng và đieu phoi lực lượng xử lý tı̀nh huong phá t sinh.
+2. Hệ thống thông tin người tham gia giao thông (ATIS): Cung cap thô ng tin cậ p
+nhậ t liê n tụ c ve tı̀nh trạ ng lưu thô ng, thời gian hà nh trı̀nh dự kien và hướng dan lộ
+trı̀nh toi ưu thô ng qua bien bá o điệ n tử VMS, ứng dụ ng di độ ng và đà i phá t thanh
+giao thô ng.
+3. Hệ thống vận tải công cộng nâng cao (APTS): Ho trợ quả n lý và toi ưu bieu đo
+chạ y xe buý t, metro, cung cap thời gian đen ben dự kien (ETA) và đieu phoi ưu
+tiê n qua nú t giao cho phương tiệ n cô ng cộ ng.
+Trong đó , bà i toá n dự báo dòng giao thông đô thị (urban traf ic forecasting) đó ng
+vai trò trung tâ m trong phâ n hệ ATMS và ATIS. Việ c dự bá o chı́nh xá c trạ ng thá i mạ ng
+lưới trước 15 đen 30 phú t cho phé p cá c nhà quả n lý chuyen từ trạ ng thá i phả n ứng bị
+độ ng sang đieu hà nh chủ độ ng, kịp thời đieu chı̉nh chu kỳ đè n tı́n hiệ u và phâ n luong từ
+xa trước khi ù n tac lan rộ ng.
+1.1.1
+
+Tiến trình phát triển của hệ thống giao thông thông minh
+
+Quá trı̀nh phá t trien củ a ITS trả i qua ba giai đoạ n cô ng nghệ chı́nh:
+1. Thế hệ ITS 1.0 (1970 – 1990): Kỷ nguyên cảm biến cơ điện cố định. Giai đoạ n
+nà y gan lien với cá c cả m bien vò ng từ (inductive loop detectors) chô n dưới mặ t
+đường và hệ thong đè n tı́n hiệ u phoi hợp co định theo thời gian trong ngà y (như
+phương phá p Webster). Dữ liệ u thu được chủ yeu phụ c vụ cá c tuyen cao toc, thu
+thậ p lưu lượng tong hợp trê n từng là n và chưa có khả nă ng liê n ket mạ ng lưới
+khô ng gian cũ ng như phâ n loạ i phương tiệ n.
+6
+
+

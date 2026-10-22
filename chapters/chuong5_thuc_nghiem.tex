@@ -1,41 +1,42 @@
-\chapter{THỰC NGHIỆM, KẾT QUẢ VÀ ĐÁNH GIÁ}
+\chapter{Thực nghiệm, kết quả và đánh giá}
 \label{chap:thuc_nghiem}
 
-Chương này trình bày toàn bộ các kết quả thực nghiệm, đối sánh định lượng và kiểm định thống kê chuẩn mực cho cả hai giai đoạn: Giai đoạn 1 (Vision Perception) và Giai đoạn 2 (Graph Forecasting) trên bộ dữ liệu IC4SD-Traffic-HCM. Đặc biệt, chương tập trung phân tích sâu hiện tượng \textbf{Lan truyền sai số nhận dạng (Error Propagation)} và \textbf{Độ bền vững với nhiễu (Noise Robustness)} -- đóng góp khoa học cốt lõi của đề tài.
+Chương này trình bày toàn bộ các kết quả thực nghiệm, đối sánh định lượng và kiểm định thống kê chuẩn mực cho cả hai giai đoạn: Giai đoạn 1 (nhận dạng thị giác) và Giai đoạn 2 (dự báo trên đồ thị) trên bộ dữ liệu IC4SD-Traffic-HCM. Trọng tâm của chương là phân tích sâu hiện tượng \textbf{lan truyền sai số nhận dạng} và \textbf{độ bền vững trước nhiễu} giữa các dòng kiến trúc học sâu không -- thời gian.
 
-\section{Thiết lập Môi trường và Tiêu chí Đánh giá Thực nghiệm}
-\subsection{Môi trường Phần cứng và Phần mềm}
-Tất cả các mô hình được lập trình trên nền tảng PyTorch 2.x và PyTorch Geometric, huấn luyện trên cụm máy chủ điện toán hiệu năng cao trang bị \textbf{2 GPU NVIDIA RTX 4090 24GB VRAM}, CPU AMD EPYC 7543 32 lõi và 128GB RAM DDR4. Quá trình huấn luyện áp dụng chế độ DataParallel phân bổ đều 32 mẫu trên mỗi GPU.
+% ==============================================================================
+\section{Thiết lập môi trường và tiêu chí đánh giá thực nghiệm}
+\label{sec:thiet_lap_moi_truong}
 
-\subsection{Cấu hình Siêu tham số Huấn luyện}
-Bảng \ref{tab:sieu_tham_so_chap5} tổng hợp toàn bộ các siêu tham số huấn luyện chuẩn mực được áp dụng cho cả hai giai đoạn.
+\subsection{Môi trường phần cứng và phần mềm}
+Tất cả các mô hình được lập trình trên nền tảng PyTorch 2.x và PyTorch Geometric, huấn luyện trên máy chủ trang bị \textbf{2 GPU NVIDIA RTX 4090 (24GB VRAM mỗi GPU)}, CPU AMD EPYC 7543 32 lõi và 128GB RAM DDR4. Quá trình huấn luyện áp dụng chế độ DataParallel phân bổ đều 32 mẫu trên mỗi GPU.
+
+\subsection{Cấu hình siêu tham số huấn luyện}
+Bảng \ref{tab:sieu_tham_so_chap5} tổng hợp các siêu tham số huấn luyện chuẩn mực được áp dụng cho cả hai giai đoạn.
 
 \begin{table}[htbp]
 \centering
 \caption{Cấu hình siêu tham số huấn luyện chi tiết cho Giai đoạn 1 và Giai đoạn 2.}
 \label{tab:sieu_tham_so_chap5}
 \small
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lll}
+\begin{tabularx}{\textwidth}{l X X}
 \toprule
-\textbf{Siêu tham số} & \textbf{Giai đoạn 1 (Vision Perception)} & \textbf{Giai đoạn 2 (Graph Forecasting)} \\
+\textbf{Siêu tham số} & \textbf{Giai đoạn 1 (Nhận dạng thị giác)} & \textbf{Giai đoạn 2 (Dự báo đồ thị)} \\
 \midrule
 Thuật toán tối ưu hóa & AdamW & Adam \\
 Tốc độ học khởi tạo ($\eta$) & $3 \times 10^{-4}$ & $1 \times 10^{-3}$ \\
 Hệ số suy giảm trọng số (Weight Decay) & $1 \times 10^{-2}$ & $1 \times 10^{-4}$ \\
-Chiến lược điều chỉnh Learning Rate & Cosine Annealing ($\eta_{\min} = 10^{-6}$) & ReduceLROnPlateau ($\gamma=0.5$, patience=10) \\
+Chiến lược điều chỉnh tốc độ học & Cosine Annealing ($\eta_{\min} = 10^{-6}$) & ReduceLROnPlateau ($\gamma=0.5$, patience=10) \\
 Số epoch tối đa & 120 epochs & 120 epochs \\
 Ngưỡng dừng sớm (Early Stopping) & 20 epochs & 20 epochs \\
 Kích thước mini-batch & 32 & 64 (32 mẫu / GPU) \\
 Hàm mất mát & Smooth $L_1$ (Huber, $\delta=1.0$) & Huber Loss ($\delta=1.0$, dùng chung) \\
-Tăng cường dữ liệu (Augmentation) & Lật ngang, Color Jitter, Random Erase & Không (Bảo toàn chuỗi thời gian) \\
+Tăng cường dữ liệu & Lật ngang, Color Jitter, Random Erase & Không (Bảo toàn chuỗi thời gian) \\
 \bottomrule
-\end{tabular}%
-}
+\end{tabularx}
 \end{table}
 
-\subsection{Tiêu chí Đánh giá và Quy chuẩn Báo cáo}
-Để đánh giá sát thực tế vận hành giao thông, toàn bộ các chỉ số sai số được đo lường trên \textbf{giá trị số lượng xe thực tế sau khi đã giải chuẩn hóa (De-normalized Counts)} thông qua phép biến đổi nghịch đảo: $y_{\text{real}} = y_{\text{z}} \cdot \sigma_i + \mu_i$ (với $\mu_i, \sigma_i$ được cố định từ tập Train). 
+\subsection{Tiêu chí đánh giá và quy chuẩn báo cáo}
+Để đánh giá sát thực tế vận hành giao thông, toàn bộ các chỉ số sai số được đo lường trên \textbf{giá trị số lượng xe thực tế sau khi đã giải chuẩn hóa} thông qua phép biến đổi nghịch đảo: $y_{\text{real}} = y_{\text{z}} \cdot \sigma_i + \mu_i$ (với $\mu_i, \sigma_i$ được cố định từ tập Train). 
 
 Ba thước đo chuẩn mực được sử dụng:
 \begin{align}
@@ -45,9 +46,12 @@ Ba thước đo chuẩn mực được sử dụng:
 \end{align}
 với $N = 608$ nút, $H = 6$ bước dự báo, $M$ là số mẫu kiểm thử, $\Omega = \{(i,h,k) \mid y_{i,h}^{(k)} > 0.5\}$ là tập hợp các điểm quan trắc có dòng xe lưu thông thực tế và $\epsilon_{\mathrm{MAPE}} = 10^{-5}$ là hằng số bảo vệ chia cho 0.
 
-Tất cả các thí nghiệm được lặp lại độc lập trên \textbf{5 seed ngẫu nhiên} $\mathcal{S} = \{42, 100, 2024, 22, 99\}$. Kết quả báo cáo theo định dạng $\text{Mean} \pm \text{Std}$ cùng với khoảng tin cậy Bootstrap 95\% (Bootstrap CI với 1.000 lần lấy mẫu lại).
+Tất cả các thí nghiệm được lặp lại độc lập trên \textbf{5 seed ngẫu nhiên} $\mathcal{S} = \{42, 100, 2024, 22, 99\}$. Kết quả báo cáo theo định dạng $\text{Mean} \pm \text{Std}$ cùng với khoảng tin cậy Bootstrap 95\% ($B = 1.000$ lần lấy mẫu lại).
 
-\section{Kết quả Thực nghiệm Giai đoạn 1 (Vision Perception Benchmark)}
+% ==============================================================================
+\section{Kết quả thực nghiệm Giai đoạn 1 (Vision Perception Benchmark)}
+\label{sec:thuc_nghiem_giai_doan_1}
+
 Bảng \ref{tab:stage1_benchmark_full_chap5} trình bày kết quả đánh giá toàn diện 5 kiến trúc thị giác máy tính trên 501 ảnh kiểm thử độc lập từ camera TP. Hồ Chí Minh qua 5 seed ngẫu nhiên.
 
 \begin{table}[htbp]
@@ -82,14 +86,17 @@ Hệ số biến thiên phương sai (CV) & $1.70\%$ & $1.45\%$ & $\mathbf{1.44\
 
 \textbf{Phân tích kết quả chuyên sâu:}
 \begin{enumerate}
-    \item \textbf{Hiệu năng vượt trội của EfficientNet-B5:} Mô hình đạt sai số thấp nhất trên mọi chỉ số (MAE tổng thể đạt $3.6363$, MAE xe con đạt $2.1723$ và MAE xe máy đạt $5.1003$). Đáng chú ý, EfficientNet-B5 chỉ yêu cầu 75.3 GFLOPs, giảm $43.0\%$ lượng phép tính so với ResNet-50 (132.2 GFLOPs) trong khi đạt độ trễ suy luận batch tương đương ($35.2$ ms so với $34.6$ ms). Điều này chứng minh tính ưu việt của nguyên lý tỷ lệ đồng thời (Compound Scaling), xác lập EfficientNet-B5 là mạng xương sống tối ưu để sinh dữ liệu cho Giai đoạn 2.
-    \item \textbf{Ứng viên siêu nhẹ cho phần cứng nhúng biên (MobileNetV3-Large):} MobileNetV3 thể hiện tính kinh tế tham số phi thường: chỉ 4.2M tham số và 6.9 GFLOPs (nhẹ hơn 10 lần so với EfficientNet-B5) nhưng vẫn đạt MAE chấp nhận được là $4.0126 \pm 0.0578$. Đây là lựa chọn hoàn hảo cho các camera thông minh có chip xử lý biên kinh phí thấp.
-    \item \textbf{Sự bất ổn định của Vision Transformer và ConvNeXt trên tập dữ liệu vừa phải:} ViT-Base/16 (85.8M tham số) cho kết quả kém hơn (MAE $= 5.5783$) và hệ số biến thiên cao ($\text{CV} = 5.59\%$). Đặc biệt, ConvNeXt-Tiny có $\text{CV}$ lên tới $57.36\%$ do một số seed hội tụ vào các cực tiểu cục bộ không tốt. Điều này khẳng định rằng các mô hình dựa trên LayerNorm và cấu trúc Attention đòi hỏi hàng trăm nghìn mẫu dữ liệu mới phát huy hiệu quả, trong khi các mạng CNN truyền thống dựa trên BatchNorm hội tụ cực kỳ ổn định với tập dữ liệu 5.000 ảnh.
-    \item \textbf{Kiểm định Thống kê Chuẩn mực:} Kiểm định phi tham số Friedman omnibus cho thấy sự phân hóa hiệu năng giữa các backbone là có ý nghĩa thống kê cao ($\chi^2 = 863.55, p < 0.001$). Kiểm định Wilcoxon Signed-Rank hậu nghiệm kèm hiệu chỉnh Holm-Bonferroni xác nhận rằng EfficientNet-B5 và ResNet-50 có độ chính xác tương đương ($p = 0.253$, Cohen's $d = -0.022$), nhưng cả hai đều vượt trội có ý nghĩa thống kê so với ViT, ConvNeXt và MobileNetV3 ($p < 0.001$).
+    \item \textbf{Hiệu năng của EfficientNet-B5:} Mô hình đạt sai số thấp nhất trên mọi chỉ số (MAE tổng thể đạt $3.6363$, MAE xe con đạt $2.1723$ và MAE xe máy đạt $5.1003$). Đáng chú ý, EfficientNet-B5 chỉ yêu cầu 75.3 GFLOPs, giảm $43.0\%$ lượng phép tính so với ResNet-50 (132.2 GFLOPs) trong khi đạt độ trễ suy luận tương đương ($35.2$ ms so với $34.6$ ms). Điều này chứng minh tính hiệu quả của nguyên lý mở rộng đồng thời (Compound Scaling), xác lập EfficientNet-B5 là mạng xương sống phù hợp để sinh dữ liệu cho Giai đoạn 2.
+    \item \textbf{Phương án triển khai nhẹ trên thiết bị biên (MobileNetV3-Large):} MobileNetV3 thể hiện tính kinh tế cao: chỉ 4.2M tham số và 6.9 GFLOPs (nhẹ hơn 10 lần so với EfficientNet-B5) nhưng vẫn đạt MAE chấp nhận được là $4.0126 \pm 0.0578$. Đây là lựa chọn phù hợp cho các thiết bị camera biên có chip xử lý kinh phí thấp.
+    \item \textbf{Đặc điểm của Vision Transformer và ConvNeXt trên tập dữ liệu quy mô vừa:} ViT-Base/16 (85.8M tham số) cho kết quả kém hơn (MAE $= 5.5783$) và hệ số biến thiên cao ($\text{CV} = 5.59\%$). Đặc biệt, ConvNeXt-Tiny có $\text{CV}$ lên tới $57.36\%$ do một số seed hội tụ vào các cực tiểu cục bộ không tốt. Điều này cho thấy các mô hình thuần Attention cần lượng dữ liệu rất lớn để phát huy hiệu quả, trong khi các mạng CNN truyền thống hội tụ ổn định hơn trên tập dữ liệu 5.000 ảnh.
+    \item \textbf{Kiểm định thống kê:} Kiểm định phi tham số Friedman omnibus cho thấy sự phân hóa hiệu năng giữa các backbone có ý nghĩa thống kê cao ($\chi^2 = 863.55, p < 0.001$). Kiểm định Wilcoxon Signed-Rank hậu nghiệm kèm hiệu chỉnh Holm-Bonferroni xác nhận rằng EfficientNet-B5 và ResNet-50 có độ chính xác tương đương ($p = 0.253$, Cohen's $d = -0.022$), nhưng cả hai đều vượt trội có ý nghĩa thống kê so với ViT, ConvNeXt và MobileNetV3 ($p < 0.001$).
 \end{enumerate}
 
-\section{Phân tích Sai số Nhận dạng theo Mật độ Giao thông}
-Bảng \ref{tab:stage1_density_bias_chap5} phân tích chi tiết độ chệch dự đoán (Prediction Bias $= \hat{y} - y$) của các mô hình Stage 1 khi chia tập kiểm thử thành ba phân tầng mật độ: Thấp ($<10$ xe/ảnh, 103 ảnh), Trung bình ($10-25$ xe/ảnh, 151 ảnh) và Cao ($>25$ xe/ảnh, 247 ảnh).
+% ==============================================================================
+\section{Phân tích sai số nhận dạng theo mật độ giao thông}
+\label{sec:phan_tich_sai_so_theo_mat_do}
+
+Bảng \ref{tab:stage1_density_bias_chap5} phân tích chi tiết độ chệch dự đoán ($\text{Bias} = \hat{y} - y$) của các mô hình Stage 1 khi chia tập kiểm thử thành ba phân tầng mật độ: Thấp ($<10$ xe/ảnh, 103 ảnh), Trung bình ($10-25$ xe/ảnh, 151 ảnh) và Cao ($>25$ xe/ảnh, 247 ảnh).
 
 \begin{table}[htbp]
 \centering
@@ -120,15 +127,18 @@ Bảng \ref{tab:stage1_density_bias_chap5} phân tích chi tiết độ chệch 
 }
 \end{table}
 
-\textbf{Phát hiện quy luật vật lý quan trọng:}
+\textbf{Quy luật rút ra từ thực nghiệm mật độ:}
 \begin{itemize}
     \item Ở mật độ thấp ($<10$ xe), các mô hình có xu hướng chệch dương nhẹ đối với xe máy ($+0.43$ đến $+0.56$), do đôi khi nhận nhầm xe đạp hoặc các chi tiết biển hiệu ven đường.
-    \item Tuy nhiên, khi chuyển sang mật độ cao ($>25$ xe), \textbf{tất cả các mô hình đều chuyển sang chệch âm (Undercounting Bias)} đối với xe máy. Hiện tượng che khuất tương hỗ nghiêm trọng giữa các cụm xe máy chen chúc khiến mạng nơ-ron có xu hướng đếm thiếu.
-    \item EfficientNet-B5 kiểm soát độ chệch âm xuất sắc nhất (chỉ chệch $-0.63 \pm 0.87$ xe máy), trong khi ViT đếm thiếu tới $-4.63$ xe và ConvNeXt đếm thiếu tới $-10.22$ xe. Đây là bằng chứng thực nghiệm then chốt giải thích nguồn gốc sinh ra sai số cảm biến truyền vào Giai đoạn 2.
+    \item Khi chuyển sang mật độ cao ($>25$ xe), \textbf{tất cả các mô hình đều chuyển sang chệch âm (đếm thiếu)} đối với xe máy. Hiện tượng che khuất tương hỗ trong dòng xe máy chen chúc khiến mạng nơ-ron có xu hướng bỏ sót phương tiện.
+    \item EfficientNet-B5 kiểm soát độ chệch âm tốt nhất (chỉ chệch $-0.63 \pm 0.87$ xe máy), trong khi ViT đếm thiếu $-4.63$ xe và ConvNeXt đếm thiếu tới $-10.22$ xe. Đây là cơ sở thực nghiệm giải thích bản chất sai số cảm biến truyền vào Giai đoạn 2.
 \end{itemize}
 
-\section{Trực quan hóa Đặc trưng bằng Grad-CAM++}
-Để kiểm chứng việc mô hình hồi quy đếm xe thực sự tập trung vào các phương tiện giao thông thay vì học vẹt theo bối cảnh cảnh nền, Hình \ref{fig:gradcam_chap5} minh họa bản đồ nhiệt kích hoạt Grad-CAM++ trích xuất từ EfficientNet-B5 trên các khung hình ngã tư phức tạp.
+% ==============================================================================
+\section{Trực quan hóa đặc trưng bằng Grad-CAM++}
+\label{sec:truc_quan_hoa_gradcam}
+
+Để kiểm tra xem mô hình hồi quy đếm xe có thực sự dựa trên các đặc trưng phương tiện hay không, Hình \ref{fig:gradcam_chap5} minh họa bản đồ nhiệt kích hoạt Grad-CAM++ trích xuất từ EfficientNet-B5 trên các khung hình ngã tư phức tạp.
 
 \begin{figure}[htbp]
 \centering
@@ -137,9 +147,12 @@ Bảng \ref{tab:stage1_density_bias_chap5} phân tích chi tiết độ chệch 
 \label{fig:gradcam_chap5}
 \end{figure}
 
-Các vùng có kích hoạt nhiệt cao nhất (màu đỏ và vàng) bám sát chặt chẽ theo vị trí không gian của các cụm xe máy và xe ô tô, trong khi các vùng cảnh nền (tòa nhà, vỉa hè, bầu trời) hoàn toàn không có kích hoạt. Điều này khẳng định mô hình hồi quy trực tiếp học được biểu diễn thị giác thực chất về sự hiện diện của phương tiện giao thông.
+Các vùng có kích hoạt nhiệt cao nhất (màu đỏ và vàng) tập trung sát vị trí của các cụm xe máy và xe ô tô, trong khi các vùng cảnh nền (tòa nhà, vỉa hè, bầu trời) hoàn toàn không có kích hoạt. Điều này khẳng định mô hình hồi quy trực tiếp học được biểu diễn thị giác thực chất về sự hiện diện của phương tiện giao thông.
 
-\section{Kết quả Thực nghiệm Giai đoạn 2 (Graph Forecasting Benchmark)}
+% ==============================================================================
+\section{Kết quả thực nghiệm Giai đoạn 2 (Graph Forecasting Benchmark)}
+\label{sec:thuc_nghiem_giai_doan_2}
+
 Bảng \ref{tab:stage2_benchmark_chap5} trình bày hiệu năng dự báo dòng giao thông trên đồ thị 608 nút camera qua 5 seed ngẫu nhiên độc lập.
 
 \begin{table}[htbp]
@@ -154,14 +167,14 @@ Bảng \ref{tab:stage2_benchmark_chap5} trình bày hiệu năng dự báo dòng
 \midrule
 STGCN Baseline & 375K & $3.2703 \pm 0.0128$ & $11.44\% \pm 0.08\%$ & $4.4245 \pm 0.0194$ & $2.8430 \pm 0.0141$ & $3.2787 \pm 0.0117$ & $3.5350 \pm 0.0250$ \\
 STGCN (Large) & 487K & $3.2805 \pm 0.0134$ & $11.53\% \pm 0.11\%$ & $4.4354 \pm 0.0156$ & $2.8498 \pm 0.0140$ & $3.2861 \pm 0.0162$ & $3.5497 \pm 0.0311$ \\
-GraphWaveNet & 549K & $3.2776 \pm 0.0049$ & $11.43\% \pm 0.03\%$ & $4.4486 \pm 0.0087$ & $\mathbf{2.8142 \pm 0.0088}$ & $3.2727 \pm 0.0048$ & $3.5800 \pm 0.0033$ \\
+Graph WaveNet & 549K & $3.2776 \pm 0.0049$ & $11.43\% \pm 0.03\%$ & $4.4486 \pm 0.0087$ & $\mathbf{2.8142 \pm 0.0088}$ & $3.2727 \pm 0.0048$ & $3.5800 \pm 0.0033$ \\
 ASTGCN & 1.533K & $3.4218 \pm 0.0115$ & $11.78\% \pm 0.08\%$ & $4.6509 \pm 0.0101$ & $2.9876 \pm 0.0262$ & $3.4296 \pm 0.0145$ & $3.6984 \pm 0.0104$ \\
 STAEformer & 568K & $3.2953 \pm 0.0184$ & $11.51\% \pm 0.12\%$ & $4.4555 \pm 0.0192$ & $2.8324 \pm 0.0237$ & $3.2924 \pm 0.0206$ & $3.5937 \pm 0.0275$ \\
 MegaCRN & 527K & $3.3433 \pm 0.0107$ & $11.55\% \pm 0.09\%$ & $4.5580 \pm 0.0182$ & $2.8436 \pm 0.0048$ & $3.3434 \pm 0.0111$ & $3.6660 \pm 0.0160$ \\
 DSTAGNN & 911K & $3.3457 \pm 0.0169$ & $11.69\% \pm 0.08\%$ & $4.5499 \pm 0.0185$ & $2.8447 \pm 0.0162$ & $3.3373 \pm 0.0179$ & $3.6729 \pm 0.0189$ \\
 iTransformer & \textbf{150K} & $3.3720 \pm 0.0143$ & $11.65\% \pm 0.08\%$ & $4.5832 \pm 0.0216$ & $2.8613 \pm 0.0153$ & $3.3613 \pm 0.0163$ & $3.7205 \pm 0.0154$ \\
 \midrule
-\textbf{TA-STGCN (Ours)} & 453K & $\mathbf{3.2401 \pm 0.0108}$ & $\mathbf{11.32\% \pm 0.04\%}$ & $\mathbf{4.3920 \pm 0.0140}$ & $2.8346 \pm 0.0090$ & $\mathbf{3.2430 \pm 0.0106}$ & $\mathbf{3.4947 \pm 0.0153}$ \\
+\textbf{TA-STGCN (Đề xuất)} & 453K & $\mathbf{3.2401 \pm 0.0108}$ & $\mathbf{11.32\% \pm 0.04\%}$ & $\mathbf{4.3920 \pm 0.0140}$ & $2.8346 \pm 0.0090$ & $\mathbf{3.2430 \pm 0.0106}$ & $\mathbf{3.4947 \pm 0.0153}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -181,14 +194,17 @@ iTransformer & \textbf{150K} & $3.3720 \pm 0.0143$ & $11.65\% \pm 0.08\%$ & $4.5
 \label{fig:error_growth_chap5}
 \end{figure}
 
-\textbf{Phân tích kết quả thực nghiệm Stage 2:}
+\textbf{Phân tích kết quả thực nghiệm Giai đoạn 2:}
 \begin{enumerate}
-    \item \textbf{Tính tương đương thực tế trên dữ liệu sạch (Clean Input Parity):} Trên dữ liệu không bị can thiệp nhiễu nhân tạo, TA-STGCN đạt sai số thấp nhất ($\text{MAE} = 3.2401 \pm 0.0108, \text{MAPE} = 11.32\%$), chỉ nhỉnh hơn STGCN gốc ($3.2703$) và GraphWaveNet ($3.2776$) khoảng $\sim 0.9\%$. Quy mô ảnh hưởng Cohen's $d$ ở mức rất nhỏ ($d = -0.032$). Nghiên cứu khẳng định trung thực rằng: \textbf{Dưới điều kiện dữ liệu sạch, các mô hình đồ thị tiên tiến đạt độ chính xác gần như tương đương nhau và không có sự đột phá áp đảo về sai số điểm tuyệt đối.}
-    \item \textbf{Cơ chế kiểm soát tích lũy sai số dài hạn ($t+6$):} Khi xét ở tầm nhìn dự báo xa 30 phút ($t+6$), sự khác biệt kiến trúc bắt đầu bộc lộ. Hình \ref{fig:error_growth_chap5} cho thấy GraphWaveNet và STGCN có đường cong sai số dốc đứng (MAE vọt lên $3.5800$ và $3.5350$), trong khi TA-STGCN duy trì đường cong thoải nhất (MAE chỉ $3.4947$). Cơ chế Temporal Self-Attention giúp mô hình bao quát toàn bộ 120 phút lịch sử, hạn chế sự trôi dạt tích lũy của các bộ lọc tích chập cục bộ.
-    \item \textbf{Thực nghiệm kiểm chứng dung lượng (Capacity Test):} Khi mở rộng dung lượng của STGCN gốc lên 487K tham số (STGCN Large, vượt qua mức 453K của TA-STGCN), sai số không hề giảm mà còn tăng nhẹ lên $3.2805$. Điều này chứng minh ưu thế của TA-STGCN bắt nguồn từ thiên kiến quy nạp (Inductive Bias) của cơ chế Attention chứ không phải do việc tăng dung lượng tham số thuần túy.
+    \item \textbf{Độ chính xác trên dữ liệu sạch:} Trên dữ liệu không bị can thiệp nhiễu, TA-STGCN đạt sai số thấp nhất ($\text{MAE} = 3.2401 \pm 0.0108, \text{MAPE} = 11.32\%$), chỉ nhỉnh hơn STGCN gốc ($3.2703$) và Graph WaveNet ($3.2776$) khoảng $\sim 0.9\%$. Kích thước hiệu ứng Cohen's $d$ ở mức rất nhỏ ($d = -0.032$). Báo cáo ghi nhận khách quan rằng: \textbf{Dưới điều kiện dữ liệu sạch, các mô hình đồ thị đạt độ chính xác gần như tương đương nhau và không có sự chênh lệch lớn về sai số tuyệt đối.}
+    \item \textbf{Kiểm soát sai số dài hạn ($t+6$):} Khi xét ở tầm nhìn dự báo xa 30 phút ($t+6$), sự khác biệt kiến trúc bắt đầu thể hiện rõ. Hình \ref{fig:error_growth_chap5} cho thấy Graph WaveNet và STGCN có độ dốc tăng sai số lớn hơn (MAE lên $3.5800$ và $3.5350$), trong khi TA-STGCN duy trì đường cong thoải hơn (MAE đạt $3.4947$). Cơ chế Temporal Self-Attention giúp mô hình bao quát toàn bộ 120 phút lịch sử, hạn chế sự trôi dạt của các bộ lọc tích chập thời gian cục bộ.
+    \item \textbf{Kiểm chứng dung lượng tham số:} Khi mở rộng dung lượng của STGCN gốc lên 487K tham số (STGCN Large, cao hơn mức 453K của TA-STGCN), sai số không giảm mà tăng nhẹ lên $3.2805$. Điều này chứng minh ưu thế của TA-STGCN bắt nguồn từ cơ chế chú ý thời gian chứ không phải do việc tăng dung lượng tham số thuần túy.
 \end{enumerate}
 
-\section{Phân tích Lan truyền Sai số theo Mật độ ở Stage 2}
+% ==============================================================================
+\section{Phân tích lan truyền sai số theo mật độ ở Giai đoạn 2}
+\label{sec:lan_truyen_sai_so_giai_doan_2}
+
 Bảng \ref{tab:stage2_density_chap5} phân tích chi tiết sai số dự báo và độ chệch của các mô hình Stage 2 khi phân tầng theo mật độ xe thực tế.
 
 \begin{table}[htbp]
@@ -201,7 +217,7 @@ Bảng \ref{tab:stage2_density_chap5} phân tích chi tiết sai số dự báo 
 \toprule
 \textbf{Kiến trúc mô hình} & \textbf{Chỉ số đánh giá} & \textbf{Mật độ Thấp ($<10$)} & \textbf{Mật độ TB ($10-25$)} & \textbf{Mật độ Cao ($>25$)} \\
 \midrule
-\multirow{3}{*}{\textbf{TA-STGCN (Ours)}} & MAE Tổng thể & $0.9737 \pm 0.0066$ & $\mathbf{2.0024 \pm 0.0054}$ & $\mathbf{3.4837 \pm 0.0120}$ \\
+\multirow{3}{*}{\textbf{TA-STGCN (Đề xuất)}} & MAE Tổng thể & $0.9737 \pm 0.0066$ & $\mathbf{2.0024 \pm 0.0054}$ & $\mathbf{3.4837 \pm 0.0120}$ \\
  & Độ chệch Ô tô & $-0.11 \pm 0.02$ & $+0.01 \pm 0.01$ & $\mathbf{-0.01 \pm 0.02}$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.01$ & $+0.01 \pm 0.02$ & $\mathbf{-0.03 \pm 0.06}$ \\
 \midrule
@@ -209,7 +225,7 @@ Bảng \ref{tab:stage2_density_chap5} phân tích chi tiết sai số dự báo 
  & Độ chệch Ô tô & $-0.09 \pm 0.02$ & $+0.05 \pm 0.05$ & $+0.11 \pm 0.11$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.05$ & $+0.04 \pm 0.07$ & $+0.08 \pm 0.14$ \\
 \midrule
-\multirow{3}{*}{GraphWaveNet} & MAE Tổng thể & $0.9997 \pm 0.0098$ & $2.0263 \pm 0.0100$ & $3.5212 \pm 0.0051$ \\
+\multirow{3}{*}{Graph WaveNet} & MAE Tổng thể & $0.9997 \pm 0.0098$ & $2.0263 \pm 0.0100$ & $3.5212 \pm 0.0051$ \\
  & Độ chệch Ô tô & $-0.08 \pm 0.02$ & $+0.03 \pm 0.03$ & $-0.02 \pm 0.07$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.03$ & $-0.04 \pm 0.06$ & $-0.01 \pm 0.12$ \\
 \midrule
@@ -221,15 +237,18 @@ Bảng \ref{tab:stage2_density_chap5} phân tích chi tiết sai số dự báo 
 }
 \end{table}
 
-Ở mức mật độ cao ($>25$ xe), nơi sai số nhận dạng từ Giai đoạn 1 lớn nhất, TA-STGCN đạt MAE thấp nhất ($3.4837$) và triệt tiêu gần như hoàn toàn độ chệch của xe máy (chỉ chệch $-0.03 \pm 0.06$ xe), trong khi STAEformer chệch dương $+0.25$ xe. Điều này khẳng định cơ chế lọc thời gian của TA-STGCN đã bù trừ hiệu quả xu hướng đếm thiếu từ khâu camera.
+Ở mức mật độ cao ($>25$ xe), nơi sai số nhận dạng từ Giai đoạn 1 lớn nhất, TA-STGCN đạt MAE thấp nhất ($3.4837$) và giảm thiểu độ chệch của xe máy (chỉ chệch $-0.03 \pm 0.06$ xe), trong khi STAEformer chệch dương $+0.25$ xe. Điều này cho thấy cơ chế lọc thời gian của TA-STGCN đã bù trừ hiệu quả xu hướng đếm thiếu từ khâu camera.
 
-\section{Nghiên cứu Độ bền vững với Nhiễu Nhận dạng (Noise Robustness Study)}
-Đây là đóng góp khoa học quan trọng nhất của công trình. Để mô phỏng chính xác sự lan truyền sai số trong thực tế, nhóm nghiên cứu tiêm nhiễu phân phối Gamma dị biệt bất đối xứng vào chuỗi thời gian đầu vào tại 4 mức độ:
+% ==============================================================================
+\section{Nghiên cứu độ bền vững với nhiễu nhận dạng}
+\label{sec:nghien_cuu_do_ben_vung_nhieu}
+
+Đây là nội dung thực nghiệm trọng tâm của công trình. Để mô phỏng sát thực tế sự lan truyền sai số, nghiên cứu tiêm nhiễu phân phối Gamma dị biệt bất đối xứng vào chuỗi thời gian đầu vào tại 4 mức độ:
 \begin{itemize}
-    \item \textbf{Level 1 ($\Delta\text{MAE} = 3.49$):} Tương đương mức sai số nhận dạng tối thiểu của camera ở điều kiện tối ưu.
-    \item \textbf{Level 2 ($\Delta\text{MAE} = 4.64$):} Tương đương mức sai số nhận dạng trung bình thực tế của Stage 1.
-    \item \textbf{Level 3 ($\Delta\text{MAE} = 10.25$):} Tương đương mức sai số tối đa ở các ngã tư tắc nghẽn nghiêm trọng.
-    \item \textbf{Level 4 ($\Delta\text{MAE} = 13.95$):} Thử nghiệm ứng suất cực đoan (Stress-test: $\text{MAE}_{\max} + 2\sigma$).
+    \item \textbf{Mức 1 ($\Delta\text{MAE} = 3.49$):} Tương đương mức sai số nhận dạng thấp của camera trong điều kiện thuận lợi.
+    \item \textbf{Mức 2 ($\Delta\text{MAE} = 4.64$):} Tương đương mức sai số nhận dạng trung bình thực tế của Giai đoạn 1.
+    \item \textbf{Mức 3 ($\Delta\text{MAE} = 10.25$):} Tương đương mức sai số cao tại các nút giao tắc nghẽn nghiêm trọng.
+    \item \textbf{Mức 4 ($\Delta\text{MAE} = 13.95$):} Thử nghiệm ứng suất cực đoan ($\text{MAE}_{\max} + 2\sigma$).
 \end{itemize}
 
 \begin{figure}[htbp]
@@ -249,17 +268,17 @@ Bảng \ref{tab:bang_suy_thoai_nhieu_chap5} và Bảng \ref{tab:cohens_d_chap5} 
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Kiến trúc mô hình} & \textbf{Level 1 (3.49)} & \textbf{Level 2 (4.64)} & \textbf{Level 3 (10.25)} & \textbf{Level 4 (13.95)} \\
+\textbf{Kiến trúc mô hình} & \textbf{Mức 1 (3.49)} & \textbf{Mức 2 (4.64)} & \textbf{Mức 3 (10.25)} & \textbf{Mức 4 (13.95)} \\
 \midrule
 STGCN Baseline & $5.3093 \pm 0.1161$ & $6.6614 \pm 0.1532$ & $12.0733 \pm 0.3396$ & $13.1724 \pm 0.3515$ \\
-GraphWaveNet & $5.7470 \pm 0.1056$ & $7.2378 \pm 0.1324$ & $13.2723 \pm 0.3303$ & $15.1046 \pm 0.4398$ \\
+Graph WaveNet & $5.7470 \pm 0.1056$ & $7.2378 \pm 0.1324$ & $13.2723 \pm 0.3303$ & $15.1046 \pm 0.4398$ \\
 ASTGCN & $5.7709 \pm 0.1521$ & $6.9956 \pm 0.2346$ & $11.8790 \pm 0.5428$ & $13.4685 \pm 0.7556$ \\
 STAEformer & $\mathbf{5.2238 \pm 0.2964}$ & $6.4260 \pm 0.5436$ & $10.5916 \pm 1.3943$ & $10.8454 \pm 1.2209$ \\
 MegaCRN & $5.9061 \pm 0.1227$ & $7.3144 \pm 0.1412$ & $13.1555 \pm 0.5314$ & $15.1106 \pm 0.8717$ \\
 DSTAGNN & $6.2166 \pm 0.0514$ & $7.8276 \pm 0.2608$ & $12.5753 \pm 0.6823$ & $13.3705 \pm 0.8442$ \\
 iTransformer & $5.7070 \pm 0.0999$ & $6.9084 \pm 0.1786$ & $10.3254 \pm 0.7281$ & $10.8422 \pm 0.9367$ \\
 \midrule
-\textbf{TA-STGCN (Ours)} & $5.2401 \pm 0.1000$ & $\mathbf{6.3120 \pm 0.1932}$ & $\mathbf{9.6381 \pm 0.8461}$ & $\mathbf{10.1532 \pm 1.1153}$ \\
+\textbf{TA-STGCN (Đề xuất)} & $5.2401 \pm 0.1000$ & $\mathbf{6.3120 \pm 0.1932}$ & $\mathbf{9.6381 \pm 0.8461}$ & $\mathbf{10.1532 \pm 1.1153}$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -267,16 +286,16 @@ iTransformer & $5.7070 \pm 0.0999$ & $6.9084 \pm 0.1786$ & $10.3254 \pm 0.7281$ 
 
 \begin{table}[htbp]
 \centering
-\caption{Quy mô ảnh hưởng Cohen's $d$ so với TA-STGCN (Dương thể hiện TA-STGCN vượt trội).}
+\caption{Quy mô ảnh hưởng Cohen's $d$ so với TA-STGCN (giá trị dương thể hiện TA-STGCN vượt trội).}
 \label{tab:cohens_d_chap5}
 \small
 \resizebox{0.95\textwidth}{!}{%
 \begin{tabular}{lcc}
 \toprule
-\textbf{Kiến trúc đối chứng} & \textbf{Level 2 (Nhiễu trung bình: 4.64)} & \textbf{Level 4 (Nhiễu cực hạn: 13.95)} \\
+\textbf{Kiến trúc đối chứng} & \textbf{Mức 2 (Nhiễu trung bình: 4.64)} & \textbf{Mức 4 (Nhiễu cực hạn: 13.95)} \\
 \midrule
 STGCN Baseline & $+2.004$ & $+3.651$ \\
-GraphWaveNet & $+5.590$ & $+5.841$ \\
+Graph WaveNet & $+5.590$ & $+5.841$ \\
 ASTGCN & $+3.181$ & $+3.480$ \\
 STAEformer & $+0.279$ & $+0.592$ \\
 MegaCRN & $+5.924$ & $+4.953$ \\
@@ -287,20 +306,23 @@ iTransformer & $+3.206$ & $+0.669$ \\
 }
 \end{table}
 
-\textbf{Luận điểm khoa học cốt lõi từ thực nghiệm nhiễu:}
+\textbf{Luận điểm khoa học rút ra từ thực nghiệm nhiễu:}
 \begin{enumerate}
-    \item \textbf{Sự phân hóa rõ rệt thành hai nhóm kiến trúc:} Dưới mức nhiễu cực hạn (Level 4), các mô hình thuần tích chập hoặc hồi quy không có cơ chế chú ý (GraphWaveNet, MegaCRN, STGCN) bị vỡ trận hoàn toàn (MAE vọt lên $13.17 - 15.11$, Cohen's $d$ chênh lệch khổng lồ từ $+3.65$ đến $+5.84$). Ngược lại, nhóm có Attention thời gian (TA-STGCN, STAEformer, iTransformer) kiểm soát suy thoái xuất sắc (MAE duy trì ở mức $10.15 - 10.84$).
-    \item \textbf{Tại sao ASTGCN thất bại dù có Attention?} ASTGCN có cơ chế Attention nhưng là \textit{Spatial-Attention-First} (chú ý không gian trước, thời gian sau). Khi gặp nhiễu cảm biến, ma trận chú ý không gian bị đánh lừa bởi các giá trị nhiễu cục bộ, truyền sai số sai lệch sang các nút lân cận. Trong khi đó, TA-STGCN là \textit{Temporal-Attention-First}, tái cân bằng trọng số thời gian trên từng nút trước khi truyền tin không gian, ngăn chặn hiệu quả sự phát tán sai số.
-    \item \textbf{Tính kinh tế vượt trội của TA-STGCN:} TA-STGCN đạt độ bền vững tương đương các Transformer khổng lồ (STAEformer) nhưng chỉ tiêu tốn 453K tham số và tiết kiệm $25.2\%$ bộ nhớ GPU.
+    \item \textbf{Sự phân hóa rõ rệt thành hai nhóm kiến trúc:} Dưới mức nhiễu cực hạn (Mức 4), các mô hình thuần tích chập hoặc hồi quy không có cơ chế chú ý (Graph WaveNet, MegaCRN, STGCN) bị tăng sai số nhanh chóng (MAE lên tới $13.17 - 15.11$, Cohen's $d$ chênh lệch từ $+3.65$ đến $+5.84$). Ngược lại, nhóm có cơ chế chú ý thời gian (TA-STGCN, STAEformer, iTransformer) kiểm soát mức tăng sai số tốt hơn nhiều (MAE duy trì ở mức $10.15 - 10.84$).
+    \item \textbf{Vai trò của thứ tự chú ý (Temporal-First so với Spatial-First):} ASTGCN có cơ chế Attention nhưng tính toán chú ý không gian trước, thời gian sau. Khi gặp nhiễu cảm biến, ma trận chú ý không gian bị ảnh hưởng bởi các giá trị nhiễu cục bộ và truyền sai số sang các nút lân cận. Trong khi đó, TA-STGCN tính toán chú ý thời gian trước, giúp làm mượt và lọc nhiễu trên từng nút trước khi lan truyền không gian, ngăn chặn hiệu quả sự phát tán sai số.
+    \item \textbf{Tính kinh tế của TA-STGCN:} TA-STGCN đạt độ bền vững tương đương mô hình Transformer lớn (STAEformer) nhưng chỉ sử dụng 453K tham số và tiết kiệm $25.2\%$ bộ nhớ GPU.
 \end{enumerate}
 
-\section{Phân tích Khả năng Giải thích của Temporal Attention}
+% ==============================================================================
+\section{Phân tích khả năng giải thích của cơ chế chú ý thời gian}
+\label{sec:kha_nang_giai_thich_attention}
+
 Hình \ref{fig:attention_heatmap_chap5} và Bảng \ref{tab:attention_ty_le_chap5} minh họa ma trận trọng số chú ý thời gian $\mathbf{A} \in \mathbb{R}^{24 \times 24}$ qua các thời điểm trong ngày.
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.92\linewidth]{paper/fig/attention_heatmap_evening_peak.png}
-\caption{Ma trận trọng số chú ý thời gian trong giờ cao điểm tối. Trọng số co cụm mạnh mẽ vào 20 phút quan sát gần nhất.}
+\caption{Ma trận trọng số chú ý thời gian trong giờ cao điểm tối. Trọng số tập trung mạnh vào 20 phút quan sát gần nhất.}
 \label{fig:attention_heatmap_chap5}
 \end{figure}
 
@@ -324,9 +346,12 @@ Buổi trưa (11:30--13:30) & 36.0 & $0.0416 \pm 0.0013$ & $0.0419 \pm 0.0011$ &
 }
 \end{table}
 
-Vào các khung giờ ổn định (như buổi trưa), mô hình phân bổ trọng số đều đặn (tỷ lệ gần/xa $\approx 0.99\times$). Tuy nhiên, vào giờ cao điểm tối khi dòng xe máy biến động dữ dội, mô hình tự động nâng tỷ lệ tập trung vào 20 phút gần nhất lên \textbf{$2.22\times$}, chứng minh cơ chế Attention thích ứng dữ liệu linh hoạt theo trạng thái giao thông thực tế.
+Vào các khung giờ lưu lượng ổn định (như buổi trưa), mô hình phân bổ trọng số đều đặn (tỷ lệ gần/xa $\approx 0.99\times$). Tuy nhiên, vào giờ cao điểm tối khi dòng xe máy biến động mạnh, mô hình tự động nâng tỷ lệ tập trung vào 20 phút gần nhất lên \textbf{$2.22\times$}, cho thấy cơ chế Attention có khả năng thích ứng linh hoạt theo trạng thái giao thông thực tế.
 
-\section{Nghiên cứu Loại trừ Thành phần (Ablation Study)}
+% ==============================================================================
+\section{Nghiên cứu loại trừ thành phần (Ablation Study)}
+\label{sec:ablation_study}
+
 Bảng \ref{tab:ablation_full_chap5} kiểm tra đóng góp của từng thành phần kiến trúc trong TA-STGCN qua 5 seed ngẫu nhiên.
 
 \begin{table}[htbp]
@@ -337,7 +362,7 @@ Bảng \ref{tab:ablation_full_chap5} kiểm tra đóng góp của từng thành 
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lcccccc}
 \toprule
-\textbf{Biến thể mô hình} & \textbf{Số tham số} & \textbf{Peak RAM} & \textbf{MAE Tổng} & \textbf{MAE Ô tô} & \textbf{MAE Xe máy} & \textbf{MAPE (\%)} \\
+\textbf{Biến thể mô hình} & \textbf{Số tham số} & \textbf{RAM đỉnh} & \textbf{MAE Tổng} & \textbf{MAE Ô tô} & \textbf{MAE Xe máy} & \textbf{MAPE (\%)} \\
 \midrule
 \textbf{TA-STGCN (Gốc: Ở giữa, $h=4$)} & \textbf{453K} & \textbf{8.607 MB} & $\mathbf{3.2401 \pm 0.0108}$ & $\mathbf{1.2087 \pm 0.0019}$ & $\mathbf{2.7286 \pm 0.0096}$ & $\mathbf{11.32\% \pm 0.04\%}$ \\
 STGCN Baseline (Không Attention) & 375K & 4.838 MB & $3.2703 \pm 0.0128$ & $1.2188 \pm 0.0063$ & $2.7467 \pm 0.0191$ & $11.44\% \pm 0.08\%$ \\
@@ -355,13 +380,16 @@ TA-STGCN (Attention ở cuối) & 453K & 8.962 MB & $3.2680 \pm 0.0099$ & $1.209
 
 \textbf{Kết luận từ Ablation Study:}
 \begin{itemize}
-    \item \textbf{Vị trí đặt Attention:} Đặt Attention ở giữa cho kết quả tối ưu nhất ($3.2401$), vượt trội so với đặt ở cuối ($3.2680$) hoặc ở đầu ($3.2485$). Trình tự tối ưu là: Khối ST-Conv 1 trích xuất đặc trưng không gian cục bộ $\to$ Tầng Attention tái cân bằng trọng số theo thời gian $\to$ Khối ST-Conv 2 tiếp tục tinh lọc trước khi xuất kết quả.
-    \item \textbf{Số đầu chú ý:} Cấu hình $h=4$ đầu đạt điểm cân bằng hoàn hảo so với đơn đầu ($h=1$, MAE $3.2501$) và 8 đầu ($h=8$, MAE $3.2494$).
-    \item \textbf{Vai trò của đồ thị không gian ($K=3$):} Khi triệt tiêu phép tích chập đồ thị ($K=1$), sai số tăng lên $3.2488$, khẳng định thông tin liên kết đường phố OpenStreetMap đóng góp thực chất vào độ chính xác dự báo.
+    \item \textbf{Vị trí đặt Attention:} Đặt Attention ở giữa mang lại kết quả tốt nhất ($3.2401$), vượt trội so với đặt ở cuối ($3.2680$) hoặc ở đầu ($3.2485$). Trình tự xử lý tối ưu là: Khối ST-Conv 1 trích xuất đặc trưng không gian cục bộ $\to$ Tầng Attention tái cân bằng trọng số theo thời gian $\to$ Khối ST-Conv 2 tiếp tục tinh lọc trước khi xuất kết quả.
+    \item \textbf{Số đầu chú ý:} Cấu hình $h=4$ đầu đạt điểm cân bằng tốt so với đơn đầu ($h=1$, MAE $3.2501$) và 8 đầu ($h=8$, MAE $3.2494$).
+    \item \textbf{Vai trò của đồ thị không gian ($K=3$):} Khi bỏ tích chập đồ thị ($K=1$), sai số tăng lên $3.2488$, khẳng định thông tin cấu trúc mạng lưới OpenStreetMap đóng góp thực chất vào độ chính xác dự báo.
 \end{itemize}
 
-\section{Phân tích Động học Sai số theo Từng Bước Dự báo Nhìn trước}
-Để làm rõ hành vi suy thoái sai số của các kiến trúc khi tầm nhìn dự báo tăng dần từ 5 phút ($t+1$) đến 30 phút ($t+6$), Bảng \ref{tab:horizon_breakdown_chap5} chi tiết hóa chỉ số MAE tại từng bước thời gian độc lập.
+% ==============================================================================
+\section{Phân tích động học sai số theo từng bước dự báo nhìn trước}
+\label{sec:dong_hoc_sai_so_theo_buoc}
+
+Để làm rõ hành vi sai số của các kiến trúc khi tầm nhìn dự báo tăng dần từ 5 phút ($t+1$) đến 30 phút ($t+6$), Bảng \ref{tab:horizon_breakdown_chap5} chi tiết hóa chỉ số MAE tại từng bước thời gian.
 
 \begin{table}[htbp]
 \centering
@@ -374,14 +402,14 @@ TA-STGCN (Attention ở cuối) & 453K & 8.962 MB & $3.2680 \pm 0.0099$ & $1.209
 \textbf{Kiến trúc} & \textbf{$t+1$ (5m)} & \textbf{$t+2$ (10m)} & \textbf{$t+3$ (15m)} & \textbf{$t+4$ (20m)} & \textbf{$t+5$ (25m)} & \textbf{$t+6$ (30m)} & \textbf{$\Delta_{6 - 1}$} \\
 \midrule
 STGCN Baseline & 2.802 & 3.018 & 3.224 & 3.415 & 3.592 & 3.758 & +0.956 \\
-GraphWaveNet & 2.765 & 2.975 & 3.180 & 3.376 & 3.560 & 3.735 & +0.970 \\
+Graph WaveNet & 2.765 & 2.975 & 3.180 & 3.376 & 3.560 & 3.735 & +0.970 \\
 ASTGCN & 2.825 & 3.040 & 3.250 & 3.442 & 3.621 & 3.792 & +0.967 \\
 MegaCRN & 2.790 & 3.002 & 3.205 & 3.398 & 3.578 & 3.748 & +0.958 \\
 DSTAGNN & 2.810 & 3.025 & 3.235 & 3.428 & 3.605 & 3.770 & +0.960 \\
 STAEformer & \textbf{2.750} & \textbf{2.962} & \textbf{3.172} & 3.365 & 3.548 & 3.715 & +0.965 \\
 iTransformer & 2.840 & 3.065 & 3.280 & 3.475 & 3.658 & 3.825 & +0.985 \\
 \midrule
-\textbf{TA-STGCN (Ours)} & 2.781 & 2.990 & 3.195 & \textbf{3.360} & \textbf{3.535} & \textbf{3.712} & \textbf{+0.931} \\
+\textbf{TA-STGCN (Đề xuất)} & 2.781 & 2.990 & 3.195 & \textbf{3.360} & \textbf{3.535} & \textbf{3.712} & \textbf{+0.931} \\
 \bottomrule
 \end{tabular}%
 }
@@ -389,24 +417,27 @@ iTransformer & 2.840 & 3.065 & 3.280 & 3.475 & 3.658 & 3.825 & +0.985 \\
 
 \textbf{Quy luật động học rút ra từ Bảng \ref{tab:horizon_breakdown_chap5}:}
 \begin{enumerate}
-    \item \textbf{Ở các bước ngắn hạn ($t+1, t+2$):} Mô hình STAEformer nhỉnh hơn nhẹ ($\text{MAE}_{t+1} = 2.750$ so với $2.781$ của TA-STGCN) nhờ cơ chế chú ý liên hợp toàn phần ghi nhận các tương quan ngắn hạn cực kỳ nhạy bén.
-    \item \textbf{Ở các bước dài hạn ($t+4, t+5, t+6$):} TA-STGCN vươn lên dẫn đầu với $\text{MAE}_{t+6} = 3.712$, vượt qua cả STAEformer ($3.715$) và bỏ xa GraphWaveNet ($3.735$) cũng như iTransformer ($3.825$).
-    \item \textbf{Tốc độ tích lũy sai số chậm nhất ($\Delta_{6-1} = +0.931$):} Độ dốc tăng trưởng sai số của TA-STGCN thấp nhất trong toàn bộ 8 mô hình (thấp hơn STGCN $+0.956$, GraphWaveNet $+0.970$ và iTransformer $+0.985$). Điều này chứng minh rằng việc kết hợp cơ chế chú ý thời gian đa đầu giúp kìm hãm sự phân kỳ sai số khi dự báo tiến sâu vào tương lai 30 phút.
+    \item \textbf{Ở các bước ngắn hạn ($t+1, t+2$):} Mô hình STAEformer nhỉnh hơn nhẹ ($\text{MAE}_{t+1} = 2.750$ so với $2.781$ của TA-STGCN) nhờ cơ chế chú ý toàn phần nắm bắt nhanh các tương quan ngắn hạn.
+    \item \textbf{Ở các bước dài hạn ($t+4, t+5, t+6$):} TA-STGCN vươn lên với $\text{MAE}_{t+6} = 3.712$, thấp hơn cả STAEformer ($3.715$), Graph WaveNet ($3.735$) và iTransformer ($3.825$).
+    \item \textbf{Tốc độ tích lũy sai số thấp nhất ($\Delta_{6-1} = +0.931$):} Độ tăng sai số của TA-STGCN thấp nhất trong toàn bộ 8 mô hình (thấp hơn STGCN $+0.956$, Graph WaveNet $+0.970$ và iTransformer $+0.985$). Kết quả này khẳng định việc kết hợp cơ chế chú ý thời gian đa đầu giúp kìm hãm sự tăng nhanh của sai số khi dự báo dài hạn.
 \end{enumerate}
 
-\section{Phân tích Định tính Các Ca Thất bại Thị giác và Năng lực Phục hồi của Đồ thị}
-Để minh họa khả năng chịu lỗi của khung làm việc hai giai đoạn, nghiên cứu phân tích hai trường hợp suy luận thất bại (Failure Cases) điển hình tại Giai đoạn 1 và cách thức Giai đoạn 2 tự động phục hồi tín hiệu:
+% ==============================================================================
+\section{Phân tích định tính các ca thất bại thị giác và năng lực phục hồi của đồ thị}
+\label{sec:phan_tich_ca_that_bai}
 
-\subsection{Trường hợp 1: Hiện tượng Lóa Đèn Pha Ban Đêm (Headlight Glare)}
+Để minh họa khả năng chịu lỗi của khung làm việc hai giai đoạn, nghiên cứu phân tích hai trường hợp suy luận thất bại điển hình tại Giai đoạn 1 và cách thức Giai đoạn 2 tự động phục hồi tín hiệu:
+
+\subsection{Trường hợp 1: Hiện tượng lóa đèn pha ban đêm}
 Tại giao lộ Hàng Xanh vào lúc 20:30, một xe ô tô tải bật đèn pha chiếu xa trực diện vào camera gắn thấp. Vùng sáng lóa cục bộ che phủ hơn $40\%$ diện tích mặt đường trong khung hình:
 \begin{itemize}
     \item \textit{Thất bại tại Giai đoạn 1:} Mạng EfficientNet-B5 bị mất đặc trưng cục bộ, dự đoán số lượng xe máy tức thời là $11$ xe, trong khi số đếm thực tế của kiểm định viên là $34$ xe (sai số hụt $-23$ xe).
-    \item \textit{Phục hồi tại Giai đoạn 2:} Tín hiệu sụt giảm đột ngột này đi vào mô hình TA-STGCN. Nhờ tầng Temporal Attention phân tán trọng số trên cửa sổ 20 phút trước đó (khi lưu lượng đang ổn định ở mức 30--35 xe) kết hợp với tầng tích chập ChebNet tiếp nhận lưu lượng cao từ hai nút giao lân cận trên trục Điện Biên Phủ, mô hình nhận định giá trị 11 xe là nhiễu ngoại lai. Kết quả dự báo tại bước kế tiếp $t+1$ đạt $29.8$ xe, phục hồi gần như trọn vẹn trạng thái thực tế của dòng giao thông.
+    \item \textit{Phục hồi tại Giai đoạn 2:} Tín hiệu sụt giảm đột ngột này đi vào mô hình TA-STGCN. Nhờ tầng Temporal Attention phân tán trọng số trên cửa sổ 20 phút trước đó (khi lưu lượng đang ổn định ở mức 30--35 xe) kết hợp với tầng tích chập ChebNet tiếp nhận lưu lượng từ các nút giao lân cận trên trục Điện Biên Phủ, mô hình nhận diện giá trị 11 xe là nhiễu ngoại lai. Kết quả dự báo tại bước kế tiếp $t+1$ đạt $29.8$ xe, phục hồi sát trạng thái thực tế của dòng xe.
 \end{itemize}
 
-\subsection{Trường hợp 2: Biến dạng Hình ảnh do Nước mưa Đọng trên Ống kính (Rain Droplets)}
-Trong đợt giông lốc chiều ngày 15/08/2025, camera tại nút giao Cầu Sài Gòn bị nước mưa tạt vào kính chắn, làm khúc xạ và biến dạng hình ảnh:
+\subsection{Trường hợp 2: Biến dạng hình ảnh do nước mưa đọng trên ống kính}
+Trong đợt giông chiều ngày 15/08/2025, camera tại nút giao Cầu Sài Gòn bị nước mưa tạt vào kính chắn, làm khúc xạ hình ảnh:
 \begin{itemize}
-    \item \textit{Thất bại tại Giai đoạn 1:} Các hạt nước khúc xạ ánh sáng khiến mạng nhận diện nhầm các cụm xe máy thành các mảng vệt mờ, dẫn đến dự báo dao động bất thường (nhảy từ 45 xe xuống 18 xe rồi vọt lên 52 xe chỉ trong 3 phút).
-    \item \textit{Phục hồi tại Giai đoạn 2:} Bộ lọc Causal Double-Rolling Filter trước tiên đã triệt tiêu các thành phần dao động tần số cao. Tiếp đó, khối TA-STGCN với hàm mất mát Huber Loss bảo vệ các tầng nơ-ron không bị kéo lệch bởi các điểm nhảy vọt. Dự báo lưu lượng tổng thể cho toàn nút vẫn giữ được độ trơn tru và phản ánh chính xác tình trạng ùn ứ thực tế trên cầu.
+    \item \textit{Thất bại tại Giai đoạn 1:} Các hạt nước làm nhòe hình ảnh khiến mạng nhận diện nhầm các cụm xe máy thành các vệt mờ, dẫn đến dự báo dao động bất thường (nhảy từ 45 xe xuống 18 xe rồi lên 52 xe chỉ trong 3 phút).
+    \item \textit{Phục hồi tại Giai đoạn 2:} Bộ lọc trượt kép nhân quả trước tiên đã làm giảm các thành phần dao động tần số cao. Tiếp đó, khối TA-STGCN với hàm mất mát Huber Loss bảo vệ các tầng nơ-ron không bị kéo lệch bởi các điểm nhảy vọt. Dự báo lưu lượng tổng thể cho toàn nút vẫn giữ được độ ổn định và phản ánh sát tình trạng lưu thông trên cầu.
 \end{itemize}

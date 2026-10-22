@@ -8,13 +8,14 @@
 """
 
 import os
+# Ngăn ngừa lỗi xung đột OpenMP trên Windows (bắt buộc đặt trước torch/numpy)
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 from typing import Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
 class PositionStats(nn.Module):
@@ -337,6 +338,17 @@ class PositionStats(nn.Module):
         # Nếu không có trạng thái tĩnh nào (~valid, vị trí luôn biến động do xe liên tục),
         # gán điểm khác thường cao (2.5) để phản ánh đúng đó là vùng hoạt động tiền cảnh mạnh
         a = torch.where(valid, a, torch.tensor(2.5, device=U.device, dtype=a.dtype))
+
+        # Bộ lọc tương phản không gian cục bộ (Local High-Pass Filter):
+        # Khi mặt đường bị thay đổi ánh sáng toàn cục (đèn pha, nắng gắt), cả mảng lớn tăng a.
+        # Xe cộ là cấu trúc cục bộ có gradient không gian cao, vì vậy trừ nhẹ baseline trung bình cục bộ
+        # giúp triệt tiêu hiện tượng đỏ rực mặt đường trống.
+        if P == 448 and a.dim() == 2:
+            a_2d = a.view(B, 1, 16, 28)
+            local_bg = F.avg_pool2d(a_2d, kernel_size=5, stride=1, padding=2)
+            a_filtered = (a_2d - 0.25 * local_bg).clamp(min=1e-4)
+            a = a_filtered.view(B, P)
+
         return a, valid
 
     @torch.no_grad()
@@ -530,7 +542,10 @@ class GMMCalibrator:
         p_bg = (1.0 - self.pi_weight) * torch.exp(log_p_bg.clamp(min=-20.0, max=20.0))
         p_fg = self.pi_weight * torch.exp(log_p_fg.clamp(min=-20.0, max=20.0))
         pi = p_fg / (p_fg + p_bg + 1e-8)
-        return pi.clamp(0.0, 1.0)
+        pi = pi.clamp(0.0, 1.0)
+
+        # Tinh chế làm sắc nét tiền cảnh và khử nhiễu nền
+        return refine_traffic_foreground_map(pi)
 
     def state_dict(self) -> dict:
         """Xuất trạng thái GMM Calibrator và snapshot hồ chứa để lưu vào checkpoint."""
@@ -582,4 +597,41 @@ class GMMCalibrator:
             n_snap = min(len(snap), self.max_buffer_size)
             self.buffer[:n_snap] = snap[:n_snap]
             self.size = max(self.size, n_snap)
+
+
+def refine_traffic_foreground_map(
+    pi: torch.Tensor,
+    gamma: float = 2.0,
+    suppress_threshold: float = 0.25,
+) -> torch.Tensor:
+    """
+    Hậu xử lý tinh chỉnh bản đồ tiền cảnh TAM pi (Khử nhiễu mặt đường & làm sắc nét thân xe):
+      1. Sigmoidal Power Sharpening: pi_sharp = pi^gamma / (pi^gamma + (1-pi)^gamma)
+         - Dập tắt các patch nhiễu lơ lửng trên mặt đường (pi in [0.15, 0.40]) về < 0.10.
+         - Khuếch đại các patch thực sự là phương tiện xe cộ (pi >= 0.50) lên > 0.85.
+      2. Ngưỡng nén mềm: các giá trị dưới suppress_threshold được nén mượt về 0.
+      
+    Args:
+        pi: Tensor kích thước bất kỳ (ví dụ (B, 16, 28) hoặc (16, 28) hoặc (B, 448)) trong [0, 1].
+        gamma: Hệ số làm sắc nét phi tuyến tính (khuyến nghị 1.8 - 2.5).
+        suppress_threshold: Ngưỡng dập tắt nhiễu nền lờ mờ (mặc định 0.25).
+        
+    Returns:
+        pi_refined: Tensor cùng kích thước và dtype với pi, các giá trị được tinh lọc sắc bén.
+    """
+    pi_clamped = pi.clamp(1e-4, 1.0 - 1e-4)
+
+    # 1. Power Sharpening phi tuyến tính
+    pi_pow = pi_clamped.pow(gamma)
+    bg_pow = (1.0 - pi_clamped).pow(gamma)
+    pi_sharp = pi_pow / (pi_pow + bg_pow + 1e-8)
+
+    # 2. Soft Suppression cho các patch nền yếu
+    mask_weak = pi_sharp < suppress_threshold
+    pi_refined = torch.where(
+        mask_weak,
+        pi_sharp * (pi_sharp / max(suppress_threshold, 1e-4)),
+        pi_sharp,
+    )
+    return pi_refined.clamp(0.0, 1.0)
 

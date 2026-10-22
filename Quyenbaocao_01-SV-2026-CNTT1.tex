@@ -34,10 +34,12 @@
 
 % Các gói hỗ trợ toán học và biểu thức đại số
 \usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{bm}
 \usepackage{mathtools}
 
 % Gói hỗ trợ hình ảnh, bảng biểu và đồ thị
 \usepackage{graphicx}
+\usepackage{pdfpages}
 \graphicspath{{paper/fig/}{paper/}{fig/}{./}}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -49,20 +51,20 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{tikz}
-\usetikzlibrary{calc,shapes.geometric,arrows}
+\usetikzlibrary{calc,shapes.geometric,arrows,arrows.meta,positioning,fit}
 
 % Định dạng tiêu đề chương, mục chuẩn học thuật hiện đại
 \usepackage{titlesec}
 \titleformat{\chapter}[display]
   {\normalfont\bfseries\centering}
-  {\fontsize{13}{15}\selectfont\color{blue!80!black}\MakeUppercase{Chương \thechapter}}
+  {\fontsize{13}{15}\selectfont\color{black}\MakeUppercase{Chương \thechapter}}
   {0.6ex}
   {\fontsize{16}{19}\selectfont\color{black}\MakeUppercase}
-  [\vspace{0.8ex}\color{blue!80!black}\rule{0.5\textwidth}{0.8pt}]
+  [\vspace{0.8ex}\color{black}\rule{0.5\textwidth}{0.8pt}]
 \titlespacing*{\chapter}{0pt}{10pt}{25pt}
 
 \titleformat{\section}
-  {\normalfont\bfseries\fontsize{13}{15}\selectfont\color{blue!90!black}}
+  {\normalfont\bfseries\fontsize{13}{15}\selectfont\color{black}}
   {\thesection}{1em}{}
 \titlespacing*{\section}{0pt}{14pt}{6pt}
 
@@ -77,14 +79,12 @@
 \titlespacing*{\subsubsection}{0pt}{8pt}{3pt}
 
 % Gói hỗ trợ Header và Footer trang trí chuyên nghiệp, sang trọng
+% Cấu hình Header và Footer: Bỏ header trên đầu trang, chỉ giữ số trang ở chân trang
 \usepackage{fancyhdr}
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\fontsize{9}{11}\selectfont\itshape\color{black!80} Báo cáo Đề tài NCKH Cấp Học viện -- PTIT}
-\fancyhead[R]{\fontsize{9}{11}\selectfont\itshape\color{black!80} Khung mô hình TA-STGCN và Lan truyền sai số}
 \fancyfoot[C]{\fontsize{10}{12}\selectfont\thepage}
-\renewcommand{\headrulewidth}{0.5pt}
-\renewcommand{\headrule}{\hbox to\headwidth{\color{blue!80!black}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 
 % Cấu hình liên kết Hyperref
@@ -92,8 +92,8 @@
 \hypersetup{
     colorlinks=true,
     linkcolor=black,
-    citecolor=blue!80!black,
-    urlcolor=blue!80!black,
+    citecolor=black,
+    urlcolor=black,
     pdftitle={Báo cáo Đề tài NCKH Cấp Học viện - PTIT},
     pdfauthor={Lê Việt Anh},
     pdfsubject={Nghiên cứu dự báo giao thông thông minh}
@@ -123,7 +123,22 @@
 % ==============================================================================
 % BẮT ĐẦU TÀI LIỆU
 % ==============================================================================
+
+% Định nghĩa tường minh các tiêu đề danh mục tiếng Việt chuẩn mực
+\renewcommand{\contentsname}{MỤC LỤC}
+\renewcommand{\listtablename}{DANH MỤC BẢNG BIỂU}
+\renewcommand{\listfigurename}{DANH MỤC HÌNH VẼ}
+\renewcommand{\bibname}{TÀI LIỆU THAM KHẢO}
+\renewcommand{\figurename}{Hình}
+\renewcommand{\tablename}{Bảng}
+\renewcommand{\chaptername}{Chương}
+
 \begin{document}
+% ------------------------------------------------------------------------------
+% TRANG BÌA CHÍNH THỨC (XUẤT TỪ BIA.DOCX)
+% ------------------------------------------------------------------------------
+\includepdf[pages=1]{bia.pdf}
+
 
 % ------------------------------------------------------------------------------
 % LỜI CẢM ƠN
@@ -145,35 +160,13 @@ Cuối cùng, tôi xin chân thành cảm ơn tất cả những người đã h
 
 \vspace{1.5cm}
 \begin{flushright}
-    \textit{Hà Nội, Tháng 05 năm 2026} \\
+    \textit{Hà Nội, Tháng 10 năm 2026} \\
     \textbf{SINH VIÊN THỰC HIỆN} \\
     \vspace{1.5cm}
     \textbf{Lê Việt Anh}
 \end{flushright}
 
-% ------------------------------------------------------------------------------
-% LỜI CAM ĐOAN
-% ------------------------------------------------------------------------------
-\newpage
-\chapter*{LỜI CAM ĐOAN}
-\addcontentsline{toc}{chapter}{Lời cam đoan}
 
-Tôi xin cam đoan rằng toàn bộ nội dung công trình nghiên cứu được trình bày trong cuốn báo cáo này là kết quả học tập và nghiên cứu khoa học nghiêm túc, độc lập của bản thân tôi dưới sự hướng dẫn khoa học của thầy PGS.TS Nguyễn Trọng Khánh cùng các thành viên nghiên cứu thuộc Phòng thí nghiệm Máy tính thông minh vì sự phát triển bền vững (IC4SD), Khoa Công nghệ Thông tin 1, Học viện Công nghệ Bưu chính Viễn thông.
-
-Toàn bộ các số liệu thống kê thực nghiệm, quy trình thu thập dữ liệu hình ảnh và chuỗi thời gian giao thông từ hệ thống camera công cộng TP. Hồ Chí Minh, mã nguồn cài đặt các mạng nơ-ron học sâu (Deep Learning) và các phân tích định lượng được trình bày trong báo cáo là hoàn toàn trung thực, khách quan và có khả năng kiểm chứng, tái lập độc lập. Các trích dẫn tài liệu tham khảo, bảng biểu đối sánh kế thừa từ các công trình khoa học quốc tế đều được ghi chú xuất xứ tường minh và tuân thủ chặt chẽ liêm chính học thuật. Tôi xin chịu hoàn toàn trách nhiệm trước Hội đồng Khoa học và Ban Giám đốc Học viện về tính xác thực của nội dung cam đoan này.
-
-\vspace{1.5cm}
-\begin{flushright}
-    \textit{Hà Nội, Tháng 05 năm 2026} \\
-    \textbf{Người cam đoan} \\
-    \vspace{1.5cm}
-    \textbf{Lê Việt Anh}
-\end{flushright}
-
-% ------------------------------------------------------------------------------
-% TÓM TẮT ĐỀ TÀI (ABSTRACT TIẾNG VIỆT) - ĐÃ BỎ ABSTRACT TIẾNG ANH THEO YÊU CẦU
-% ------------------------------------------------------------------------------
-\newpage
 \chapter*{TÓM TẮT ĐỀ TÀI}
 \addcontentsline{toc}{chapter}{Tóm tắt đề tài}
 
