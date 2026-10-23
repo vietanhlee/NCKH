@@ -83,6 +83,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
         lambda_tv: float = 0.01,
         lambda_sparse: float = 0.005,
         lambda_bin: float = 0.05,
+        lambda_guide: float = 0.85,
+        lambda_fg: float = 0.35,
         tau_excl: float = 0.05,
         charbonnier_eps: float = 1e-3,
         lambda_bg: Optional[float] = None,
@@ -98,6 +100,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
         self.lambda_tv = lambda_tv
         self.lambda_sparse = lambda_sparse
         self.lambda_bin = lambda_bin
+        self.lambda_guide = lambda_guide
+        self.lambda_fg = lambda_fg
         self.tau_excl = tau_excl
         self.charbonnier_eps = charbonnier_eps
 
@@ -109,6 +113,7 @@ class NoiseAwareDecompositionLoss(nn.Module):
         epoch: int = 10,
         warmup_bin_epoch: int = 10,
         pi: Optional[torch.Tensor] = None,
+        k_frames: int = 1,
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         if isinstance(origin, dict):
             targets = origin
@@ -163,9 +168,12 @@ class NoiseAwareDecompositionLoss(nn.Module):
         l_prior = 0.5 * laplace_nll + 0.5 * direct_inpaint_loss
 
         # 3. Nền dùng chung nhiều ngày (L_shared với hàm Charbonnier)
-        if B_hat.shape[0] > 1:
-            bg_median = torch.median(B_hat, dim=0, keepdim=True)[0].detach()
-            diff_shared = B_hat - bg_median
+        # Chỉ kích hoạt khi ở chế độ group (k_frames > 1) và batch chia hết cho k_frames
+        # Nhóm theo từng camera (B, K, C, H, W) và tính median dọc theo dim=1 (trục K)
+        if k_frames > 1 and B_hat.shape[0] >= k_frames and B_hat.shape[0] % k_frames == 0:
+            Bk = B_hat.view(-1, k_frames, *B_hat.shape[1:])
+            med = Bk.median(dim=1, keepdim=True)[0].detach()
+            diff_shared = Bk - med
             l_shared = torch.mean(torch.sqrt(diff_shared ** 2 + self.charbonnier_eps ** 2))
         else:
             l_shared = torch.tensor(0.0, device=B_hat.device)
@@ -215,8 +223,8 @@ class NoiseAwareDecompositionLoss(nn.Module):
             + self.lambda_prior * l_prior
             + self.lambda_shared * l_shared
             + self.lambda_excl * l_excl
-            + 0.85 * l_guide
-            + 0.35 * l_fg
+            + self.lambda_guide * l_guide
+            + self.lambda_fg * l_fg
             + self.lambda_tv * l_tv
             + self.lambda_sparse * l_sparse
             + self.lambda_bin * l_bin

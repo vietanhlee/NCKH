@@ -32,26 +32,53 @@ def align_prior_illumination(
     Căn chỉnh ánh sáng cục bộ (Local Photometric Gain & Bias Alignment) cho ảnh Prior:
     Khắc phục hiện tượng lệch phơi sáng / bóng nắng giữa thời điểm chụp ảnh gốc (origin)
     và thời điểm trích xuất ảnh nền (prior), chỉ ước lượng trên vùng nền tĩnh.
+
+    Cơ chế Chống Rò Rỉ Màu Xe (Anti-Color-Bleeding):
+    - Đặt trọng số vùng xe (mask >= 0.25) tuyệt đối về 0.0.
+    - Ước lượng thông số trắc quang toàn cục trên các điểm nền tĩnh tin cậy.
+    - Kết hợp cửa sổ trắc quang cục bộ thích ứng: tại vùng lõi xe lớn (nơi w_sum cục bộ tiệm cận 0),
+      hệ thống mượt mà chuyển tiếp sang giá trị chuẩn toàn cục của mặt đường thay vì kéo về màu xe!
     """
     if mask is None:
         raw_diff = torch.abs(origin - prior).mean(dim=1, keepdim=True)
-        w_stat = torch.exp(-4.0 * raw_diff).detach()
+        w_stat = torch.exp(-6.0 * raw_diff).detach() * (raw_diff < 0.15).float()
     else:
-        w_stat = torch.clamp(1.0 - mask.detach(), min=0.05, max=1.0)
+        # Ngắt tuyệt đối vùng có xe để chống rò màu xe vào nền
+        w_stat = (1.0 - mask.detach()).clamp(0.0, 1.0) * (mask.detach() < 0.25).float()
 
+    valid_stat = (w_stat > 0.05).float()
+    w_glob_sum = valid_stat.sum(dim=(2, 3), keepdim=True).clamp(min=1.0)
+
+    # 1. Thống kê trắc quang toàn cục của mặt đường sạch
+    mu_orig_glob = (valid_stat * origin).sum(dim=(2, 3), keepdim=True) / w_glob_sum
+    mu_prior_glob = (valid_stat * prior).sum(dim=(2, 3), keepdim=True) / w_glob_sum
+    var_orig_glob = (valid_stat * (origin - mu_orig_glob).pow(2)).sum(dim=(2, 3), keepdim=True) / w_glob_sum
+    var_prior_glob = (valid_stat * (prior - mu_prior_glob).pow(2)).sum(dim=(2, 3), keepdim=True) / w_glob_sum
+    std_orig_glob = torch.sqrt(torch.clamp(var_orig_glob, min=1e-5))
+    std_prior_glob = torch.sqrt(torch.clamp(var_prior_glob, min=1e-5))
+    gain_glob = torch.clamp((std_orig_glob + 0.03) / (std_prior_glob + 0.03), min=0.55, max=1.85)
+
+    # 2. Thống kê trắc quang cục bộ trên cửa sổ trượt
     pad = kernel_size // 2
-    w_sum = F.avg_pool2d(w_stat, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) + 1e-5
+    w_sum = F.avg_pool2d(w_stat, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False)
 
-    mu_orig = F.avg_pool2d(w_stat * origin, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / w_sum
-    mu_prior = F.avg_pool2d(w_stat * prior, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / w_sum
+    mu_orig_loc = F.avg_pool2d(w_stat * origin, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / (w_sum + 1e-5)
+    mu_prior_loc = F.avg_pool2d(w_stat * prior, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / (w_sum + 1e-5)
 
-    var_orig = F.avg_pool2d(w_stat * (origin - mu_orig).pow(2), kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / w_sum
-    var_prior = F.avg_pool2d(w_stat * (prior - mu_prior).pow(2), kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / w_sum
+    var_orig_loc = F.avg_pool2d(w_stat * (origin - mu_orig_loc).pow(2), kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / (w_sum + 1e-5)
+    var_prior_loc = F.avg_pool2d(w_stat * (prior - mu_prior_loc).pow(2), kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False) / (w_sum + 1e-5)
 
-    std_orig = torch.sqrt(torch.clamp(var_orig, min=1e-5))
-    std_prior = torch.sqrt(torch.clamp(var_prior, min=1e-5))
+    std_orig_loc = torch.sqrt(torch.clamp(var_orig_loc, min=1e-5))
+    std_prior_loc = torch.sqrt(torch.clamp(var_prior_loc, min=1e-5))
+    gain_loc = torch.clamp((std_orig_loc + 0.03) / (std_prior_loc + 0.03), min=0.55, max=1.85)
 
-    gain = torch.clamp((std_orig + 0.03) / (std_prior + 0.03), min=0.55, max=1.85)
+    # 3. Hòa trộn thích ứng: Nếu cửa sổ cục bộ có đủ điểm tĩnh (w_sum >= 0.15) thì dùng local,
+    # nếu trong vùng xe lớn (w_sum -> 0), mượt mà fallback về global road statistics
+    blend = torch.clamp(w_sum / 0.15, 0.0, 1.0)
+    mu_orig = blend * mu_orig_loc + (1.0 - blend) * mu_orig_glob
+    mu_prior = blend * mu_prior_loc + (1.0 - blend) * mu_prior_glob
+    gain = blend * gain_loc + (1.0 - blend) * gain_glob
+
     prior_aligned = mu_orig + gain * (prior - mu_prior)
     return torch.clamp(prior_aligned, 0.0, 1.0)
 
@@ -81,18 +108,25 @@ def compute_illumination_invariant_guide(
       4. Tích hợp Semantic TAM Guidance (pi từ ViT deep tokens nếu có): Hợp nhất đa tầng ngữ nghĩa
          giúp bắt trọn 100% xe cộ kể cả khi sơn xe trùng khít màu nhựa đường và khử bóng râm ảo.
       5. Đóng mở hình thái học khả vi (Morphological Opening & Closing) giúp lấp đầy lỗ thủng thân xe.
+    Returns:
+      - m_guide: Mặt nạ hướng dẫn phương tiện (B, 1, H, W) trong [0, 1]
+      - prior_aligned: Ảnh nền đã căn chỉnh ánh sáng theo origin (B, 3, H, W)
+      - static_edge_map: Bản đồ cạnh tĩnh của mặt đường/vạch kẻ đường (B, 1, H, W)
     """
     with torch.no_grad():
         prior_aligned = align_prior_illumination(origin, prior)
+        # Bước lặp 2: Tinh chỉnh căn chỉnh ánh sáng sau khi loại trừ vùng nghi ngờ có xe
         coarse_diff = torch.abs(origin - prior_aligned).mean(dim=1, keepdim=True)
         coarse_mask = torch.clamp((coarse_diff - 0.06) / 0.12, 0.0, 1.0)
         prior_aligned = align_prior_illumination(origin, prior, mask=coarse_mask)
 
+        # 1. Sai khác trắc quang (Photometric Difference: kết hợp L_inf và L1 theo kênh màu)
         abs_diff = torch.abs(origin - prior_aligned)
         diff_max = abs_diff.max(dim=1, keepdim=True)[0]
         diff_mean = abs_diff.mean(dim=1, keepdim=True)
         diff_photo = 0.55 * diff_max + 0.45 * diff_mean
 
+        # 2. Sai khác cấu trúc cục bộ (Local Structural & Variance Dissimilarity - bắt xe màu xám bạc)
         lum_orig = 0.299 * origin[:, 0:1] + 0.587 * origin[:, 1:2] + 0.114 * origin[:, 2:3]
         lum_prior = 0.299 * prior_aligned[:, 0:1] + 0.587 * prior_aligned[:, 1:2] + 0.114 * prior_aligned[:, 2:3]
 
@@ -108,21 +142,27 @@ def compute_illumination_invariant_guide(
         )
         diff_struct = torch.clamp((1.0 - ssim_local) * 0.5, 0.0, 1.0)
 
+        # 3. Phát hiện và triệt tiêu cạnh tĩnh (vạch kẻ đường trắng, mũi tên, biển báo, timestamp)
         gx_o, gy_o, mag_o = _sobel_gradients(lum_orig)
         gx_p, gy_p, mag_p = _sobel_gradients(lum_prior)
 
+        # Giãn nở biên prior 3x3 để dung sai rung lắc camera 1-2 pixel
         mag_p_dil = F.max_pool2d(mag_p, kernel_size=3, stride=1, padding=1)
         cos_sim_edge = (gx_o * gx_p + gy_o * gy_p) / (mag_o * mag_p + 1e-4)
+        # Cạnh tĩnh là nơi cả ảnh gốc và ảnh nền đều có biên sắc nét cùng chiều (ví dụ vạch sơn trắng)
         static_edge_map = torch.clamp(mag_p_dil * torch.clamp(cos_sim_edge, min=0.2), 0.0, 1.0)
 
+        # Chuẩn hóa sai khác bởi độ mạnh biên nền tĩnh để dập tắt nhiễu vạch kẻ đường
         raw_motion = (diff_photo + 0.45 * diff_struct) / (1.0 + 4.5 * mag_p_dil)
 
+        # 4. Lọc hình thái học: Opening 3x3 (xóa nhiễu vạch mảnh) -> Closing 7x7 (lấp đầy thân xe)
         eroded_3 = -F.max_pool2d(-raw_motion, kernel_size=3, stride=1, padding=1)
         opened_3 = F.max_pool2d(eroded_3, kernel_size=3, stride=1, padding=1)
         dilated_7 = F.max_pool2d(opened_3, kernel_size=7, stride=1, padding=3)
         closed_7 = -F.max_pool2d(-dilated_7, kernel_size=7, stride=1, padding=3)
 
         m_guide = torch.clamp((closed_7 - 0.05) / 0.10, 0.0, 1.0)
+        # Làm mịn nhẹ biên hướng dẫn
         m_guide = F.avg_pool2d(m_guide, kernel_size=3, stride=1, padding=1)
 
         # 5. Tích hợp Semantic TAM Guidance nếu có: Hợp nhất đa mức với xác suất tiền cảnh từ ViT
@@ -136,25 +176,51 @@ def compute_illumination_invariant_guide(
                 pi_up = F.interpolate(pi_in, size=(H_g, W_g), mode="bilinear", align_corners=False)
             else:
                 pi_up = pi_in
+            # Hợp nhất: Lấy max để bảo toàn mọi phát hiện xe, đồng thời triệt tiêu bóng râm
             m_guide = torch.clamp(torch.max(m_guide, pi_up), 0.0, 1.0)
 
     return m_guide.detach(), prior_aligned.detach(), static_edge_map.detach()
 
 
-def inpaint_spatial_features(feat: torch.Tensor, valid_gate: torch.Tensor, num_iters: int = 3) -> torch.Tensor:
+def inpaint_spatial_features(
+    feat: torch.Tensor,
+    valid_gate: torch.Tensor,
+    num_iters: int = 4,
+    kernel_size: int = 5,
+) -> torch.Tensor:
     """
-    Nội suy đặc trưng vùng nền (Contextual Feature Inpainting) cho chế độ Single-Frame:
-    Thay thế các đặc trưng nằm trong vùng có xe (valid_gate -> 0) bằng trung bình có trọng số
-    từ các vùng mặt đường sạch lân cận qua nhiều bước lan truyền.
+    Nội suy đặc trưng vùng nền (Normalized Contextual Feature Inpainting) cho chế độ Single-Frame:
+    Áp dụng thuật toán Partial Convolution lũy tiến có chuẩn hóa trọng số bảo toàn năng lượng:
+    - Lan tỏa mượt mà từ các vùng mặt đường sạch sang mọi vị trí phương tiện bị che khuất.
+    - Bảo toàn độ lớn đặc trưng (F_new = M * F_orig + (1 - M) * (sum_f / sum_w)),
+      triệt tiêu hoàn toàn hiện tượng phân kỳ năng lượng hoặc triệt tiêu về 0 ở tâm xe.
     """
-    curr_feat = feat * valid_gate
-    curr_weight = valid_gate.clamp(min=1e-4)
+    pad = kernel_size // 2
+    if valid_gate.shape[-2:] != feat.shape[-2:]:
+        gate_aligned = F.interpolate(valid_gate, size=feat.shape[-2:], mode="bilinear", align_corners=False)
+    else:
+        gate_aligned = valid_gate
+
+    # Khởi tạo: vùng tĩnh giữ nguyên đặc trưng gốc, vùng xe tạm thời bằng 0
+    curr_feat = feat * gate_aligned
+    curr_weight = gate_aligned.clone()
+
     for _ in range(num_iters):
-        avg_f = F.avg_pool2d(curr_feat, kernel_size=7, stride=1, padding=3, count_include_pad=False)
-        avg_w = F.avg_pool2d(curr_weight, kernel_size=7, stride=1, padding=3, count_include_pad=False) + 1e-5
-        inpainted = avg_f / avg_w
-        curr_feat = valid_gate * feat + (1.0 - valid_gate) * inpainted
-        curr_weight = torch.clamp(valid_gate + (1.0 - valid_gate) * (avg_w.clamp(max=1.0)), min=1e-4, max=1.0)
+        sum_f = F.avg_pool2d(curr_feat, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False)
+        sum_w = F.avg_pool2d(curr_weight, kernel_size=kernel_size, stride=1, padding=pad, count_include_pad=False)
+
+        # Nội suy chuẩn hóa
+        inpainted = sum_f / (sum_w + 1e-5)
+
+        # Thay thế hoàn toàn vùng chưa có đặc trưng thay vì cộng dồn (chống phân kỳ năng lượng)
+        curr_feat = gate_aligned * feat + (1.0 - gate_aligned) * inpainted
+        curr_weight = torch.clamp(gate_aligned + (1.0 - gate_aligned) * torch.clamp(sum_w * 2.0, 0.0, 1.0), 0.0, 1.0)
+
+    # Fallback cho trường hợp cực đoan nếu còn điểm chưa phủ tới: dùng giá trị mặt đường hợp lệ toàn cục
+    valid_count = (gate_aligned > 0.05).float().sum(dim=(2, 3), keepdim=True).clamp(min=1.0)
+    glob_feat = (feat * (gate_aligned > 0.05).float()).sum(dim=(2, 3), keepdim=True) / valid_count
+    curr_feat = gate_aligned * feat + (1.0 - gate_aligned) * (curr_weight * curr_feat + (1.0 - curr_weight) * glob_feat)
+
     return curr_feat
 
 
@@ -184,6 +250,7 @@ class MultiScaleDecompDecoder(nn.Module):
         super().__init__()
         self.proj = nn.Conv2d(in_dim, hidden_dim, kernel_size=1)
 
+        # 4 tầng upsample liên tục
         self.up1 = nn.ConvTranspose2d(hidden_dim, 128, kernel_size=4, stride=2, padding=1)
         self.conv1 = ConvBlock(128, 128)
 
@@ -242,6 +309,7 @@ class TrafficDecompositionNet(nn.Module):
             for p in self.backbone.parameters():
                 p.requires_grad = False
         elif unfreeze_last_blocks > 0:
+            # Đóng băng toàn bộ, chỉ mở unfreeze_last_blocks blocks cuối
             for p in self.backbone.parameters():
                 p.requires_grad = False
             if hasattr(self.backbone, "blocks"):
@@ -250,23 +318,26 @@ class TrafficDecompositionNet(nn.Module):
                     for p in b.parameters():
                         p.requires_grad = True
 
+        # Nhánh mã hóa prior (phục vụ Chế độ b)
         self.prior_encoder = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=7, stride=2, padding=3),
             nn.GELU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.GELU(),
-            nn.AdaptiveAvgPool2d((14, 14)),
             nn.Conv2d(64, embed_dim, kernel_size=1),
         )
 
+        # Decoder chính dùng chung
         self.decoder = MultiScaleDecompDecoder(in_dim=embed_dim, hidden_dim=256)
 
+        # Nhánh Skip-Connection bảo toàn chi tiết tần số cao
         self.rgb_skip = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, padding=1),
             nn.GELU(),
             nn.Conv2d(32, 32, kernel_size=3, padding=1),
         )
 
+        # 5 Heads chuyên biệt (Hướng 2 Mới)
         self.head_alpha = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
             nn.Sigmoid(),
@@ -279,9 +350,11 @@ class TrafficDecompositionNet(nn.Module):
             nn.Conv2d(32, 3, kernel_size=3, padding=1),
             nn.Sigmoid(),
         )
+        # Đầu sigma: dự đoán s = log(sigma), kẹp trong [log 0.01, log 0.5]
         self.head_log_sigma = nn.Sequential(
             nn.Conv2d(32, 1, kernel_size=3, padding=1),
         )
+        # Đầu mã ánh sáng ell in R^J: trích từ trung bình token patch tĩnh (pi < 0.2)
         self.head_ell = nn.Sequential(
             nn.Linear(embed_dim, 128),
             nn.GELU(),
@@ -302,15 +375,23 @@ class TrafficDecompositionNet(nn.Module):
                 patch_tokens = list(feats.values())[0]
         elif isinstance(feats, torch.Tensor):
             if feats.dim() == 3:
-                patch_tokens = feats[:, 1:] if feats.shape[1] > H_p * W_p else feats
+                # Bỏ CLS token và register tokens nếu có: lấy đúng H_p * W_p tokens không gian cuối
+                if feats.shape[1] >= H_p * W_p:
+                    patch_tokens = feats[:, -H_p * W_p:]
+                else:
+                    patch_tokens = feats
             elif feats.dim() == 2:
-                return feats.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, H_p, W_p)
+                raise RuntimeError(
+                    f"Backbone trả về tensor 2D shape={feats.shape} (có thể là CLS token). "
+                    "TrafficDecompositionNet yêu cầu ViT backbone trả về patch tokens 3D (B, L, D)."
+                )
             else:
                 patch_tokens = feats
         else:
             patch_tokens = feats[0]
 
         if patch_tokens.dim() == 3:
+            # Reshape về dạng không gian (B, D, H_p, W_p)
             if patch_tokens.shape[1] == H_p * W_p:
                 feat_map = patch_tokens.transpose(1, 2).reshape(B, self.embed_dim, H_p, W_p)
             else:
@@ -328,6 +409,13 @@ class TrafficDecompositionNet(nn.Module):
         use_prior: bool = True,
         pi: Optional[torch.Tensor] = None,
     ) -> Dict[str, torch.Tensor]:
+        """
+        Forward phân rã cảnh với cơ chế Chống Rò Rỉ Tiền Cảnh (Anti-Shortcut Gated Skip):
+          - Nhánh Alpha & Foreground nhận đặc trưng chi tiết từ ảnh gốc x.
+          - Nhánh Background bị khóa chặn hoàn toàn rgb_skip(x) tại các vùng có xe (alpha cao),
+            thay thế bằng đặc trưng từ prior đã căn chỉnh ánh sáng (Chế độ b) hoặc nội suy không gian
+            từ mặt đường xung quanh (Chế độ a), triệt tiêu 100% hiện tượng in bóng xe lên mặt đường.
+        """
         B, C, H, W = x.shape
         feat_map = self.extract_patch_feature_map(x)  # (B, embed_dim, Hp, Wp)
 
@@ -336,16 +424,19 @@ class TrafficDecompositionNet(nn.Module):
         prior_aligned = None
         static_edge_map = None
 
+        # Chuẩn bị Prior đã căn chỉnh ánh sáng cục bộ nếu có
+        # Đồng bộ Train/Test: Chỉ tính m_guide khi Prior thực sự được kích hoạt (không bị prior_dropout)
         if prior is not None and use_prior:
-            m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(x, prior, pi=pi)
             p_keep = (1.0 - self.prior_dropout) if self.training else 1.0
             if torch.rand(1).item() < p_keep:
                 has_active_prior = True
-                prior_feat = self.prior_encoder(x - prior_aligned)
-                if prior_feat.shape[-2:] != feat_map.shape[-2:]:
-                    prior_feat = F.interpolate(prior_feat, size=feat_map.shape[-2:], mode="bilinear", align_corners=False)
+                m_guide, prior_aligned, static_edge_map = compute_illumination_invariant_guide(x, prior, pi=pi)
+                # Mã hóa sự tương phản giữa x và prior_aligned để giúp Decoder nhận biết vùng xe
+                raw_prior_feat = self.prior_encoder(x - prior_aligned)
+                prior_feat = F.adaptive_avg_pool2d(raw_prior_feat, feat_map.shape[-2:])
                 feat_map = feat_map + 0.35 * prior_feat
 
+        # Tính đầu mã ánh sáng ell: gộp trung bình các token patch tĩnh (pi < 0.2)
         B_cur, D_cur, Hp, Wp = feat_map.shape
         patch_tokens = feat_map.flatten(2).transpose(1, 2)  # (B, P, D)
         pi_full = None
@@ -371,24 +462,27 @@ class TrafficDecompositionNet(nn.Module):
 
         pred_ell = self.head_ell(static_token_avg)  # (B, num_light_codes)
 
+        # Giải mã đa tỉ lệ từ ViT tokens
         dec_feat = self.decoder(feat_map, target_hw=(H, W))
         rgb_feat_x = self.rgb_skip(x)
 
-        # 1. Nhánh Tiền cảnh & Mặt nạ Alpha
+        # 1. Nhánh Tiền cảnh & Mặt nạ Alpha: sử dụng chi tiết biên từ ảnh gốc x
         dec_feat_fg = dec_feat + rgb_feat_x
         alpha_raw = self.head_alpha(dec_feat_fg)
 
-        if prior is not None and use_prior and not self.training and m_guide is not None:
+        if has_active_prior and static_edge_map is not None and m_guide is not None:
+            # Khử các vạch kẻ đường tĩnh bị bắt nhầm
             lane_suppress = torch.clamp(1.0 - 2.5 * static_edge_map * (1.0 - m_guide), 0.0, 1.0)
-            alpha_clean = alpha_raw * lane_suppress
-            alpha_mask = torch.max(alpha_clean, 0.90 * m_guide)
+            alpha_mask = alpha_raw * lane_suppress
         else:
             alpha_mask = alpha_raw
 
+        # Dự đoán lớp Tiền cảnh (Foreground Vehicles Layer)
         pred_fg = self.head_fg(dec_feat_fg)
         isolated_fg = alpha_mask * pred_fg
 
         # 2. Nhánh Nền sạch (Clean Road Background): NGẮT RÒ RỈ XE CỘ TỪ RGB_SKIP(X)
+        # Tích hợp lá chắn đa tầng (Alpha Mask + Pixel Guide + Semantic TAM Pi)
         shield_components = [alpha_mask.detach()]
         if m_guide is not None:
             shield_components.append(m_guide.detach())
@@ -399,22 +493,24 @@ class TrafficDecompositionNet(nn.Module):
         for sc in shield_components[1:]:
             vehicle_shield = torch.max(vehicle_shield, sc)
 
+        # Giãn nở mặt nạ chắn 7x7 để xóa sạch cả viền và bóng xe khỏi nhánh nền
         shield_dilated = F.max_pool2d(vehicle_shield, kernel_size=7, stride=1, padding=3)
-        bg_vis_gate = torch.clamp(1.0 - shield_dilated * 1.4, 0.0, 1.0)
+        bg_vis_gate = torch.clamp(1.0 - shield_dilated * 1.4, 0.0, 1.0)  # 1 ở mặt đường trống, 0 ở vùng có xe
 
         if has_active_prior and prior_aligned is not None:
+            # Chế độ (b) Frame + Prior: Vùng có xe nhận chi tiết mặt đường từ prior_aligned
             rgb_feat_prior = self.rgb_skip(prior_aligned)
             dec_feat_bg = dec_feat + bg_vis_gate * rgb_feat_x + (1.0 - bg_vis_gate) * rgb_feat_prior
-            pred_bg_raw = self.head_bg(dec_feat_bg)
-            inpaint_w = torch.clamp(shield_dilated * 1.25, 0.0, 1.0)
-            pred_bg = (1.0 - inpaint_w) * pred_bg_raw + inpaint_w * (0.80 * prior_aligned + 0.20 * pred_bg_raw)
+            pred_bg = self.head_bg(dec_feat_bg)
         else:
-            dec_inpainted = inpaint_spatial_features(dec_feat, bg_vis_gate, num_iters=2)
-            skip_inpainted = inpaint_spatial_features(rgb_feat_x, bg_vis_gate, num_iters=3)
+            # Chế độ (a) Single-Frame: Nội suy đặc trưng không gian từ mặt đường xung quanh
+            dec_inpainted = inpaint_spatial_features(dec_feat, bg_vis_gate, num_iters=3, kernel_size=7)
+            skip_inpainted = inpaint_spatial_features(rgb_feat_x, bg_vis_gate, num_iters=4, kernel_size=7)
             dec_feat_bg = dec_inpainted + skip_inpainted
             pred_bg = self.head_bg(dec_feat_bg)
 
-        # 3. Tính độ bất định Laplace sigma trơn tru C^\infty chống triệt tiêu gradient
+        # 3. Tính độ bất định Laplace sigma: Kích hoạt mượt mà khả vi toàn miền C^\infty
+        # Loại bỏ hoàn toàn clamp cứng gây triệt tiêu gradient (vanishing gradients)
         # sigma = sigma_min + (sigma_max - sigma_min) * sigmoid(raw_s) in (0.01, 0.50)
         raw_sigma = self.head_log_sigma(dec_feat_fg)
         sigma = 0.01 + 0.49 * torch.sigmoid(raw_sigma)
@@ -424,13 +520,13 @@ class TrafficDecompositionNet(nn.Module):
         recon_origin = alpha_mask * pred_fg + (1.0 - alpha_mask) * pred_bg
 
         return {
-            "alpha_mask": alpha_mask,
-            "pred_mask": alpha_mask,
-            "pred_fg": pred_fg,
-            "isolated_fg": isolated_fg,
-            "pred_bg": pred_bg,
-            "sigma": sigma,
-            "log_sigma": log_sigma,
-            "pred_ell": pred_ell,
-            "recon_origin": recon_origin,
+            "alpha_mask": alpha_mask,       # M_alpha: [0, 1] (B, 1, H, W)
+            "pred_mask": alpha_mask,        # Alias cho tương thích ngược
+            "pred_fg": pred_fg,             # F: [0, 1] (B, 3, H, W)
+            "isolated_fg": isolated_fg,     # Lớp xe cộ tách biệt: M_alpha * F (B, 3, H, W)
+            "pred_bg": pred_bg,             # B_hat: Mặt đường sạch không còn xe (B, 3, H, W)
+            "sigma": sigma,                 # Độ bất định sigma: (B, 1, H, W)
+            "log_sigma": log_sigma,         # Phục vụ Laplace NLL (khả vi toàn miền)
+            "pred_ell": pred_ell,           # Mã ánh sáng dự đoán: (B, J)
+            "recon_origin": recon_origin,   # I_recon: (B, 3, H, W)
         }

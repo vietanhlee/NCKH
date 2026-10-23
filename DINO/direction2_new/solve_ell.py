@@ -46,7 +46,7 @@ def solve_ell(
     # A: (C * H * W, J)
     # y: (C * H * W,) = (I - E0)
     A = Ej_up.permute(1, 2, 3, 0).reshape(-1, J)  # (3*H*W, J)
-    y = (I - E0).view(-1)                          # (3*H*W,)
+    y = (I - E0).reshape(-1)                       # (3*H*W,) an toàn với non-contiguous tensors
 
     if w_static is None:
         w = torch.ones((H, W), device=device)
@@ -54,6 +54,7 @@ def solve_ell(
         w = w_static.squeeze()
 
     w_flat = w.unsqueeze(0).expand(3, -1, -1).reshape(-1)  # (3*H*W,)
+    w_static_flat = w_flat.clone()                         # Bảo toàn trọng số tĩnh qua mọi vòng lặp
     ell = torch.zeros(J, device=device)
 
     # Vòng lặp IRLS
@@ -63,15 +64,23 @@ def solve_ell(
         A_w = A * sqrt_w
         y_w = y * sqrt_w.squeeze(-1)
 
-        # Giải bình phương tối thiểu: (A_w^T A_w + lambda I)^(-1) A_w^T y_w
-        AtA = torch.matmul(A_w.T, A_w) + 1e-4 * torch.eye(J, device=device)
+        # Giải bình phương tối thiểu có Regularization tương đối:
+        # lambda_ridge tỉ lệ thuận với độ lớn vết ma trận AtA
+        AtA = torch.matmul(A_w.T, A_w)
+        ridge_val = 1e-4 * (torch.trace(AtA) / max(J, 1)).clamp(min=1e-5)
+        AtA_reg = AtA + ridge_val * torch.eye(J, device=device)
         Aty = torch.matmul(A_w.T, y_w)
-        ell = torch.linalg.solve(AtA, Aty)
+        ell = torch.linalg.solve(AtA_reg, Aty)
 
-        # Cập nhật phần dư và trọng số IRLS
+        # Cập nhật phần dư và trọng số IRLS thích ứng theo MAD (Median Absolute Deviation)
         pred_delta = torch.matmul(A, ell)
         res = torch.abs(y - pred_delta)
-        # Huber / Bisquare weighting
-        w_flat = 1.0 / (1.0 + (res / 0.05) ** 2)
+        med_res = torch.median(res)
+        mad_res = 1.4826 * torch.median(torch.abs(res - med_res)) + 1e-4
+        scale = max(float(mad_res.item()), 0.02)
+
+        # Huber weighting kết hợp bảo toàn w_static_flat ban đầu
+        w_huber = 1.0 / (1.0 + (res / scale) ** 2)
+        w_flat = w_static_flat * w_huber
 
     return ell

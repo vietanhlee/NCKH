@@ -338,6 +338,125 @@ class TestDirection2New(unittest.TestCase):
         _, dict_ep13 = loss_fn(preds, origin, prior_bg, epoch=13, warmup_bin_epoch=10)
         self.assertAlmostEqual(dict_ep13["bin_ramp_w"], 1.0, places=5)
 
+    def test_11_l_shared_group_independence_and_deactivation(self):
+        """Kiểm tra L_shared: tắt khi k_frames=1 và tính độc lập theo từng group khi k_frames > 1."""
+        from direction2_new.losses import NoiseAwareDecompositionLoss
+
+        loss_fn = NoiseAwareDecompositionLoss(lambda_shared=1.0)
+        B, C, H, W = 8, 3, 64, 64
+
+        # Tạo 2 camera riêng biệt: cam 0 (4 frames nền đỏ) và cam 1 (4 frames nền xanh)
+        pred_bg = torch.zeros(B, C, H, W, device=self.device)
+        pred_bg[:4, 0, :, :] = 0.8  # Cam 0: Đỏ
+        pred_bg[4:, 1, :, :] = 0.8  # Cam 1: Xanh lá
+
+        preds = {
+            "recon_origin": pred_bg,
+            "pred_bg": pred_bg,
+            "pred_fg": torch.zeros_like(pred_bg),
+            "alpha_mask": torch.zeros(B, 1, H, W, device=self.device),
+            "sigma": torch.full((B, 1, H, W), 0.1, device=self.device),
+            "log_sigma": torch.full((B, 1, H, W), -2.3, device=self.device),
+        }
+        origin = pred_bg.clone()
+        prior_bg = pred_bg.clone()
+
+        # 1. Khi k_frames = 1: L_shared phải tuyệt đối bằng 0.0
+        _, dict_k1 = loss_fn(preds, origin, prior_bg, k_frames=1)
+        self.assertEqual(dict_k1["loss_shared"], 0.0)
+
+        # 2. Khi k_frames = 4: Mỗi group gồm 4 frames cùng camera có nền giống nhau -> diff = 0 -> L_shared ~ 0
+        _, dict_k4 = loss_fn(preds, origin, prior_bg, k_frames=4)
+        self.assertLess(dict_k4["loss_shared"], 0.01)
+
+    def test_12_anti_color_bleeding_illumination_alignment(self):
+        """Kiểm tra chống rò rỉ màu xe trong align_prior_illumination khi xe có kích thước lớn."""
+        from direction2_new.models import align_prior_illumination
+
+        H, W = 128, 128
+        # Nền đường tối màu (RGB = 0.15) cho cả origin và prior
+        origin = torch.full((1, 3, H, W), 0.15, device=self.device)
+        prior = torch.full((1, 3, H, W), 0.15, device=self.device)
+
+        # Đặt 1 xe ô tô lớn màu trắng chói (RGB = 0.95) kích thước 50x50 ở giữa ảnh
+        origin[:, :, 39:89, 39:89] = 0.95
+
+        # Mặt nạ xe (1.0 trên xe, 0.0 trên đường)
+        mask = torch.zeros((1, 1, H, W), device=self.device)
+        mask[:, :, 39:89, 39:89] = 1.0
+
+        prior_aligned = align_prior_illumination(origin, prior, mask=mask, kernel_size=31)
+
+        # Kiểm tra giá trị bên trong tâm xe (50, 50): Phải duy trì màu mặt đường sạch (~0.15),
+        # KHÔNG ĐƯỢC phép bị kéo về màu trắng của xe (0.95)!
+        val_in_car = prior_aligned[:, :, 50:70, 50:70].mean().item()
+        self.assertLess(val_in_car, 0.35, f"Màu xe bị rò rỉ vào prior_aligned: {val_in_car} >= 0.35!")
+
+    def test_13_deep_patch_inpainting_coverage_and_energy(self):
+        """Kiểm tra inpaint_spatial_features lấp đầy hoàn hảo lỗ thủng lớn và bảo toàn năng lượng."""
+        from direction2_new.models import inpaint_spatial_features
+
+        B, C, H, W = 1, 64, 16, 28
+        feat = torch.full((B, C, H, W), 0.50, device=self.device)
+
+        # Lỗ thủng xe rộng 6x6 patches ở giữa
+        valid_gate = torch.ones((B, 1, H, W), device=self.device)
+        valid_gate[:, :, 5:11, 10:16] = 0.0
+
+        inpainted = inpaint_spatial_features(feat, valid_gate, num_iters=4, kernel_size=5)
+
+        # Tâm lỗ thủng phải được lấp đầy bằng giá trị mặt đường sạch (~0.50)
+        center_val = inpainted[:, :, 8, 13].mean().item()
+        self.assertGreater(center_val, 0.40)
+        self.assertLess(center_val, 0.60)
+        self.assertFalse(torch.isnan(inpainted).any())
+
+    def test_14_irls_preserves_static_weights(self):
+        """Kiểm tra solve_ell bảo toàn w_static qua mọi vòng lặp IRLS, không bị ghi đè."""
+        from direction2_new.solve_ell import solve_ell
+
+        H, W, J = 64, 64, 4
+        I = torch.rand(3, H, W, device=self.device)
+        E0 = torch.full((3, H, W), 0.3, device=self.device)
+        Ej = torch.randn(J, 3, H, W, device=self.device) * 0.05
+
+        # Đặt 1 vùng xe ở góc với w_static = 0.0
+        w_static = torch.ones(1, H, W, device=self.device)
+        w_static[:, 10:30, 10:30] = 0.0
+
+        # Giải ell qua 4 vòng lặp IRLS
+        ell = solve_ell(I, E0, Ej, w_static=w_static, iters=4)
+
+        self.assertEqual(ell.shape, (J,))
+        self.assertFalse(torch.isnan(ell).any())
+
+    def test_15_patch_feature_map_handles_register_tokens(self):
+        """Kiểm tra extract_patch_feature_map xử lý chính xác ViT có Register Tokens."""
+        from direction2_new.models import TrafficDecompositionNet
+
+        class MockViTWithRegisters(nn.Module):
+            def __init__(self, embed_dim=64):
+                super().__init__()
+                self.embed_dim = embed_dim
+            def forward(self, x):
+                B, C, H, W = x.shape
+                Hp, Wp = H // 16, W // 16
+                # 1 CLS token + 4 Register tokens + Hp*Wp patch tokens
+                num_tokens = 1 + 4 + Hp * Wp
+                return torch.randn(B, num_tokens, self.embed_dim, device=x.device)
+
+        net = TrafficDecompositionNet(
+            backbone=MockViTWithRegisters(embed_dim=64),
+            embed_dim=64,
+            patch_size=16,
+        ).to(self.device)
+
+        x = torch.rand(1, 3, 64, 64, device=self.device)
+        feat_map = net.extract_patch_feature_map(x)
+
+        # Kích thước phải là đúng (1, 64, 4, 4)
+        self.assertEqual(feat_map.shape, (1, 64, 4, 4))
+
 
 if __name__ == "__main__":
     unittest.main()

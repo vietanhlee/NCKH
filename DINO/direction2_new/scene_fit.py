@@ -97,7 +97,8 @@ class SceneBasis(nn.Module):
             weighted_avg = (frames * w_static).sum(dim=0) / w_static.sum(dim=0).clamp(min=1e-4)
             self.E0.data[cam_idx] = weighted_avg.clamp(0.0, 1.0)
         else:
-            self.E0.data[cam_idx] = frames.mean(dim=0).clamp(0.0, 1.0)
+            # Sử dụng Temporal Median thay vì Mean để loại bỏ bóng xe ngay từ epoch 0
+            self.E0.data[cam_idx] = torch.median(frames, dim=0)[0].clamp(0.0, 1.0)
         self.Ej.data[cam_idx].zero_()
         self.ell.data[cam_idx].zero_()
 
@@ -172,16 +173,30 @@ def robust_weights(
         pi_up = torch.zeros((N, 1, H, W), device=I.device)
         kappa_t = torch.full((N,), 0.30, device=I.device)
 
-    # 4. Phân vị Q_t(1 - kappa_t) theo từng frame
+    # 4. Phân vị Q_t kết hợp ngưỡng MAD thích ứng theo từng frame
+    # Khắc phục triệt để lỗi: khi ảnh trống không có xe, vẫn bị cắt mất 30% pixel
     q_vals = []
+    s_vals = []
     r_flat = r_bar.reshape(N, -1)
     for i in range(N):
-        q_i = torch.quantile(r_flat[i], 1.0 - kappa_t[i].item())
-        q_vals.append(q_i)
-    Q = torch.stack(q_vals).view(N, 1, 1, 1)
+        r_i = r_flat[i]
+        med_i = torch.median(r_i)
+        mad_i = 1.4826 * torch.median(torch.abs(r_i - med_i)) + 1e-4
 
-    # 5. Trọng số phần dư w_res = sigmoid((Q - r_bar) / s)
-    w_res = torch.sigmoid((Q - r_bar) / s)
+        # Ngưỡng vật lý ngoại lai: điểm chênh sáng vượt quá 2.5 * MAD so với mặt đường
+        thresh_abs = med_i + 2.5 * mad_i
+        thresh_quantile = torch.quantile(r_i, 1.0 - kappa_t[i].item())
+
+        # Nếu không có TAM (pi is None), dùng ngưỡng thích ứng kết hợp để bảo toàn đường trống
+        q_i = torch.max(thresh_abs, thresh_quantile) if pi is None else thresh_quantile
+        q_vals.append(q_i)
+        s_vals.append(max(float(mad_i.item()), 0.02))
+
+    Q = torch.stack(q_vals).view(N, 1, 1, 1)
+    S = torch.tensor(s_vals, device=I.device, dtype=I.dtype).view(N, 1, 1, 1)
+
+    # 5. Trọng số phần dư w_res = sigmoid((Q - r_bar) / S)
+    w_res = torch.sigmoid((Q - r_bar) / S)
 
     # 6. Kết hợp prior TAM: w = w_res * (1 - pi)^gamma
     w = w_res * torch.pow((1.0 - pi_up).clamp(min=0.0, max=1.0), gamma)
@@ -386,13 +401,20 @@ def main():
     parser.add_argument("--iters", type=int, default=200, help="Số vòng lặp tối ưu hóa IRLS")
     parser.add_argument("--J", type=int, default=4, help="Số chiều không gian ảnh cơ sở ánh sáng Ej")
     parser.add_argument("--lr", type=float, default=1e-2, help="Tốc độ học")
-    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_new_scene_fit", help="Thư mục lưu kết quả")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_scene_fit", help="Thư mục lưu kết quả")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Thiết bị tính toán")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parsed, unknown = parser.parse_known_args()
     if unknown:
         print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
     args = parsed
+
+    # Thiết lập seed chuẩn hóa tính tái lập kết quả
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
 
     os.makedirs(args.save_dir, exist_ok=True)
     primary_dev, num_gpus, gpu_names = get_available_devices()
@@ -431,7 +453,20 @@ def main():
             img_paths.extend(glob.glob(pat, recursive=True))
         img_paths = sorted(list(set(img_paths)))
         if len(img_paths) >= 4:
-            print(f"📂 [Dữ Liệu] Tìm thấy {len(img_paths)} ảnh trong thư mục: {args.frames_dir}")
+            # Nhóm ảnh theo camera/route_id để tránh khớp chung các camera khác nhau
+            cam_groups = defaultdict(list)
+            for p in img_paths:
+                fname = os.path.basename(p)
+                m_cam = re.match(r"^(\d+)_", fname)
+                cam_id = m_cam.group(1) if m_cam else "default"
+                cam_groups[cam_id].append(p)
+
+            if len(cam_groups) > 1:
+                primary_cam = max(cam_groups.keys(), key=lambda c: len(cam_groups[c]))
+                print(f"📷 [Phân Nhóm Camera] Phát hiện {len(cam_groups)} camera. Tự động khớp SceneBasis cho camera '{primary_cam}' ({len(cam_groups[primary_cam])} ảnh).")
+                img_paths = cam_groups[primary_cam]
+
+            print(f"📂 [Dữ Liệu] Tìm thấy {len(img_paths)} ảnh hợp lệ trong thư mục: {args.frames_dir}")
             sel_paths = img_paths[:args.num_frames]
             loaded = []
             for p in sel_paths:

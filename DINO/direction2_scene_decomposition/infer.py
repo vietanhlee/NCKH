@@ -85,8 +85,13 @@ def split_touching_instances(
             current_marker += 1
             continue
 
-        # Tìm các hạt giống (seeds) của các đỉnh khoảng cách bên trong cụm
-        local_seeds = ((local_dist > (watershed_thresh * max_d)) * 255).astype(np.uint8)
+        # Tìm các hạt giống (seeds) bằng cực đại cục bộ kết hợp ngưỡng khoảng cách
+        # Giúp bắt trọn cả xe máy nhỏ (dist ~ 3-4px) nằm sát cạnh ô tô lớn (dist ~ 20-30px)
+        local_max = cv2.dilate(local_dist, np.ones((5, 5), np.uint8))
+        is_peak = (local_dist == local_max) & (local_dist >= 2.0)
+        local_seeds_peak = is_peak.astype(np.uint8) * 255
+        local_seeds_thresh = ((local_dist > (watershed_thresh * max_d)) * 255).astype(np.uint8)
+        local_seeds = cv2.bitwise_or(local_seeds_peak, local_seeds_thresh)
         n_seeds, seed_lbls = cv2.connectedComponents(local_seeds)
 
         if n_seeds <= 2:
@@ -141,6 +146,7 @@ def create_segmentation_overlay(
     open_kernel: int = 3,        # Bẻ gãy các cầu nối mảnh giữa các xe (0 hoặc 1 để tắt)
     split_instances: bool = True,# Tách các xe bị chạm dính nhau bằng Watershed
     watershed_thresh: float = 0.55, # Ngưỡng phát hiện tâm xe (0.35 - 0.75; tăng để tách gắt)
+    banner_ratio: float = 0.05,  # Tỷ lệ chiều cao dải timestamp trên cùng (0.0 = tắt)
 ) -> Tuple[Image.Image, Image.Image]:
     """
     Tạo ảnh phân đoạn phương tiện vẽ trực tiếp lên ảnh gốc chuẩn Mask R-CNN / YOLO-Seg:
@@ -161,9 +167,10 @@ def create_segmentation_overlay(
     else:
         norm_mask = np.clip(mask_arr, 0.0, 1.0).astype(np.float32)
 
-    # Khử vùng banner timestamp trên cùng (thường nằm ở 6% chiều cao đầu ảnh CCTV)
-    banner_h = max(1, int(orig_h * 0.06))
-    norm_mask[:banner_h, :] = 0.0
+    # Khử vùng banner timestamp trên cùng nếu được chỉ định
+    if banner_ratio > 0.0:
+        banner_h = max(1, int(orig_h * banner_ratio))
+        norm_mask[:banner_h, :] = 0.0
 
     # 1. Làm mượt bằng Gaussian Blur để triệt tiêu răng cưa viền cắt
     mask_blur = cv2.GaussianBlur(norm_mask, (5, 5), 1.2)
@@ -384,10 +391,11 @@ def run_inference(args):
     print("=" * 78)
 
     # 1. Nạp Backbone và Mô hình
-    # ĐẶT PRETRAINED=TRUE: Đảm bảo backbone ViT luôn giữ trọng số ImageNet chuẩn nếu checkpoint chỉ lưu Heads
+    # Tự động phát hiện nếu checkpoint chứa weights của backbone thì không cần bắt buộc tải lại từ Hub
+    has_custom = (args.weights is not None and os.path.isfile(args.weights))
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
-        pretrained=True,
+        pretrained=not has_custom,
         device=device,
         hf_token=getattr(args, "hf_token", None),
     )
@@ -488,6 +496,7 @@ def run_inference(args):
             open_kernel=args.open_kernel,
             split_instances=args.split_instances,
             watershed_thresh=args.watershed_thresh,
+            banner_ratio=args.banner_ratio,
             min_area=args.min_area,
             contour_thickness=args.contour_thickness,
         )
@@ -560,6 +569,7 @@ def parse_args():
     parser.add_argument("--no_split_instances", action="store_false", dest="split_instances", help="Tắt chế độ tự động tách cá thể (giữ nguyên cụm dính)")
     parser.add_argument("--watershed_thresh", type=float, default=0.55, help="Ngưỡng tìm tâm hạt giống phương tiện trên bản đồ khoảng cách (mặc định: 0.55; khoảng giá trị 0.35 - 0.75; tăng lên 0.65-0.75 để tách gắt các xe đi sát nhau)")
     parser.add_argument("--min_area", type=int, default=36, help="Diện tích tối thiểu (pixel) của mask phương tiện để lọc nhiễu (mặc định: 36)")
+    parser.add_argument("--banner_ratio", type=float, default=0.05, help="Tỷ lệ chiều cao dải timestamp trên cùng để khử nhiễu (mặc định: 0.05; đặt 0.0 để tắt hoàn toàn)")
     parser.add_argument("--contour_thickness", type=int, default=1, help="Độ dày đường viền vẽ quanh từng xe (mặc định: 1)")
     parser.add_argument("--seg_mode", type=str, default="multi", choices=["multi", "single"], help="Chế độ màu phân đoạn: 'multi' (đa sắc từng xe kiểu YOLO/Mask R-CNN) hoặc 'single' (đơn sắc)")
     parser.add_argument("--save_composite", action="store_true", default=True, help="Lưu thêm ảnh ghép so sánh trực quan đa bảng (composite)")

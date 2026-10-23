@@ -1,22 +1,35 @@
 """
 =============================================================================
-Hướng 2 Mới (Direction 2 New): Prior-Free Traffic Scene Decomposition
-Tự động phân rã cảnh giao thông không cần ảnh nền mẫu bằng SceneBasis đa chiếu sáng
-và mạng nơ-ron ước lượng độ bất định Laplace (Uncertainty-Aware Laplace Formulation)
+ Hướng 2: Physics-Consistent Traffic Scene Decomposition & Road Inpainting
+ (direction2_scene_decomposition)
 =============================================================================
 """
 
+from .models import (
+    TrafficDecompositionNet,
+    MultiScaleDecompDecoder,
+    align_prior_illumination,
+    compute_illumination_invariant_guide,
+    inpaint_spatial_features,
+)
+from .losses import (
+    DecompositionLoss,
+    SceneDecompositionLossV2,
+)
+from .dataset import DecompositionDataset
 from .scene_fit import SceneBasis, robust_weights
 from .solve_ell import solve_ell
-from .models import TrafficDecompositionNet
-from .losses import SceneDecompositionLossV2
-from .dataset import DecompositionDataset
 
 __all__ = [
+    "TrafficDecompositionNet",
+    "MultiScaleDecompDecoder",
+    "align_prior_illumination",
+    "compute_illumination_invariant_guide",
+    "inpaint_spatial_features",
+    "DecompositionLoss",
+    "SceneDecompositionLossV2",
+    "DecompositionDataset",
     "SceneBasis",
     "robust_weights",
     "solve_ell",
-    "TrafficDecompositionNet",
-    "SceneDecompositionLossV2",
-    "DecompositionDataset",
 ]

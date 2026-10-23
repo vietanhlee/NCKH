@@ -208,6 +208,8 @@ def train_decomposition(args):
         lambda_prior=getattr(args, "lambda_prior", getattr(args, "lambda_bg", 1.0)),
         lambda_shared=getattr(args, "lambda_shared", 1.0),
         lambda_excl=getattr(args, "lambda_excl", 0.5),
+        lambda_guide=getattr(args, "lambda_guide", 0.85),
+        lambda_fg=getattr(args, "lambda_fg", 0.35),
         lambda_tv=args.lambda_tv,
         lambda_sparse=args.lambda_sparse,
         lambda_bin=getattr(args, "lambda_bin", 0.05),
@@ -370,6 +372,7 @@ def train_decomposition(args):
             total_prior = 0.0
             pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
+            fixed_vis_sample = None
             for batch in pbar:
                 if "origins" in batch:
                     origins = batch["origins"].to(device)
@@ -377,9 +380,14 @@ def train_decomposition(args):
                     B, K, C, H, W = origins.shape
                     origin = origins.view(B * K, C, H, W)
                     bg = bgs.view(B * K, C, H, W)
+                    k_val = K
                 else:
                     origin = batch["origin"].to(device)
                     bg = batch["bg"].to(device)
+                    k_val = 1
+
+                if fixed_vis_sample is None:
+                    fixed_vis_sample = {k: v[:1].clone() if torch.is_tensor(v) else v for k, v in batch.items()}
 
                 pi = batch.get("pi", None)
                 if pi is not None:
@@ -391,6 +399,7 @@ def train_decomposition(args):
                     epoch=epoch,
                     warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
                     pi=pi,
+                    k_frames=k_val,
                 )
 
                 optimizer.zero_grad()
@@ -425,12 +434,12 @@ def train_decomposition(args):
 
             print(f"📊 Epoch [{epoch+1}/{args.epochs}] — LR: {cur_lr:.6e} — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
 
-            # Xuất ảnh trực quan kiểm tra
+            # Xuất ảnh trực quan kiểm tra với mô hình bọc trong raw_model.eval() để tránh rò rỉ training behavior
+            raw_model.eval()
             with torch.no_grad():
-                sample = next(iter(loader))
-                s_origin = sample["origin"][:1].to(device) if "origin" in sample else sample["origins"][:1, 0].to(device)
-                s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
-                s_preds = model(s_origin, prior=s_bg)
+                s_origin = fixed_vis_sample["origin"][:1].to(device) if "origin" in fixed_vis_sample else fixed_vis_sample["origins"][:1, 0].to(device)
+                s_bg = fixed_vis_sample["bg"][:1].to(device) if "bg" in fixed_vis_sample else fixed_vis_sample["prior_bgs"][:1, 0].to(device)
+                s_preds = raw_model(s_origin, prior=s_bg, use_prior=True)
                 s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
                 progress_path = os.path.join(args.save_dir, "decomposition_progress.png")
                 epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
@@ -446,6 +455,7 @@ def train_decomposition(args):
                     save_path=progress_path,
                     epoch=epoch + 1,
                 )
+            raw_model.train()
 
             # Metadata lưu kèm checkpoint
             extra_meta = {
@@ -576,12 +586,16 @@ def parse_args():
     parser.add_argument("--lambda_prior", "--lambda_bg", dest="lambda_prior", type=float, default=1.0, help="Trọng số giám sát nền prior (L_prior / lambda_bg)")
     parser.add_argument("--lambda_shared", type=float, default=1.0, help="Trọng số ràng buộc nền dùng chung (L_shared)")
     parser.add_argument("--lambda_excl", type=float, default=0.5, help="Trọng số loại trừ nền - tiền cảnh (L_excl)")
+    parser.add_argument("--lambda_guide", type=float, default=0.85, help="Trọng số hướng dẫn tiền cảnh cân bằng lớp (L_guide)")
+    parser.add_argument("--lambda_fg", type=float, default=0.35, help="Trọng số tách biệt tiền cảnh (L_fg)")
     parser.add_argument("--lambda_sparse", type=float, default=0.001, help="Trọng số mask sparsity (L_sparse)")
     parser.add_argument("--lambda_tv", type=float, default=0.01, help="Trọng số Total Variation (L_tv)")
     parser.add_argument("--lambda_bin", type=float, default=0.05, help="Trọng số nhị phân hóa mặt nạ (L_bin)")
     parser.add_argument("--warmup_bin_epoch", type=int, default=10, help="Epoch bắt đầu kích hoạt loss nhị phân hóa mặt nạ L_bin (mặc định: 10)")
     parser.add_argument("--group_by_camera_slot", action="store_true", default=False, help="Nhóm K-frame cùng trạm khác ngày để tính L_shared")
-    parser.add_argument("--freeze_backbone", action="store_true", default=True)
+    parser.add_argument("--k_frames", type=int, default=4, help="Số frames trong một group khi bật group_by_camera_slot")
+    parser.add_argument("--freeze_backbone", action="store_true", default=True, help="Đóng băng ViT backbone")
+    parser.add_argument("--no_freeze_backbone", dest="freeze_backbone", action="store_false", help="Mở khóa huấn luyện toàn bộ backbone")
     default_workers = 4 if sys.platform != "win32" else 0
     parser.add_argument("--num_workers", type=int, default=default_workers, help=f"Số luồng CPU nạp dữ liệu (mặc định: {default_workers})")
     parser.add_argument("--max_samples", type=int, default=None)

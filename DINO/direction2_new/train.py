@@ -18,6 +18,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ from common.gpu_utils import (
     get_cli_specified_args,
     build_smooth_lr_scheduler,
 )
+from common.logger import setup_training_logger
 from dataset import DecompositionDataset
 from models import TrafficDecompositionNet
 from losses import DecompositionLoss
@@ -94,11 +96,16 @@ def save_visual_sample(origin, bg, pred_bg, pred_fg, pred_mask, recon, save_path
 
 
 def train_decomposition(args):
-    torch.manual_seed(args.seed)
+    # Tự động kích hoạt cơ chế lưu toàn bộ log phiên huấn luyện vào file
+    setup_training_logger(
+        save_dir=args.save_dir,
+        log_file=getattr(args, "log_file", None),
+        session_title=f"HUẤN LUYỆN TÁCH LỚP SCENE DECOMPOSITION ({args.backbone})",
+    )
 
     # 0. Tiền xử lý Resume: Nạp checkpoint sớm để đồng bộ siêu tham số (Smart Hyperparameters Restoration)
     preloaded_ckpt = None
-    if args.resume:
+    if getattr(args, "resume", None):
         args.resume = resolve_checkpoint_path(args.resume)
         print(f"🔄 [Resume Preload] Đang kiểm tra checkpoint từ: {args.resume}")
         try:
@@ -113,13 +120,13 @@ def train_decomposition(args):
             if "total_epochs" in preloaded_ckpt and "epochs" not in cli_specified:
                 args.epochs = int(preloaded_ckpt["total_epochs"])
             sync_keys = [
-                "epochs", "session_epochs", "warmup_epochs",
-                "lr", "batch_size", "img_size", "backbone", "weights", "seed",
-                "lambda_prior", "lambda_bg", "lambda_shared", "lambda_excl",
-                "lambda_sparse", "lambda_tv", "lambda_bin", "freeze_backbone",
+                "epochs", "session_epochs", "warmup_epochs", "lr", "img_size", "lambda_prior", "lambda_shared", "lambda_excl",
+                "lambda_tv", "lambda_sparse", "lambda_bin", "warmup_bin_epoch",
+                "batch_size", "backbone", "weights", "match_strategy",
             ]
             smart_inherit_checkpoint_args(args, ckpt_args, sync_keys)
 
+    torch.manual_seed(args.seed)
     if "cuda" in args.device.lower() and not torch.cuda.is_available():
         print("⚠️ [Cảnh Báo] CUDA không khả dụng trên môi trường hiện tại, tự động chuyển sang CPU.")
         device = torch.device("cpu")
@@ -143,7 +150,7 @@ def train_decomposition(args):
     # 1. Khởi tạo Dataset (Tự động phát hiện pseudo_bgs nếu chưa có bg_dir)
     bg_dir_to_use = args.bg_dir
     if not os.path.exists(bg_dir_to_use):
-        pseudo_candidate = os.path.join("checkpoints", "direction2_new_scene_fit", "pseudo_bgs")
+        pseudo_candidate = os.path.join("checkpoints", "direction2_scene_fit", "pseudo_bgs")
         if os.path.exists(pseudo_candidate):
             print(f"💡 [Data] Tự động phát hiện và liên kết ảnh nền pseudo-background từ: {pseudo_candidate}")
             bg_dir_to_use = pseudo_candidate
@@ -160,11 +167,12 @@ def train_decomposition(args):
     print(f"✅ [Data] Đã nạp {len(dataset)} mẫu huấn luyện.")
 
     # 2. Khởi tạo Mô hình & Tự động cấu hình Toàn bộ GPU (Multi-GPU Engine)
+    effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
     backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.backbone,
         pretrained=True,
         device=args.device,
-        weights_path=args.weights,
+        weights_path=effective_backbone_weights,
         hf_token=args.hf_token,
     )
     base_model = TrafficDecompositionNet(
@@ -200,6 +208,8 @@ def train_decomposition(args):
         lambda_prior=getattr(args, "lambda_prior", getattr(args, "lambda_bg", 1.0)),
         lambda_shared=getattr(args, "lambda_shared", 1.0),
         lambda_excl=getattr(args, "lambda_excl", 0.5),
+        lambda_guide=getattr(args, "lambda_guide", 0.85),
+        lambda_fg=getattr(args, "lambda_fg", 0.35),
         lambda_tv=args.lambda_tv,
         lambda_sparse=args.lambda_sparse,
         lambda_bin=getattr(args, "lambda_bin", 0.05),
@@ -219,6 +229,8 @@ def train_decomposition(args):
     history = {"epochs": [], "loss": [], "loss_rec": [], "loss_prior": []}
 
     if args.resume:
+        if not os.path.exists(args.resume):
+            raise FileNotFoundError(f"Không tìm thấy file hoặc thư mục checkpoint resume: {args.resume}")
         print(f"\n🔄 [Resume] Khôi phục toàn bộ trạng thái huấn luyện từ checkpoint: {args.resume}")
         ckpt_data = preloaded_ckpt if preloaded_ckpt is not None else load_checkpoint(
             load_path=args.resume,
@@ -231,7 +243,15 @@ def train_decomposition(args):
         )
         if preloaded_ckpt is not None:
             from common.gpu_utils import smart_load_state_dict
-            model_sd = ckpt_data.get("model_state", ckpt_data.get("state_dict", ckpt_data))
+            candidate_keys = ["model_state", "state_dict", "student_state", "model", "student"]
+            model_sd = None
+            if isinstance(ckpt_data, dict):
+                for ck in candidate_keys:
+                    if ck in ckpt_data and isinstance(ckpt_data[ck], dict):
+                        model_sd = ckpt_data[ck]
+                        break
+            if model_sd is None:
+                model_sd = ckpt_data
             smart_load_state_dict(raw_model, model_sd, strict=False, verbose=True)
             if "optimizer" in ckpt_data:
                 try:
@@ -276,7 +296,7 @@ def train_decomposition(args):
             else:
                 print(f"   ⚠️ [Cảnh báo] --epochs {args.epochs} <= epoch hiện tại ({start_epoch}). Vui lòng tăng --epochs > {start_epoch} để tiếp tục train!")
 
-        # Tái lập Smooth LR Scheduler liên tục C^0 qua mọi session (triệt tiêu gradient shock)
+        # Tái lập Smooth LR Scheduler liên tục C^0 qua mọi session
         scheduler = build_smooth_lr_scheduler(
             optimizer,
             total_epochs=args.epochs,
@@ -352,6 +372,7 @@ def train_decomposition(args):
             total_prior = 0.0
             pbar = tqdm(loader, desc=f"Epoch [{epoch+1}/{args.epochs}]")
 
+            fixed_vis_sample = None
             for batch in pbar:
                 if "origins" in batch:
                     origins = batch["origins"].to(device)
@@ -359,9 +380,14 @@ def train_decomposition(args):
                     B, K, C, H, W = origins.shape
                     origin = origins.view(B * K, C, H, W)
                     bg = bgs.view(B * K, C, H, W)
+                    k_val = K
                 else:
                     origin = batch["origin"].to(device)
                     bg = batch["bg"].to(device)
+                    k_val = 1
+
+                if fixed_vis_sample is None:
+                    fixed_vis_sample = {k: v[:1].clone() if torch.is_tensor(v) else v for k, v in batch.items()}
 
                 pi = batch.get("pi", None)
                 if pi is not None:
@@ -373,6 +399,7 @@ def train_decomposition(args):
                     epoch=epoch,
                     warmup_bin_epoch=getattr(args, "warmup_bin_epoch", 10),
                     pi=pi,
+                    k_frames=k_val,
                 )
 
                 optimizer.zero_grad()
@@ -407,12 +434,12 @@ def train_decomposition(args):
 
             print(f"📊 Epoch [{epoch+1}/{args.epochs}] — LR: {cur_lr:.6e} — Loss TB: {avg_loss:.4f} (Recon: {avg_rec:.4f}, Prior: {avg_prior:.4f})")
 
-            # Xuất ảnh trực quan kiểm tra
+            # Xuất ảnh trực quan kiểm tra với mô hình bọc trong raw_model.eval() để tránh rò rỉ training behavior
+            raw_model.eval()
             with torch.no_grad():
-                sample = next(iter(loader))
-                s_origin = sample["origin"][:1].to(device) if "origin" in sample else sample["origins"][:1, 0].to(device)
-                s_bg = sample["bg"][:1].to(device) if "bg" in sample else sample["prior_bgs"][:1, 0].to(device)
-                s_preds = model(s_origin, prior=s_bg)
+                s_origin = fixed_vis_sample["origin"][:1].to(device) if "origin" in fixed_vis_sample else fixed_vis_sample["origins"][:1, 0].to(device)
+                s_bg = fixed_vis_sample["bg"][:1].to(device) if "bg" in fixed_vis_sample else fixed_vis_sample["prior_bgs"][:1, 0].to(device)
+                s_preds = raw_model(s_origin, prior=s_bg, use_prior=True)
                 s_mask = s_preds.get("alpha_mask", s_preds.get("pred_mask"))
                 progress_path = os.path.join(args.save_dir, "decomposition_progress.png")
                 epoch_vis_path = os.path.join(vis_dir, f"epoch_{epoch+1:03d}.png")
@@ -428,6 +455,7 @@ def train_decomposition(args):
                     save_path=progress_path,
                     epoch=epoch + 1,
                 )
+            raw_model.train()
 
             # Metadata lưu kèm checkpoint
             extra_meta = {
@@ -439,7 +467,7 @@ def train_decomposition(args):
                 "args": vars(args),
             }
 
-            # Lưu Checkpoint
+            # Lưu Best Checkpoint
             if avg_loss < best_loss:
                 best_loss = avg_loss
                 for b_name in ["best_decomposition_model.pth", "best_checkpoint.pth"]:
@@ -456,7 +484,7 @@ def train_decomposition(args):
                     )
 
             # Lưu Last Checkpoint mỗi epoch
-            for l_name in ["last_checkpoint.pth", "traffic_decomp_latest.pth", "direction2_latest.pth"]:
+            for l_name in ["last_checkpoint.pth", "traffic_decomp_latest.pth"]:
                 last_ckpt_path = os.path.join(args.save_dir, l_name)
                 save_checkpoint(
                     save_path=last_ckpt_path,
@@ -475,7 +503,6 @@ def train_decomposition(args):
     # Lưu metrics JSON
     metrics_path = os.path.join(args.save_dir, "training_metrics.json")
     try:
-        import json
         with open(metrics_path, "w", encoding="utf-8") as f:
             json.dump({
                 "args": vars(args),
@@ -508,7 +535,7 @@ def train_decomposition(args):
     except Exception as e_plot:
         print(f"⚠️ [Chart Warning] {e_plot}")
 
-    latest_ckpt_path = os.path.join(args.save_dir, "direction2_latest.pth")
+    latest_ckpt_path = os.path.join(args.save_dir, "traffic_decomp_latest.pth")
     best_checkpoint_path = os.path.join(args.save_dir, "best_checkpoint.pth")
     if session_target_epoch < args.epochs:
         next_session_epochs = min(args.session_epochs, args.epochs - session_target_epoch) if args.session_epochs > 0 else (args.epochs - session_target_epoch)
@@ -544,7 +571,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Huấn luyện Traffic Scene Decomposition")
     parser.add_argument("--bg_dir", type=str, default="traffic_backgrounds", help="Thư mục background")
     parser.add_argument("--origin_dir", "--data_dir", dest="origin_dir", type=str, default="output", help="Thư mục origin")
-    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_new", help="Thư mục lưu")
+    parser.add_argument("--save_dir", "--output_dir", dest="save_dir", type=str, default="checkpoints/direction2_scene_decomp", help="Thư mục lưu")
     parser.add_argument("--match_strategy", type=str, default="route_hourly")
     parser.add_argument("--backbone", "--model_name", dest="backbone", type=str, default="dinov3_vits16")
     parser.add_argument("--weights", type=str, default=None, help="Đường dẫn file trọng số khởi tạo ban đầu")
@@ -559,17 +586,23 @@ def parse_args():
     parser.add_argument("--lambda_prior", "--lambda_bg", dest="lambda_prior", type=float, default=1.0, help="Trọng số giám sát nền prior (L_prior / lambda_bg)")
     parser.add_argument("--lambda_shared", type=float, default=1.0, help="Trọng số ràng buộc nền dùng chung (L_shared)")
     parser.add_argument("--lambda_excl", type=float, default=0.5, help="Trọng số loại trừ nền - tiền cảnh (L_excl)")
+    parser.add_argument("--lambda_guide", type=float, default=0.85, help="Trọng số hướng dẫn tiền cảnh cân bằng lớp (L_guide)")
+    parser.add_argument("--lambda_fg", type=float, default=0.35, help="Trọng số tách biệt tiền cảnh (L_fg)")
     parser.add_argument("--lambda_sparse", type=float, default=0.001, help="Trọng số mask sparsity (L_sparse)")
     parser.add_argument("--lambda_tv", type=float, default=0.01, help="Trọng số Total Variation (L_tv)")
     parser.add_argument("--lambda_bin", type=float, default=0.05, help="Trọng số nhị phân hóa mặt nạ (L_bin)")
+    parser.add_argument("--warmup_bin_epoch", type=int, default=10, help="Epoch bắt đầu kích hoạt loss nhị phân hóa mặt nạ L_bin (mặc định: 10)")
     parser.add_argument("--group_by_camera_slot", action="store_true", default=False, help="Nhóm K-frame cùng trạm khác ngày để tính L_shared")
-    parser.add_argument("--freeze_backbone", action="store_true", default=True)
+    parser.add_argument("--k_frames", type=int, default=4, help="Số frames trong một group khi bật group_by_camera_slot")
+    parser.add_argument("--freeze_backbone", action="store_true", default=True, help="Đóng băng ViT backbone")
+    parser.add_argument("--no_freeze_backbone", dest="freeze_backbone", action="store_false", help="Mở khóa huấn luyện toàn bộ backbone")
     default_workers = 4 if sys.platform != "win32" else 0
     parser.add_argument("--num_workers", type=int, default=default_workers, help=f"Số luồng CPU nạp dữ liệu (mặc định: {default_workers})")
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--hf_token", type=str, default=None, help="Hugging Face user access token cho các mô hình có quyền truy cập đóng (Meta DINOv3)")
+    parser.add_argument("--log_file", type=str, default=None, help="Tên hoặc đường dẫn file log ghi lại toàn bộ output (mặc định: train.log trong --save_dir)")
     parsed, unknown = parser.parse_known_args()
     if unknown:
         print(f"⚠️ [CLI Warning] Bỏ qua các đối số chưa khai báo: {unknown}")
