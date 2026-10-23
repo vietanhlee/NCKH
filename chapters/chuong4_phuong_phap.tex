@@ -27,7 +27,7 @@ Mô hình tổng thể được tổ chức thành hai giai đoạn phân tách 
 \subsection{Mạng xương sống và trích xuất đặc trưng}
 Mô hình tiếp nhận ảnh tĩnh đầu vào $\mathbf{I} \in \mathbb{R}^{3 \times 224 \times 224}$ đã được chuẩn hóa theo kỳ vọng và độ lệch chuẩn của tập dữ liệu ImageNet. 
 
-Nghiên cứu lựa chọn kiến trúc \textbf{EfficientNet-B5} làm mạng xương sống chính thức (dựa trên kết quả tối ưu hóa đa mục tiêu về độ chính xác và lượng tính toán FLOPs được chứng minh tại Chương 5). EfficientNet-B5 bao gồm 7 cụm khối tích chập MBConv kết hợp cơ chế chú ý kênh Squeeze-and-Excitation (SE). Đầu ra của tầng tích chập cuối cùng là tensor đặc trưng bậc 3:
+Nghiên cứu lựa chọn kiến trúc \textbf{EfficientNet-B5} \cite{efficientnet} làm mạng xương sống chính thức (dựa trên kết quả tối ưu hóa đa mục tiêu về độ chính xác và lượng tính toán FLOPs được chứng minh tại Chương 5). EfficientNet-B5 bao gồm 7 cụm khối tích chập MBConv kết hợp cơ chế chú ý kênh Squeeze-and-Excitation (SE). Đầu ra của tầng tích chập cuối cùng là tensor đặc trưng bậc 3:
 \begin{equation}
     \mathbf{F}_{\text{conv}} \in \mathbb{R}^{2048 \times 7 \times 7}
 \end{equation}
@@ -52,7 +52,7 @@ trong đó $\hat{\mathbf{c}} = [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \
 \end{itemize}
 
 \subsection{Hàm mất mát Smooth L1 (Huber Loss)}
-Để huấn luyện mô hình Giai đoạn 1 có khả năng chống chịu bền bỉ trước các ảnh bị lóa sáng hoặc che khuất đột ngột, hàm mất mát Huber Loss ($\delta = 1.0$) được áp dụng cho từng phân lớp:
+Để huấn luyện mô hình Giai đoạn 1 có khả năng chống chịu bền bỉ trước các ảnh bị lóa sáng hoặc che khuất đột ngột, hàm mất mát Huber Loss \cite{huber} ($\delta = 1.0$) được áp dụng cho từng phân lớp:
 \begin{align}
     e_{\text{car}} &= c_{\text{car}} - \hat{c}_{\text{car}} \\
     e_{\text{bike}} &= c_{\text{bike}} - \hat{c}_{\text{bike}}
@@ -101,7 +101,7 @@ Khối ST-Conv được thiết kế theo cấu trúc sandwich gồm ba tầng t
     \begin{equation}
         \mathbf{H}_1 = (\mathbf{X} \star \boldsymbol{\Theta}_{1,1} + \mathbf{b}_{1,1}) \odot \sigma(\mathbf{X} \star \boldsymbol{\Theta}_{1,2} + \mathbf{b}_{1,2}) \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}
     \end{equation}
-    \item \textbf{Tầng tích chập không gian ChebNet:} Áp dụng đa thức Chebyshev bậc $K = 3$ trên ma trận Laplacian $\tilde{\mathbf{L}}$ của đồ thị OpenStreetMap:
+    \item \textbf{Tầng tích chập không gian ChebNet:} Áp dụng đa thức Chebyshev bậc $K = 3$ \cite{chebnet} trên ma trận Laplacian $\tilde{\mathbf{L}}$ của đồ thị OpenStreetMap:
     \begin{equation}
         \mathbf{H}_2 = \text{ReLU}\left( \sum_{k=0}^{K-1} T_k(\tilde{\mathbf{L}}) \mathbf{H}_1 \boldsymbol{\Theta}_k^{\text{spatial}} \right) \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}
     \end{equation}
@@ -124,7 +124,7 @@ Gọi đầu ra sau khối ST-Conv thứ nhất là $\mathbf{H}^{(1)} \in \mathb
 \begin{equation}
     \mathbf{Z} = \text{Reshape}(\text{Permute}(\mathbf{H}^{(1)}, [0, 2, 3, 1])) \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times C}
 \end{equation}
-Mỗi nút trong batch được xem như một chuỗi độc lập có độ dài $T_{\text{in}} = 24$. Áp dụng cơ chế Multi-Head Attention với $h = 4$ đầu (chiều mỗi đầu $d_k = C/h = 20$):
+Mỗi nút trong batch được xem như một chuỗi độc lập có độ dài $T_{\text{in}} = 24$. Áp dụng cơ chế Multi-Head Attention \cite{attention} với $h = 4$ đầu (chiều mỗi đầu $d_k = C/h = 20$):
 \begin{align}
     \mathbf{Q}_i &= \mathbf{Z} \mathbf{W}_i^Q \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \\
     \mathbf{K}_i &= \mathbf{Z} \mathbf{W}_i^K \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \\
@@ -174,7 +174,7 @@ Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy tr
     \begin{itemize}
         \item Lấy batch ảnh $B=32$, áp dụng tăng cường dữ liệu bảo toàn nhãn.
         \item Tính dự đoán $\hat{\mathbf{c}} = f_\theta(I)$ và tính hàm mất mát Huber Loss $\mathcal{L}_{\text{Stage 1}}$.
-        \item Cập nhật trọng số bằng thuật toán tối ưu AdamW kết hợp Cosine Annealing.
+        \item Cập nhật trọng số bằng thuật toán tối ưu AdamW \cite{adam} kết hợp Cosine Annealing.
     \end{itemize}
     \item Lưu trọng số tối ưu $\theta^*$ theo sai số MAE nhỏ nhất trên tập Validation.
 \end{enumerate}
@@ -193,7 +193,7 @@ Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy tr
     \begin{itemize}
         \item Lấy batch chuỗi thời gian $B=64$, cửa sổ $T_{\text{in}}=24$, mục tiêu $H=6$.
         \item Lan truyền xuôi qua ST-Conv 1 $\to$ Temporal Attention $\to$ ST-Conv 2 $\to$ Conv1D Output.
-        \item Tính hàm mất mát Huber Loss $\mathcal{L}_{\text{Stage 2}}$ và cập nhật trọng số bằng Adam.
+        \item Tính hàm mất mát Huber Loss $\mathcal{L}_{\text{Stage 2}}$ và cập nhật trọng số bằng thuật toán Adam \cite{adam}.
         \item Điều chỉnh tốc độ học theo cơ chế ReduceLROnPlateau.
     \end{itemize}
     \item Dừng sớm sau 20 epoch nếu Validation MAE không cải thiện. Lưu trọng số tối ưu $\Phi^*$.

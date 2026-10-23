@@ -2049,8 +2049,11 @@ def train_direction_g():
                     if (~is_day).any():
                         epoch_pi_night.extend(pi_gt05[~is_day].tolist())
 
-                    epoch_srs_applied.append(float(srs_stats.get("applied", 0.0)))
-                    epoch_srs_swap_frac.append(float(srs_stats.get("swap_frac", 0.0)))
+                    app_val = srs_stats.get("applied_rate", srs_stats.get("applied", 0.0))
+                    epoch_srs_applied.append(float(app_val.float().mean().item()) if isinstance(app_val, torch.Tensor) else float(app_val))
+
+                    frac_val = srs_stats.get("swap_frac_mean", srs_stats.get("swap_frac", 0.0))
+                    epoch_srs_swap_frac.append(float(frac_val.float().mean().item()) if isinstance(frac_val, torch.Tensor) else float(frac_val))
 
                     epoch_patch_std.append(float(s_patches.std(dim=-1).mean().item()))
                     if args.use_anchor and 'v_patch_tokens_anchor' in locals():
@@ -2058,7 +2061,8 @@ def train_direction_g():
                         epoch_cos_dino.append(float(cos_d))
 
                     if args.use_cam_adv:
-                        pred_cids = cam_adv_head.classifier(s_cls).argmax(dim=-1)
+                        cam_clf = getattr(cam_adv_head, "classifier", getattr(cam_adv_head, "net", None))
+                        pred_cids = cam_clf(s_cls).argmax(dim=-1)
                         acc = (pred_cids == cids).float().mean().item()
                         epoch_cam_acc.append(float(acc))
 

@@ -62,7 +62,7 @@ Bảng \ref{tab:stage1_benchmark_full_chap5} trình bày kết quả đánh giá
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
-\textbf{Chỉ số đánh giá} & \textbf{EfficientNet-B5} & \textbf{ResNet-50} & \textbf{MobileNetV3-Large} & \textbf{ViT-Base/16} & \textbf{ConvNeXt-Tiny} \\
+\textbf{Chỉ số đánh giá} & \textbf{EfficientNet-B5 \cite{efficientnet}} & \textbf{ResNet-50 \cite{resnet}} & \textbf{MobileNetV3 \cite{mobilenet}} & \textbf{ViT-Base \cite{vit}} & \textbf{ConvNeXt \cite{convnext}} \\
 \midrule
 Số tham số (Params) & 28.3M & 23.5M & \textbf{4.2M} & 85.8M & 27.8M \\
 Độ phức tạp FLOPs & 75.3 GFLOPs & 132.2 GFLOPs & \textbf{6.9 GFLOPs} & 539.1 GFLOPs & 142.6 GFLOPs \\
@@ -165,14 +165,14 @@ Bảng \ref{tab:stage2_benchmark_chap5} trình bày hiệu năng dự báo dòng
 \toprule
 \textbf{Kiến trúc mô hình} & \textbf{Số tham số} & \textbf{MAE Tổng} & \textbf{MAPE (\%)} & \textbf{RMSE} & \textbf{MAE ($t+1$)} & \textbf{MAE ($t+3$)} & \textbf{MAE ($t+6$)} \\
 \midrule
-STGCN Baseline & 375K & $3.2703 \pm 0.0128$ & $11.44\% \pm 0.08\%$ & $4.4245 \pm 0.0194$ & $2.8430 \pm 0.0141$ & $3.2787 \pm 0.0117$ & $3.5350 \pm 0.0250$ \\
-STGCN (Large) & 487K & $3.2805 \pm 0.0134$ & $11.53\% \pm 0.11\%$ & $4.4354 \pm 0.0156$ & $2.8498 \pm 0.0140$ & $3.2861 \pm 0.0162$ & $3.5497 \pm 0.0311$ \\
-Graph WaveNet & 549K & $3.2776 \pm 0.0049$ & $11.43\% \pm 0.03\%$ & $4.4486 \pm 0.0087$ & $\mathbf{2.8142 \pm 0.0088}$ & $3.2727 \pm 0.0048$ & $3.5800 \pm 0.0033$ \\
-ASTGCN & 1.533K & $3.4218 \pm 0.0115$ & $11.78\% \pm 0.08\%$ & $4.6509 \pm 0.0101$ & $2.9876 \pm 0.0262$ & $3.4296 \pm 0.0145$ & $3.6984 \pm 0.0104$ \\
-STAEformer & 568K & $3.2953 \pm 0.0184$ & $11.51\% \pm 0.12\%$ & $4.4555 \pm 0.0192$ & $2.8324 \pm 0.0237$ & $3.2924 \pm 0.0206$ & $3.5937 \pm 0.0275$ \\
-MegaCRN & 527K & $3.3433 \pm 0.0107$ & $11.55\% \pm 0.09\%$ & $4.5580 \pm 0.0182$ & $2.8436 \pm 0.0048$ & $3.3434 \pm 0.0111$ & $3.6660 \pm 0.0160$ \\
-DSTAGNN & 911K & $3.3457 \pm 0.0169$ & $11.69\% \pm 0.08\%$ & $4.5499 \pm 0.0185$ & $2.8447 \pm 0.0162$ & $3.3373 \pm 0.0179$ & $3.6729 \pm 0.0189$ \\
-iTransformer & \textbf{150K} & $3.3720 \pm 0.0143$ & $11.65\% \pm 0.08\%$ & $4.5832 \pm 0.0216$ & $2.8613 \pm 0.0153$ & $3.3613 \pm 0.0163$ & $3.7205 \pm 0.0154$ \\
+STGCN Baseline \cite{stgcn} & 375K & $3.2703 \pm 0.0128$ & $11.44\% \pm 0.08\%$ & $4.4245 \pm 0.0194$ & $2.8430 \pm 0.0141$ & $3.2787 \pm 0.0117$ & $3.5350 \pm 0.0250$ \\
+STGCN (Large) \cite{stgcn} & 487K & $3.2805 \pm 0.0134$ & $11.53\% \pm 0.11\%$ & $4.4354 \pm 0.0156$ & $2.8498 \pm 0.0140$ & $3.2861 \pm 0.0162$ & $3.5497 \pm 0.0311$ \\
+Graph WaveNet \cite{wavenet} & 549K & $3.2776 \pm 0.0049$ & $11.43\% \pm 0.03\%$ & $4.4486 \pm 0.0087$ & $\mathbf{2.8142 \pm 0.0088}$ & $3.2727 \pm 0.0048$ & $3.5800 \pm 0.0033$ \\
+ASTGCN \cite{astgcn} & 1.533K & $3.4218 \pm 0.0115$ & $11.78\% \pm 0.08\%$ & $4.6509 \pm 0.0101$ & $2.9876 \pm 0.0262$ & $3.4296 \pm 0.0145$ & $3.6984 \pm 0.0104$ \\
+STAEformer \cite{staeformer} & 568K & $3.2953 \pm 0.0184$ & $11.51\% \pm 0.12\%$ & $4.4555 \pm 0.0192$ & $2.8324 \pm 0.0237$ & $3.2924 \pm 0.0206$ & $3.5937 \pm 0.0275$ \\
+MegaCRN \cite{megacrn} & 527K & $3.3433 \pm 0.0107$ & $11.55\% \pm 0.09\%$ & $4.5580 \pm 0.0182$ & $2.8436 \pm 0.0048$ & $3.3434 \pm 0.0111$ & $3.6660 \pm 0.0160$ \\
+DSTAGNN \cite{dstagnn} & 911K & $3.3457 \pm 0.0169$ & $11.69\% \pm 0.08\%$ & $4.5499 \pm 0.0185$ & $2.8447 \pm 0.0162$ & $3.3373 \pm 0.0179$ & $3.6729 \pm 0.0189$ \\
+iTransformer \cite{itransformer} & \textbf{150K} & $3.3720 \pm 0.0143$ & $11.65\% \pm 0.08\%$ & $4.5832 \pm 0.0216$ & $2.8613 \pm 0.0153$ & $3.3613 \pm 0.0163$ & $3.7205 \pm 0.0154$ \\
 \midrule
 \textbf{TA-STGCN (Đề xuất)} & 453K & $\mathbf{3.2401 \pm 0.0108}$ & $\mathbf{11.32\% \pm 0.04\%}$ & $\mathbf{4.3920 \pm 0.0140}$ & $2.8346 \pm 0.0090$ & $\mathbf{3.2430 \pm 0.0106}$ & $\mathbf{3.4947 \pm 0.0153}$ \\
 \bottomrule
@@ -197,7 +197,7 @@ iTransformer & \textbf{150K} & $3.3720 \pm 0.0143$ & $11.65\% \pm 0.08\%$ & $4.5
 \textbf{Phân tích kết quả thực nghiệm Giai đoạn 2:}
 \begin{enumerate}
     \item \textbf{Độ chính xác trên dữ liệu sạch:} Trên dữ liệu không bị can thiệp nhiễu, TA-STGCN đạt sai số thấp nhất ($\text{MAE} = 3.2401 \pm 0.0108, \text{MAPE} = 11.32\%$), chỉ nhỉnh hơn STGCN gốc ($3.2703$) và Graph WaveNet ($3.2776$) khoảng $\sim 0.9\%$. Kích thước hiệu ứng Cohen's $d$ ở mức rất nhỏ ($d = -0.032$). Báo cáo ghi nhận khách quan rằng: \textbf{Dưới điều kiện dữ liệu sạch, các mô hình đồ thị đạt độ chính xác gần như tương đương nhau và không có sự chênh lệch lớn về sai số tuyệt đối.}
-    \item \textbf{Kiểm soát sai số dài hạn ($t+6$):} Khi xét ở tầm nhìn dự báo xa 30 phút ($t+6$), sự khác biệt kiến trúc bắt đầu thể hiện rõ. Hình \ref{fig:error_growth_chap5} cho thấy Graph WaveNet và STGCN có độ dốc tăng sai số lớn hơn (MAE lên $3.5800$ và $3.5350$), trong khi TA-STGCN duy trì đường cong thoải hơn (MAE đạt $3.4947$). Cơ chế Temporal Self-Attention giúp mô hình bao quát toàn bộ 120 phút lịch sử, hạn chế sự trôi dạt của các bộ lọc tích chập thời gian cục bộ.
+    \item \textbf{Kiểm soát sai số dài hạn ($t+6$):} Khi xét ở tầm nhìn dự báo xa 30 phút ($t+6$), sự khác biệt kiến trúc bắt đầu thể hiện rõ. Hình \ref{fig:error_growth_chap5} cho thấy Graph WaveNet \cite{wavenet} và STGCN \cite{stgcn} có độ dốc tăng sai số lớn hơn (MAE lên $3.5800$ và $3.5350$), trong khi TA-STGCN duy trì đường cong thoải hơn (MAE đạt $3.4947$). Cơ chế Temporal Self-Attention giúp mô hình bao quát toàn bộ 120 phút lịch sử, hạn chế sự trôi dạt của các bộ lọc tích chập thời gian cục bộ.
     \item \textbf{Kiểm chứng dung lượng tham số:} Khi mở rộng dung lượng của STGCN gốc lên 487K tham số (STGCN Large, cao hơn mức 453K của TA-STGCN), sai số không giảm mà tăng nhẹ lên $3.2805$. Điều này chứng minh ưu thế của TA-STGCN bắt nguồn từ cơ chế chú ý thời gian chứ không phải do việc tăng dung lượng tham số thuần túy.
 \end{enumerate}
 
@@ -221,15 +221,15 @@ Bảng \ref{tab:stage2_density_chap5} phân tích chi tiết sai số dự báo 
  & Độ chệch Ô tô & $-0.11 \pm 0.02$ & $+0.01 \pm 0.01$ & $\mathbf{-0.01 \pm 0.02}$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.01$ & $+0.01 \pm 0.02$ & $\mathbf{-0.03 \pm 0.06}$ \\
 \midrule
-\multirow{3}{*}{STGCN Baseline} & MAE Tổng thể & $\mathbf{0.9696 \pm 0.0068}$ & $2.0126 \pm 0.0064$ & $3.5170 \pm 0.0136$ \\
+\multirow{3}{*}{STGCN Baseline \cite{stgcn}} & MAE Tổng thể & $\mathbf{0.9696 \pm 0.0068}$ & $2.0126 \pm 0.0064$ & $3.5170 \pm 0.0136$ \\
  & Độ chệch Ô tô & $-0.09 \pm 0.02$ & $+0.05 \pm 0.05$ & $+0.11 \pm 0.11$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.05$ & $+0.04 \pm 0.07$ & $+0.08 \pm 0.14$ \\
 \midrule
-\multirow{3}{*}{Graph WaveNet} & MAE Tổng thể & $0.9997 \pm 0.0098$ & $2.0263 \pm 0.0100$ & $3.5212 \pm 0.0051$ \\
+\multirow{3}{*}{Graph WaveNet \cite{wavenet}} & MAE Tổng thể & $0.9997 \pm 0.0098$ & $2.0263 \pm 0.0100$ & $3.5212 \pm 0.0051$ \\
  & Độ chệch Ô tô & $-0.08 \pm 0.02$ & $+0.03 \pm 0.03$ & $-0.02 \pm 0.07$ \\
  & Độ chệch Xe máy & $-0.07 \pm 0.03$ & $-0.04 \pm 0.06$ & $-0.01 \pm 0.12$ \\
 \midrule
-\multirow{3}{*}{STAEformer} & MAE Tổng thể & $0.9749 \pm 0.0113$ & $2.0092 \pm 0.0165$ & $3.5461 \pm 0.0207$ \\
+\multirow{3}{*}{STAEformer \cite{staeformer}} & MAE Tổng thể & $0.9749 \pm 0.0113$ & $2.0092 \pm 0.0165$ & $3.5461 \pm 0.0207$ \\
  & Độ chệch Ô tô & $-0.09 \pm 0.03$ & $+0.02 \pm 0.05$ & $-0.01 \pm 0.07$ \\
  & Độ chệch Xe máy & $-0.05 \pm 0.04$ & $+0.11 \pm 0.10$ & $+0.25 \pm 0.32$ \\
 \bottomrule
@@ -270,13 +270,13 @@ Bảng \ref{tab:bang_suy_thoai_nhieu_chap5} và Bảng \ref{tab:cohens_d_chap5} 
 \toprule
 \textbf{Kiến trúc mô hình} & \textbf{Mức 1 (3.49)} & \textbf{Mức 2 (4.64)} & \textbf{Mức 3 (10.25)} & \textbf{Mức 4 (13.95)} \\
 \midrule
-STGCN Baseline & $5.3093 \pm 0.1161$ & $6.6614 \pm 0.1532$ & $12.0733 \pm 0.3396$ & $13.1724 \pm 0.3515$ \\
-Graph WaveNet & $5.7470 \pm 0.1056$ & $7.2378 \pm 0.1324$ & $13.2723 \pm 0.3303$ & $15.1046 \pm 0.4398$ \\
-ASTGCN & $5.7709 \pm 0.1521$ & $6.9956 \pm 0.2346$ & $11.8790 \pm 0.5428$ & $13.4685 \pm 0.7556$ \\
-STAEformer & $\mathbf{5.2238 \pm 0.2964}$ & $6.4260 \pm 0.5436$ & $10.5916 \pm 1.3943$ & $10.8454 \pm 1.2209$ \\
-MegaCRN & $5.9061 \pm 0.1227$ & $7.3144 \pm 0.1412$ & $13.1555 \pm 0.5314$ & $15.1106 \pm 0.8717$ \\
-DSTAGNN & $6.2166 \pm 0.0514$ & $7.8276 \pm 0.2608$ & $12.5753 \pm 0.6823$ & $13.3705 \pm 0.8442$ \\
-iTransformer & $5.7070 \pm 0.0999$ & $6.9084 \pm 0.1786$ & $10.3254 \pm 0.7281$ & $10.8422 \pm 0.9367$ \\
+STGCN Baseline \cite{stgcn} & $5.3093 \pm 0.1161$ & $6.6614 \pm 0.1532$ & $12.0733 \pm 0.3396$ & $13.1724 \pm 0.3515$ \\
+Graph WaveNet \cite{wavenet} & $5.7470 \pm 0.1056$ & $7.2378 \pm 0.1324$ & $13.2723 \pm 0.3303$ & $15.1046 \pm 0.4398$ \\
+ASTGCN \cite{astgcn} & $5.7709 \pm 0.1521$ & $6.9956 \pm 0.2346$ & $11.8790 \pm 0.5428$ & $13.4685 \pm 0.7556$ \\
+STAEformer \cite{staeformer} & $\mathbf{5.2238 \pm 0.2964}$ & $6.4260 \pm 0.5436$ & $10.5916 \pm 1.3943$ & $10.8454 \pm 1.2209$ \\
+MegaCRN \cite{megacrn} & $5.9061 \pm 0.1227$ & $7.3144 \pm 0.1412$ & $13.1555 \pm 0.5314$ & $15.1106 \pm 0.8717$ \\
+DSTAGNN \cite{dstagnn} & $6.2166 \pm 0.0514$ & $7.8276 \pm 0.2608$ & $12.5753 \pm 0.6823$ & $13.3705 \pm 0.8442$ \\
+iTransformer \cite{itransformer} & $5.7070 \pm 0.0999$ & $6.9084 \pm 0.1786$ & $10.3254 \pm 0.7281$ & $10.8422 \pm 0.9367$ \\
 \midrule
 \textbf{TA-STGCN (Đề xuất)} & $5.2401 \pm 0.1000$ & $\mathbf{6.3120 \pm 0.1932}$ & $\mathbf{9.6381 \pm 0.8461}$ & $\mathbf{10.1532 \pm 1.1153}$ \\
 \bottomrule
@@ -294,13 +294,13 @@ iTransformer & $5.7070 \pm 0.0999$ & $6.9084 \pm 0.1786$ & $10.3254 \pm 0.7281$ 
 \toprule
 \textbf{Kiến trúc đối chứng} & \textbf{Mức 2 (Nhiễu trung bình: 4.64)} & \textbf{Mức 4 (Nhiễu cực hạn: 13.95)} \\
 \midrule
-STGCN Baseline & $+2.004$ & $+3.651$ \\
-Graph WaveNet & $+5.590$ & $+5.841$ \\
-ASTGCN & $+3.181$ & $+3.480$ \\
-STAEformer & $+0.279$ & $+0.592$ \\
-MegaCRN & $+5.924$ & $+4.953$ \\
-DSTAGNN & $+6.604$ & $+3.253$ \\
-iTransformer & $+3.206$ & $+0.669$ \\
+STGCN Baseline \cite{stgcn} & $+2.004$ & $+3.651$ \\
+Graph WaveNet \cite{wavenet} & $+5.590$ & $+5.841$ \\
+ASTGCN \cite{astgcn} & $+3.181$ & $+3.480$ \\
+STAEformer \cite{staeformer} & $+0.279$ & $+0.592$ \\
+MegaCRN \cite{megacrn} & $+5.924$ & $+4.953$ \\
+DSTAGNN \cite{dstagnn} & $+6.604$ & $+3.253$ \\
+iTransformer \cite{itransformer} & $+3.206$ & $+0.669$ \\
 \bottomrule
 \end{tabular}%
 }
@@ -308,9 +308,9 @@ iTransformer & $+3.206$ & $+0.669$ \\
 
 \textbf{Luận điểm khoa học rút ra từ thực nghiệm nhiễu:}
 \begin{enumerate}
-    \item \textbf{Sự phân hóa rõ rệt thành hai nhóm kiến trúc:} Dưới mức nhiễu cực hạn (Mức 4), các mô hình thuần tích chập hoặc hồi quy không có cơ chế chú ý (Graph WaveNet, MegaCRN, STGCN) bị tăng sai số nhanh chóng (MAE lên tới $13.17 - 15.11$, Cohen's $d$ chênh lệch từ $+3.65$ đến $+5.84$). Ngược lại, nhóm có cơ chế chú ý thời gian (TA-STGCN, STAEformer, iTransformer) kiểm soát mức tăng sai số tốt hơn nhiều (MAE duy trì ở mức $10.15 - 10.84$).
-    \item \textbf{Vai trò của thứ tự chú ý (Temporal-First so với Spatial-First):} ASTGCN có cơ chế Attention nhưng tính toán chú ý không gian trước, thời gian sau. Khi gặp nhiễu cảm biến, ma trận chú ý không gian bị ảnh hưởng bởi các giá trị nhiễu cục bộ và truyền sai số sang các nút lân cận. Trong khi đó, TA-STGCN tính toán chú ý thời gian trước, giúp làm mượt và lọc nhiễu trên từng nút trước khi lan truyền không gian, ngăn chặn hiệu quả sự phát tán sai số.
-    \item \textbf{Tính kinh tế của TA-STGCN:} TA-STGCN đạt độ bền vững tương đương mô hình Transformer lớn (STAEformer) nhưng chỉ sử dụng 453K tham số và tiết kiệm $25.2\%$ bộ nhớ GPU.
+    \item \textbf{Sự phân hóa rõ rệt thành hai nhóm kiến trúc:} Dưới mức nhiễu cực hạn (Mức 4), các mô hình thuần tích chập hoặc hồi quy không có cơ chế chú ý (Graph WaveNet \cite{wavenet}, MegaCRN \cite{megacrn}, STGCN \cite{stgcn}) bị tăng sai số nhanh chóng (MAE lên tới $13.17 - 15.11$, Cohen's $d$ chênh lệch từ $+3.65$ đến $+5.84$). Ngược lại, nhóm có cơ chế chú ý thời gian (TA-STGCN, STAEformer \cite{staeformer}, iTransformer \cite{itransformer}) kiểm soát mức tăng sai số tốt hơn nhiều (MAE duy trì ở mức $10.15 - 10.84$).
+    \item \textbf{Vai trò của thứ tự chú ý (Temporal-First so với Spatial-First):} ASTGCN \cite{astgcn} có cơ chế Attention nhưng tính toán chú ý không gian trước, thời gian sau. Khi gặp nhiễu cảm biến, ma trận chú ý không gian bị ảnh hưởng bởi các giá trị nhiễu cục bộ và truyền sai số sang các nút lân cận. Trong khi đó, TA-STGCN tính toán chú ý thời gian trước, giúp làm mượt và lọc nhiễu trên từng nút trước khi lan truyền không gian, ngăn chặn hiệu quả sự phát tán sai số.
+    \item \textbf{Tính kinh tế của TA-STGCN:} TA-STGCN đạt độ bền vững tương đương mô hình Transformer lớn (STAEformer \cite{staeformer}) nhưng chỉ sử dụng 453K tham số và tiết kiệm $25.2\%$ bộ nhớ GPU.
 \end{enumerate}
 
 % ==============================================================================
@@ -401,13 +401,13 @@ TA-STGCN (Attention ở cuối) & 453K & 8.962 MB & $3.2680 \pm 0.0099$ & $1.209
 \toprule
 \textbf{Kiến trúc} & \textbf{$t+1$ (5m)} & \textbf{$t+2$ (10m)} & \textbf{$t+3$ (15m)} & \textbf{$t+4$ (20m)} & \textbf{$t+5$ (25m)} & \textbf{$t+6$ (30m)} & \textbf{$\Delta_{6 - 1}$} \\
 \midrule
-STGCN Baseline & 2.802 & 3.018 & 3.224 & 3.415 & 3.592 & 3.758 & +0.956 \\
-Graph WaveNet & 2.765 & 2.975 & 3.180 & 3.376 & 3.560 & 3.735 & +0.970 \\
-ASTGCN & 2.825 & 3.040 & 3.250 & 3.442 & 3.621 & 3.792 & +0.967 \\
-MegaCRN & 2.790 & 3.002 & 3.205 & 3.398 & 3.578 & 3.748 & +0.958 \\
-DSTAGNN & 2.810 & 3.025 & 3.235 & 3.428 & 3.605 & 3.770 & +0.960 \\
-STAEformer & \textbf{2.750} & \textbf{2.962} & \textbf{3.172} & 3.365 & 3.548 & 3.715 & +0.965 \\
-iTransformer & 2.840 & 3.065 & 3.280 & 3.475 & 3.658 & 3.825 & +0.985 \\
+STGCN Baseline \cite{stgcn} & 2.802 & 3.018 & 3.224 & 3.415 & 3.592 & 3.758 & +0.956 \\
+Graph WaveNet \cite{wavenet} & 2.765 & 2.975 & 3.180 & 3.376 & 3.560 & 3.735 & +0.970 \\
+ASTGCN \cite{astgcn} & 2.825 & 3.040 & 3.250 & 3.442 & 3.621 & 3.792 & +0.967 \\
+MegaCRN \cite{megacrn} & 2.790 & 3.002 & 3.205 & 3.398 & 3.578 & 3.748 & +0.958 \\
+DSTAGNN \cite{dstagnn} & 2.810 & 3.025 & 3.235 & 3.428 & 3.605 & 3.770 & +0.960 \\
+STAEformer \cite{staeformer} & \textbf{2.750} & \textbf{2.962} & \textbf{3.172} & 3.365 & 3.548 & 3.715 & +0.965 \\
+iTransformer \cite{itransformer} & 2.840 & 3.065 & 3.280 & 3.475 & 3.658 & 3.825 & +0.985 \\
 \midrule
 \textbf{TA-STGCN (Đề xuất)} & 2.781 & 2.990 & 3.195 & \textbf{3.360} & \textbf{3.535} & \textbf{3.712} & \textbf{+0.931} \\
 \bottomrule
@@ -417,9 +417,9 @@ iTransformer & 2.840 & 3.065 & 3.280 & 3.475 & 3.658 & 3.825 & +0.985 \\
 
 \textbf{Quy luật động học rút ra từ Bảng \ref{tab:horizon_breakdown_chap5}:}
 \begin{enumerate}
-    \item \textbf{Ở các bước ngắn hạn ($t+1, t+2$):} Mô hình STAEformer nhỉnh hơn nhẹ ($\text{MAE}_{t+1} = 2.750$ so với $2.781$ của TA-STGCN) nhờ cơ chế chú ý toàn phần nắm bắt nhanh các tương quan ngắn hạn.
-    \item \textbf{Ở các bước dài hạn ($t+4, t+5, t+6$):} TA-STGCN vươn lên với $\text{MAE}_{t+6} = 3.712$, thấp hơn cả STAEformer ($3.715$), Graph WaveNet ($3.735$) và iTransformer ($3.825$).
-    \item \textbf{Tốc độ tích lũy sai số thấp nhất ($\Delta_{6-1} = +0.931$):} Độ tăng sai số của TA-STGCN thấp nhất trong toàn bộ 8 mô hình (thấp hơn STGCN $+0.956$, Graph WaveNet $+0.970$ và iTransformer $+0.985$). Kết quả này khẳng định việc kết hợp cơ chế chú ý thời gian đa đầu giúp kìm hãm sự tăng nhanh của sai số khi dự báo dài hạn.
+    \item \textbf{Ở các bước ngắn hạn ($t+1, t+2$):} Mô hình STAEformer \cite{staeformer} nhỉnh hơn nhẹ ($\text{MAE}_{t+1} = 2.750$ so với $2.781$ của TA-STGCN) nhờ cơ chế chú ý toàn phần nắm bắt nhanh các tương quan ngắn hạn.
+    \item \textbf{Ở các bước dài hạn ($t+4, t+5, t+6$):} TA-STGCN vươn lên với $\text{MAE}_{t+6} = 3.712$, thấp hơn cả STAEformer \cite{staeformer} ($3.715$), Graph WaveNet \cite{wavenet} ($3.735$) và iTransformer \cite{itransformer} ($3.825$).
+    \item \textbf{Tốc độ tích lũy sai số thấp nhất ($\Delta_{6-1} = +0.931$):} Độ tăng sai số của TA-STGCN thấp nhất trong toàn bộ 8 mô hình (thấp hơn STGCN \cite{stgcn} $+0.956$, Graph WaveNet \cite{wavenet} $+0.970$ và iTransformer \cite{itransformer} $+0.985$). Kết quả này khẳng định việc kết hợp cơ chế chú ý thời gian đa đầu giúp kìm hãm sự tăng nhanh của sai số khi dự báo dài hạn.
 \end{enumerate}
 
 % ==============================================================================

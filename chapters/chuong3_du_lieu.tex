@@ -10,15 +10,42 @@
 \subsection{Hạ tầng camera giám sát TP. Hồ Chí Minh}
 Thành phố Hồ Chí Minh là trung tâm kinh tế lớn nhất cả nước với diện tích hơn 2.061 $\text{km}^2$ và dân số hơn 10 triệu người. Mạng lưới đường bộ thành phố chịu tải lượng lớn từ hơn 8.5 triệu xe máy cá nhân và gần 1 triệu xe ô tô. Để phục vụ công tác điều hành giao thông, Sở Giao thông Vận tải TP.HCM đã triển khai hệ thống camera giám sát giao thông (CCTV) bao phủ các trục đường chính, cầu vượt, hầm ngầm và các nút giao thông trọng điểm.
 
-Dữ liệu hình ảnh từ các camera này được cung cấp qua Cổng thông tin giao thông thành phố Hồ Chí Minh (\url{http://giaothong.hochiminhcity.gov.vn/}) dưới dạng ảnh tĩnh định kỳ, phục vụ giám sát và nghiên cứu khoa học.
+Dữ liệu hình ảnh từ các camera này được trích xuất từ Cổng thông tin giao thông thành phố Hồ Chí Minh dưới dạng ảnh tĩnh định kỳ, phục vụ giám sát và nghiên cứu khoa học.
 
 \subsection{Hệ thống thu thập dữ liệu đa luồng tự động}
-Nhóm nghiên cứu đã phát triển hệ thống thu thập dữ liệu tự động vận hành liên tục trên máy chủ chuyên dụng:
+Nhóm nghiên cứu đã phát triển hệ thống thu thập dữ liệu tự động vận hành liên tục trên máy chủ chuyên dụng, thực hiện thu thập dữ liệu ảnh đa luồng bất đồng bộ và sàng lọc các điểm trạm camera giám sát ổn định theo Thuật toán \ref{algo:data_collection}.
+\begin{algorithm_box}{Thu thập dữ liệu ảnh đa luồng bất đồng bộ và sàng lọc trạm camera}{
+\textbf{Đầu vào:} Danh mục ban đầu $M=657$ trạm camera $\mathcal{C}_{\text{init}} = \{c_1, c_2, \dots, c_M\}$, chu kỳ lấy mẫu $\tau = 60$ giây, thời gian thử nghiệm $T_{\text{test}} = 14$ ngày, ngưỡng lỗi tối đa $\theta_{\text{err}} = 5\%$. \\
+\textbf{Đầu ra:} Tập $N=608$ trạm camera ổn định $\mathcal{V}$ và kho lưu trữ hình ảnh theo chu kỳ $\mathcal{D}_{\text{raw}}$. \\
+\textbf{Bước 1: Khởi tạo kết nối đa luồng bất đồng bộ:}
 \begin{enumerate}
-    \item \textbf{Quản lý phiên kết nối và hàng đợi đa luồng:} Để thu thập đồng thời từ hàng trăm camera mà không gây tắc nghẽn đường truyền hoặc bị từ chối dịch vụ, hệ thống sử dụng cơ chế kết nối đa luồng bất đồng bộ kết hợp hàng đợi công việc. Các phiên kết nối HTTP được tái sử dụng nhằm giảm độ trễ bắt tay TCP/TLS.
-    \item \textbf{Chu kỳ lấy mẫu 60 giây đồng bộ:} Cứ sau đúng 60 giây, hệ thống kích hoạt một đợt quét đồng thời trên toàn bộ các endpoint camera đã đăng ký. Hình ảnh phản hồi từ hơn 600 camera được tải về trong cửa sổ 2 đến 4 giây, bảo đảm tính đồng bộ thời gian giữa các nút giao trên toàn thành phố.
-    \item \textbf{Lọc trạm ngoại lệ và xử lý mất tín hiệu:} Danh mục ban đầu gồm 657 camera có tọa độ hợp lệ. Trong quá trình vận hành thử nghiệm 14 ngày, hệ thống tự động ghi nhận các mã lỗi phản hồi (mã lỗi 404, 503, khung hình đen hoàn toàn hoặc camera bị lệch góc nhìn). Các camera có tỷ lệ mất tín hiệu tích lũy vượt quá $5\%$ trong thời gian quan sát bị loại bỏ. Kết quả sàng lọc giữ lại đúng \textbf{608 trạm camera hoạt động ổn định và liên tục}, tạo thành tập đỉnh không gian chính thức $\mathcal{V}$ ($N = |\mathcal{V}| = 608$).
+    \item Khởi tạo nhóm phiên làm việc HTTP bất đồng bộ (Session Pool) với cơ chế giữ kết nối (Keep-Alive) nhằm triệt tiêu độ trễ bắt tay TCP/TLS.
+    \item Thiết lập biến đếm số lần yêu cầu $S_k \gets 0$ và số lần ghi nhận lỗi $E_k \gets 0$ cho từng trạm $c_k \in \mathcal{C}_{\text{init}}$.
 \end{enumerate}
+\textbf{Bước 2: Vòng lặp thu thập đồng bộ theo chu kỳ $\tau$:}
+\begin{enumerate}
+    \item \textbf{Định kỳ} mỗi $\tau = 60$ giây:
+    \begin{itemize}
+        \item Kích hoạt đồng thời $M$ tác vụ yêu cầu bất đồng bộ (Async HTTP GET) tới các endpoint của $M$ trạm camera.
+        \item Thu nhận phản hồi trong cửa sổ $2 \div 4$ giây:
+        \item \textbf{Với mỗi} phản hồi từ trạm $c_k$:
+        \begin{itemize}
+            \item Cập nhật $S_k \gets S_k + 1$.
+            \item Kiểm tra tính toàn vẹn: nếu mã phản hồi là HTTP 200, kích thước tệp hợp lệ và không phải khung hình đen hoàn toàn thì ghi tệp ảnh vào $\mathcal{D}_{\text{raw}}$ kèm nhãn thời gian $t$.
+            \item Ngược lại (mã lỗi 404, 503, timeout hoặc ảnh rỗng), cập nhật $E_k \gets E_k + 1$.
+        \end{itemize}
+    \end{itemize}
+    \item Lặp lại quy trình cho đến khi đủ thời gian quan sát $T_{\text{test}}$.
+\end{enumerate}
+\textbf{Bước 3: Sàng lọc trạm ổn định:}
+\begin{enumerate}
+    \item Với mỗi trạm $c_k$, tính tỷ lệ mất tín hiệu tích lũy: $r_k = E_k / S_k$.
+    \item Lọc danh sách trạm chính thức: $\mathcal{V} = \{c_k \in \mathcal{C}_{\text{init}} \mid r_k \le \theta_{\text{err}}\}$.
+    \item Thu được đúng $N = |\mathcal{V}| = 608$ trạm camera hoạt động liên tục và ổn định.
+\end{enumerate}
+}
+\label{algo:data_collection}
+\end{algorithm_box}
 
 Hình \ref{fig:anh_samples_camera_chapter3} minh họa một số mẫu hình ảnh thu thập thực tế từ hệ thống, cho thấy sự đa dạng về góc chụp (từ trên cao nhìn xuống, góc chéo ngang mép đường), điều kiện ánh sáng (ban ngày, chạng vạng hoàng hôn, ban đêm) và mật độ tập trung cao của luồng xe máy.
 
@@ -106,7 +133,7 @@ Vì mục tiêu là hồi quy chính xác số lượng phương tiện có tron
 \section{Bộ dữ liệu chuỗi thời gian IC4SD-Traffic-HCM-Graph}
 \label{sec:du_lieu_graph}
 
-Để phục vụ bài toán dự báo đồ thị ở Giai đoạn 2, mô hình thị giác tối ưu ở Giai đoạn 1 (EfficientNet-B5) được triển khai để suy luận trên toàn bộ ảnh của 608 trạm camera trong suốt \textbf{86 ngày liên tục} (từ ngày 23/06/2025 đến ngày 16/09/2025). 
+Để phục vụ bài toán dự báo đồ thị ở Giai đoạn 2, mô hình thị giác tối ưu ở Giai đoạn 1 (EfficientNet-B5 \cite{efficientnet}) được triển khai để suy luận trên toàn bộ ảnh của 608 trạm camera trong suốt \textbf{86 ngày liên tục} (từ ngày 23/06/2025 đến ngày 16/09/2025). 
 
 \subsection{Quy trình lọc nhân quả kết hợp trượt kép}
 Dữ liệu suy luận ở tần suất 1 phút phản ánh lưu lượng tức thời tại thời điểm chụp ảnh. Do góc chụp camera và chu kỳ đèn tín hiệu, chuỗi 1 phút xuất hiện các dao động tần số cao. Nghiên cứu áp dụng quy trình lọc nhân quả hai bước:
@@ -157,7 +184,7 @@ Ma trận trọng số $\mathbf{W}$ được chuẩn hóa bậc hai phía nhằm
 \begin{equation}
     \mathbf{L} = \mathbf{I}_N - \mathbf{D}^{-1/2} \mathbf{W} \mathbf{D}^{-1/2}, \quad \tilde{\mathbf{L}} = \frac{2}{\lambda_{\max}} \mathbf{L} - \mathbf{I}_N
 \end{equation}
-với $D_{ii} = \sum_j W_{ij}$ là ma trận bậc ra và $\lambda_{\max} \approx 2.0$ là giá trị riêng cực đại dùng để co giãn toán tử phục vụ khai triển trực giao Chebyshev.
+với $D_{ii} = \sum_j W_{ij}$ là ma trận bậc ra và $\lambda_{\max} \approx 2.0$ là giá trị riêng cực đại dùng để co giãn toán tử phục vụ khai triển trực giao Chebyshev \cite{chebnet}.
 
 % ==============================================================================
 \section{Chiến lược phân chia dữ liệu và kiểm soát rò rỉ thông tin}

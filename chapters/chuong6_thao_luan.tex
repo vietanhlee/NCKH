@@ -59,8 +59,8 @@ Một ưu thế ứng dụng nổi bật của mô hình hai giai đoạn là kh
     };
 
     \node[highlightbox, text width=3.6cm] (priv) at (0, -3.2) {
-        \textbf{Bảo vệ riêng tư tuyệt đối}\\
-        Không truyền video ra ngoài mạng
+        \textbf{Tăng cường quyền riêng tư}\\
+        Không truyền video thô qua mạng
     };
 
     % =========================================================================
@@ -84,10 +84,10 @@ Một ưu thế ứng dụng nổi bật của mô hình hai giai đoạn là kh
     };
 
     \node[highlightbox, text width=3.0cm] (bw_save) at (4.7, -1.8) {
-        \textbf{Tối ưu băng thông:}\\
-        $4{,}86\text{ KB/phút}$ toàn mạng\\
-        \textbf{(Tiết kiệm $62.500\times$)}\\
-        So với truyền video nén
+        \textbf{Tối ưu tải trọng dữ liệu:}\\
+        $4{,}86\text{ KB/phút}$ payload\\
+        \textbf{(Giảm thiểu dữ liệu)}\\
+        So với truyền tải ảnh thô
     };
 
     % =========================================================================
@@ -141,7 +141,7 @@ Một ưu thế ứng dụng nổi bật của mô hình hai giai đoạn là kh
 \label{fig:edge_cloud_arch_chap6}
 \end{figure}
 
-\subsection{Bài toán tiết kiệm băng thông hạ tầng truyền thông (62.500 lần)}
+\subsection{Phân tích tối ưu hóa tải trọng truyền thông hạ tầng}
 Trong giải pháp thu thập tập trung truyền thống, mỗi camera phải nén và truyền luồng video hoặc ảnh tĩnh độ phân giải cao ($1920 \times 1080$) về máy chủ trung tâm qua mạng cáp quang hoặc mạng di động 4G. Giả sử ảnh nén JPEG có dung lượng trung bình $500\text{ KB}$, một mạng lưới gồm 608 camera lấy mẫu định kỳ 1 phút/lần sẽ tiêu tốn:
 \begin{align}
     \text{Băng thông / phút} &= 608 \times 500\text{ KB} = 304.000\text{ KB} \approx 304\text{ MB/phút} \\
@@ -154,19 +154,19 @@ Khi chuyển dịch việc nhận dạng thị giác xuống thiết bị biên 
     \text{Băng thông / phút} &= 608 \times 8\text{ Bytes} \approx 4.86\text{ KB/phút} \\
     \text{Băng thông / ngày} &= 4.86\text{ KB} \times 60 \times 24 \approx 7.00\text{ MB/ngày}
 \end{align}
-Tỷ lệ tiết kiệm băng thông đạt được là:
+Về mặt lý thuyết tải trọng (payload), mức độ cắt giảm kích thước dữ liệu thuần túy giữa một khung ảnh JPEG tĩnh ($500\text{ KB}$) và vector đặc trưng 2 chiều ($8\text{ Bytes}$) đạt xấp xỉ:
 \begin{equation}
-    \text{Tỷ lệ tiết kiệm băng thông} = \frac{500\text{ KB}}{8\text{ Bytes}} = 62.500 \text{ lần}
+    \text{Tỷ lệ thu gọn payload} = \frac{500\text{ KB}}{8\text{ Bytes}} = 62.500 \text{ lần}
 \end{equation}
-Hệ thống hoàn toàn có thể vận hành ổn định trên các kênh truyền di động băng thông hẹp với độ trễ truyền gói tin dưới 10 ms.
+Trong thực tế triển khai, khi tính thêm phần overhead của các tiêu đề giao thức truyền thông mạng (gói tin IP, TCP và khung tin MQTT thường chiếm khoảng vài chục đến hàng trăm bytes mỗi chu kỳ), tải trọng đường truyền thực tế vẫn giảm từ hàng trăm đến hàng nghìn lần so với phương án truyền tải hình ảnh hoặc video thô. Nhờ vậy, giải pháp giảm đáng kể áp lực lên hạ tầng viễn thông công cộng và bảo đảm khả năng vận hành ổn định ngay cả trong điều kiện mạng di động có băng thông hạn chế.
 
 \subsection{Bảo vệ quyền riêng tư hình ảnh theo thiết kế}
 Việc truyền và lưu trữ tập trung hình ảnh camera nơi công cộng tiềm ẩn nguy cơ xâm phạm quyền riêng tư của người dân (như nhận diện biển số xe cá nhân, nhận diện khuôn mặt người tham gia giao thông) và rủi ro rò rỉ dữ liệu máy chủ.
 
-Trong kiến trúc Edge--Cloud được đề xuất, nguyên lý bảo vệ quyền riêng tư theo thiết kế (Privacy-by-Design) được thực hiện một cách triệt để:
+Trong kiến trúc Edge--Cloud được đề xuất, giải pháp hướng đến việc áp dụng nguyên lý bảo vệ quyền riêng tư theo thiết kế (Privacy-by-Design):
 \begin{itemize}
     \item Hình ảnh camera được giải mã trực tiếp trong bộ nhớ RAM tạm thời của vi xử lý biên, đưa qua mạng nơ-ron để trích xuất số lượng xe và được giải phóng ngay lập tức.
-    \item Không có bất kỳ hình ảnh thô nào được lưu vào ổ cứng cố định hoặc truyền qua môi trường mạng Internet.
+    \item Hình ảnh thô không bị truyền qua môi trường mạng công cộng hoặc lưu trữ dài hạn tại máy chủ trung tâm, giúp hạn chế tối đa nguy cơ rò rỉ dữ liệu hình ảnh cá nhân.
     \item Dữ liệu rời khỏi camera chỉ là các con số thống kê vô danh (ví dụ: nút 102 có 12 ô tô, 45 xe máy), tuân thủ chặt chẽ các quy định pháp luật về bảo vệ dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP của Chính phủ.
 \end{itemize}
 
@@ -185,13 +185,13 @@ Một phát hiện thực nghiệm quan trọng tại Chương 5 là số lượ
 \toprule
 \textbf{Kiến trúc mô hình} & \textbf{Tham số} & \textbf{VRAM đỉnh (MB)} & \textbf{Thời gian (s/epoch)} \\
 \midrule
-STGCN Baseline & 375K & 4.838 MB & 3.48 s \\
-Graph WaveNet & 549K & 7.731 MB & 4.91 s \\
-ASTGCN & 1.533K & 9.261 MB & 7.11 s \\
-MegaCRN & 527K & 4.850 MB & 1.69 s \\
-DSTAGNN & 911K & 9.802 MB & 3.97 s \\
-STAEformer & 568K & 11.509 MB & 5.65 s \\
-iTransformer & \textbf{150K} & \textbf{265 MB} & \textbf{0.55 s} \\
+STGCN Baseline \cite{stgcn} & 375K & 4.838 MB & 3.48 s \\
+Graph WaveNet \cite{wavenet} & 549K & 7.731 MB & 4.91 s \\
+ASTGCN \cite{astgcn} & 1.533K & 9.261 MB & 7.11 s \\
+MegaCRN \cite{megacrn} & 527K & 4.850 MB & 1.69 s \\
+DSTAGNN \cite{dstagnn} & 911K & 9.802 MB & 3.97 s \\
+STAEformer \cite{staeformer} & 568K & 11.509 MB & 5.65 s \\
+iTransformer \cite{itransformer} & \textbf{150K} & \textbf{265 MB} & \textbf{0.55 s} \\
 \midrule
 \textbf{TA-STGCN (Đề xuất)} & \textbf{453K} & \textbf{8.607 MB} & \textbf{4.76 s} \\
 \bottomrule
@@ -200,9 +200,9 @@ iTransformer & \textbf{150K} & \textbf{265 MB} & \textbf{0.55 s} \\
 
 \textbf{Phân tích đặc tính tài nguyên phần cứng:}
 \begin{enumerate}
-    \item \textbf{Vấn đề bùng nổ bộ nhớ kích hoạt của Attention đồng thời:} Mặc dù STAEformer có số lượng tham số vừa phải (568K), cơ chế chú ý không -- thời gian kết hợp (Joint Spatio-Temporal Attention) buộc mô hình phải duy trì các tensor kích hoạt rất lớn trong VRAM, đẩy mức tiêu thụ đỉnh lên tới \textbf{11.509 MB} (chạm sát ngưỡng 12 GB của GPU phổ thông).
-    \item \textbf{Đặc điểm của mô hình iTransformer:} iTransformer tiêu tốn bộ nhớ rất thấp (265 MB) do đảo ngược chiều biến số, xem mỗi nút như một kênh độc lập mà không sử dụng ma trận không gian. Tuy nhiên, việc bỏ qua hoàn toàn thông tin hình học của mạng lưới OpenStreetMap khiến mô hình này có sai số dài hạn ở bước $t+6$ cao hơn TA-STGCN.
-    \item \textbf{Cân bằng tối ưu của TA-STGCN:} Bằng cách kết hợp tích chập phổ Chebyshev $K=3$ trên đồ thị thưa và Attention thời gian độc lập cho từng nút, TA-STGCN chỉ tiêu tốn \textbf{8.607 MB} VRAM (tiết kiệm $25.2\%$ so với STAEformer) và giảm $70.4\%$ số lượng tham số so với ASTGCN (453K so với 1.53M). Cấu hình này giúp một máy chủ sử dụng một GPU tầm trung thương mại (như RTX 4070/4080) có thể đảm nhiệm việc dự báo lưu lượng toàn thành phố một cách ổn định.
+    \item \textbf{Vấn đề bùng nổ bộ nhớ kích hoạt của Attention đồng thời:} Mặc dù STAEformer \cite{staeformer} có số lượng tham số vừa phải (568K), cơ chế chú ý không -- thời gian kết hợp (Joint Spatio-Temporal Attention) buộc mô hình phải duy trì các tensor kích hoạt rất lớn trong VRAM, đẩy mức tiêu thụ đỉnh lên tới \textbf{11.509 MB} (chạm sát ngưỡng 12 GB của GPU phổ thông).
+    \item \textbf{Đặc điểm của mô hình iTransformer:} iTransformer \cite{itransformer} tiêu tốn bộ nhớ rất thấp (265 MB) do đảo ngược chiều biến số, xem mỗi nút như một kênh độc lập mà không sử dụng ma trận không gian. Tuy nhiên, việc bỏ qua hoàn toàn thông tin hình học của mạng lưới OpenStreetMap khiến mô hình này có sai số dài hạn ở bước $t+6$ cao hơn TA-STGCN.
+    \item \textbf{Cân bằng tối ưu của TA-STGCN:} Bằng cách kết hợp tích chập phổ Chebyshev $K=3$ \cite{chebnet} trên đồ thị thưa và Attention thời gian độc lập cho từng nút, TA-STGCN chỉ tiêu tốn \textbf{8.607 MB} VRAM (tiết kiệm $25.2\%$ so với STAEformer \cite{staeformer}) và giảm $70.4\%$ số lượng tham số so với ASTGCN \cite{astgcn} (453K so với 1.53M). Cấu hình này giúp một máy chủ sử dụng một GPU tầm trung thương mại (như RTX 4070/4080) có thể đảm nhiệm việc dự báo lưu lượng toàn thành phố một cách ổn định.
 \end{enumerate}
 
 % ==============================================================================
@@ -211,7 +211,7 @@ iTransformer & \textbf{150K} & \textbf{265 MB} & \textbf{0.55 s} \\
 
 Nghiên cứu tuân thủ các nguyên tắc liêm chính học thuật nhằm bảo đảm tính khách quan và minh bạch của các kết luận đối sánh:
 \begin{enumerate}
-    \item \textbf{Sử dụng chung hàm mục tiêu (Unified Huber Loss):} Tất cả 8 mô hình đồ thị ở Giai đoạn 2 đều được huấn luyện dưới cùng một hàm mất mát Smooth $L_1$ Huber Loss ($\delta=1.0$). Một số mô hình gốc (như Graph WaveNet) ban đầu sử dụng $L_1$ Loss. Việc huấn luyện lại toàn bộ baseline dưới hàm Huber Loss bảo đảm đối xử đồng nhất với các điểm ngoại lai, cô lập hoàn toàn yếu tố sai khác về mặt kiến trúc.
+    \item \textbf{Sử dụng chung hàm mục tiêu (Unified Huber Loss):} Tất cả 8 mô hình đồ thị ở Giai đoạn 2 đều được huấn luyện dưới cùng một hàm mất mát Smooth $L_1$ Huber Loss ($\delta=1.0$). Một số mô hình gốc (như Graph WaveNet \cite{wavenet}) ban đầu sử dụng $L_1$ Loss. Việc huấn luyện lại toàn bộ baseline dưới hàm Huber Loss bảo đảm đối xử đồng nhất với các điểm ngoại lai, cô lập hoàn toàn yếu tố sai khác về mặt kiến trúc.
     \item \textbf{Không tinh chỉnh tham số mang tính thiên vị:} Toàn bộ các mô hình đối chứng đều sử dụng cấu hình siêu tham số chuẩn theo công bố của các tác giả gốc (được điều chỉnh kích thước đầu vào và đầu ra cho phù hợp với đồ thị 608 nút). Nhóm nghiên cứu không thay đổi siêu tham số theo hướng làm giảm hiệu năng của các mô hình đối chứng.
     \item \textbf{Báo cáo trung thực và minh bạch kết quả:} Báo cáo nêu rõ rằng trên tập dữ liệu sạch, các mô hình đạt độ chính xác gần như tương đương nhau ($|d| < 0.1$). Đề tài không tuyên bố vượt trội trên dữ liệu sạch, mà xác định đóng góp khoa học cốt lõi là \textbf{độ bền vững vượt trội trước sai số nhận dạng cảm biến}.
 \end{enumerate}
@@ -238,15 +238,15 @@ Mô hình kết nối giữa 608 nút camera biên và máy chủ trung tâm đ�
 Trong điều kiện thực tế, hiện tượng gián đoạn kết nối do thời tiết hoặc sự cố đường truyền là khó tránh khỏi. Hệ thống được trang bị cơ chế tự phục hồi hai cấp:
 \begin{enumerate}
     \item \textbf{Bộ đệm ngoại tuyến tại biên (Edge Offline Spooling):} Khi mất kết nối mạng, thiết bị biên tự động lưu tạm thời các vector số đếm vào bộ nhớ flash eMMC (dung lượng bộ đệm đủ lưu trữ liên tục 30 ngày). Khi kết nối mạng được tái lập, thiết bị biên tự động gửi bù (backfilling) để lấp đầy các khoảng trống dữ liệu trong quá khứ.
-    \item \textbf{Cơ chế điền khuyết không gian bằng đồ thị (Graph Spatial Imputation):} Nếu một camera bị mất tín hiệu hoàn toàn trong thời gian thực, mô hình TA-STGCN không làm gián đoạn việc dự báo toàn mạng. Nhờ toán tử tích chập ChebNet bậc $K=3$, trạng thái của nút bị khuyết được xấp xỉ tự động thông qua tổ hợp tuyến tính dòng xe từ các nút lân cận trên đồ thị OpenStreetMap. Kết quả thử nghiệm cho thấy khi ngắt tín hiệu ngẫu nhiên $10\%$ số camera, sai số dự báo toàn mạng chỉ tăng nhẹ $0.18$ xe MAE, thể hiện khả năng chịu lỗi tốt của mô hình.
+    \item \textbf{Cơ chế điền khuyết không gian bằng đồ thị (Graph Spatial Imputation):} Nếu một camera bị mất tín hiệu hoàn toàn trong thời gian thực, mô hình TA-STGCN không làm gián đoạn việc dự báo toàn mạng. Nhờ toán tử tích chập ChebNet bậc $K=3$ \cite{chebnet}, trạng thái của nút bị khuyết được xấp xỉ tự động thông qua tổ hợp tuyến tính dòng xe từ các nút lân cận trên đồ thị OpenStreetMap. Kết quả thử nghiệm cho thấy khi ngắt tín hiệu ngẫu nhiên $10\%$ số camera, sai số dự báo toàn mạng chỉ tăng nhẹ $0.18$ xe MAE, thể hiện khả năng chịu lỗi tốt của mô hình.
 \end{enumerate}
 
-\subsection{Phân tích tổng chi phí sở hữu (TCO) trong 5 năm}
-Bảng \ref{tab:tco_analysis_chap6} so sánh chi phí ước tính cho việc triển khai và vận hành hệ thống giám sát và dự báo cho 608 nút giao thông trong vòng 5 năm giữa hai phương án: vòng từ cảm ứng truyền thống và khung mô hình camera AI của đề tài.
+\subsection{Phân tích mô hình chi phí sở hữu tham khảo (TCO) trong 5 năm}
+Bảng \ref{tab:tco_analysis_chap6} trình bày một mô hình ước tính chi phí định tính mang tính chất tham khảo cho việc triển khai và vận hành hệ thống giám sát và dự báo trên 608 nút giao thông trong vòng 5 năm. Phân tích này so sánh giữa giải pháp dùng cảm biến vật lý truyền thống (như vòng từ) và giải pháp ứng dụng camera AI kết hợp đồ thị không--thời gian dựa trên các giả định thị trường và chi phí tham chiếu phổ biến trong các dự án ITS.
 
 \begin{table}[htbp]
 \centering
-\caption{Ước tính tổng chi phí sở hữu (TCO) trong 5 năm cho 608 nút giao thông (đơn vị: Tỷ VNĐ).}
+\caption{Mô hình ước tính chi phí sở hữu tham khảo (TCO) trong 5 năm cho 608 nút giao thông (đơn vị: Tỷ VNĐ).}
 \label{tab:tco_analysis_chap6}
 \small
 \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
@@ -255,15 +255,17 @@ Bảng \ref{tab:tco_analysis_chap6} so sánh chi phí ước tính cho việc tr
 \midrule
 Thiết bị cảm biến ban đầu & 36.5 tỷ (608 nút $\times$ 4 làn $\times$ cảm biến) & \textbf{0.0 tỷ} (Tận dụng camera sẵn có) \\
 Chi phí xẻ đường, thi công lắp đặt & 24.3 tỷ (Tổ chức thi công, rào chắn) & \textbf{3.6 tỷ} (Lắp bo mạch vi xử lý biên) \\
-Chi phí băng thông mạng viễn thông & 1.5 tỷ (Truyền dữ liệu cảm biến) & \textbf{0.4 tỷ} (Nhờ nén dữ liệu $62.500\times$) \\
+Chi phí băng thông mạng viễn thông & 1.5 tỷ (Truyền dữ liệu cảm biến) & \textbf{0.4 tỷ} (Nhờ tối ưu hóa dữ liệu tại biên) \\
 Bảo trì, duy tu mặt đường (5 năm) & 42.0 tỷ (Sụt lún, đứt dây ngầm) & \textbf{4.8 tỷ} (Bảo trì bo mạch, lau ống kính) \\
 Chi phí máy chủ trung tâm & 3.0 tỷ (Máy chủ dữ liệu) & \textbf{2.5 tỷ} (Máy chủ GPU RTX 4090) \\
 \midrule
 \textbf{Tổng chi phí 5 năm (TCO):} & \textbf{107.3 tỷ VNĐ} & \textbf{11.3 tỷ VNĐ} \\
-\multicolumn{2}{l}{\textbf{Tỷ lệ tiết kiệm ngân sách:}} & \textbf{Tiết kiệm 89.5\% (gấp 9.5 lần)} \\
+\multicolumn{2}{l}{\textbf{Tiềm năng tối ưu hóa chi phí:}} & \textbf{Ước tính giảm đáng kể (tham khảo)} \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+Cần lưu ý rằng các con số nêu trên mang tính chất mô hình hóa kinh tế tham khảo nhằm minh họa tiềm năng tối ưu hóa nguồn lực đầu tư của hướng tiếp cận xử lý ảnh kết hợp mạng đồ thị. Trong thực tế triển khai cụ thể, tổng chi phí dự án sẽ phụ thuộc vào các điều kiện kỹ thuật thực tế, chính sách đấu thầu, chi phí bản quyền phần mềm và quy trình bảo dưỡng hạ tầng tại từng địa phương.
 
 % ==============================================================================
 \section{Các hạn chế của đề tài và hướng phát triển tiếp nối}
