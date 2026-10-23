@@ -116,6 +116,7 @@ def precompute_tam_cache(
     gmm_buffer_size: int = 300000,
     gmm_ema_alpha: float = 0.15,
     tam_warmup_frames: int = None,
+    frame_norm_alpha: float = 0.0,
 ):
     device = torch.device(device_str if torch.cuda.is_available() and device_str.startswith("cuda") else "cpu")
     os.makedirs(cache_dir, exist_ok=True)
@@ -183,6 +184,7 @@ def precompute_tam_cache(
         num_patches=448,
         num_states=4,
         feat_dim=64,
+        frame_norm_alpha=frame_norm_alpha,
     ).to(device)
 
     calibrator = GMMCalibrator(

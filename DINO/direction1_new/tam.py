@@ -22,7 +22,8 @@ import torch.nn.functional as F
 # vì cache pi (.npy) và tam_stats.pth tính bằng phiên bản cũ sẽ không còn tương thích.
 #   v1: median-normalization, valid=False -> 2.5, mean centering (alpha 0.15 / 1.0)
 #   v2: trimmed-mean centering, cụm trội luôn tĩnh, gate có dilation, chuẩn hóa phân vị 25%
-TAM_VERSION = 2
+#   v3: frame_norm_alpha=0.0 (chuẩn DINOv3 semantic tokens), loại bỏ local_contrast, kẹp s >= 0.08, dập tắt timestamp banner r=0
+TAM_VERSION = 3
 
 
 def _robust_frame_scale(
@@ -76,7 +77,7 @@ class PositionStats(nn.Module):
         eta: float = 0.02,
         eta_w: float = 0.005,
         eps: float = 0.01,
-        frame_norm_alpha: float = 1.0,
+        frame_norm_alpha: float = 0.0,
     ):
         super().__init__()
         self.num_cams = num_cams
@@ -388,8 +389,10 @@ class PositionStats(nn.Module):
         cos_sim = (U_norm.unsqueeze(2) * mu_b).sum(dim=-1)  # (B, P, K)
         cos_dist = (1.0 - cos_sim).clamp(min=0.0)
 
-        # Tính chuẩn hóa Mahalanobis-like: dist / (s_k + eps)
-        norm_dist = cos_dist / (s_b + self.eps)  # (B, P, K)
+        # Tính chuẩn hóa khoảng cách thống kê theo độ phân tán: dist / (s_eff + eps)
+        # Kẹp cận dưới độ phân tán s_b >= 0.08 để chống nhiễu / nổ giá trị tại các patch ít biến động ở rìa ảnh
+        s_eff = s_b.clamp(min=0.08)
+        norm_dist = cos_dist / (s_eff + self.eps)  # (B, P, K)
 
         # Lọc theo tập trạng thái tĩnh S
         is_static = self.static_set(cids)  # (B, P, K)
@@ -400,34 +403,22 @@ class PositionStats(nn.Module):
         a = torch.min(norm_dist_masked, dim=-1)[0]  # (B, P)
 
         # static_set luôn chứa cụm trội nên valid đúng ở mọi vị trí. Phòng hờ trường hợp
-        # dữ liệu suy biến: dùng khoảng cách tới cụm gần nhất (KHÔNG gán hằng số cao như 2.5,
-        # vì hằng số đó khiến cả làn đông luôn bị coi là tiền cảnh bất kể lúc này có xe hay không).
+        # dữ liệu suy biến: dùng khoảng cách tới cụm gần nhất (KHÔNG gán hằng số cao như 2.5)
         a_fallback = torch.min(norm_dist, dim=-1)[0]
         a = torch.where(valid, a, a_fallback)
 
-        # Bộ lọc tương phản không gian cục bộ tương đối (Relative Local Contrast & High-Pass Filter):
-        # Khi mặt đường bị thay đổi ánh sáng diện rộng (đèn pha, mưa ướt, phản quang), cả mảng lớn
-        # đều có điểm a cao xấp xỉ nhau -> độ phân tán cục bộ thấp và (a - local_mean) ~ 0.
-        # Sử dụng Replicate Padding để khử triệt để sai số biên do padding 0 tạo ra.
-        # Phương tiện (ô tô, xe máy) là cấu trúc cục bộ sắc nét, có độ tương phản vượt trội so với nền xung quanh.
-        if P == 448 and a.dim() == 2:
-            a_2d = a.reshape(B, 1, 16, 28)
-            # Replicate padding 2 pixel mỗi phía để giá trị trung bình ở viền biên không bị kéo lệch
-            a_padded = F.pad(a_2d, (2, 2, 2, 2), mode="replicate")
-            local_mean = F.avg_pool2d(a_padded, kernel_size=5, stride=1, padding=0)
-            local_sq_mean = F.avg_pool2d(a_padded ** 2, kernel_size=5, stride=1, padding=0)
-            local_std = torch.sqrt(torch.clamp(local_sq_mean - local_mean ** 2, min=1e-4))
-
-            # Độ tương phản tương đối so với nền cục bộ
-            local_contrast = F.relu(a_2d - local_mean) / (local_std + 0.15)
-            # Gate mềm: Dập tắt mảng đường ướt phản quang đồng nhất, bảo toàn và khuếch đại xe cộ
-            contrast_gate = torch.sigmoid(4.0 * (local_contrast - 0.5))
-            # Dilation 3x3 của gate: ruột xe lớn (bus, xe tải, cụm xe dày) có a cao đồng đều nên
-            # contrast nội bộ thấp; nhờ dilation, ruột xe kế thừa gate cao từ viền xe, không bị "khoét ruột".
-            # Mảng đường ướt trải rộng không có viền tương phản nên gate vẫn thấp sau dilation.
-            contrast_gate = F.max_pool2d(contrast_gate, kernel_size=3, stride=1, padding=1)
-            a_filtered = a_2d * (0.05 + 0.95 * contrast_gate)
-            a = a_filtered.reshape(B, P)
+        # Cưỡng bức dập tắt tuyệt đối hàng banner timestamp camera trên cùng (hàng r=0, 28 patch đầu tiên nếu P=448):
+        # Dòng chữ timestamp/tên camera màu trắng nhảy từng giây tạo gradient tương phản cao nhưng
+        # hoàn toàn không phải phương tiện giao thông.
+        if P == 448:
+            if a.dim() == 2:
+                a_2d = a.clone().view(B, 16, 28)
+                a_2d[:, 0, :] = 0.0
+                a = a_2d.reshape(B, P)
+            elif a.dim() == 1:
+                a_2d = a.clone().view(16, 28)
+                a_2d[0, :] = 0.0
+                a = a_2d.reshape(-1)
 
         return a, valid
 
@@ -737,10 +728,13 @@ def refine_traffic_foreground_map(
         # avg_pool 3x3 để đếm mật độ hỗ trợ của 8 ô lân cận
         nbr_support = F.avg_pool2d(pi_2d.unsqueeze(1), kernel_size=3, stride=1, padding=1).squeeze(1)
         # Ô đơn độc có pi trung bình nhưng cả cụm lân cận < 0.12 -> dập tắt (nhiễu đo).
-        # Ô cô lập có pi CAO (>= 0.6) được giữ nguyên: đó thường là xe máy lẻ chiếm đúng 1 patch,
-        # chính là loại đỉnh cô lập mà contrast gate trong atypicality đã ưu tiên -> hai cơ chế nhất quán.
+        # Ô cô lập có pi CAO (>= 0.6) được giữ nguyên: đó thường là xe máy lẻ chiếm đúng 1 patch.
         isolated_mask = (pi_2d > 0.35) & (pi_2d < 0.60) & (nbr_support < 0.12)
         pi_2d = torch.where(isolated_mask, pi_2d * 0.15, pi_2d)
+
+        # Cưỡng bức dập tắt hoàn toàn hàng banner timestamp camera trên cùng (r=0)
+        pi_2d[:, 0, :] = 0.0
+
         pi_refined = pi_2d if is_3d else pi_2d.squeeze(0)
 
     return pi_refined.clamp(0.0, 1.0)

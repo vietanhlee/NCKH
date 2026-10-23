@@ -331,10 +331,10 @@ def save_direction_g_visuals(
       Cột 2: Bản đồ tiền cảnh bất thường TAM pi (Heatmap)
       Cột 3: Mặt nạ che phân tầng AGM (Mask)
       Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS (kèm mức sai khác nền Δ)
-      Cột 5: DINOv3 Gốc PCA (Pretrained Baseline - Chiếu trên không gian SVD chung)
-      Cột 6: Student PCA Đồng Bộ (Batch-Consistent - Chiếu trên không gian SVD chung với DINO)
-      Cột 7: Student PCA Nội Tại (Per-Image: độ tương phản chi tiết riêng từng ảnh)
-      Cột 8: Student Foreground PCA (Object-Centric Detrended: bóc tách chi tiết thân xe, triệt tiêu gradient phối cảnh)
+      Cột 5: DINOv3 Gốc PCA (Pretrained Baseline - Chiếu trên không gian Per-Sample SVD)
+      Cột 6: Student PCA Đồng Bộ (Per-Sample SVD: Chiếu trên cùng hệ trục SVD với DINO gốc)
+      Cột 7: Student PCA Toàn Cảnh (Full Image PCA: Không gian ngữ nghĩa toàn cảnh không gán đen)
+      Cột 8: Student Chi Tiết Xe (Vehicle Part Decomposition: Bóc tách cấu trúc bộ phận xe)
     """
     B = min(4, x_orig.shape[0])
     fig, axes = plt.subplots(B, 8, figsize=(28, 3.2 * B), dpi=150)
@@ -343,69 +343,10 @@ def save_direction_g_visuals(
 
     corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
 
-    # Khởi tạo tọa độ không gian 16x28 phục vụ khử gradient phối cảnh (Spatial Detrending)
-    r_coords = np.repeat(np.arange(16, dtype=np.float32) / 15.0 - 0.5, 28)
-    c_coords = np.tile(np.arange(28, dtype=np.float32) / 27.0 - 0.5, 16)
-    spatial_coords_full = np.stack([r_coords, c_coords], axis=1)  # (448, 2)
-
-    def _detrend_spatial(feat_mat: np.ndarray, coords_mat: np.ndarray) -> np.ndarray:
-        """Loại trừ tương quan tuyến tính với tọa độ không gian (r, c) để triệt tiêu gradient phối cảnh xa-gần."""
-        M = feat_mat.shape[0]
-        if M <= 4:
-            return feat_mat
-        X = np.concatenate([coords_mat, np.ones((M, 1), dtype=np.float32)], axis=1)  # (M, 3)
-        # Ridge regression ổn định số học
-        lambda_reg = 1e-2 * np.eye(3, dtype=np.float32)
-        try:
-            W = np.linalg.solve(X.T @ X + lambda_reg, X.T @ feat_mat)
-            feat_detrend = feat_mat - (X @ W)
-            return feat_detrend
-        except Exception:
-            return feat_mat
-
-    def _compute_twostage_pca(feat: np.ndarray, fg_mask_in: Optional[np.ndarray] = None, detrend_spatial: bool = False) -> np.ndarray:
-        """Helper Two-Stage PCA: Stage 1 tách FG qua PC1/TAM, Stage 2 bóc tách bộ phận xe qua PC2-4."""
-        N, D = feat.shape
-        f_mean = feat.mean(axis=0, keepdims=True)
-        f_cent = feat - f_mean
-        _, _, vt = np.linalg.svd(f_cent, full_matrices=False)
-        pc1 = f_cent @ vt[0]
-        if pc1[corners_idx].mean() > pc1.mean():
-            pc1 = -pc1
-        pc1_norm = (pc1 - pc1.min()) / (pc1.max() - pc1.min() + 1e-8)
-
-        if fg_mask_in is not None:
-            fg_mask = fg_mask_in
-        else:
-            fg_mask = (pc1_norm > 0.50)
-            if fg_mask.sum() < 8:
-                fg_mask = (pc1_norm >= np.percentile(pc1_norm, 75))
-
-        res_rgb = np.full((N, 3), 0.05, dtype=np.float32)
-        if fg_mask.sum() >= 4:
-            f_fg = feat[fg_mask]
-            if detrend_spatial:
-                coords_fg = spatial_coords_full[fg_mask]
-                f_fg = _detrend_spatial(f_fg, coords_fg)
-
-            f_fg_mean = f_fg.mean(axis=0, keepdims=True)
-            f_fg_cent = f_fg - f_fg_mean
-            _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
-            fg_proj = f_fg_cent @ vt_fg[:3].T
-            p_lo = np.percentile(fg_proj, 2, axis=0, keepdims=True)
-            p_hi = np.percentile(fg_proj, 98, axis=0, keepdims=True)
-            fg_norm = np.clip((fg_proj - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0)
-            res_rgb[fg_mask] = fg_norm
-        else:
-            pca3 = f_cent @ vt[:3].T
-            p_lo = np.percentile(pca3, 2, axis=0, keepdims=True)
-            p_hi = np.percentile(pca3, 98, axis=0, keepdims=True)
-            res_rgb = np.clip((pca3 - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0)
-        return res_rgb.reshape(16, 28, 3)
-
-    # 1. Tính toán Unified SVD Projector chung cho DINO Gốc và Student (Cột 5 & Cột 6)
-    vanilla_pca_grid_batch = None
-    batch_pca_grid = None
+    # 1. Tính toán SVD riêng biệt cho từng mẫu ảnh (Per-Sample Joint SVD)
+    # Triệt tiêu hoàn toàn hiện tượng PC1 bị chi phối bởi độ chênh lệch Ngày/Đêm hoặc Camera A/B
+    vanilla_pca_grid_batch = []
+    batch_pca_grid = []
     per_image_pca_grid = []
     fg_grid_batch = []
 
@@ -413,61 +354,82 @@ def save_direction_g_visuals(
         v_feats_np = vanilla_patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
         s_feats_np = patch_features[:B].detach().cpu().numpy()          # (B, 448, D)
 
-        # Chuẩn hóa độc lập theo từng mô hình trước khi gộp
-        v_flat = v_feats_np.reshape(B * 448, -1)
-        s_flat = s_feats_np.reshape(B * 448, -1)
-
-        v_cent = v_flat - v_flat.mean(axis=0, keepdims=True)
-        v_norm = v_cent / (v_flat.std(axis=0, keepdims=True) + 1e-6)
-
-        s_cent = s_flat - s_flat.mean(axis=0, keepdims=True)
-        s_norm = s_cent / (s_flat.std(axis=0, keepdims=True) + 1e-6)
-
-        # Fit SVD chung trên không gian liên hiệp
-        joint_feats = np.concatenate([v_norm, s_norm], axis=0)  # (2 * B * 448, D)
-        _, _, vt_joint = np.linalg.svd(joint_feats, full_matrices=False)
-        proj_joint = vt_joint[:3].T  # (D, 3)
-
-        # Chiếu cả hai mô hình lên cùng một hệ trục không gian
-        v_proj = v_norm @ proj_joint  # (B * 448, 3)
-        s_proj = s_norm @ proj_joint  # (B * 448, 3)
-
-        # Căn dấu theo vùng nền: Lấy các góc hoặc patch có pi < 0.2
-        pi_flat = pi[:B].detach().cpu().numpy().reshape(B * 448)
-        bg_idx = np.where(pi_flat < 0.2)[0]
-        if len(bg_idx) < 16:
-            bg_idx = [b_idx * 448 + c_idx for b_idx in range(B) for c_idx in corners_idx]
-
-        for c in range(3):
-            if v_proj[bg_idx, c].mean() > v_proj[:, c].mean():
-                v_proj[:, c] = -v_proj[:, c]
-                s_proj[:, c] = -s_proj[:, c]
-
-        # Chuẩn hóa phân vị chung trên toàn bộ miền chiếu liên hiệp
-        all_proj = np.concatenate([v_proj, s_proj], axis=0)
-        p_min = np.percentile(all_proj, 1, axis=0, keepdims=True)
-        p_max = np.percentile(all_proj, 99, axis=0, keepdims=True)
-
-        v_rgb = np.clip((v_proj - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
-        s_rgb = np.clip((s_proj - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
-
-        vanilla_pca_grid_batch = v_rgb.reshape(B, 16, 28, 3)
-        batch_pca_grid = s_rgb.reshape(B, 16, 28, 3)
-
-        # 2. Xử lý Cột 7 (Per-Image) và Cột 8 (Foreground Detrended)
         for b in range(B):
-            f_b = s_feats_np[b]  # (448, D)
-            pi_b = pi[b].detach().cpu().numpy().reshape(-1)
-            # Ngưỡng tiền cảnh chung pi >= 0.50
-            fg_mask_b = (pi_b >= 0.50)
-            if fg_mask_b.sum() < 4:
-                fg_mask_b = (pi_b >= np.percentile(pi_b, 85))
+            v_b = v_feats_np[b]  # (448, D)
+            s_b = s_feats_np[b]  # (448, D)
+            pi_b = pi[b].detach().cpu().numpy().reshape(-1)  # (448,)
 
-            # Student Two-Stage PCA nội tại
-            per_image_pca_grid.append(_compute_twostage_pca(f_b))
-            # Student Foreground PCA có Detrending tọa độ không gian (Triệt tiêu triệt để gradient phối cảnh xa-gần)
-            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b, detrend_spatial=True))
+            # Centering độc lập cho từng view của ảnh b
+            v_b_cent = v_b - v_b.mean(axis=0, keepdims=True)
+            s_b_cent = s_b - s_b.mean(axis=0, keepdims=True)
 
+            # Gộp hai biểu diễn của cùng một ảnh b vào không gian liên hiệp
+            joint_b = np.concatenate([v_b_cent, s_b_cent], axis=0)  # (896, D)
+            _, _, vt_b = np.linalg.svd(joint_b, full_matrices=False)
+            proj_b = vt_b[:3].T  # (D, 3)
+
+            # Chiếu cả DINO gốc và Student lên cùng hệ trục SVD của ảnh b
+            v_proj = v_b_cent @ proj_b  # (448, 3)
+            s_proj = s_b_cent @ proj_b  # (448, 3)
+
+            # Căn dấu theo vùng nền (các patch có pi < 0.20 hoặc 4 góc ảnh)
+            bg_idx = np.where(pi_b < 0.20)[0]
+            if len(bg_idx) < 8:
+                bg_idx = corners_idx
+
+            for c in range(3):
+                if v_proj[bg_idx, c].mean() > v_proj[:, c].mean():
+                    v_proj[:, c] = -v_proj[:, c]
+                    s_proj[:, c] = -s_proj[:, c]
+
+            # Chuẩn hóa phân vị 1% - 99% chung cho 2 view của ảnh b
+            all_proj_b = np.concatenate([v_proj, s_proj], axis=0)
+            p_min = np.percentile(all_proj_b, 1, axis=0, keepdims=True)
+            p_max = np.percentile(all_proj_b, 99, axis=0, keepdims=True)
+            scale_b = np.maximum(p_max - p_min, 1e-6)
+
+            v_rgb = np.clip((v_proj - p_min) / scale_b, 0.0, 1.0).reshape(16, 28, 3)
+            s_rgb = np.clip((s_proj - p_min) / scale_b, 0.0, 1.0).reshape(16, 28, 3)
+
+            vanilla_pca_grid_batch.append(v_rgb)
+            batch_pca_grid.append(s_rgb)
+
+            # --- CỘT 7: Student PCA Toàn Cảnh (Full Image PCA - Không gán đen) ---
+            _, _, vt_s = np.linalg.svd(s_b_cent, full_matrices=False)
+            s_full_proj = s_b_cent @ vt_s[:3].T  # (448, 3)
+            for c in range(3):
+                if s_full_proj[bg_idx, c].mean() > s_full_proj[:, c].mean():
+                    s_full_proj[:, c] = -s_full_proj[:, c]
+            p_lo = np.percentile(s_full_proj, 2, axis=0, keepdims=True)
+            p_hi = np.percentile(s_full_proj, 98, axis=0, keepdims=True)
+            s_full_rgb = np.clip((s_full_proj - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0).reshape(16, 28, 3)
+            per_image_pca_grid.append(s_full_rgb)
+
+            # --- CỘT 8: Student Vehicle Part Decomposition (Bóc Tách Bộ Phận Xe) ---
+            fg_mask_b = (pi_b >= 0.30)
+            # Loại trừ dòng chữ timestamp banner camera trên cùng r=0 (patch 0..27)
+            fg_mask_b[:28] = False
+
+            if fg_mask_b.sum() >= 4:
+                f_fg = s_b[fg_mask_b]
+                f_fg_cent = f_fg - f_fg.mean(axis=0, keepdims=True)
+                _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
+                fg_proj = f_fg_cent @ vt_fg[:3].T
+                p_lo_fg = np.percentile(fg_proj, 2, axis=0, keepdims=True)
+                p_hi_fg = np.percentile(fg_proj, 98, axis=0, keepdims=True)
+                fg_norm = np.clip((fg_proj - p_lo_fg) / np.maximum(p_hi_fg - p_lo_fg, 1e-6), 0.0, 1.0)
+
+                # Nền tối 0.04 làm nổi bật chi tiết từng cấu trúc xe
+                res_fg = np.full((448, 3), 0.04, dtype=np.float32)
+                res_fg[fg_mask_b] = fg_norm
+                fg_grid_batch.append(res_fg.reshape(16, 28, 3))
+            else:
+                # Cảnh tĩnh vắng xe: hiển thị ảnh toàn cảnh hạ sáng 30% để thể hiện rõ trạng thái cảnh tĩnh
+                res_fg = s_full_rgb * 0.30
+                fg_grid_batch.append(res_fg)
+
+        vanilla_pca_grid_batch = np.stack(vanilla_pca_grid_batch, axis=0)
+        batch_pca_grid = np.stack(batch_pca_grid, axis=0)
         per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
         fg_grid_batch = np.stack(fg_grid_batch, axis=0)
 
@@ -475,13 +437,40 @@ def save_direction_g_visuals(
         # Fallback khi chưa có vanilla_patch_features
         s_feats_np = patch_features[:B].detach().cpu().numpy()
         for b in range(B):
-            f_b = s_feats_np[b]
+            s_b = s_feats_np[b]
             pi_b = pi[b].detach().cpu().numpy().reshape(-1)
-            fg_mask_b = (pi_b >= 0.50)
-            if fg_mask_b.sum() < 4:
-                fg_mask_b = (pi_b >= np.percentile(pi_b, 85))
-            per_image_pca_grid.append(_compute_twostage_pca(f_b))
-            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b, detrend_spatial=True))
+            s_b_cent = s_b - s_b.mean(axis=0, keepdims=True)
+            bg_idx = np.where(pi_b < 0.20)[0]
+            if len(bg_idx) < 8:
+                bg_idx = corners_idx
+
+            _, _, vt_s = np.linalg.svd(s_b_cent, full_matrices=False)
+            s_full_proj = s_b_cent @ vt_s[:3].T
+            for c in range(3):
+                if s_full_proj[bg_idx, c].mean() > s_full_proj[:, c].mean():
+                    s_full_proj[:, c] = -s_full_proj[:, c]
+            p_lo = np.percentile(s_full_proj, 2, axis=0, keepdims=True)
+            p_hi = np.percentile(s_full_proj, 98, axis=0, keepdims=True)
+            s_full_rgb = np.clip((s_full_proj - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0).reshape(16, 28, 3)
+            per_image_pca_grid.append(s_full_rgb)
+
+            fg_mask_b = (pi_b >= 0.30)
+            fg_mask_b[:28] = False
+            if fg_mask_b.sum() >= 4:
+                f_fg = s_b[fg_mask_b]
+                f_fg_cent = f_fg - f_fg.mean(axis=0, keepdims=True)
+                _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
+                fg_proj = f_fg_cent @ vt_fg[:3].T
+                p_lo_fg = np.percentile(fg_proj, 2, axis=0, keepdims=True)
+                p_hi_fg = np.percentile(fg_proj, 98, axis=0, keepdims=True)
+                fg_norm = np.clip((fg_proj - p_lo_fg) / np.maximum(p_hi_fg - p_lo_fg, 1e-6), 0.0, 1.0)
+                res_fg = np.full((448, 3), 0.04, dtype=np.float32)
+                res_fg[fg_mask_b] = fg_norm
+                fg_grid_batch.append(res_fg.reshape(16, 28, 3))
+            else:
+                res_fg = s_full_rgb * 0.30
+                fg_grid_batch.append(res_fg)
+
         per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
         fg_grid_batch = np.stack(fg_grid_batch, axis=0)
         batch_pca_grid = per_image_pca_grid
@@ -521,40 +510,40 @@ def save_direction_g_visuals(
             v_smooth = F.interpolate(v_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             v_smooth_np = v_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 4].imshow(v_smooth_np)
-            axes[b, 4].set_title("DINO Gốc (Joint SVD)", fontsize=10, fontweight="bold", color="#1f77b4")
+            axes[b, 4].set_title("DINO Gốc (Per-Sample SVD)", fontsize=10, fontweight="bold", color="#1f77b4")
         else:
             axes[b, 4].axis("off")
         axes[b, 4].axis("off")
 
-        # 6. Student PCA Đồng Bộ (Batch-Consistent: Chiếu trên hệ trục SVD chung với DINO)
+        # 6. Student PCA Đồng Bộ (Per-Sample Joint SVD: Chiếu trên hệ trục SVD chung với DINO)
         if batch_pca_grid is not None:
             bp_tensor = torch.from_numpy(batch_pca_grid[b]).permute(2, 0, 1).unsqueeze(0).float()
             bp_smooth = F.interpolate(bp_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             bp_smooth_np = bp_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 5].imshow(bp_smooth_np)
-            axes[b, 5].set_title("Student (Joint SVD)", fontsize=10, fontweight="bold", color="#008080")
+            axes[b, 5].set_title("Student (Đồng Bộ Màu)", fontsize=10, fontweight="bold", color="#008080")
         else:
             axes[b, 5].axis("off")
         axes[b, 5].axis("off")
 
-        # 7. Student PCA Nội Tại (Per-Image: Độ tương phản chi tiết riêng trong từng ảnh)
+        # 7. Student PCA Toàn Cảnh (Full Image PCA: Không gán đen)
         if per_image_pca_grid is not None:
             pca_tensor = torch.from_numpy(per_image_pca_grid[b]).permute(2, 0, 1).unsqueeze(0).float()
             pca_smooth = F.interpolate(pca_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             pca_smooth_np = pca_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 6].imshow(pca_smooth_np)
-            axes[b, 6].set_title("Student PCA Nội Tại", fontsize=10, fontweight="bold", color="#2ca02c")
+            axes[b, 6].set_title("Student PCA Toàn Cảnh", fontsize=10, fontweight="bold", color="#2ca02c")
         else:
             axes[b, 6].axis("off")
         axes[b, 6].axis("off")
 
-        # 8. Student Foreground PCA Feature Map (Object-Centric Detrended: Triệt tiêu gradient xa-gần)
+        # 8. Student Vehicle Part Decomposition (Bóc Tách Chi Tiết Xe)
         if fg_grid_batch is not None:
             fg_tensor = torch.from_numpy(fg_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
             fg_smooth = F.interpolate(fg_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             fg_smooth_np = fg_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 7].imshow(fg_smooth_np)
-            axes[b, 7].set_title("Student FG (Detrended)", fontsize=10, fontweight="bold", color="#d62728")
+            axes[b, 7].set_title("Student Chi Tiết Xe", fontsize=10, fontweight="bold", color="#d62728")
         else:
             axes[b, 7].axis("off")
         axes[b, 7].axis("off")
@@ -718,6 +707,7 @@ def resolve_or_precompute_tam_cache(
     gmm_buffer_size: int = 300000,
     gmm_ema_alpha: float = 0.15,
     rebuild_cache: bool = False,
+    frame_norm_alpha: float = 0.0,
 ) -> Optional[str]:
     """
     Tự động tìm kiếm hoặc kích hoạt tiền xử lý bộ nhớ đệm TAM pi (tam_cache):
@@ -795,6 +785,7 @@ def resolve_or_precompute_tam_cache(
             tam_warmup_frames=tam_warmup_frames,
             gmm_buffer_size=gmm_buffer_size,
             gmm_ema_alpha=gmm_ema_alpha,
+            frame_norm_alpha=frame_norm_alpha,
         )
         return chosen_cache_dir
     except Exception as e:
@@ -849,6 +840,7 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--hf_token": "hf_token",
         "--tam_warmup_frames": "tam_warmup_frames",
         "--tam_cache_dir": "tam_cache_dir",
+        "--frame_norm_alpha": "frame_norm_alpha",
         "--tam_kmeans_iters": "tam_kmeans_iters",
         "--gmm_buffer_size": "gmm_buffer_size",
         "--gmm_refit_steps": "gmm_refit_steps",
@@ -934,6 +926,7 @@ def parse_args():
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
     parser.add_argument("--tam_warmup_frames", type=int, default=200, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 200 frame)")
     parser.add_argument("--tam_cache_dir", type=str, default=None, help="Thư mục chứa cache pi đã tính trước bởi precompute_tam.py (tăng tốc độ nạp 2.5x)")
+    parser.add_argument("--frame_norm_alpha", type=float, default=0.0, help="Hệ số trừ frame-mean trong TAM (mặc định: 0.0 để bảo toàn tuyệt đối đặc trưng DINOv3)")
     parser.add_argument("--rebuild_tam_cache", action="store_true", default=False, help="Xóa cache TAM cũ và tính toán lại từ đầu với TAM_VERSION mới")
     parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
     parser.add_argument("--gmm_buffer_size", type=int, default=300000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 300000 mẫu)")
@@ -1349,7 +1342,13 @@ def train_direction_g():
     if num_gpus > 1:
         frozen_extractor = nn.DataParallel(frozen_extractor)
 
-    pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
+    pos_stats = PositionStats(
+        num_cams=16,
+        num_patches=448,
+        num_states=4,
+        feat_dim=64,
+        frame_norm_alpha=args.frame_norm_alpha,
+    ).to(device)
     calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size, ema_alpha=args.gmm_ema_alpha)
 
     # 3b. Dataloader (đặt TRƯỚC khi tạo heads/optimizer): số camera thực tế của dataset quyết định
@@ -1370,6 +1369,7 @@ def train_direction_g():
             gmm_buffer_size=args.gmm_buffer_size,
             gmm_ema_alpha=args.gmm_ema_alpha,
             rebuild_cache=args.rebuild_tam_cache,
+            frame_norm_alpha=args.frame_norm_alpha,
         )
 
         # Nếu tìm thấy trọng số TAM đã fit từ cache, nạp luôn để bỏ qua warmup offline

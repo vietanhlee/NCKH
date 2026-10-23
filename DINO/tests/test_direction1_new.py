@@ -834,6 +834,83 @@ class TestDirection1New(unittest.TestCase):
             if p.requires_grad:
                 self.assertIsNotNone(p.grad)
 
+    def test_35_tam_dispersion_floor_and_banner_zeroing(self):
+        """Kiểm tra TAM dập tắt triệt để hàng banner timestamp (r=0) và kẹp cận dưới độ phân tán s >= 0.08 chống nổ số học."""
+        from direction1_new.tam import PositionStats, refine_traffic_foreground_map
+
+        B, P, d = 2, 448, 64
+        ps = PositionStats(num_cams=4, num_patches=P, num_states=4, feat_dim=d, frame_norm_alpha=0.0)
+        cids = torch.tensor([0, 1])
+
+        # Gán độ phân tán cực nhỏ (1e-6) ở một số patch để kiểm tra cận dưới s_eff >= 0.08
+        ps.s[0, 50, :] = 1e-6
+        U = F.normalize(torch.randn(B, P, d), p=2, dim=-1)
+
+        a, valid = ps.atypicality(cids, U)
+
+        # 1. Điểm a không được nổ vô cực dù s cực nhỏ
+        self.assertFalse(torch.isnan(a).any())
+        self.assertFalse(torch.isinf(a).any())
+        self.assertLess(a[0, 50].item(), 30.0)  # Nếu không kẹp 0.08, khoảng cách / 1e-6 sẽ nổ hàng triệu!
+
+        # 2. Hàng r=0 (patch 0..27) bắt buộc phải bị dập tắt về chính xác 0.0
+        a_2d = a.view(B, 16, 28)
+        self.assertTrue((a_2d[:, 0, :] == 0.0).all())
+
+        # 3. refine_traffic_foreground_map cũng phải bảo toàn r=0 bằng 0.0
+        mock_pi = torch.rand(B, 16, 28)
+        mock_pi[:, 0, :] = 0.9  # Giả lập dòng timestamp banner bị gán nhầm điểm cao
+        refined_pi = refine_traffic_foreground_map(mock_pi)
+        self.assertTrue((refined_pi[:, 0, :] == 0.0).all())
+
+    def test_36_per_sample_joint_svd_visualization(self):
+        """Kiểm tra hàm save_direction_g_visuals chạy Per-Sample Joint SVD, Full PCA và Part Decomposition mượt mà."""
+        import tempfile
+        from direction1_new.train import save_direction_g_visuals
+
+        B = 2
+        x_orig = torch.rand(B, 3, 256, 448)
+        x_srs = torch.rand(B, 3, 256, 448)
+        pi = torch.rand(B, 16, 28)
+        pi[:, 0, :] = 0.0  # Hàng banner r=0
+        pi[:, 8:12, 10:18] = 0.85  # Giả lập vùng xe
+        mask = torch.zeros(B, 448, dtype=torch.bool)
+        mask[:, 100:150] = True
+
+        vanilla_feats = torch.randn(B, 448, 384)
+        student_feats = torch.randn(B, 448, 384)
+
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            save_direction_g_visuals(
+                x_orig=x_orig,
+                pi=pi,
+                mask=mask,
+                x_srs=x_srs,
+                save_path=tmp_path,
+                epoch=1,
+                patch_features=student_feats,
+                vanilla_patch_features=vanilla_feats,
+            )
+            self.assertTrue(os.path.isfile(tmp_path))
+            self.assertGreater(os.path.getsize(tmp_path), 50000)  # File PNG tạo ra phải hợp lệ và có kích thước đầy đủ
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def test_37_frame_norm_alpha_zero_preservation(self):
+        """Kiểm tra frame_norm_alpha=0.0 bảo toàn nguyên bản phân bố đặc trưng DINOv3 không bị méo mó số học."""
+        from direction1_new.tam import PositionStats
+
+        B, P, d = 2, 448, 64
+        U = torch.randn(B, P, d)
+        expected = F.normalize(U, p=2, dim=-1)
+
+        actual = PositionStats.normalize_frame_features(U, alpha=0.0)
+        self.assertTrue(torch.allclose(actual, expected, atol=1e-6))
+
 
 if __name__ == "__main__":
     unittest.main()
