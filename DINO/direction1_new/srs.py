@@ -166,27 +166,43 @@ def batch_static_region_swap(
     ratio: float = 0.6,
     feather: int = 4,
     continuous_bg: bool = True,
-    color_match: bool = False,
+    color_match: bool = True,
     generator: Optional[torch.Generator] = None,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+    thr: float = 0.2,
+    max_lum_log_ratio: float = 0.47,
+    exclude_top_rows: int = 1,
+    exclude_bottom_rows: int = 0,
+    min_swap_frac: float = 0.10,
+    return_stats: bool = False,
+):
     """
     Hoán đổi vùng tĩnh (SRS) song song toàn bộ batch (B, 3, H, W) trực tiếp trên GPU.
-    Loại bỏ triệt để vòng lặp tuần tự for-loop trên CPU, tăng tốc độ xử lý hơn 80 lần.
+
+    Quy tắc nghiệp vụ (True Background Swap có kiểm soát):
+      1. Bảo vệ xe frame 1: patch có MaxPool3x3(pi1) >= thr (xe giãn 1 patch) không bao giờ bị thay.
+         Ngưỡng thấp (mặc định 0.2) để xe máy có pi ~0.3 không bị thay bằng mặt đường ở view student
+         trong khi teacher vẫn thấy xe (gây mục tiêu học mâu thuẫn).
+      2. Loại xe frame 2: patch có pi2 >= thr + 0.1 không được chép sang (tránh "xe ma").
+      3. Loại banner timestamp: exclude_top_rows / exclude_bottom_rows hàng patch không bao giờ bị swap.
+         Banner là chữ tương phản cao; nếu đổi theo x2, nó trở thành tín hiệu lộ "đã swap".
+      4. Gate điều kiện sáng: chỉ swap khi |log(L1 / L2)| <= max_lum_log_ratio (mặc định log 1.6 ~ 0.47).
+         Tránh ảnh ghép ngày - đêm phi vật lý mà student không bao giờ gặp lúc test.
+      5. Khớp màu (color_match, mặc định bật cả với cặp cùng camera): chuẩn hóa mean/std theo kênh của x2
+         về x1, ước lượng CHỈ trên vùng nền chung được swap -> làm mờ biên ghép.
+      6. Mẫu có diện tích hợp lệ < min_swap_frac sẽ không swap (tránh vá vụn gây artifact).
 
     Args:
-        x1: Tensor batch (B, 3, H, W).
-        x2: Tensor batch (B, 3, H, W).
-        pi1: Tensor bản đồ tiền cảnh x1 (B, Hp, Wp).
-        pi2: Tensor bản đồ tiền cảnh x2 (B, Hp, Wp).
-        p_srs: Xác suất áp dụng hoán nền cho mỗi mẫu in [0, 1].
-        ratio: Tỷ lệ diện tích nền hoán đổi.
+        x1, x2: (B, 3, H, W) trong [0, 1].
+        pi1, pi2: (B, Hp, Wp) bản đồ tiền cảnh.
+        p_srs: Xác suất áp dụng hoán nền cho mỗi mẫu.
+        ratio, continuous_bg: Giữ cho tương thích chữ ký (batch luôn swap liền mạch toàn vùng nền hợp lệ).
         feather: Bán kính làm mềm đường viền (pixels).
-        continuous_bg: Hoán đổi toàn bộ nền tĩnh tự nhiên.
-        color_match: Cân bằng màu sắc giữa 2 camera nếu bật Cross-Camera SRS.
+        return_stats: Nếu True trả thêm dict thống kê (applied, swap_frac, lum_ok) theo mẫu.
 
     Returns:
-        x_student: (B, 3, H, W) Tensor batch sau khi hoán nền.
-        swap_mask_patch: (B, Hp, Wp) bool Tensor ghi nhận các patch thực tế đã hoán đổi.
+        x_student: (B, 3, H, W)
+        swap_mask_patch: (B, Hp, Wp) bool - patch THỰC SỰ bị swap (False ở mẫu không áp dụng).
+        stats (tùy chọn): dict các tensor (B,).
     """
     B, C, H, W = x1.shape
     device = x1.device
@@ -194,54 +210,69 @@ def batch_static_region_swap(
         pi1 = pi1.unsqueeze(0).expand(B, -1, -1)
     if pi2.dim() == 2:
         pi2 = pi2.unsqueeze(0).expand(B, -1, -1)
-
+    pi1 = pi1.float()
+    pi2 = pi2.float()
     Hp, Wp = pi1.shape[-2], pi1.shape[-1]
 
-    # 1. Bảo vệ vùng xe frame 1: MaxPool2d (kernel=3, stride=1, padding=1) tương đương dilation radius=1
-    fg1 = (pi1 >= 0.40).float().unsqueeze(1)  # (B, 1, Hp, Wp)
-    fg1_dilated = F.max_pool2d(fg1, kernel_size=3, stride=1, padding=1) > 0.5  # (B, 1, Hp, Wp)
+    # 1. Bảo vệ xe frame 1 (dilation radius 1 bằng max-pool trên pi)
+    pi1_dil = F.max_pool2d(pi1.unsqueeze(1), kernel_size=3, stride=1, padding=1)  # (B, 1, Hp, Wp)
+    protect1 = pi1_dil >= thr
+    # 2. Loại xe frame 2
+    fg2 = (pi2 >= (thr + 0.1)).unsqueeze(1)
+    eligible = (~protect1) & (~fg2)  # (B, 1, Hp, Wp)
 
-    # 2. Loại trừ vùng xe frame 2 để không chép đè xe ma vào nền
-    fg2 = (pi2 >= 0.45).unsqueeze(1)  # (B, 1, Hp, Wp)
+    # 3. Loại các hàng banner
+    if exclude_top_rows > 0:
+        eligible[:, :, :exclude_top_rows, :] = False
+    if exclude_bottom_rows > 0:
+        eligible[:, :, Hp - exclude_bottom_rows:, :] = False
 
-    # 3. Vùng nền hợp lệ để hoán đổi
-    eligible = (~fg1_dilated) & (~fg2)  # (B, 1, Hp, Wp) bool
+    swap_frac = eligible.float().mean(dim=(1, 2, 3))  # (B,)
 
-    # Fallback: nếu ảnh nào có quá ít ô nền hợp lệ (< 15% diện tích khung hình), dùng (~fg1) & (~fg2)
-    sum_eligible = eligible.sum(dim=(2, 3), keepdim=True)  # (B, 1, 1, 1)
-    min_needed = int(0.15 * Hp * Wp)
-    fallback_mask = sum_eligible < min_needed
-    if fallback_mask.any():
-        eligible_fallback = (~(fg1 > 0.5)) & (~fg2)
-        eligible = torch.where(fallback_mask, eligible_fallback, eligible)
+    # 4. Gate điều kiện sáng (luminance Rec.601)
+    lum_w = torch.tensor([0.299, 0.587, 0.114], device=device, dtype=x1.dtype).view(1, 3, 1, 1)
+    L1 = (x1 * lum_w).sum(dim=1).mean(dim=(1, 2)).clamp(min=1e-3)
+    L2 = (x2 * lum_w).sum(dim=1).mean(dim=(1, 2)).clamp(min=1e-3)
+    lum_ok = torch.abs(torch.log(L1 / L2)) <= max_lum_log_ratio
 
-    # 4. Mặt nạ patch swap
-    swap_mask_patch = eligible.squeeze(1)  # (B, Hp, Wp) bool
+    # 5. Quyết định áp dụng theo mẫu
+    rand_ok = torch.rand((B,), device=device, generator=generator) < p_srs
+    applied = rand_ok & lum_ok & (swap_frac >= min_swap_frac)
+    swap_mask_patch = eligible.squeeze(1) & applied.view(B, 1, 1)
 
-    # 5. Phóng đại lên kích thước pixel (H, W) và làm mềm biên bằng avg_pool2d
-    pixel_mask = F.interpolate(eligible.float(), size=(H, W), mode="bilinear", align_corners=False)
+    # 6. Trọng số pixel: phóng đại + feather (KHÔNG làm mềm vượt vào vùng bảo vệ quá feather px)
+    pixel_mask = F.interpolate(eligible.float(), size=(H, W), mode="nearest")
     if feather > 0:
         k_size = 2 * feather + 1
-        pixel_weight = F.avg_pool2d(pixel_mask, kernel_size=k_size, stride=1, padding=feather)
+        pixel_weight = F.avg_pool2d(pixel_mask, kernel_size=k_size, stride=1, padding=feather,
+                                    count_include_pad=False)
     else:
         pixel_weight = pixel_mask
 
-    # 6. Cân bằng màu nếu color_match=True
+    # 7. Khớp màu theo kênh trên vùng nền chung
     x2_src = x2
     if color_match:
-        mean_x1 = x1.mean(dim=(2, 3), keepdim=True)
-        std_x1 = x1.std(dim=(2, 3), keepdim=True).clamp(min=1e-4)
-        mean_x2 = x2.mean(dim=(2, 3), keepdim=True)
-        std_x2 = x2.std(dim=(2, 3), keepdim=True).clamp(min=1e-4)
-        x2_matched = (x2 - mean_x2) * (std_x1 / std_x2) + mean_x1
-        x2_src = (0.5 * x2 + 0.5 * x2_matched).clamp(0.0, 1.0)
+        wsum = pixel_mask.sum(dim=(2, 3), keepdim=True).clamp(min=1.0)
+        m1 = (x1 * pixel_mask).sum(dim=(2, 3), keepdim=True) / wsum
+        m2 = (x2 * pixel_mask).sum(dim=(2, 3), keepdim=True) / wsum
+        s1 = (((x1 - m1) ** 2 * pixel_mask).sum(dim=(2, 3), keepdim=True) / wsum).sqrt().clamp(min=1e-3)
+        s2 = (((x2 - m2) ** 2 * pixel_mask).sum(dim=(2, 3), keepdim=True) / wsum).sqrt().clamp(min=1e-3)
+        x2_src = ((x2 - m2) * (s1 / s2) + m1).clamp(0.0, 1.0)
 
-    # 7. Quyết định áp dụng SRS theo xác suất p_srs cho từng mẫu trong batch
-    do_srs = (torch.rand((B, 1, 1, 1), device=device, generator=generator) < p_srs).float()
-    effective_w = pixel_weight * do_srs  # (B, 1, H, W)
+    # 8. Trộn
+    effective_w = pixel_weight * applied.view(B, 1, 1, 1).to(pixel_weight.dtype)
+    x_student = ((1.0 - effective_w) * x1 + effective_w * x2_src).clamp(0.0, 1.0)
 
-    # 8. Trộn ma trận trực tiếp trên GPU
-    x_student = (1.0 - effective_w) * x1 + effective_w * x2_src
-    return x_student.clamp(0.0, 1.0), swap_mask_patch
+    if return_stats:
+        stats = {
+            "applied": applied,
+            "applied_rate": float(applied.float().mean().item()),
+            "lum_ok": lum_ok,
+            "lum_ok_all": bool(lum_ok.all().item()),
+            "swap_frac": swap_frac * applied.float(),
+            "swap_frac_mean": float((swap_frac * applied.float()).mean().item()),
+        }
+        return x_student, swap_mask_patch, stats
+    return x_student, swap_mask_patch
 
 

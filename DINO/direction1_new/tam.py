@@ -18,6 +18,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+# Phiên bản thuật toán TAM. BẮT BUỘC tăng mỗi khi thay đổi logic tính atypicality / chuẩn hóa / GMM,
+# vì cache pi (.npy) và tam_stats.pth tính bằng phiên bản cũ sẽ không còn tương thích.
+#   v1: median-normalization, valid=False -> 2.5, mean centering (alpha 0.15 / 1.0)
+#   v2: trimmed-mean centering, cụm trội luôn tĩnh, gate có dilation, chuẩn hóa phân vị 25%
+TAM_VERSION = 2
+
+
+def _robust_frame_scale(
+    a: torch.Tensor,
+    valid: Optional[torch.Tensor] = None,
+    q: float = 0.25,
+) -> torch.Tensor:
+    """
+    Ước lượng mức nền của điểm khác thường a theo từng frame bằng phân vị thấp (mặc định 25%).
+
+    Vì sao không dùng median:
+        Ở cảnh kẹt xe, > 50% patch là xe -> median rơi vào mức của xe -> sau khi chia,
+        xe trông "bình thường" còn nền thấp hơn 1. Phân vị 25% vẫn nằm trong vùng nền
+        miễn là nền chiếm > 25% khung hình, nên ổn định hơn nhiều.
+
+    Args:
+        a: (B, P) hoặc (P,) điểm khác thường.
+        valid: mask bool cùng shape (tùy chọn) - chỉ ước lượng trên patch hợp lệ.
+        q: phân vị dùng làm mức nền.
+    Returns:
+        scale: Tensor broadcast được với a, đã kẹp tối thiểu 1e-3.
+    """
+    a_c = a.clamp(min=1e-4).float()
+    if valid is not None and valid.shape == a.shape:
+        a_c = torch.where(valid.bool(), a_c, torch.full_like(a_c, float("nan")))
+        scale = torch.nanquantile(a_c, q, dim=-1, keepdim=True) if a.dim() >= 2 else torch.nanquantile(a_c, q)
+        scale = torch.nan_to_num(scale, nan=1.0)
+    else:
+        scale = torch.quantile(a_c, q, dim=-1, keepdim=True) if a.dim() >= 2 else torch.quantile(a_c, q)
+    return scale.clamp(min=1e-3).to(a.dtype)
+
+
 class PositionStats(nn.Module):
     """
     Quản lý thống kê đa trạng thái tĩnh theo từng vị trí patch không gian cho các camera.
@@ -70,17 +107,36 @@ class PositionStats(nn.Module):
         self.register_buffer("is_initialized", torch.zeros(num_cams, dtype=torch.bool))
 
     @staticmethod
-    def normalize_frame_features(U: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
+    def normalize_frame_features(U: torch.Tensor, alpha: float = 1.0, trim_ratio: float = 0.30) -> torch.Tensor:
         """
-        Chuẩn hóa trắc quang toàn khung hình (Frame-level Photometric Normalization).
-        Khử thành phần dịch chuyển đồng biến toàn cục (do bóng mây, sương mù, chế độ hồng ngoại ban đêm)
+        Chuẩn hóa trắc quang toàn khung hình (Frame-level Photometric Normalization) bằng Trimmed Mean.
+
+        Khử thành phần dịch chuyển đồng biến toàn cục (bóng mây, sương mù, hồng ngoại ban đêm)
         trước khi đưa vào thống kê theo vị trí.
-        Mặc định alpha = 1.0 (Full Centering) loại bỏ 100% độ dịch chuyển toàn cục giữa ca ngày và ca đêm.
-        U: (B, P, d) hoặc (N, P, d)
+
+        Vì sao dùng trimmed mean thay vì mean toàn khung:
+            Ở khung hình kẹt xe, mean toàn khung bị kéo về phía đặc trưng xe, làm MỌI patch nền
+            lệch khỏi tâm cụm tĩnh (đã fit trên khung hình thưa) -> nền bị đánh giá "bất thường".
+            Ta ước lượng tâm khung chỉ trên (1 - trim_ratio) patch gần tâm sơ bộ nhất,
+            loại bỏ các patch lệch xa nhất (thường là xe) khỏi phép ước lượng.
+
+        Args:
+            U: (B, P, d) hoặc (N, P, d)
+            alpha: Hệ số trừ tâm (1.0 = Full Centering).
+            trim_ratio: Tỷ lệ patch lệch xa nhất bị loại khỏi ước lượng tâm (mặc định 30%).
         """
         if alpha <= 0.0:
             return F.normalize(U, p=2, dim=-1)
-        frame_mean = U.mean(dim=1, keepdim=True)  # (B, 1, d)
+        B, P, d = U.shape
+        rough_mean = U.mean(dim=1, keepdim=True)  # (B, 1, d) tâm sơ bộ
+        if 0.0 < trim_ratio < 1.0 and P >= 8:
+            keep = max(1, int(round(P * (1.0 - trim_ratio))))
+            dist = (U - rough_mean).pow(2).sum(dim=-1)  # (B, P)
+            idx = torch.topk(dist, k=keep, dim=1, largest=False).indices  # (B, keep)
+            kept = torch.gather(U, 1, idx.unsqueeze(-1).expand(-1, -1, d))
+            frame_mean = kept.mean(dim=1, keepdim=True)
+        else:
+            frame_mean = rough_mean
         U_centered = U - alpha * frame_mean
         return F.normalize(U_centered, p=2, dim=-1)
 
@@ -304,7 +360,14 @@ class PositionStats(nn.Module):
         s_max = self.s_max_mult * s_median.clamp(min=0.05)
 
         static_mask = (w_b >= self.w_min) & (s_b <= s_max)
-        return static_mask
+
+        # Cụm có tần suất lớn nhất tại mỗi vị trí LUÔN được coi là trạng thái tĩnh:
+        # Trạng thái chiếm ưu thế theo thời gian chính là nền. Nếu không có ràng buộc này,
+        # ở làn đông (hoặc khi K cụm bị chia giữa ngày/đêm/đường ướt, mỗi cụm w < w_min)
+        # vị trí đó không có trạng thái tĩnh nào -> luôn bị coi là "bất thường" -> pi đỏ thành dải làn.
+        top_k = torch.argmax(w_b, dim=-1, keepdim=True)  # (B, P, 1)
+        dominant = torch.zeros_like(static_mask).scatter_(-1, top_k, True)
+        return static_mask | dominant
 
     @torch.no_grad()
     def atypicality(self, cids: torch.Tensor, U: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -336,9 +399,11 @@ class PositionStats(nn.Module):
         norm_dist_masked = norm_dist.masked_fill(~is_static, float("inf"))
         a = torch.min(norm_dist_masked, dim=-1)[0]  # (B, P)
 
-        # Nếu không có trạng thái tĩnh nào (~valid, vị trí luôn biến động do xe liên tục),
-        # gán điểm khác thường cao (2.5) để phản ánh đúng đó là vùng hoạt động tiền cảnh mạnh
-        a = torch.where(valid, a, torch.tensor(2.5, device=U.device, dtype=a.dtype))
+        # static_set luôn chứa cụm trội nên valid đúng ở mọi vị trí. Phòng hờ trường hợp
+        # dữ liệu suy biến: dùng khoảng cách tới cụm gần nhất (KHÔNG gán hằng số cao như 2.5,
+        # vì hằng số đó khiến cả làn đông luôn bị coi là tiền cảnh bất kể lúc này có xe hay không).
+        a_fallback = torch.min(norm_dist, dim=-1)[0]
+        a = torch.where(valid, a, a_fallback)
 
         # Bộ lọc tương phản không gian cục bộ tương đối (Relative Local Contrast & High-Pass Filter):
         # Khi mặt đường bị thay đổi ánh sáng diện rộng (đèn pha, mưa ướt, phản quang), cả mảng lớn
@@ -357,6 +422,10 @@ class PositionStats(nn.Module):
             local_contrast = F.relu(a_2d - local_mean) / (local_std + 0.15)
             # Gate mềm: Dập tắt mảng đường ướt phản quang đồng nhất, bảo toàn và khuếch đại xe cộ
             contrast_gate = torch.sigmoid(4.0 * (local_contrast - 0.5))
+            # Dilation 3x3 của gate: ruột xe lớn (bus, xe tải, cụm xe dày) có a cao đồng đều nên
+            # contrast nội bộ thấp; nhờ dilation, ruột xe kế thừa gate cao từ viền xe, không bị "khoét ruột".
+            # Mảng đường ướt trải rộng không có viền tương phản nên gate vẫn thấp sau dilation.
+            contrast_gate = F.max_pool2d(contrast_gate, kernel_size=3, stride=1, padding=1)
             a_filtered = a_2d * (0.05 + 0.95 * contrast_gate)
             a = a_filtered.reshape(B, P)
 
@@ -422,14 +491,9 @@ class GMMCalibrator:
             max_samples: Hạn ngạch số mẫu tối đa (dùng cho Warmup Equal Quota)
             subsample_ratio: Tỷ lệ lấy mẫu ngẫu nhiên (ví dụ 0.15 để giảm tương quan không gian)
         """
-        # Chuẩn hóa theo mức nền trung vị của từng frame: loại bỏ trôi dạt phân bố tuyệt đối giữa ngày và đêm
+        # Chuẩn hóa theo mức nền phân vị 25% của từng frame (xem _robust_frame_scale)
         if torch.is_tensor(a):
-            if a.dim() >= 2:
-                med_a = torch.median(a.clamp(min=1e-4), dim=-1, keepdim=True)[0]
-                a_norm = a / med_a.clamp(min=1e-3)
-            else:
-                med_a = torch.median(a.clamp(min=1e-4))
-                a_norm = a / med_a.clamp(min=1e-3)
+            a_norm = a / _robust_frame_scale(a, valid)
             valid_mask = valid.detach().cpu().numpy().astype(bool)
             valid_a = a_norm.detach().cpu().numpy()[valid_mask].flatten()
         else:
@@ -552,13 +616,8 @@ class GMMCalibrator:
         Returns:
             pi: (B, P) Tensor xác suất tiền cảnh
         """
-        # Chuẩn hóa theo mức nền trung vị của từng frame: loại bỏ trôi dạt thang đo giữa ngày và đêm
-        if a.dim() >= 2:
-            med_a = torch.median(a.clamp(min=1e-4), dim=-1, keepdim=True)[0]
-            a_norm = a / med_a.clamp(min=1e-3)
-        else:
-            med_a = torch.median(a.clamp(min=1e-4))
-            a_norm = a / med_a.clamp(min=1e-3)
+        # Chuẩn hóa theo mức nền phân vị 25% của từng frame (đồng nhất với push)
+        a_norm = a / _robust_frame_scale(a)
 
         log_a = torch.log(a_norm.clamp(min=1e-4, max=100.0))
 
@@ -677,8 +736,10 @@ def refine_traffic_foreground_map(
         pi_2d = pi_refined if is_3d else pi_refined.unsqueeze(0)  # (B, 16, 28)
         # avg_pool 3x3 để đếm mật độ hỗ trợ của 8 ô lân cận
         nbr_support = F.avg_pool2d(pi_2d.unsqueeze(1), kernel_size=3, stride=1, padding=1).squeeze(1)
-        # Ô đơn độc có pi cao nhưng cả cụm lân cận < 0.12 -> dập tắt
-        isolated_mask = (pi_2d > 0.35) & (nbr_support < 0.12)
+        # Ô đơn độc có pi trung bình nhưng cả cụm lân cận < 0.12 -> dập tắt (nhiễu đo).
+        # Ô cô lập có pi CAO (>= 0.6) được giữ nguyên: đó thường là xe máy lẻ chiếm đúng 1 patch,
+        # chính là loại đỉnh cô lập mà contrast gate trong atypicality đã ưu tiên -> hai cơ chế nhất quán.
+        isolated_mask = (pi_2d > 0.35) & (pi_2d < 0.60) & (nbr_support < 0.12)
         pi_2d = torch.where(isolated_mask, pi_2d * 0.15, pi_2d)
         pi_refined = pi_2d if is_3d else pi_2d.squeeze(0)
 

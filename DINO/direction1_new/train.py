@@ -331,10 +331,10 @@ def save_direction_g_visuals(
       Cột 2: Bản đồ tiền cảnh bất thường TAM pi (Heatmap)
       Cột 3: Mặt nạ che phân tầng AGM (Mask)
       Cột 4: Ảnh sau khi hoán đổi vùng tĩnh SRS (kèm mức sai khác nền Δ)
-      Cột 5: DINOv3 Gốc PCA (Pretrained Baseline - Đối chứng nguyên bản)
-      Cột 6: Student PCA Đồng Bộ (Batch-Consistent: màu nền & xe nhất quán qua các camera)
+      Cột 5: DINOv3 Gốc PCA (Pretrained Baseline - Chiếu trên không gian SVD chung)
+      Cột 6: Student PCA Đồng Bộ (Batch-Consistent - Chiếu trên không gian SVD chung với DINO)
       Cột 7: Student PCA Nội Tại (Per-Image: độ tương phản chi tiết riêng từng ảnh)
-      Cột 8: Student Foreground PCA (Object-Centric: bóc tách chi tiết thân xe)
+      Cột 8: Student Foreground PCA (Object-Centric Detrended: bóc tách chi tiết thân xe, triệt tiêu gradient phối cảnh)
     """
     B = min(4, x_orig.shape[0])
     fig, axes = plt.subplots(B, 8, figsize=(28, 3.2 * B), dpi=150)
@@ -343,8 +343,28 @@ def save_direction_g_visuals(
 
     corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
 
-    def _compute_twostage_pca(feat: np.ndarray, fg_mask_in: Optional[np.ndarray] = None) -> np.ndarray:
-        """Helper Two-Stage PCA chuẩn Meta DINOv2: Stage 1 tách FG qua PC1, Stage 2 bóc tách bộ phận qua PC2-4."""
+    # Khởi tạo tọa độ không gian 16x28 phục vụ khử gradient phối cảnh (Spatial Detrending)
+    r_coords = np.repeat(np.arange(16, dtype=np.float32) / 15.0 - 0.5, 28)
+    c_coords = np.tile(np.arange(28, dtype=np.float32) / 27.0 - 0.5, 16)
+    spatial_coords_full = np.stack([r_coords, c_coords], axis=1)  # (448, 2)
+
+    def _detrend_spatial(feat_mat: np.ndarray, coords_mat: np.ndarray) -> np.ndarray:
+        """Loại trừ tương quan tuyến tính với tọa độ không gian (r, c) để triệt tiêu gradient phối cảnh xa-gần."""
+        M = feat_mat.shape[0]
+        if M <= 4:
+            return feat_mat
+        X = np.concatenate([coords_mat, np.ones((M, 1), dtype=np.float32)], axis=1)  # (M, 3)
+        # Ridge regression ổn định số học
+        lambda_reg = 1e-2 * np.eye(3, dtype=np.float32)
+        try:
+            W = np.linalg.solve(X.T @ X + lambda_reg, X.T @ feat_mat)
+            feat_detrend = feat_mat - (X @ W)
+            return feat_detrend
+        except Exception:
+            return feat_mat
+
+    def _compute_twostage_pca(feat: np.ndarray, fg_mask_in: Optional[np.ndarray] = None, detrend_spatial: bool = False) -> np.ndarray:
+        """Helper Two-Stage PCA: Stage 1 tách FG qua PC1/TAM, Stage 2 bóc tách bộ phận xe qua PC2-4."""
         N, D = feat.shape
         f_mean = feat.mean(axis=0, keepdims=True)
         f_cent = feat - f_mean
@@ -364,6 +384,10 @@ def save_direction_g_visuals(
         res_rgb = np.full((N, 3), 0.05, dtype=np.float32)
         if fg_mask.sum() >= 4:
             f_fg = feat[fg_mask]
+            if detrend_spatial:
+                coords_fg = spatial_coords_full[fg_mask]
+                f_fg = _detrend_spatial(f_fg, coords_fg)
+
             f_fg_mean = f_fg.mean(axis=0, keepdims=True)
             f_fg_cent = f_fg - f_fg_mean
             _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
@@ -379,61 +403,88 @@ def save_direction_g_visuals(
             res_rgb = np.clip((pca3 - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0)
         return res_rgb.reshape(16, 28, 3)
 
-    # 1. Tiền xử lý Two-Stage PCA cho DINO gốc (Vanilla Pretrained) - Loại bỏ dải gradient trơn
-    vanilla_pca_grid_batch = []
-    if vanilla_patch_features is not None:
-        v_feats_np = vanilla_patch_features[:B].detach().cpu().numpy()
-        for b in range(B):
-            v_pca_map = _compute_twostage_pca(v_feats_np[b])
-            vanilla_pca_grid_batch.append(v_pca_map)
-        vanilla_pca_grid_batch = np.stack(vanilla_pca_grid_batch, axis=0)
-    else:
-        vanilla_pca_grid_batch = None
-
-    # 2. Tiền xử lý PCA cho Student (Truyền từ Student thực thụ)
-    batch_pca_grid = []
+    # 1. Tính toán Unified SVD Projector chung cho DINO Gốc và Student (Cột 5 & Cột 6)
+    vanilla_pca_grid_batch = None
+    batch_pca_grid = None
     per_image_pca_grid = []
     fg_grid_batch = []
 
-    if patch_features is not None:
-        feats_np = patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
+    if vanilla_patch_features is not None and patch_features is not None:
+        v_feats_np = vanilla_patch_features[:B].detach().cpu().numpy()  # (B, 448, D)
+        s_feats_np = patch_features[:B].detach().cpu().numpy()          # (B, 448, D)
 
-        # A. Batch-Consistent PCA: Chiếu toàn bộ B ảnh lên 1 hệ trục SVD chung -> Đồng bộ màu sắc xuyên camera
-        feats_all = feats_np.reshape(B * 448, -1)
-        all_mean = feats_all.mean(axis=0, keepdims=True)
-        feats_all_cent = feats_all - all_mean
-        _, _, vt_batch = np.linalg.svd(feats_all_cent, full_matrices=False)
-        pca3_batch_all = feats_all_cent @ vt_batch[:3].T  # (B * 448, 3)
+        # Chuẩn hóa độc lập theo từng mô hình trước khi gộp
+        v_flat = v_feats_np.reshape(B * 448, -1)
+        s_flat = s_feats_np.reshape(B * 448, -1)
 
-        corners_batch_idx = [b_idx * 448 + c_idx for b_idx in range(B) for c_idx in corners_idx]
+        v_cent = v_flat - v_flat.mean(axis=0, keepdims=True)
+        v_norm = v_cent / (v_flat.std(axis=0, keepdims=True) + 1e-6)
+
+        s_cent = s_flat - s_flat.mean(axis=0, keepdims=True)
+        s_norm = s_cent / (s_flat.std(axis=0, keepdims=True) + 1e-6)
+
+        # Fit SVD chung trên không gian liên hiệp
+        joint_feats = np.concatenate([v_norm, s_norm], axis=0)  # (2 * B * 448, D)
+        _, _, vt_joint = np.linalg.svd(joint_feats, full_matrices=False)
+        proj_joint = vt_joint[:3].T  # (D, 3)
+
+        # Chiếu cả hai mô hình lên cùng một hệ trục không gian
+        v_proj = v_norm @ proj_joint  # (B * 448, 3)
+        s_proj = s_norm @ proj_joint  # (B * 448, 3)
+
+        # Căn dấu theo vùng nền: Lấy các góc hoặc patch có pi < 0.2
+        pi_flat = pi[:B].detach().cpu().numpy().reshape(B * 448)
+        bg_idx = np.where(pi_flat < 0.2)[0]
+        if len(bg_idx) < 16:
+            bg_idx = [b_idx * 448 + c_idx for b_idx in range(B) for c_idx in corners_idx]
+
         for c in range(3):
-            if pca3_batch_all[corners_batch_idx, c].mean() > pca3_batch_all[:, c].mean():
-                pca3_batch_all[:, c] = -pca3_batch_all[:, c]
+            if v_proj[bg_idx, c].mean() > v_proj[:, c].mean():
+                v_proj[:, c] = -v_proj[:, c]
+                s_proj[:, c] = -s_proj[:, c]
 
-        bp_min = np.percentile(pca3_batch_all, 1, axis=0, keepdims=True)
-        bp_max = np.percentile(pca3_batch_all, 99, axis=0, keepdims=True)
-        pca3_batch_norm = np.clip((pca3_batch_all - bp_min) / np.maximum(bp_max - bp_min, 1e-6), 0.0, 1.0)
-        batch_pca_grid = pca3_batch_norm.reshape(B, 16, 28, 3)
+        # Chuẩn hóa phân vị chung trên toàn bộ miền chiếu liên hiệp
+        all_proj = np.concatenate([v_proj, s_proj], axis=0)
+        p_min = np.percentile(all_proj, 1, axis=0, keepdims=True)
+        p_max = np.percentile(all_proj, 99, axis=0, keepdims=True)
 
-        # B. Per-Image PCA và Foreground PCA độc lập cho từng ảnh
+        v_rgb = np.clip((v_proj - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
+        s_rgb = np.clip((s_proj - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
+
+        vanilla_pca_grid_batch = v_rgb.reshape(B, 16, 28, 3)
+        batch_pca_grid = s_rgb.reshape(B, 16, 28, 3)
+
+        # 2. Xử lý Cột 7 (Per-Image) và Cột 8 (Foreground Detrended)
         for b in range(B):
-            f_b = feats_np[b]  # (448, D)
+            f_b = s_feats_np[b]  # (448, D)
             pi_b = pi[b].detach().cpu().numpy().reshape(-1)
-            fg_mask_b = (pi_b > 0.40)
+            # Ngưỡng tiền cảnh chung pi >= 0.50
+            fg_mask_b = (pi_b >= 0.50)
             if fg_mask_b.sum() < 4:
-                fg_mask_b = (pi_b >= np.percentile(pi_b, 80))
+                fg_mask_b = (pi_b >= np.percentile(pi_b, 85))
 
-            # Student Two-Stage PCA
+            # Student Two-Stage PCA nội tại
             per_image_pca_grid.append(_compute_twostage_pca(f_b))
-            # Student Foreground PCA có định hướng bởi TAM
-            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b))
+            # Student Foreground PCA có Detrending tọa độ không gian (Triệt tiêu triệt để gradient phối cảnh xa-gần)
+            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b, detrend_spatial=True))
 
         per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
         fg_grid_batch = np.stack(fg_grid_batch, axis=0)
-    else:
-        batch_pca_grid = None
-        per_image_pca_grid = None
-        fg_grid_batch = None
+
+    elif patch_features is not None:
+        # Fallback khi chưa có vanilla_patch_features
+        s_feats_np = patch_features[:B].detach().cpu().numpy()
+        for b in range(B):
+            f_b = s_feats_np[b]
+            pi_b = pi[b].detach().cpu().numpy().reshape(-1)
+            fg_mask_b = (pi_b >= 0.50)
+            if fg_mask_b.sum() < 4:
+                fg_mask_b = (pi_b >= np.percentile(pi_b, 85))
+            per_image_pca_grid.append(_compute_twostage_pca(f_b))
+            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b, detrend_spatial=True))
+        per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
+        fg_grid_batch = np.stack(fg_grid_batch, axis=0)
+        batch_pca_grid = per_image_pca_grid
 
     for b in range(B):
         # 1. Ảnh gốc
@@ -470,18 +521,18 @@ def save_direction_g_visuals(
             v_smooth = F.interpolate(v_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             v_smooth_np = v_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 4].imshow(v_smooth_np)
-            axes[b, 4].set_title("DINO Gốc PCA (Pretrained)", fontsize=10, fontweight="bold", color="#1f77b4")
+            axes[b, 4].set_title("DINO Gốc (Joint SVD)", fontsize=10, fontweight="bold", color="#1f77b4")
         else:
             axes[b, 4].axis("off")
         axes[b, 4].axis("off")
 
-        # 6. Student PCA Đồng Bộ (Batch-Consistent: Màu sắc mặt đường & xe nhất quán giữa các camera)
+        # 6. Student PCA Đồng Bộ (Batch-Consistent: Chiếu trên hệ trục SVD chung với DINO)
         if batch_pca_grid is not None:
             bp_tensor = torch.from_numpy(batch_pca_grid[b]).permute(2, 0, 1).unsqueeze(0).float()
             bp_smooth = F.interpolate(bp_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             bp_smooth_np = bp_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 5].imshow(bp_smooth_np)
-            axes[b, 5].set_title("Student PCA Đồng Bộ Cam", fontsize=10, fontweight="bold", color="#008080")
+            axes[b, 5].set_title("Student (Joint SVD)", fontsize=10, fontweight="bold", color="#008080")
         else:
             axes[b, 5].axis("off")
         axes[b, 5].axis("off")
@@ -497,13 +548,13 @@ def save_direction_g_visuals(
             axes[b, 6].axis("off")
         axes[b, 6].axis("off")
 
-        # 8. Student Foreground PCA Feature Map (Object-Centric bóc tách chi tiết phương tiện)
+        # 8. Student Foreground PCA Feature Map (Object-Centric Detrended: Triệt tiêu gradient xa-gần)
         if fg_grid_batch is not None:
             fg_tensor = torch.from_numpy(fg_grid_batch[b]).permute(2, 0, 1).unsqueeze(0).float()
             fg_smooth = F.interpolate(fg_tensor, size=(H_orig, W_orig), mode="bilinear", align_corners=False)
             fg_smooth_np = fg_smooth.squeeze(0).permute(1, 2, 0).numpy().clip(0.0, 1.0)
             axes[b, 7].imshow(fg_smooth_np)
-            axes[b, 7].set_title("Student Foreground PCA", fontsize=10, fontweight="bold", color="#d62728")
+            axes[b, 7].set_title("Student FG (Detrended)", fontsize=10, fontweight="bold", color="#d62728")
         else:
             axes[b, 7].axis("off")
         axes[b, 7].axis("off")
@@ -662,18 +713,23 @@ def resolve_or_precompute_tam_cache(
     batch_size: int = 32,
     num_workers: int = 4,
     hf_token: str = "",
+    weights_path: Optional[str] = None,
     tam_warmup_frames: Optional[int] = None,
     gmm_buffer_size: int = 300000,
     gmm_ema_alpha: float = 0.15,
+    rebuild_cache: bool = False,
 ) -> Optional[str]:
     """
     Tự động tìm kiếm hoặc kích hoạt tiền xử lý bộ nhớ đệm TAM pi (tam_cache):
     1. Quét các vị trí tiềm năng (requested_cache_dir, tam_cache, data_dir/../tam_cache, output_dir/tam_cache).
-    2. Nếu tìm thấy thư mục chứa file .npy hợp lệ: tự động nạp trực tiếp.
-    3. Nếu chưa có: tự động chạy precompute_tam_cache để trích xuất trước toàn bộ pi rồi nạp vào.
+    2. Xác thực phiên bản TAM_VERSION trong cache_meta.json: từ chối tuyệt đối nạp cache từ phiên bản cũ.
+    3. Nếu chưa có hoặc phiên bản cũ: tự động chạy precompute_tam_cache để trích xuất trước toàn bộ pi.
     """
     if not data_dir or not os.path.isdir(data_dir):
         return None
+
+    import shutil
+    from direction1_new.tam import TAM_VERSION
 
     data_parent = os.path.dirname(os.path.abspath(data_dir))
     candidate_dirs = []
@@ -686,20 +742,36 @@ def resolve_or_precompute_tam_cache(
         "/workspace/tam_cache",
     ])
 
-    # 1. Tìm xem có thư mục nào đã chứa cache hoàn chỉnh không
+    # 1. Tìm xem có thư mục nào đã chứa cache hoàn chỉnh và đúng TAM_VERSION không
     for c_dir in candidate_dirs:
         if os.path.isdir(c_dir):
+            if rebuild_cache:
+                print(f"🗑️ [TAM Cache Rebuild] Nhận cờ --rebuild_tam_cache. Đang xóa cache cũ tại: '{c_dir}'...")
+                shutil.rmtree(c_dir, ignore_errors=True)
+                continue
+
             meta_file = os.path.join(c_dir, "cache_meta.json")
             has_cache = False
+            version_match = False
             if os.path.isfile(meta_file):
-                has_cache = True
+                try:
+                    with open(meta_file, "r", encoding="utf-8") as f_meta:
+                        meta = json.load(f_meta)
+                        c_ver = meta.get("tam_version", 1)
+                        if c_ver == TAM_VERSION:
+                            version_match = True
+                            has_cache = True
+                        else:
+                            print(f"⚠️ [TAM Cache Version Mismatch] Cache tại '{c_dir}' có tam_version={c_ver}, "
+                                  f"nhưng thuật toán hiện tại yêu cầu TAM_VERSION={TAM_VERSION}. "
+                                  f"Tự động bỏ qua cache cũ để tái tính toán chuẩn xác!")
+                except Exception as e_meta:
+                    print(f"⚠️ [TAM Cache Warning] Lỗi đọc {meta_file}: {e_meta}")
             else:
-                for root, _, files in os.walk(c_dir):
-                    if any(f.endswith(".npy") for f in files):
-                        has_cache = True
-                        break
-            if has_cache:
-                print(f"⚡ [TAM Cache Auto-Detect] Đã tìm thấy bộ nhớ đệm TAM tại: '{c_dir}'. Tự động nạp trực tiếp!")
+                print(f"⚠️ [TAM Cache Notice] Không tìm thấy cache_meta.json trong '{c_dir}' (có thể từ phiên bản cũ thiếu version). Bỏ qua!")
+
+            if has_cache and version_match:
+                print(f"⚡ [TAM Cache Auto-Detect] Đã tìm thấy bộ nhớ đệm TAM hợp lệ (version {TAM_VERSION}) tại: '{c_dir}'. Tự động nạp trực tiếp!")
                 return c_dir
 
     # 2. Nếu chưa có bất kỳ cache nào, tự động kích hoạt tiền xử lý precompute
@@ -715,6 +787,7 @@ def resolve_or_precompute_tam_cache(
             data_dir=data_dir,
             cache_dir=chosen_cache_dir,
             model_name=model_name,
+            weights=weights_path,
             batch_size=batch_size,
             num_workers=num_workers,
             device_str=device,
@@ -811,6 +884,9 @@ def parse_args():
     parser.add_argument("--mask_mode", type=str, default="block", choices=["patch", "block", "random"],
                         help="Chế độ che AGM: 'block' (liền khối xe), 'patch' (phân tầng rời rạc), 'random' (ngẫu nhiên)")
     parser.add_argument("--p_srs", type=float, default=0.5, help="Xác suất áp dụng SRS hoán nền")
+    parser.add_argument("--srs_thr", type=float, default=0.2, help="Ngưỡng pi xác định xe cần bảo vệ trong SRS (mặc định: 0.2)")
+    parser.add_argument("--srs_exclude_top_rows", type=int, default=1, help="Số hàng patch trên cùng loại khỏi SRS để giữ nguyên banner timestamp (mặc định: 1 hàng = 16px)")
+    parser.add_argument("--srs_max_lum_ratio", type=float, default=0.47, help="Ngưỡng log tỷ lệ độ sáng cực đại cho phép swap (|log(L1/L2)| <= 0.47 ~ tỷ lệ 1.6)")
     parser.add_argument("--srs_continuous", action="store_true", default=True, help="Hoán đổi toàn bộ nền tĩnh tự nhiên (thay vì chắp vá từng patch)")
     parser.add_argument("--no_srs_continuous", dest="srs_continuous", action="store_false")
     parser.add_argument("--cross_cam_srs", action="store_true", default=False, help="Ablation: Hoán nền từ camera khác để triệt góc máy")
@@ -828,6 +904,8 @@ def parse_args():
     parser.add_argument("--use_patch_var", action="store_true", default=True, help="Bật Patch-level Variance Regularizer chống Dimensional Collapse")
     parser.add_argument("--no_patch_var", dest="use_patch_var", action="store_false")
     parser.add_argument("--lambda_patch_var", type=float, default=0.10, help="Hệ số trọng số Patch Variance Loss")
+    parser.add_argument("--patch_var_target_std", type=float, default=0.5, help="Mức std mục tiêu cho Patch Variance Loss (mặc định: 0.5)")
+    parser.add_argument("--patch_smooth_weight", type=float, default=0.20, help="Trọng số của Spatial Smoothness Regularizer (mặc định: 0.20)")
     parser.add_argument("--use_anchor", action="store_true", default=True, help="Bật Feature Anchor Loss chống trôi dạt biểu diễn khỏi DINOv3 gốc")
     parser.add_argument("--no_anchor", dest="use_anchor", action="store_false")
     parser.add_argument("--lambda_anchor", type=float, default=0.05, help="Hệ số trọng số Feature Anchor Loss")
@@ -856,6 +934,7 @@ def parse_args():
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
     parser.add_argument("--tam_warmup_frames", type=int, default=200, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 200 frame)")
     parser.add_argument("--tam_cache_dir", type=str, default=None, help="Thư mục chứa cache pi đã tính trước bởi precompute_tam.py (tăng tốc độ nạp 2.5x)")
+    parser.add_argument("--rebuild_tam_cache", action="store_true", default=False, help="Xóa cache TAM cũ và tính toán lại từ đầu với TAM_VERSION mới")
     parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
     parser.add_argument("--gmm_buffer_size", type=int, default=300000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 300000 mẫu)")
     parser.add_argument("--gmm_refit_steps", type=int, default=100, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator (mặc định: 100)")
@@ -1115,18 +1194,18 @@ def train_direction_g():
                 else:
                     override_info.append((key, getattr(args, key), ckpt_args[key]))
 
-            print("\n" + "=" * 80)
-            print(" ⚙️ [SMART HYPERPARAMETER RESTORATION] ĐỒNG BỘ SIÊU THAM SỐ TỪ CHECKPOINT")
-            print("=" * 80)
-            if restored_info:
-                print("   ✅ Tự động kế thừa các Hyperparameters từ checkpoint cũ:")
-                for k, v in restored_info:
-                    print(f"      - {k:<15}: {v}")
-            if override_info:
-                print("   ⚡ Ưu tiên tham số người dùng chỉ định trên CLI (ghi đè checkpoint cũ):")
-                for k, curr_v, old_v in override_info:
-                    print(f"      - {k:<15}: {curr_v} (thay vì {old_v} từ checkpoint)")
-            print("=" * 80 + "\n")
+        print("\n" + "=" * 80)
+        print(" ⚙️ [SMART HYPERPARAMETER RESTORATION] ĐỒNG BỘ SIÊU THAM SỐ TỪ CHECKPOINT")
+        print("=" * 80)
+        if restored_info:
+            print("   ✅ Tự động kế thừa các Hyperparameters từ checkpoint cũ:")
+            for k, v in restored_info:
+                print(f"      - {k:<15}: {v}")
+        if override_info:
+            print("   ⚡ Ưu tiên tham số người dùng chỉ định trên CLI (ghi đè checkpoint cũ):")
+            for k, curr_v, old_v in override_info:
+                print(f"      - {k:<15}: {curr_v} (thay vì {old_v} từ checkpoint)")
+        print("=" * 80 + "\n")
 
     # 1. Phát hiện phần cứng và thiết lập Multi-GPU tự động
     primary_device, num_gpus, gpu_names = get_available_devices()
@@ -1184,7 +1263,7 @@ def train_direction_g():
         scaler = torch.cuda.amp.GradScaler(enabled=(use_amp and use_scaler))
 
     # 2. Khởi tạo Student & Teacher backbone và Projection Heads
-    effective_backbone_weights = args.weights or (args.resume if (args.resume and os.path.isfile(args.resume)) else None)
+    effective_backbone_weights = args.weights
     print(f"📦 [Backbone] Nạp mô hình Student DINOv3 '{args.model_name}'...")
     student_backbone, embed_dim, patch_size = get_dino_backbone(
         model_name=args.model_name,
@@ -1240,11 +1319,15 @@ def train_direction_g():
 
     # 3. Module FrozenExtractor & PositionStats cho TAM
     print("🔍 [TAM] Khởi tạo FrozenExtractor & PositionStats...")
-    # Tạo bản sao độc lập của teacher_backbone để đảm bảo:
-    # 1. FrozenExtractor đóng băng tuyệt đối, không can thiệp vào requires_grad của Student
-    # 2. Không cần tải lại trọng số từ HuggingFace Hub lần 2
-    # 3. Toàn bộ tham số và buffers nằm chuẩn trên primary device (cuda:0)
-    frozen_backbone = copy.deepcopy(raw_t.backbone)
+    # Frozen Backbone BẮT BUỘC luôn là DINOv3 gốc nguyên bản, KHÔNG sao chép từ teacher/student
+    # để triệt tiêu hoàn toàn nguy cơ nhiễm student weights khi resume qua các session.
+    frozen_backbone, _, _ = get_dino_backbone(
+        model_name=args.model_name,
+        pretrained=True,
+        weights_path=args.weights,
+        device=device,
+        hf_token=args.hf_token,
+    )
     for p in frozen_backbone.parameters():
         p.requires_grad = False
 
@@ -1269,14 +1352,132 @@ def train_direction_g():
     pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
     calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size, ema_alpha=args.gmm_ema_alpha)
 
+    # 3b. Dataloader (đặt TRƯỚC khi tạo heads/optimizer): số camera thực tế của dataset quyết định
+    #     kích thước CameraAdversarialHead. Nếu tạo head trước rồi mở rộng sau, lớp mới sẽ nằm ngoài optimizer.
+    #     Lưu ý thứ tự: TAM stats từ cache được nạp ở đây, sau đó resume (nếu có) sẽ ghi đè bằng trạng thái mới hơn.
+    active_tam_cache = None
+    if args.data_dir and os.path.isdir(args.data_dir):
+        active_tam_cache = resolve_or_precompute_tam_cache(
+            data_dir=args.data_dir,
+            requested_cache_dir=args.tam_cache_dir,
+            output_dir=args.output_dir,
+            model_name=args.model_name,
+            device=args.device,
+            batch_size=min(64, max(16, args.batch_size)),
+            num_workers=args.num_workers,
+            hf_token=args.hf_token,
+            tam_warmup_frames=args.tam_warmup_frames,
+            gmm_buffer_size=args.gmm_buffer_size,
+            gmm_ema_alpha=args.gmm_ema_alpha,
+            rebuild_cache=args.rebuild_tam_cache,
+        )
+
+        # Nếu tìm thấy trọng số TAM đã fit từ cache, nạp luôn để bỏ qua warmup offline
+        if active_tam_cache:
+            stats_pth = os.path.join(active_tam_cache, "tam_stats.pth")
+            if os.path.isfile(stats_pth):
+                try:
+                    s_ckpt = torch.load(stats_pth, map_location=device, weights_only=False)
+                except TypeError:
+                    s_ckpt = torch.load(stats_pth, map_location=device)
+                if "pos_stats" in s_ckpt:
+                    pos_stats.load_state_dict(s_ckpt["pos_stats"])
+                if "calibrator" in s_ckpt:
+                    calibrator.load_state_dict(s_ckpt["calibrator"])
+                args.skip_tam_warmup = True
+                print("⚡ [TAM Cache] Đã khôi phục thành công trọng số PositionStats & GMMCalibrator từ cache -> Tự động bỏ qua Warm-up offline!")
+
+        try:
+            dataset = TrafficCameraDataset(
+                data_dir=args.data_dir,
+                img_size=(256, 448),
+                cross_cam_srs=args.cross_cam_srs,
+                tam_cache_dir=active_tam_cache,
+                refine_tam=args.refine_tam,
+            )
+            print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
+            if dataset.num_cams > pos_stats.num_cams:
+                pos_stats.ensure_cam_capacity(max(0, dataset.num_cams - 1))
+        except Exception as e_data:
+            print(f"⚠️ [Data] Không thể nạp ảnh từ '{args.data_dir}': {e_data}. Chuyển sang SyntheticTrafficDataset...")
+            dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
+    else:
+        print("💡 [Data] Chưa truyền --data_dir -> Sử dụng SyntheticTrafficDataset mô phỏng...")
+        dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
+
+    # Thiết lập Bộ lấy mẫu phân nhóm theo Camera (CameraGroupedSampler) cho hard negatives cùng camera
+    batch_sampler = None
+    if args.use_cam_sampler and hasattr(dataset, "camera_to_indices"):
+        valid_cam_dict = {c: idxs for c, idxs in dataset.camera_to_indices.items() if len(idxs) >= 2}
+        if len(valid_cam_dict) >= 2:
+            frames_per_camera = max(2, args.frames_per_cam)
+            # Tự động đồng bộ cams_per_batch nếu người dùng chỉ định batch_size lớn hơn
+            cams_per_batch = max(1, args.cams_per_batch)
+            if args.batch_size > cams_per_batch * frames_per_camera:
+                auto_cams = max(1, args.batch_size // frames_per_camera)
+                print(f"⚙️ [Batch Sync] Tự động nâng cams_per_batch ({cams_per_batch} -> {auto_cams}) "
+                      f"để khớp với --batch_size {args.batch_size} (với {frames_per_camera} frames/cam).")
+                cams_per_batch = auto_cams
+
+            actual_batch_size = cams_per_batch * frames_per_camera
+            target_batches = None
+            if args.batches_per_epoch == -1:
+                target_batches = max(1, len(dataset) // actual_batch_size)
+                print(f"📊 [Epoch Scale] Chế độ Full Dataset Coverage: {target_batches} batches/epoch (duyệt trọn vẹn ~{len(dataset)} ảnh).")
+            elif args.batches_per_epoch > 0:
+                target_batches = args.batches_per_epoch
+                print(f"📊 [Epoch Scale] Thiết lập thủ công: {target_batches} batches/epoch (~{target_batches * actual_batch_size} ảnh).")
+            else:
+                default_batches = len(valid_cam_dict) // cams_per_batch
+                print(f"ℹ️ [Epoch Notice] Chế độ Camera-Round: {default_batches} batches/epoch (mỗi epoch duyệt qua 1 lượt 608 camera, ~{default_batches * actual_batch_size} ảnh). "
+                      f"Để duyệt toàn bộ {len(dataset)} ảnh mỗi epoch, hãy dùng --batches_per_epoch -1 hoặc tắt --no_cam_sampler.")
+
+            batch_sampler = CameraGroupedSampler(
+                camera_to_indices=valid_cam_dict,
+                batch_cameras=cams_per_batch,
+                frames_per_camera=frames_per_camera,
+                batches_per_epoch=target_batches,
+                shuffle=True,
+                drop_last=True,
+            )
+            print(f"📦 [CameraGroupedSampler] Đã kích hoạt bộ lấy mẫu theo nhóm Camera: "
+                  f"{cams_per_batch} cams x {frames_per_camera} frames/cam = batch {actual_batch_size} ảnh.")
+
+    loader_kwargs = {
+        "num_workers": args.num_workers,
+        "pin_memory": (device.type == "cuda"),
+    }
+    if args.num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
+        loader_kwargs["persistent_workers"] = True
+
+    if batch_sampler is not None:
+        loader = DataLoader(
+            dataset,
+            batch_sampler=batch_sampler,
+            **loader_kwargs,
+        )
+    else:
+        loader = DataLoader(
+            dataset,
+            batch_size=effective_batch_size,
+            shuffle=True,
+            drop_last=(len(dataset) > effective_batch_size),
+            **loader_kwargs,
+        )
+
     # 4. Losses, Metric Heads & Optimizer
     dino_loss_fn = DINOLoss(out_dim=args.out_dim, nepochs=args.epochs).to(device)
     ibot_loss_fn = iBOTPatchLoss(out_dim=args.out_dim).to(device)
     koleo_loss_fn = KoLeoLoss().to(device)
-    patch_var_fn = PatchVarianceRegularizer(target_std=1.0).to(device)
+    patch_var_fn = PatchVarianceRegularizer(
+        target_std=args.patch_var_target_std,
+        smooth_weight=args.patch_smooth_weight,
+    ).to(device)
     anchor_fn = FeatureAnchorLoss().to(device)
     ric_loss_fn = RICLoss().to(device)
-    cam_adv_head = CameraAdversarialHead(in_dim=embed_dim, num_cams=pos_stats.num_cams).to(device)
+    total_cams = max(getattr(dataset, "num_cams", 16), pos_stats.num_cams)
+    cam_adv_head = CameraAdversarialHead(in_dim=embed_dim, num_cams=total_cams).to(device)
 
     # Phân nhóm tham số khoa học (Parameter Groups):
     # - Tách Backbone (giảm LR theo backbone_lr_scale) khỏi Heads (full LR) để bảo vệ pretrained DINOv3
@@ -1326,7 +1527,10 @@ def train_direction_g():
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
-    history = {"total": [], "dino": [], "ibot": [], "koleo": [], "patch_var": [], "anchor": [], "ric": [], "cam_adv": []}
+    history = {
+        "total": [], "dino": [], "ibot": [], "koleo": [], "patch_var": [], "anchor": [], "ric": [], "cam_adv": [],
+        "pi_day": [], "pi_night": [], "srs_rate": [], "srs_swap_frac": [], "patch_std": [], "cos_dino": [], "cam_acc": [],
+    }
 
     resume_target = args.resume
     if resume_target:
@@ -1381,6 +1585,11 @@ def train_direction_g():
             smart_load_state_dict(raw_curr_t.ibot_head, ckpt["teacher_ibot_head"], strict=False, verbose=False)
         elif "student_ibot_head" in ckpt:
             smart_load_state_dict(raw_curr_t.ibot_head, ckpt["student_ibot_head"], strict=False, verbose=False)
+
+        # 3b. Khôi phục Camera Adversarial Head (CamAdvHead)
+        if "cam_adv_head" in ckpt:
+            smart_load_state_dict(cam_adv_head, ckpt["cam_adv_head"], strict=False, verbose=False)
+            print("   📸 [CamAdvHead] Khôi phục thành công trọng số Camera Adversarial Head.")
 
         # 4. Khôi phục PositionStats (TAM)
         if "pos_stats" in ckpt:
@@ -1503,123 +1712,13 @@ def train_direction_g():
                 pass
 
         if "history" in ckpt and isinstance(ckpt["history"], dict):
-            history = {k: list(v) for k, v in ckpt["history"].items()}
-            print(f"   📊 [History] Khôi phục toàn bộ lịch sử loss ({len(history.get('total', []))} epochs trước).")
+            for k, v in ckpt["history"].items():
+                history[k] = list(v)
+            print(f"   📊 [History] Khôi phục toàn bộ lịch sử metrics ({len(history.get('total', []))} epochs trước).")
 
         if "best_loss" in ckpt and ckpt["best_loss"] is not None:
             best_loss = float(ckpt["best_loss"])
         print("✅ [Resume] Đã khôi phục hoàn chỉnh và an toàn tuyệt đối toàn bộ trạng thái mô hình!")
-
-    # 5. Dataloader: Tự động phát hiện hoặc tạo trước TAM cache, sau đó nạp dataset
-    active_tam_cache = None
-    if args.data_dir and os.path.isdir(args.data_dir):
-        active_tam_cache = resolve_or_precompute_tam_cache(
-            data_dir=args.data_dir,
-            requested_cache_dir=args.tam_cache_dir,
-            output_dir=args.output_dir,
-            model_name=args.model_name,
-            device=args.device,
-            batch_size=min(64, max(16, args.batch_size)),
-            num_workers=args.num_workers,
-            hf_token=args.hf_token,
-            tam_warmup_frames=args.tam_warmup_frames,
-            gmm_buffer_size=args.gmm_buffer_size,
-            gmm_ema_alpha=args.gmm_ema_alpha,
-        )
-
-        # Nếu tìm thấy trọng số TAM đã fit từ cache, nạp luôn để bỏ qua warmup offline
-        if active_tam_cache:
-            stats_pth = os.path.join(active_tam_cache, "tam_stats.pth")
-            if os.path.isfile(stats_pth):
-                try:
-                    s_ckpt = torch.load(stats_pth, map_location=device, weights_only=False)
-                except TypeError:
-                    s_ckpt = torch.load(stats_pth, map_location=device)
-                if "pos_stats" in s_ckpt:
-                    pos_stats.load_state_dict(s_ckpt["pos_stats"])
-                if "calibrator" in s_ckpt:
-                    calibrator.load_state_dict(s_ckpt["calibrator"])
-                args.skip_tam_warmup = True
-                print("⚡ [TAM Cache] Đã khôi phục thành công trọng số PositionStats & GMMCalibrator từ cache -> Tự động bỏ qua Warm-up offline!")
-
-        try:
-            dataset = TrafficCameraDataset(
-                data_dir=args.data_dir,
-                img_size=(256, 448),
-                cross_cam_srs=args.cross_cam_srs,
-                tam_cache_dir=active_tam_cache,
-                refine_tam=args.refine_tam,
-            )
-            print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
-            if dataset.num_cams > pos_stats.num_cams:
-                pos_stats.ensure_cam_capacity(max(0, dataset.num_cams - 1))
-        except Exception as e_data:
-            print(f"⚠️ [Data] Không thể nạp ảnh từ '{args.data_dir}': {e_data}. Chuyển sang SyntheticTrafficDataset...")
-            dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
-    else:
-        print("💡 [Data] Chưa truyền --data_dir -> Sử dụng SyntheticTrafficDataset mô phỏng...")
-        dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
-
-    # Thiết lập Bộ lấy mẫu phân nhóm theo Camera (CameraGroupedSampler) cho hard negatives cùng camera
-    batch_sampler = None
-    if args.use_cam_sampler and hasattr(dataset, "camera_to_indices"):
-        valid_cam_dict = {c: idxs for c, idxs in dataset.camera_to_indices.items() if len(idxs) >= 2}
-        if len(valid_cam_dict) >= 2:
-            frames_per_camera = max(2, args.frames_per_cam)
-            # Tự động đồng bộ cams_per_batch nếu người dùng chỉ định batch_size lớn hơn
-            cams_per_batch = max(1, args.cams_per_batch)
-            if args.batch_size > cams_per_batch * frames_per_camera:
-                auto_cams = max(1, args.batch_size // frames_per_camera)
-                print(f"⚙️ [Batch Sync] Tự động nâng cams_per_batch ({cams_per_batch} -> {auto_cams}) "
-                      f"để khớp với --batch_size {args.batch_size} (với {frames_per_camera} frames/cam).")
-                cams_per_batch = auto_cams
-
-            actual_batch_size = cams_per_batch * frames_per_camera
-            target_batches = None
-            if args.batches_per_epoch == -1:
-                target_batches = max(1, len(dataset) // actual_batch_size)
-                print(f"📊 [Epoch Scale] Chế độ Full Dataset Coverage: {target_batches} batches/epoch (duyệt trọn vẹn ~{len(dataset)} ảnh).")
-            elif args.batches_per_epoch > 0:
-                target_batches = args.batches_per_epoch
-                print(f"📊 [Epoch Scale] Thiết lập thủ công: {target_batches} batches/epoch (~{target_batches * actual_batch_size} ảnh).")
-            else:
-                default_batches = len(valid_cam_dict) // cams_per_batch
-                print(f"ℹ️ [Epoch Notice] Chế độ Camera-Round: {default_batches} batches/epoch (mỗi epoch duyệt qua 1 lượt 608 camera, ~{default_batches * actual_batch_size} ảnh). "
-                      f"Để duyệt toàn bộ {len(dataset)} ảnh mỗi epoch, hãy dùng --batches_per_epoch -1 hoặc tắt --no_cam_sampler.")
-
-            batch_sampler = CameraGroupedSampler(
-                camera_to_indices=valid_cam_dict,
-                batch_cameras=cams_per_batch,
-                frames_per_camera=frames_per_camera,
-                batches_per_epoch=target_batches,
-                shuffle=True,
-                drop_last=True,
-            )
-            print(f"📦 [CameraGroupedSampler] Đã kích hoạt bộ lấy mẫu theo nhóm Camera: "
-                  f"{cams_per_batch} cams x {frames_per_camera} frames/cam = batch {actual_batch_size} ảnh.")
-
-    loader_kwargs = {
-        "num_workers": args.num_workers,
-        "pin_memory": (device.type == "cuda"),
-    }
-    if args.num_workers > 0:
-        loader_kwargs["prefetch_factor"] = 2
-        loader_kwargs["persistent_workers"] = True
-
-    if batch_sampler is not None:
-        loader = DataLoader(
-            dataset,
-            batch_sampler=batch_sampler,
-            **loader_kwargs,
-        )
-    else:
-        loader = DataLoader(
-            dataset,
-            batch_size=effective_batch_size,
-            shuffle=True,
-            drop_last=(len(dataset) > effective_batch_size),
-            **loader_kwargs,
-        )
 
     # 6. Tự động khởi động TAM Warmup offline (Fit PCA, K-means đa camera & GMM sơ bộ)
     raw_fe = unwrap_model(frozen_extractor)
@@ -1642,7 +1741,7 @@ def train_direction_g():
             batch_size=args.batch_size,
         )
 
-    # Khởi tạo Fixed Visual Benchmark Batch (Cố định 4 ảnh đại diện xuyên suốt quá trình train để so sánh chuẩn xác)
+    # Khởi tạo Fixed Visual Benchmark Batch (Cố định 4 ảnh phân tầng độ sáng từ 2 camera khác nhau để so sánh chuẩn xác)
     fixed_visual_batch = None
     try:
         fixed_indices = []
@@ -1651,10 +1750,24 @@ def train_direction_g():
             cam2 = dataset.cam_keys[min(1, len(dataset.cam_keys) - 1)]
             idxs1 = dataset.camera_to_indices.get(dataset.cam_to_id[cam1], [0])
             idxs2 = dataset.camera_to_indices.get(dataset.cam_to_id[cam2], [0])
-            if len(idxs1) >= 2 and len(idxs2) >= 2:
-                fixed_indices = [idxs1[0], idxs1[-1], idxs2[0], idxs2[-1]]
-            else:
-                fixed_indices = (idxs1 + idxs2)[:4]
+
+            def _pick_light_dark(idxs):
+                if len(idxs) <= 2:
+                    return idxs
+                # Lấy tối đa 15 mẫu đại diện để đo độ sáng trung bình
+                candidates = idxs[::max(1, len(idxs) // 15)][:15]
+                lums = []
+                for idx in candidates:
+                    try:
+                        s = dataset[idx]
+                        lums.append((idx, float(s["x1"].mean())))
+                    except Exception:
+                        lums.append((idx, 0.5))
+                lums.sort(key=lambda item: item[1])
+                return [lums[0][0], lums[-1][0]]  # [ảnh tối nhất, ảnh sáng nhất]
+
+            fixed_indices = _pick_light_dark(idxs1) + _pick_light_dark(idxs2)
+
         if len(fixed_indices) < 4:
             fixed_indices = list(range(min(4, len(dataset))))
 
@@ -1663,7 +1776,7 @@ def train_direction_g():
         fixed_x2 = torch.stack([s["x2"] for s in fixed_samples], dim=0).to(device)
         fixed_cids = torch.tensor([s["cid"] for s in fixed_samples], dtype=torch.long, device=device)
         fixed_visual_batch = {"x1": fixed_x1, "x2": fixed_x2, "cids": fixed_cids}
-        print(f"🎯 [Visual Benchmark] Đã cố định 4 ảnh mẫu benchmark (Camera IDs: {fixed_cids.tolist()}) để theo dõi tiến trình qua từng epoch.")
+        print(f"🎯 [Visual Benchmark] Đã cố định 4 ảnh mẫu benchmark phân tầng sáng/tối (Camera IDs: {fixed_cids.tolist()}) để theo dõi tiến trình qua từng epoch.")
     except Exception as e:
         print(f"⚠️ [Visual Benchmark] Không thể khởi tạo tập mẫu cố định ({e}), sẽ fallback sang batch cuối.")
 
@@ -1738,6 +1851,15 @@ def train_direction_g():
             epoch_ric_losses = []
             epoch_cam_adv_losses = []
 
+            # Danh sách tracking chỉ số định lượng D2
+            epoch_pi_day = []
+            epoch_pi_night = []
+            epoch_srs_applied = []
+            epoch_srs_swap_frac = []
+            epoch_cos_dino = []
+            epoch_patch_std = []
+            epoch_cam_acc = []
+
             pbar = tqdm(
                 loader,
                 desc=f"Epoch [{epoch+1}/{args.epochs}]",
@@ -1781,12 +1903,16 @@ def train_direction_g():
                         # Gated Update: Bảo vệ cụm tĩnh không bị xe ở làn đông làm sai lệch
                         pos_stats.update(cids, u1_f, gate_pi=pi1.reshape(B, 448))
 
-                # Bước B: Áp dụng SRS hoán nền song song toàn bộ batch trên GPU (nhanh gấp 80 lần)
-                x_student, _ = batch_static_region_swap(
+                # Bước B: Áp dụng SRS hoán nền song song toàn bộ batch trên GPU (với bảo vệ xe, chống lệch sáng & loại banner)
+                x_student, _, srs_stats = batch_static_region_swap(
                     x1=x1, x2=x2, pi1=pi1, pi2=pi2,
                     p_srs=args.p_srs, ratio=0.6, feather=4,
                     continuous_bg=args.srs_continuous,
-                    color_match=args.cross_cam_srs,
+                    color_match=True,
+                    thr=args.srs_thr,
+                    exclude_top_rows=args.srs_exclude_top_rows,
+                    max_lum_log_ratio=args.srs_max_lum_ratio,
+                    return_stats=True,
                 )
 
                 # Bước C: Áp dụng AGM sinh mask che phân tầng Super-block Grid 2x2 cho toàn batch (nhanh gấp 500 lần)
@@ -1900,26 +2026,41 @@ def train_direction_g():
                 epoch_ric_losses.append(loss_ric.item())
                 epoch_cam_adv_losses.append(loss_cam_adv.item())
 
-                # Lưu dữ liệu visual thực tế của batch cuối phục vụ fallback
+                # Lưu tensor thô của batch cuối để chỉ forward 1 lần nếu cần fallback trực quan hóa
                 B_vis = min(4, x1.shape[0])
-                with torch.no_grad():
-                    x1_vis = x1[:B_vis].to(device)
-                    x1_vis_norm = imagenet_normalize(x1_vis)
-                    _, v_patch_spatial = extract_tokens(frozen_backbone, x1_vis_norm, patch_size=patch_size)
-                    v_patch_tokens = v_patch_spatial.reshape(B_vis, -1, embed_dim).cpu().float()
-
-                    # Trích xuất đặc trưng THỰC SỰ của Student trên ảnh sạch x1 (không che mask)
-                    _, s_clean_patches, _, _ = student_model(x1_vis, masks=None)
-                    s_patch_tokens_real = s_clean_patches.reshape(B_vis, -1, embed_dim).cpu().float()
-
                 last_visual_data = {
-                    "x_orig": x1[:B_vis].detach().cpu(),
-                    "pi": pi1[:B_vis].detach().cpu(),
-                    "mask": mask_batch[:B_vis].detach().cpu(),
-                    "x_srs": x_student[:B_vis].detach().cpu(),  # Giữ nguyên ảnh SRS thực tế của bước train
-                    "patch_features": s_patch_tokens_real,      # ĐẶC TRƯNG CHUẨN XÁC TỪ STUDENT
-                    "vanilla_patch_features": v_patch_tokens,
+                    "x1": x1[:B_vis].detach(),
+                    "x2": x2[:B_vis].detach(),
+                    "cid": cids[:B_vis].detach(),
+                    "cid2": cids2[:B_vis].detach(),
+                    "pi1": pi1[:B_vis].detach(),
+                    "mask_batch": mask_batch[:B_vis].detach(),
+                    "x_student": x_student[:B_vis].detach(),
                 }
+
+                # Thu thập chỉ số định lượng D2:
+                with torch.no_grad():
+                    lum1 = x1.mean(dim=[1, 2, 3])
+                    is_day = lum1 >= 0.25
+                    pi1_flat = pi1.reshape(B, -1)
+                    pi_gt05 = (pi1_flat > 0.5).float().mean(dim=1)
+                    if is_day.any():
+                        epoch_pi_day.extend(pi_gt05[is_day].tolist())
+                    if (~is_day).any():
+                        epoch_pi_night.extend(pi_gt05[~is_day].tolist())
+
+                    epoch_srs_applied.append(float(srs_stats.get("applied", 0.0)))
+                    epoch_srs_swap_frac.append(float(srs_stats.get("swap_frac", 0.0)))
+
+                    epoch_patch_std.append(float(s_patches.std(dim=-1).mean().item()))
+                    if args.use_anchor and 'v_patch_tokens_anchor' in locals():
+                        cos_d = F.cosine_similarity(s_patches, v_patch_tokens_anchor, dim=-1).mean().item()
+                        epoch_cos_dino.append(float(cos_d))
+
+                    if args.use_cam_adv:
+                        pred_cids = cam_adv_head.classifier(s_cls).argmax(dim=-1)
+                        acc = (pred_cids == cids).float().mean().item()
+                        epoch_cam_acc.append(float(acc))
 
                 step += 1
                 cur_lr = optimizer.param_groups[0]["lr"]
@@ -1935,7 +2076,7 @@ def train_direction_g():
             # Cập nhật lịch trình Learning Rate Cosine Annealing
             scheduler.step()
 
-            # Kết thúc epoch: Tính giá trị loss trung bình
+            # Kết thúc epoch: Tính giá trị loss và metrics trung bình
             avg_tot = float(np.mean(epoch_losses)) if epoch_losses else 0.0
             avg_dino = float(np.mean(epoch_dino_losses)) if epoch_dino_losses else 0.0
             avg_ibot = float(np.mean(epoch_ibot_losses)) if epoch_ibot_losses else 0.0
@@ -1945,6 +2086,14 @@ def train_direction_g():
             avg_ric = float(np.mean(epoch_ric_losses)) if epoch_ric_losses else 0.0
             avg_cam_adv = float(np.mean(epoch_cam_adv_losses)) if epoch_cam_adv_losses else 0.0
 
+            avg_pi_day = float(np.mean(epoch_pi_day)) if epoch_pi_day else 0.0
+            avg_pi_night = float(np.mean(epoch_pi_night)) if epoch_pi_night else 0.0
+            avg_srs_rate = float(np.mean(epoch_srs_applied)) if epoch_srs_applied else 0.0
+            avg_swap_frac = float(np.mean(epoch_srs_swap_frac)) if epoch_srs_swap_frac else 0.0
+            avg_patch_std = float(np.mean(epoch_patch_std)) if epoch_patch_std else 0.0
+            avg_cos_dino = float(np.mean(epoch_cos_dino)) if epoch_cos_dino else 0.0
+            avg_cam_acc = float(np.mean(epoch_cam_acc)) if epoch_cam_acc else 0.0
+
             history["total"].append(avg_tot)
             history["dino"].append(avg_dino)
             history["ibot"].append(avg_ibot)
@@ -1953,12 +2102,22 @@ def train_direction_g():
             history["anchor"].append(avg_anchor)
             history["ric"].append(avg_ric)
             history["cam_adv"].append(avg_cam_adv)
+            history["pi_day"].append(avg_pi_day)
+            history["pi_night"].append(avg_pi_night)
+            history["srs_rate"].append(avg_srs_rate)
+            history["srs_swap_frac"].append(avg_swap_frac)
+            history["patch_std"].append(avg_patch_std)
+            history["cos_dino"].append(avg_cos_dino)
+            history["cam_acc"].append(avg_cam_acc)
 
             cur_lr = optimizer.param_groups[0]["lr"]
             print(f"📊 [Epoch {epoch+1}/{args.epochs} Hoàn Tất] LR: {cur_lr:.2e} — Loss TB: {avg_tot:.4f} "
                   f"(DINO: {avg_dino:.4f}, iBOT: {avg_ibot:.4f}, KoLeo: {avg_koleo:.4f}, "
                   f"PatchVar: {avg_patch_var:.4f}, Anchor: {avg_anchor:.4f}, "
                   f"RIC: {avg_ric:.4f}, CamAdv: {avg_cam_adv:.4f})")
+            print(f"   🔍 [Kiểm Toán Định Lượng D2] TAM π>0.5: Ngày={avg_pi_day*100:.1f}%, Đêm={avg_pi_night*100:.1f}% | "
+                  f"SRS: Swap Rate={avg_srs_rate*100:.1f}%, Swap Frac={avg_swap_frac*100:.1f}% | "
+                  f"Student: PatchStd={avg_patch_std:.4f}, CosDINO={avg_cos_dino:.4f}, CamAcc={avg_cam_acc*100:.1f}%")
 
             # Giám sát phân bố Teacher-Student để phát hiện sớm bất thường
             try:
@@ -1988,41 +2147,43 @@ def train_direction_g():
                         fs_patch_tokens = fs_patches_clean.reshape(B_f, -1, embed_dim).cpu().float()
 
                         # 3. Tính TAM và AGM trên tập mẫu cố định
-                        fu1, _ = frozen_extractor(fx1)
+                        fu1 = frozen_extractor(fx1)
                         fa1, _ = pos_stats.atypicality(fcids, fu1)
                         fpi1 = calibrator.posterior(fa1, refine=args.refine_tam).reshape(B_f, 16, 28)
 
-                        fu2, _ = frozen_extractor(fx2)
+                        fu2 = frozen_extractor(fx2)
                         fa2, _ = pos_stats.atypicality(fcids, fu2)
                         fpi2 = calibrator.posterior(fa2, refine=args.refine_tam).reshape(B_f, 16, 28)
 
-                        # 4. Sinh ảnh SRS hoán nền và mặt nạ AGM
-                        fx_srs_list = []
-                        fmask_list = []
-                        for b_i in range(B_f):
-                            f_sw, _ = static_region_swap(
-                                fx1[b_i], fx2[b_i], fpi1[b_i], fpi2[b_i],
-                                ratio=0.7, feather=4, continuous_bg=True, color_match=True
-                            )
-                            fx_srs_list.append(f_sw)
-
-                            fm_b = agm_sample(
-                                pi=fpi1[b_i].reshape(-1),
-                                ratio=args.mask_ratio,
-                                phi=args.phi,
-                                q_max=args.q_max,
-                                mode=args.mask_mode,
-                            )
-                            fmask_list.append(fm_b)
-
-                        fx_srs_tensor = torch.stack(fx_srs_list, dim=0).cpu()
-                        fmask_tensor = torch.stack(fmask_list, dim=0).cpu()
+                        # 4. Sinh ảnh SRS hoán nền và mặt nạ AGM song song GPU chuẩn nghiệp vụ
+                        fx_srs_tensor, _, _ = batch_static_region_swap(
+                            x1=fx1,
+                            x2=fx2,
+                            pi1=fpi1,
+                            pi2=fpi2,
+                            p_srs=1.0,  # Ép swap để kiểm chứng trực quan trên benchmark
+                            ratio=0.6,
+                            feather=4,
+                            continuous_bg=args.srs_continuous,
+                            color_match=True,
+                            thr=args.srs_thr,
+                            exclude_top_rows=args.srs_exclude_top_rows,
+                            max_lum_log_ratio=args.srs_max_lum_ratio,
+                            return_stats=True,
+                        )
+                        fmask_tensor = batch_agm_sample(
+                            pi=fpi1,
+                            ratio=args.mask_ratio,
+                            phi=args.phi,
+                            q_max=args.q_max,
+                            mode=args.mask_mode,
+                        )
 
                     save_direction_g_visuals(
                         x_orig=fx1.detach().cpu(),
                         pi=fpi1.detach().cpu(),
-                        mask=fmask_tensor,
-                        x_srs=fx_srs_tensor,
+                        mask=fmask_tensor.detach().cpu(),
+                        x_srs=fx_srs_tensor.detach().cpu(),
                         patch_features=fs_patch_tokens,  # Student đặc trưng sạch
                         save_path=vis_save_path,
                         epoch=epoch + 1,
@@ -2031,27 +2192,51 @@ def train_direction_g():
                 except Exception as e_vis:
                     print(f"⚠️ [Visualizer] Lỗi suy luận benchmark ({e_vis}), fallback sang batch cuối.")
                     if last_visual_data is not None:
-                        save_direction_g_visuals(
-                            x_orig=last_visual_data["x_orig"],
-                            pi=last_visual_data["pi"],
-                            mask=last_visual_data["mask"],
-                            x_srs=last_visual_data["x_srs"],
-                            patch_features=last_visual_data["patch_features"],
-                            save_path=vis_save_path,
-                            epoch=epoch + 1,
-                            vanilla_patch_features=last_visual_data.get("vanilla_patch_features"),
-                        )
+                        try:
+                            with torch.no_grad():
+                                bx1 = last_visual_data["x1"].to(device)
+                                B_b = bx1.shape[0]
+                                bx1_norm = imagenet_normalize(bx1)
+                                _, bv_spatial = extract_tokens(frozen_backbone, bx1_norm, patch_size=patch_size)
+                                bv_patch_tokens = bv_spatial.reshape(B_b, -1, embed_dim).cpu().float()
+                                _, bs_clean, _, _ = student_model(bx1, masks=None)
+                                bs_patch_tokens = bs_clean.reshape(B_b, -1, embed_dim).cpu().float()
+
+                            save_direction_g_visuals(
+                                x_orig=last_visual_data["x1"].cpu(),
+                                pi=last_visual_data["pi1"].cpu(),
+                                mask=last_visual_data["mask_batch"].cpu(),
+                                x_srs=last_visual_data["x_student"].cpu(),
+                                patch_features=bs_patch_tokens,
+                                save_path=vis_save_path,
+                                epoch=epoch + 1,
+                                vanilla_patch_features=bv_patch_tokens,
+                            )
+                        except Exception as e_fb:
+                            print(f"⚠️ [Visualizer Fallback Error] {e_fb}")
             elif last_visual_data is not None:
-                save_direction_g_visuals(
-                    x_orig=last_visual_data["x_orig"],
-                    pi=last_visual_data["pi"],
-                    mask=last_visual_data["mask"],
-                    x_srs=last_visual_data["x_srs"],
-                    patch_features=last_visual_data["patch_features"],
-                    save_path=vis_save_path,
-                    epoch=epoch + 1,
-                    vanilla_patch_features=last_visual_data.get("vanilla_patch_features"),
-                )
+                try:
+                    with torch.no_grad():
+                        bx1 = last_visual_data["x1"].to(device)
+                        B_b = bx1.shape[0]
+                        bx1_norm = imagenet_normalize(bx1)
+                        _, bv_spatial = extract_tokens(frozen_backbone, bx1_norm, patch_size=patch_size)
+                        bv_patch_tokens = bv_spatial.reshape(B_b, -1, embed_dim).cpu().float()
+                        _, bs_clean, _, _ = student_model(bx1, masks=None)
+                        bs_patch_tokens = bs_clean.reshape(B_b, -1, embed_dim).cpu().float()
+
+                    save_direction_g_visuals(
+                        x_orig=last_visual_data["x1"].cpu(),
+                        pi=last_visual_data["pi1"].cpu(),
+                        mask=last_visual_data["mask_batch"].cpu(),
+                        x_srs=last_visual_data["x_student"].cpu(),
+                        patch_features=bs_patch_tokens,
+                        save_path=vis_save_path,
+                        epoch=epoch + 1,
+                        vanilla_patch_features=bv_patch_tokens,
+                    )
+                except Exception as e_fb:
+                    print(f"⚠️ [Visualizer Error] {e_fb}")
 
             # Cập nhật đồ thị đường cong hàm mất mát sau mỗi epoch (Live Loss Curve)
             loss_curve_path = os.path.join(args.output_dir, "loss_curve.png")

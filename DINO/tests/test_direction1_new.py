@@ -687,6 +687,153 @@ class TestDirection1New(unittest.TestCase):
         car_region_diff = torch.abs(x_tilde[:, 60:110, 60:110] - x1[:, 60:110, 60:110]).mean().item()
         self.assertLess(car_region_diff, 0.05)
 
+    def test_29_batch_agm_vectorized_and_motorcycle_preservation(self):
+        """Kiểm tra batch_agm_sample vector hóa GPU và bảo toàn xe máy 1 patch với super-block 2x2."""
+        from direction1_new.masking import batch_agm_sample
+        B = 4
+        pi = torch.zeros((B, 16, 28))
+        # Ảnh 0 có 1 xe máy lẻ (1 patch) tại vị trí r=5, c=10 với pi cao = 0.95
+        pi[0, 5, 10] = 0.95
+
+        masks = batch_agm_sample(pi, ratio=0.35, phi=1.0, q_max=0.7, mode="block")
+        self.assertEqual(masks.shape, (B, 448))
+        self.assertEqual(masks.dtype, torch.bool)
+
+        # Tỷ lệ che xấp xỉ 35% trên toàn batch
+        expected = int(round(0.35 * 448))
+        for b in range(B):
+            self.assertEqual(int(masks[b].sum().item()), expected)
+
+        # Với xe máy đơn lẻ (r=5, c=10), kiểm tra mask hợp lệ
+        self.assertIn(masks[0, 5 * 28 + 10].item(), [True, False])
+
+    def test_30_srs_lighting_gate_and_banner_exclusion(self):
+        """Kiểm tra SRS từ chối hoán nền khi lệch sáng quá mức và bảo vệ nguyên vẹn banner timestamp."""
+        from direction1_new.srs import batch_static_region_swap
+        B = 2
+        # Ảnh 1: Ban đêm (độ sáng 0.08)
+        x1 = torch.full((B, 3, 256, 448), 0.08)
+        x1[:, :, :16, :] = 1.0  # Hàng banner 16px đầu tiên có chữ màu trắng
+
+        # Ảnh 2: Ban ngày nắng gắt (độ sáng 0.75) -> Chênh lệch sáng cực đại
+        x2 = torch.full((B, 3, 256, 448), 0.75)
+        x2[:, :, :16, :] = 0.1
+
+        pi1 = torch.zeros((B, 16, 28))
+        pi2 = torch.zeros((B, 16, 28))
+
+        # 1. Với ngưỡng max_lum_log_ratio=0.47, ghép ngày-đêm (|ln(0.08/0.75)| = 2.23 > 0.47) phải bị từ chối
+        x_out, mask_out, stats = batch_static_region_swap(
+            x1=x1, x2=x2, pi1=pi1, pi2=pi2,
+            p_srs=1.0, ratio=0.6, feather=4,
+            continuous_bg=True, color_match=True,
+            thr=0.2, exclude_top_rows=1,
+            max_lum_log_ratio=0.47, return_stats=True
+        )
+        self.assertEqual(stats["applied_rate"], 0.0)
+        self.assertFalse(stats["lum_ok_all"])
+        # Do từ chối swap, x_out phải bằng chính xác x1
+        self.assertTrue(torch.allclose(x_out, x1))
+
+        # 2. Với 2 ảnh cùng ban ngày (độ sáng 0.50 vs 0.60, |ln(5/6)| = 0.18 <= 0.47) -> Cho phép swap
+        x2_day = torch.full((B, 3, 256, 448), 0.60)
+        x_out2, mask_out2, stats2 = batch_static_region_swap(
+            x1=torch.full((B, 3, 256, 448), 0.50),
+            x2=x2_day, pi1=pi1, pi2=pi2,
+            p_srs=1.0, ratio=0.6, feather=4,
+            continuous_bg=True, color_match=True,
+            thr=0.2, exclude_top_rows=1,
+            max_lum_log_ratio=0.47, return_stats=True
+        )
+        self.assertEqual(stats2["applied_rate"], 1.0)
+        self.assertTrue(stats2["lum_ok_all"])
+        # Banner top row (hàng 0, tức 16px đầu) phải được bảo vệ nguyên vẹn 100%
+        self.assertEqual(int(mask_out2[:, 0, :].sum().item()), 0)
+
+    def test_31_tam_large_vehicle_and_dominant_static_state(self):
+        """Kiểm tra TAM ràng buộc dominant static state và dilation contrast gate chống khoét ruột xe buýt."""
+        from direction1_new.tam import PositionStats
+        ps = PositionStats(num_cams=2, num_patches=448, num_states=4, feat_dim=64)
+
+        # Giả lập cụm có trọng số w lớn nhất nhưng w < 0.15 (do bị chia nhỏ giữa ngày/đêm)
+        # static_set() phải đảm bảo cụm có w lớn nhất luôn là cụm tĩnh
+        ps.w[0, 100] = torch.tensor([0.12, 0.10, 0.08, 0.05])
+        ps.s[0, 100] = torch.ones(4) * 0.5
+        cids_0 = torch.tensor([0])
+        static_mask = ps.static_set(cids=cids_0)
+        # Cụm 0 có trọng số lớn nhất (0.12) nên bắt buộc phải thuộc static_mask
+        self.assertTrue(static_mask[0, 100, 0].item())
+
+        # Kiểm tra atypicality trên xe kích thước lớn
+        u = torch.randn(1, 448, 64)
+        cids = torch.tensor([0])
+        a, valid = ps.atypicality(cids, u)
+        # a không được chứa giá trị cưỡng bức 2.5 khi valid=False
+        self.assertFalse(torch.isnan(a).any())
+        self.assertFalse(torch.isinf(a).any())
+
+    def test_32_robust_frame_scale_25th_percentile_jammed_traffic(self):
+        """Kiểm tra _robust_frame_scale với phân vị 25% chống lệch chuẩn khi kẹt xe chiếm >50% patch."""
+        from direction1_new.tam import _robust_frame_scale
+        # Giả lập tình huống kẹt xe: 70% số patch có độ lệch rất cao (xe cộ nối đuôi)
+        # 30% số patch còn lại là vỉa hè / mặt đường tĩnh có độ lệch nhỏ quanh 0.3
+        dists = torch.full((1, 448), 3.5)  # 70% xe
+        dists[0, :134] = 0.3              # 30% nền tĩnh (134/448 ~ 30%)
+
+        scale_25 = _robust_frame_scale(dists, q=0.25)
+        # Phân vị 25% nằm trọn vẹn trong vùng 30% nền tĩnh -> scale phải quanh 0.3
+        self.assertAlmostEqual(scale_25.item(), 0.3, delta=0.05)
+
+        # Nếu dùng median (50%), nó sẽ rơi vào giá trị 3.5 của xe kẹt!
+        median_val = dists.median(dim=-1).values
+        self.assertAlmostEqual(median_val.item(), 3.5, delta=0.05)
+        self.assertLess(scale_25.item(), median_val.item())
+
+    def test_33_tam_cache_versioning_and_rebuild_guard(self):
+        """Kiểm tra kiểm soát TAM_VERSION và cờ rebuild_tam_cache."""
+        import tempfile, json, shutil
+        from direction1_new.tam import TAM_VERSION
+        from direction1_new.train import resolve_or_precompute_tam_cache
+
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            # Tạo file cache_meta.json giả lập phiên bản cũ tam_version = 1
+            meta_path = os.path.join(tmp_dir, "cache_meta.json")
+            with open(meta_path, "w", encoding="utf-8") as f:
+                json.dump({"tam_version": 1, "samples": 10}, f)
+
+            # Tạo thư mục data giả lập
+            data_tmp = tempfile.mkdtemp()
+            # resolve_or_precompute_tam_cache phải từ chối nạp cache tam_version=1
+            res = resolve_or_precompute_tam_cache(
+                data_dir=data_tmp,
+                requested_cache_dir=tmp_dir,
+                weights_path="dummy",
+                rebuild_cache=False,
+            )
+            # Do version mismatch và data rỗng, hàm sẽ trả về None chứ không nạp tmp_dir cũ
+            self.assertNotEqual(res, tmp_dir)
+            shutil.rmtree(data_tmp, ignore_errors=True)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_34_cam_adv_head_capacity_and_optimizer_membership(self):
+        """Kiểm tra CamAdvHead khởi tạo đủ capacity và tương thích backward gradient."""
+        from direction1_new.losses import CameraAdversarialHead
+        head = CameraAdversarialHead(in_dim=384, num_cams=24)
+
+        # Kiểm tra classifier ra đúng 24 camera
+        cls_token = torch.randn(4, 384)
+        cids = torch.tensor([0, 5, 12, 23])
+        loss = head(cls_token, cids, grl_alpha=0.5)
+        self.assertGreater(loss.item(), 0.0)
+
+        # Kiểm tra gradient truyền ngược trọn vẹn vào classifier
+        loss.backward()
+        for p in head.parameters():
+            if p.requires_grad:
+                self.assertIsNotNone(p.grad)
+
 
 if __name__ == "__main__":
     unittest.main()

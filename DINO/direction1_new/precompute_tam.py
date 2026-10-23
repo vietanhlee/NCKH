@@ -44,7 +44,7 @@ if _dino_root not in sys.path:
 
 from common.backbone_loader import get_dino_backbone
 from direction1_new.features import FrozenExtractor
-from direction1_new.tam import PositionStats, GMMCalibrator
+from direction1_new.tam import PositionStats, GMMCalibrator, TAM_VERSION
 from direction1_new.train import warmup_tam_offline, TrafficCameraDataset, SyntheticTrafficDataset
 
 
@@ -74,7 +74,7 @@ class SimpleImageDataset(Dataset):
         for path in self.file_list:
             rel = os.path.relpath(path, data_dir)
             parts = rel.split(os.sep)
-            cam_key = parts[0] if len(parts) > 1 else path.split("_")[0]
+            cam_key = parts[0] if len(parts) > 1 else os.path.basename(path).split("_")[0]
             self.cam_to_files[cam_key].append(path)
 
         self.cam_keys = sorted(list(self.cam_to_files.keys()))
@@ -85,7 +85,7 @@ class SimpleImageDataset(Dataset):
         for path in self.file_list:
             rel = os.path.relpath(path, data_dir)
             parts = rel.split(os.sep)
-            cam_key = parts[0] if len(parts) > 1 else path.split("_")[0]
+            cam_key = parts[0] if len(parts) > 1 else os.path.basename(path).split("_")[0]
             cid = self.cam_to_id[cam_key]
             self.items.append((path, rel, cid))
 
@@ -298,6 +298,7 @@ def precompute_tam_cache(
     import json
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump({
+            "tam_version": TAM_VERSION,
             "total_images": total_imgs,
             "num_cameras": num_cams,
             "patch_grid": [16, 28],

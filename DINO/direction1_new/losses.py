@@ -340,6 +340,10 @@ class CameraAdversarialHead(nn.Module):
             nn.Linear(hidden_dim, self.num_cams),
         )
 
+    @property
+    def classifier(self):
+        return self.net
+
     def ensure_cam_capacity(self, max_cid: int):
         """Mở rộng tầng phân loại nếu gặp camera ID vượt quá num_cams hiện tại."""
         if max_cid < self.num_cams:

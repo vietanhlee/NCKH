@@ -61,7 +61,7 @@ class ProbeDataset(Dataset):
         for path in all_files:
             rel = os.path.relpath(path, data_dir)
             parts = rel.split(os.sep)
-            cam_key = parts[0] if len(parts) > 1 else path.split("_")[0]
+            cam_key = parts[0] if len(parts) > 1 else os.path.basename(path).split("_")[0]
             if cam_key not in cam_to_files:
                 cam_to_files[cam_key] = []
             cam_to_files[cam_key].append(path)

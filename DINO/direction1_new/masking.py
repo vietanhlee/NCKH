@@ -136,17 +136,18 @@ def agm_sample(
             Hb, Wb = Hp // 2, Wp // 2
             n_super_blocks = Hb * Wb
 
-            # 1. Tính mức độ tiền cảnh của từng siêu khối 2x2 bằng phép trung bình không gian
+            # 1. Mức độ tiền cảnh của từng siêu khối 2x2 = MAX của 4 patch (không dùng trung bình):
+            # Xe máy chiếm đúng 1 patch (pi cao) vẫn đưa cả siêu khối vào tầng xe. Nếu dùng trung bình,
+            # 1 patch xe + 3 patch nền cho giá trị ~0.25 < ngưỡng -> tầng xe gần như không có xe máy.
             pi_2d = pi_flat.view(Hp, Wp)
-            pi_block = pi_2d.view(Hb, 2, Wb, 2).mean(dim=(1, 3))  # (Hb, Wb)
-            pi_block_flat = pi_block.view(-1)
+            pi_block = F.max_pool2d(pi_2d.view(1, 1, Hp, Wp), kernel_size=2, stride=2).view(Hb, Wb)
+            pi_block_flat = pi_block.reshape(-1)
 
             # 2. Tổng số siêu khối 2x2 cần che (mỗi khối = 4 patches)
             n_b_mask = max(1, int(round(n_mask / 4.0)))
 
-            # 3. Phân tầng siêu khối xe vs siêu khối nền
-            thr_fg_b = thr_fg * 0.8  # Ngưỡng trung bình 2x2 đại diện
-            is_fg_block = pi_block_flat >= thr_fg_b
+            # 3. Phân tầng siêu khối xe vs siêu khối nền (cùng ngưỡng thr_fg với mức patch)
+            is_fg_block = pi_block_flat >= thr_fg
             fg_b_indices = torch.where(is_fg_block)[0]
             bg_b_indices = torch.where(~is_fg_block)[0]
 
@@ -290,6 +291,18 @@ def map_pi_to_crop(
     return pi_crop.clamp(0.0, 1.0)
 
 
+def _gumbel_noise(shape, device, generator: Optional[torch.Generator] = None) -> torch.Tensor:
+    """Sinh nhiễu Gumbel(0, 1) chuẩn: g = -log(-log(U))."""
+    u = torch.rand(shape, device=device, generator=generator).clamp(min=1e-6, max=1.0 - 1e-6)
+    return -torch.log(-torch.log(u))
+
+
+def _rank_desc(keys: torch.Tensor) -> torch.Tensor:
+    """Hạng (0 = lớn nhất) của từng phần tử theo chiều cuối. Dùng cho Gumbel top-k với k thay đổi theo mẫu."""
+    order = torch.argsort(keys, dim=-1, descending=True)
+    return torch.argsort(order, dim=-1)
+
+
 def batch_agm_sample(
     pi: torch.Tensor,
     ratio: float = 0.35,
@@ -300,57 +313,91 @@ def batch_agm_sample(
     generator: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """
-    Sinh mặt nạ AGM song song hiệu năng cao cho toàn bộ tensor batch (B, N) hoặc (B, Hp, Wp).
+    Sinh mặt nạ AGM cho toàn bộ batch, VECTOR HÓA HOÀN TOÀN ở chế độ 'block' (không vòng lặp Python, không .item()).
+
+    Thuật toán (Super-Block Grid 2x2 chuẩn SimMIM / iBOT):
+      1. pi_block = MaxPool2d(pi, 2): siêu khối là "xe" nếu có ít nhất 1 patch xe (giữ được xe máy 1 patch).
+      2. Ngưỡng xe động theo từng mẫu: 0.5, hạ về 0.35 khi ít hơn 12 patch đạt 0.5 (ban đêm / xe nhỏ).
+      3. Ngân sách khối k_fg, k_bg là tensor (B,) - tuân thủ trần q_max và tỷ lệ phi như agm_sample.
+      4. Lấy mẫu không hoàn lại có trọng số bằng Gumbel top-k với k thay đổi theo mẫu:
+         key = log(w) + Gumbel; chọn các phần tử có hạng < k_b.
+      5. Bung siêu khối bằng repeat_interleave -> mọi khối là 2x2 nguyên vẹn.
+      6. Bù phần dư (n_mask - 4 * n_blocks) bằng Gumbel top-r, ưu tiên ô KỀ khối đã che
+         (không tạo patch cô lập) -> mỗi mẫu có chính xác n_mask patch bị che.
+
+    Các chế độ 'patch' / 'random' hoặc lưới lẻ dùng lại agm_sample theo từng mẫu (tương thích ngược).
 
     Args:
-        pi: Tensor xác suất tiền cảnh (B, 448) hoặc (B, 16, 28).
-        ratio: Tỷ lệ patch bị che tổng thể.
-        phi: Tỷ lệ phân bổ ngân sách cho vùng xe.
-        q_max: Trần tỷ lệ che tối đa của xe.
-        mode: 'block' (Super-block Grid 2x2), 'patch', hoặc 'random'.
+        pi: (B, N) hoặc (B, Hp, Wp) xác suất tiền cảnh; (N,) sẽ chuyển sang agm_sample.
+        ratio, phi, q_max: như agm_sample.
+        mode: 'block' | 'patch' | 'random'.
         grid_shape: (Hp, Wp), mặc định (16, 28).
-
     Returns:
-        masks: Tensor (B, N) bool chứa mặt nạ che tương ứng cho từng mẫu.
+        masks: (B, N) bool.
     """
-    if pi.dim() == 2:
-        B, N = pi.shape
+    if pi.dim() == 1:
+        return agm_sample(pi=pi, ratio=ratio, phi=phi, q_max=q_max, mode=mode,
+                          grid_shape=grid_shape, generator=generator)
+
+    B = pi.shape[0]
+    Hp, Wp = grid_shape
+    N = Hp * Wp
+    device = pi.device
+
+    if mode != "block" or Hp % 2 != 0 or Wp % 2 != 0 or pi[0].numel() != N:
         masks = [
-            agm_sample(
-                pi=pi[b],
-                ratio=ratio,
-                phi=phi,
-                q_max=q_max,
-                mode=mode,
-                grid_shape=grid_shape,
-                generator=generator,
-            )
+            agm_sample(pi=pi[b].reshape(-1), ratio=ratio, phi=phi, q_max=q_max, mode=mode,
+                       grid_shape=grid_shape, generator=generator)
             for b in range(B)
         ]
         return torch.stack(masks, dim=0)
-    elif pi.dim() == 3:
-        B = pi.shape[0]
-        masks = [
-            agm_sample(
-                pi=pi[b].reshape(-1),
-                ratio=ratio,
-                phi=phi,
-                q_max=q_max,
-                mode=mode,
-                grid_shape=grid_shape,
-                generator=generator,
-            )
-            for b in range(B)
-        ]
-        return torch.stack(masks, dim=0)
-    else:
-        return agm_sample(
-            pi=pi,
-            ratio=ratio,
-            phi=phi,
-            q_max=q_max,
-            mode=mode,
-            grid_shape=grid_shape,
-            generator=generator,
-        )
+
+    n_mask = int(round(ratio * N))
+    if n_mask <= 0:
+        return torch.zeros((B, N), dtype=torch.bool, device=device)
+
+    pi_2d = pi.reshape(B, Hp, Wp).float().clamp(0.0, 1.0)
+    Hb, Wb = Hp // 2, Wp // 2
+    nb = Hb * Wb
+
+    # 1-2. Mức xe của siêu khối (max-pool) và ngưỡng động theo mẫu
+    pi_blk = F.max_pool2d(pi_2d.unsqueeze(1), kernel_size=2, stride=2).reshape(B, nb)
+    n05 = (pi_2d >= 0.50).flatten(1).sum(dim=1)
+    n035 = (pi_2d >= 0.35).flatten(1).sum(dim=1)
+    thr = torch.where((n05 < 12) & (n035 >= 12),
+                      torch.full((B,), 0.35, device=device),
+                      torch.full((B,), 0.50, device=device))
+    is_fg = pi_blk >= thr.unsqueeze(1)  # (B, nb)
+
+    # 3. Ngân sách khối (tensor theo mẫu)
+    n_b = max(1, n_mask // 4)  # 4 * n_b <= n_mask; phần dư được bù ở bước 6
+    n_fg = is_fg.sum(dim=1)
+    n_bg = nb - n_fg
+    max_fg = torch.floor(q_max * n_fg.float()).long()
+    k_fg = torch.minimum(torch.full_like(n_fg, int(round(phi * n_b))), max_fg).clamp(min=0)
+    k_bg = torch.minimum(n_b - k_fg, n_bg).clamp(min=0)
+    extra = torch.minimum((n_b - (k_fg + k_bg)).clamp(min=0), (max_fg - k_fg).clamp(min=0))
+    k_fg = k_fg + extra
+
+    # 4. Gumbel top-k có trọng số pi cho tầng xe, đồng nhất cho tầng nền
+    neg_inf = torch.tensor(float("-inf"), device=device)
+    key_fg = torch.where(is_fg, torch.log(pi_blk.clamp(min=1e-6)) + _gumbel_noise((B, nb), device, generator), neg_inf)
+    key_bg = torch.where(~is_fg, _gumbel_noise((B, nb), device, generator), neg_inf)
+    sel = (is_fg & (_rank_desc(key_fg) < k_fg.unsqueeze(1))) | ((~is_fg) & (_rank_desc(key_bg) < k_bg.unsqueeze(1)))
+
+    # 5. Bung siêu khối 2x2
+    mask = sel.view(B, Hb, Wb).repeat_interleave(2, dim=1).repeat_interleave(2, dim=2)  # (B, Hp, Wp)
+
+    # 6. Bù phần dư để mỗi mẫu có đúng n_mask patch, ưu tiên ô kề 4 hướng với vùng đã che
+    deficit = n_mask - mask.flatten(1).sum(dim=1)  # (B,)
+    if bool((deficit > 0).any()):
+        m = mask.unsqueeze(1).float()
+        cross = torch.tensor([[0., 1., 0.], [1., 0., 1.], [0., 1., 0.]], device=device).view(1, 1, 3, 3)
+        adj = (F.conv2d(m, cross, padding=1) > 0).squeeze(1) & (~mask)
+        g = _gumbel_noise((B, Hp, Wp), device, generator)
+        key_add = torch.where(adj, g + 100.0, torch.where(~mask, g, neg_inf)).flatten(1)
+        add = (_rank_desc(key_add) < deficit.clamp(min=0).unsqueeze(1)).view(B, Hp, Wp) & (~mask)
+        mask = mask | add
+
+    return mask.reshape(B, N)
 
