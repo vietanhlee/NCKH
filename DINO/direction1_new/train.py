@@ -343,28 +343,54 @@ def save_direction_g_visuals(
 
     corners_idx = [0, 1, 26, 27, 448 - 28, 448 - 27, 448 - 2, 448 - 1]
 
-    # 1. Tiền xử lý Per-Image PCA cho DINO gốc (Vanilla Pretrained)
+    def _compute_twostage_pca(feat: np.ndarray, fg_mask_in: Optional[np.ndarray] = None) -> np.ndarray:
+        """Helper Two-Stage PCA chuẩn Meta DINOv2: Stage 1 tách FG qua PC1, Stage 2 bóc tách bộ phận qua PC2-4."""
+        N, D = feat.shape
+        f_mean = feat.mean(axis=0, keepdims=True)
+        f_cent = feat - f_mean
+        _, _, vt = np.linalg.svd(f_cent, full_matrices=False)
+        pc1 = f_cent @ vt[0]
+        if pc1[corners_idx].mean() > pc1.mean():
+            pc1 = -pc1
+        pc1_norm = (pc1 - pc1.min()) / (pc1.max() - pc1.min() + 1e-8)
+
+        if fg_mask_in is not None:
+            fg_mask = fg_mask_in
+        else:
+            fg_mask = (pc1_norm > 0.50)
+            if fg_mask.sum() < 8:
+                fg_mask = (pc1_norm >= np.percentile(pc1_norm, 75))
+
+        res_rgb = np.full((N, 3), 0.05, dtype=np.float32)
+        if fg_mask.sum() >= 4:
+            f_fg = feat[fg_mask]
+            f_fg_mean = f_fg.mean(axis=0, keepdims=True)
+            f_fg_cent = f_fg - f_fg_mean
+            _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
+            fg_proj = f_fg_cent @ vt_fg[:3].T
+            p_lo = np.percentile(fg_proj, 2, axis=0, keepdims=True)
+            p_hi = np.percentile(fg_proj, 98, axis=0, keepdims=True)
+            fg_norm = np.clip((fg_proj - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0)
+            res_rgb[fg_mask] = fg_norm
+        else:
+            pca3 = f_cent @ vt[:3].T
+            p_lo = np.percentile(pca3, 2, axis=0, keepdims=True)
+            p_hi = np.percentile(pca3, 98, axis=0, keepdims=True)
+            res_rgb = np.clip((pca3 - p_lo) / np.maximum(p_hi - p_lo, 1e-6), 0.0, 1.0)
+        return res_rgb.reshape(16, 28, 3)
+
+    # 1. Tiền xử lý Two-Stage PCA cho DINO gốc (Vanilla Pretrained) - Loại bỏ dải gradient trơn
     vanilla_pca_grid_batch = []
     if vanilla_patch_features is not None:
         v_feats_np = vanilla_patch_features[:B].detach().cpu().numpy()
         for b in range(B):
-            f_vb = v_feats_np[b]
-            f_vmean = f_vb.mean(axis=0, keepdims=True)
-            f_vcent = f_vb - f_vmean
-            _, _, vt_v = np.linalg.svd(f_vcent, full_matrices=False)
-            pca3_v = f_vcent @ vt_v[:3].T
-            for c in range(3):
-                if pca3_v[corners_idx, c].mean() > pca3_v[:, c].mean():
-                    pca3_v[:, c] = -pca3_v[:, c]
-            p_vmin = np.percentile(pca3_v, 1, axis=0, keepdims=True)
-            p_vmax = np.percentile(pca3_v, 99, axis=0, keepdims=True)
-            pca3_vnorm = np.clip((pca3_v - p_vmin) / np.maximum(p_vmax - p_vmin, 1e-6), 0.0, 1.0)
-            vanilla_pca_grid_batch.append(pca3_vnorm.reshape(16, 28, 3))
+            v_pca_map = _compute_twostage_pca(v_feats_np[b])
+            vanilla_pca_grid_batch.append(v_pca_map)
         vanilla_pca_grid_batch = np.stack(vanilla_pca_grid_batch, axis=0)
     else:
         vanilla_pca_grid_batch = None
 
-    # 2. Tiền xử lý PCA cho Student: Cả Batch-Consistent (đồng bộ camera) và Per-Image (nội tại)
+    # 2. Tiền xử lý PCA cho Student (Truyền từ Student thực thụ)
     batch_pca_grid = []
     per_image_pca_grid = []
     fg_grid_batch = []
@@ -379,7 +405,6 @@ def save_direction_g_visuals(
         _, _, vt_batch = np.linalg.svd(feats_all_cent, full_matrices=False)
         pca3_batch_all = feats_all_cent @ vt_batch[:3].T  # (B * 448, 3)
 
-        # Căn chỉnh dấu eigenvector theo các góc của toàn bộ batch để nền ổn định
         corners_batch_idx = [b_idx * 448 + c_idx for b_idx in range(B) for c_idx in corners_idx]
         for c in range(3):
             if pca3_batch_all[corners_batch_idx, c].mean() > pca3_batch_all[:, c].mean():
@@ -393,42 +418,15 @@ def save_direction_g_visuals(
         # B. Per-Image PCA và Foreground PCA độc lập cho từng ảnh
         for b in range(B):
             f_b = feats_np[b]  # (448, D)
-            f_mean = f_b.mean(axis=0, keepdims=True)
-            f_cent = f_b - f_mean
-            _, _, vt = np.linalg.svd(f_cent, full_matrices=False)
-            pca3 = f_cent @ vt[:3].T  # (448, 3)
-
-            for c in range(3):
-                if pca3[corners_idx, c].mean() > pca3[:, c].mean():
-                    pca3[:, c] = -pca3[:, c]
-
-            p_min = np.percentile(pca3, 1, axis=0, keepdims=True)
-            p_max = np.percentile(pca3, 99, axis=0, keepdims=True)
-            pca3_norm = np.clip((pca3 - p_min) / np.maximum(p_max - p_min, 1e-6), 0.0, 1.0)
-            per_image_pca_grid.append(pca3_norm.reshape(16, 28, 3))
-
-            # Foreground-focused DINOv2 PCA (SVD bậc 2 trên các patch xe)
             pi_b = pi[b].detach().cpu().numpy().reshape(-1)
             fg_mask_b = (pi_b > 0.40)
             if fg_mask_b.sum() < 4:
                 fg_mask_b = (pi_b >= np.percentile(pi_b, 80))
 
-            fg_map = np.full((448, 3), 0.06, dtype=np.float32)  # Nền tối dịu (dark backdrop)
-            if fg_mask_b.sum() >= 4:
-                f_fg = f_b[fg_mask_b]
-                f_fg_mean = f_fg.mean(axis=0, keepdims=True)
-                f_fg_cent = f_fg - f_fg_mean
-                _, _, vt_fg = np.linalg.svd(f_fg_cent, full_matrices=False)
-                fg_pca3 = f_fg_cent @ vt_fg[:3].T  # (N_fg, 3)
-
-                f_min = np.percentile(fg_pca3, 2, axis=0, keepdims=True)
-                f_max = np.percentile(fg_pca3, 98, axis=0, keepdims=True)
-                fg_norm = np.clip((fg_pca3 - f_min) / np.maximum(f_max - f_min, 1e-6), 0.0, 1.0)
-                fg_map[fg_mask_b] = fg_norm
-            else:
-                fg_map = pca3_norm * np.clip(pi_b[:, None] * 2.0, 0.1, 1.0)
-
-            fg_grid_batch.append(fg_map.reshape(16, 28, 3))
+            # Student Two-Stage PCA
+            per_image_pca_grid.append(_compute_twostage_pca(f_b))
+            # Student Foreground PCA có định hướng bởi TAM
+            fg_grid_batch.append(_compute_twostage_pca(f_b, fg_mask_in=fg_mask_b))
 
         per_image_pca_grid = np.stack(per_image_pca_grid, axis=0)
         fg_grid_batch = np.stack(fg_grid_batch, axis=0)
@@ -1644,6 +1642,31 @@ def train_direction_g():
             batch_size=args.batch_size,
         )
 
+    # Khởi tạo Fixed Visual Benchmark Batch (Cố định 4 ảnh đại diện xuyên suốt quá trình train để so sánh chuẩn xác)
+    fixed_visual_batch = None
+    try:
+        fixed_indices = []
+        if hasattr(dataset, "cam_keys") and len(dataset.cam_keys) >= 2:
+            cam1 = dataset.cam_keys[0]
+            cam2 = dataset.cam_keys[min(1, len(dataset.cam_keys) - 1)]
+            idxs1 = dataset.camera_to_indices.get(dataset.cam_to_id[cam1], [0])
+            idxs2 = dataset.camera_to_indices.get(dataset.cam_to_id[cam2], [0])
+            if len(idxs1) >= 2 and len(idxs2) >= 2:
+                fixed_indices = [idxs1[0], idxs1[-1], idxs2[0], idxs2[-1]]
+            else:
+                fixed_indices = (idxs1 + idxs2)[:4]
+        if len(fixed_indices) < 4:
+            fixed_indices = list(range(min(4, len(dataset))))
+
+        fixed_samples = [dataset[i] for i in fixed_indices]
+        fixed_x1 = torch.stack([s["x1"] for s in fixed_samples], dim=0).to(device)
+        fixed_x2 = torch.stack([s["x2"] for s in fixed_samples], dim=0).to(device)
+        fixed_cids = torch.tensor([s["cid"] for s in fixed_samples], dtype=torch.long, device=device)
+        fixed_visual_batch = {"x1": fixed_x1, "x2": fixed_x2, "cids": fixed_cids}
+        print(f"🎯 [Visual Benchmark] Đã cố định 4 ảnh mẫu benchmark (Camera IDs: {fixed_cids.tolist()}) để theo dõi tiến trình qua từng epoch.")
+    except Exception as e:
+        print(f"⚠️ [Visual Benchmark] Không thể khởi tạo tập mẫu cố định ({e}), sẽ fallback sang batch cuối.")
+
     print("🏁 [Huấn Luyện] Bắt đầu vòng lặp huấn luyện Hướng G...")
     step = start_epoch * len(loader) if start_epoch > 0 else 0
     start_time = time.time()
@@ -1885,8 +1908,7 @@ def train_direction_g():
                 epoch_ric_losses.append(loss_ric.item())
                 epoch_cam_adv_losses.append(loss_cam_adv.item())
 
-                # Lưu mẫu dữ liệu visual của batch cuối (dùng t_patches của Teacher - ảnh sạch!)
-                # Đồng thời trích xuất đặc trưng DINO gốc để phục vụ đối chứng 7 cột
+                # Lưu dữ liệu visual thực tế của batch cuối phục vụ fallback
                 B_vis = min(4, x1.shape[0])
                 with torch.no_grad():
                     x1_vis = x1[:B_vis].to(device)
@@ -1894,25 +1916,16 @@ def train_direction_g():
                     _, v_patch_spatial = extract_tokens(frozen_backbone, x1_vis_norm, patch_size=patch_size)
                     v_patch_tokens = v_patch_spatial.reshape(B_vis, -1, embed_dim).cpu().float()
 
-                    # Đảm bảo các mẫu visual luôn được áp dụng SRS để hiển thị tác động hoán nền thực tế
-                    x_srs_vis = x_student[:B_vis].clone()
-                    for b_idx in range(B_vis):
-                        diff_check = float(torch.abs(x_srs_vis[b_idx] - x1[b_idx]).mean().item() * 100.0)
-                        if diff_check < 0.5:
-                            # Mẫu này bị bỏ qua p_srs trong lúc train, thực hiện swap bổ sung để trực quan hóa
-                            x_sw_vis, _ = static_region_swap(
-                                x1[b_idx].to(device), x2[b_idx].to(device),
-                                pi1[b_idx].to(device), pi2[b_idx].to(device),
-                                ratio=0.7, feather=4, continuous_bg=True, color_match=True,
-                            )
-                            x_srs_vis[b_idx] = x_sw_vis.cpu()
+                    # Trích xuất đặc trưng THỰC SỰ của Student trên ảnh sạch x1 (không che mask)
+                    _, s_clean_patches, _, _ = student_model(x1_vis, masks=None)
+                    s_patch_tokens_real = s_clean_patches.reshape(B_vis, -1, embed_dim).cpu().float()
 
                 last_visual_data = {
                     "x_orig": x1[:B_vis].detach().cpu(),
                     "pi": pi1[:B_vis].detach().cpu(),
                     "mask": mask_batch[:B_vis].detach().cpu(),
-                    "x_srs": x_srs_vis.detach().cpu(),
-                    "patch_features": t_patches[:B_vis].detach().cpu().float(),
+                    "x_srs": x_student[:B_vis].detach().cpu(),  # Giữ nguyên ảnh SRS thực tế của bước train
+                    "patch_features": s_patch_tokens_real,      # ĐẶC TRƯNG CHUẨN XÁC TỪ STUDENT
                     "vanilla_patch_features": v_patch_tokens,
                 }
 
@@ -1963,9 +1976,80 @@ def train_direction_g():
             except Exception:
                 pass
 
-            # Cập nhật hình ảnh trực quan hóa và đồ thị sau mỗi epoch
-            if last_visual_data is not None:
-                vis_save_path = os.path.join(args.output_dir, "direction1_new_progress.png")
+            # Cập nhật hình ảnh trực quan hóa: Ưu tiên dùng Fixed Visual Benchmark để so sánh chuẩn xác qua các epoch
+            vis_save_path = os.path.join(args.output_dir, "direction1_new_progress.png")
+            if fixed_visual_batch is not None:
+                try:
+                    with torch.no_grad():
+                        fx1 = fixed_visual_batch["x1"]
+                        fx2 = fixed_visual_batch["x2"]
+                        fcids = fixed_visual_batch["cids"]
+                        B_f = fx1.shape[0]
+
+                        # 1. Trích xuất đặc trưng DINO gốc
+                        fx1_norm = imagenet_normalize(fx1)
+                        _, fv_patch_spatial = extract_tokens(frozen_backbone, fx1_norm, patch_size=patch_size)
+                        fv_patch_tokens = fv_patch_spatial.reshape(B_f, -1, embed_dim).cpu().float()
+
+                        # 2. Trích xuất đặc trưng thực thụ của Student (trên ảnh sạch không che)
+                        _, fs_patches_clean, _, _ = student_model(fx1, masks=None)
+                        fs_patch_tokens = fs_patches_clean.reshape(B_f, -1, embed_dim).cpu().float()
+
+                        # 3. Tính TAM và AGM trên tập mẫu cố định
+                        fu1, _ = frozen_extractor(fx1)
+                        fa1, _ = pos_stats.atypicality(fcids, fu1)
+                        fpi1 = calibrator.posterior(fa1, refine=args.refine_tam).reshape(B_f, 16, 28)
+
+                        fu2, _ = frozen_extractor(fx2)
+                        fa2, _ = pos_stats.atypicality(fcids, fu2)
+                        fpi2 = calibrator.posterior(fa2, refine=args.refine_tam).reshape(B_f, 16, 28)
+
+                        # 4. Sinh ảnh SRS hoán nền và mặt nạ AGM
+                        fx_srs_list = []
+                        fmask_list = []
+                        for b_i in range(B_f):
+                            f_sw, _ = static_region_swap(
+                                fx1[b_i], fx2[b_i], fpi1[b_i], fpi2[b_i],
+                                ratio=0.7, feather=4, continuous_bg=True, color_match=True
+                            )
+                            fx_srs_list.append(f_sw)
+
+                            fm_b = agm_sample(
+                                pi=fpi1[b_i].reshape(-1),
+                                ratio=args.mask_ratio,
+                                phi=args.phi,
+                                q_max=args.q_max,
+                                mode=args.mask_mode,
+                            )
+                            fmask_list.append(fm_b)
+
+                        fx_srs_tensor = torch.stack(fx_srs_list, dim=0).cpu()
+                        fmask_tensor = torch.stack(fmask_list, dim=0).cpu()
+
+                    save_direction_g_visuals(
+                        x_orig=fx1.detach().cpu(),
+                        pi=fpi1.detach().cpu(),
+                        mask=fmask_tensor,
+                        x_srs=fx_srs_tensor,
+                        patch_features=fs_patch_tokens,  # Student đặc trưng sạch
+                        save_path=vis_save_path,
+                        epoch=epoch + 1,
+                        vanilla_patch_features=fv_patch_tokens,
+                    )
+                except Exception as e_vis:
+                    print(f"⚠️ [Visualizer] Lỗi suy luận benchmark ({e_vis}), fallback sang batch cuối.")
+                    if last_visual_data is not None:
+                        save_direction_g_visuals(
+                            x_orig=last_visual_data["x_orig"],
+                            pi=last_visual_data["pi"],
+                            mask=last_visual_data["mask"],
+                            x_srs=last_visual_data["x_srs"],
+                            patch_features=last_visual_data["patch_features"],
+                            save_path=vis_save_path,
+                            epoch=epoch + 1,
+                            vanilla_patch_features=last_visual_data.get("vanilla_patch_features"),
+                        )
+            elif last_visual_data is not None:
                 save_direction_g_visuals(
                     x_orig=last_visual_data["x_orig"],
                     pi=last_visual_data["pi"],

@@ -88,8 +88,14 @@ def agm_sample(
         mask[chosen] = True
         return mask
 
-    F_mask = (pi_flat > 0.5) & valid_flat  # Vùng xe
-    B_mask = ~F_mask                       # Vùng nền & không xác định
+    # Ngưỡng phân tầng xe linh hoạt: nếu ban đêm hoặc xe nhỏ khiến ít patch đạt > 0.5,
+    # tự động hạ ngưỡng xuống 0.35 để không bị rơi vào tình trạng bỏ sót xe
+    thr_fg = 0.50
+    if (pi_flat >= 0.50).sum() < 12 and (pi_flat >= 0.35).sum() >= 12:
+        thr_fg = 0.35
+
+    F_mask = (pi_flat >= thr_fg) & valid_flat  # Vùng xe
+    B_mask = ~F_mask                           # Vùng nền & không xác định
 
     n_fg_total = int(F_mask.sum().item())
     n_bg_total = int(B_mask.sum().item())
@@ -109,8 +115,8 @@ def agm_sample(
     fg_indices = torch.where(F_mask)[0]
     bg_indices = torch.where(B_mask)[0]
 
-    # Nhánh 2: Che theo khối (Block-wise Masking quanh hạt giống vùng xe)
-    if mode == "block" and k_fg > 0:
+    # Nhánh 2: Che theo khối (Block-wise Masking chuẩn iBOT / SimMIM)
+    if mode == "block":
         if grid_shape is None:
             if len(orig_pi_shape) == 2:
                 Hp, Wp = orig_pi_shape
@@ -123,42 +129,99 @@ def agm_sample(
             Hp, Wp = grid_shape
 
         if Hp * Wp == N:
-            # Chọn số hạt giống bằng khoảng 1/3 ngân sách k_fg rồi lan tỏa khối 2x2 trong tập F_mask
-            n_seeds = max(1, k_fg // 3)
-            fg_weights = pi_flat[fg_indices]
-            seeds = sample_without_replacement(fg_indices, n_seeds, weights=fg_weights, generator=generator)
+            mask_2d = torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
 
-            fg_2d = F_mask.view(Hp, Wp)
-            block_cand_2d = torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
-            for s_idx in seeds.tolist():
-                r, c = s_idx // Wp, s_idx % Wp
-                r_end = min(Hp, r + 2)
-                c_end = min(Wp, c + 2)
-                block_cand_2d[r:r_end, c:c_end] = True
+            # A. Gieo khối 2x2 cho vùng phương tiện (k_fg):
+            # Luôn giữ trọn vẹn khối 2x2 (4 patches) bao quanh xe và vi ngữ cảnh lân cận,
+            # đồng thời tôn trọng nghiêm ngặt trần q_max của vùng xe.
+            max_fg_patches = int(math.floor(q_max * n_fg_total))
+            if k_fg > 0 and fg_indices.numel() > 0 and max_fg_patches > 0:
+                fg_weights = pi_flat[fg_indices].clone()
+                # Gieo từng khối 2x2 cho đến khi đạt k_fg hoặc chạm trần max_fg_patches
+                while mask_2d.view(-1)[fg_indices].sum().item() < k_fg:
+                    unmasked_fg = fg_indices[~mask_2d.view(-1)[fg_indices]]
+                    if unmasked_fg.numel() == 0:
+                        break
+                    w = fg_weights[~mask_2d.view(-1)[fg_indices]]
+                    seed = sample_without_replacement(unmasked_fg, 1, weights=w, generator=generator)[0].item()
+                    r = min(int(seed // Wp), Hp - 2)
+                    c = min(int(seed % Wp), Wp - 2)
+                    candidate = mask_2d.clone()
+                    candidate[r:r+2, c:c+2] = True
+                    if candidate.view(-1)[fg_indices].sum().item() <= max_fg_patches:
+                        mask_2d[r:r+2, c:c+2] = True
+                    else:
+                        break
 
-            # Chỉ giữ các ô thuộc vùng xe để tôn trọng nghiêm ngặt trần q_max
-            block_fg_2d = block_cand_2d & fg_2d
-            block_fg_idx = torch.where(block_fg_2d.view(-1))[0]
+            # B. Gieo khối 2x2 cho vùng nền (k_bg) thay vì rải rác muối tiêu 1x1:
+            cur_masked = int(mask_2d.sum().item())
+            while cur_masked + 3 < n_mask:
+                avail_bg_mask = B_mask.view(Hp, Wp) & (~mask_2d)
+                avail_bg_indices = torch.where(avail_bg_mask.view(-1))[0]
+                if avail_bg_indices.numel() == 0:
+                    break
+                seed = sample_without_replacement(avail_bg_indices, 1, weights=None, generator=generator)[0].item()
+                r = min(int(seed // Wp), Hp - 2)
+                c = min(int(seed % Wp), Wp - 2)
+                mask_2d[r:r+2, c:c+2] = True
+                cur_masked = int(mask_2d.sum().item())
 
-            if block_fg_idx.numel() >= k_fg:
-                chosen_fg = block_fg_idx[:k_fg]
-            else:
-                rem_fg_mask = F_mask.clone()
-                rem_fg_mask[block_fg_idx] = False
-                rem_fg_idx = torch.where(rem_fg_mask)[0]
-                need_more = k_fg - block_fg_idx.numel()
-                extra_chosen = sample_without_replacement(
-                    rem_fg_idx, need_more, weights=pi_flat[rem_fg_idx], generator=generator
-                )
-                chosen_fg = torch.cat([block_fg_idx, extra_chosen], dim=0)
+            # C. Tinh chỉnh chính xác số lượng patch bị che về n_mask:
+            # Bù các patch còn thiếu (1-3 patch) bằng cách mở rộng tiếp giáp khối hiện hữu,
+            # tuyệt đối không rắc 1x1 ngẫu nhiên để tránh sinh hạt muối tiêu cô lập.
+            cur_masked = int(mask_2d.sum().item())
+            if cur_masked < n_mask:
+                n_add = n_mask - cur_masked
+                # Tìm các ô chưa che tiếp giáp trực tiếp (4 hướng) với các ô đã che
+                adj_mask = torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
+                adj_mask[:-1, :] |= mask_2d[1:, :]
+                adj_mask[1:, :] |= mask_2d[:-1, :]
+                adj_mask[:, :-1] |= mask_2d[:, 1:]
+                adj_mask[:, 1:] |= mask_2d[:, :-1]
+                adj_unmasked = adj_mask & (~mask_2d)
+                adj_indices = torch.where(adj_unmasked.view(-1))[0]
+                if adj_indices.numel() >= n_add:
+                    chosen = sample_without_replacement(adj_indices, n_add, weights=None, generator=generator)
+                    mask_2d.view(-1)[chosen] = True
+                else:
+                    if adj_indices.numel() > 0:
+                        mask_2d.view(-1)[adj_indices] = True
+                    remain = n_mask - int(mask_2d.sum().item())
+                    if remain > 0:
+                        rem_idx = torch.where(~mask_2d.view(-1))[0]
+                        chosen = sample_without_replacement(rem_idx, remain, weights=None, generator=generator)
+                        mask_2d.view(-1)[chosen] = True
+            elif cur_masked > n_mask:
+                # Nếu thừa 1-3 patch do khối 2x2: gỡ bỏ an toàn từ các ô có >= 2 láng giềng
+                n_drop = cur_masked - n_mask
+                for _ in range(n_drop):
+                    nbr_count = torch.zeros((Hp, Wp), dtype=torch.int32, device=device)
+                    nbr_count[:-1, :] += mask_2d[1:, :].int()
+                    nbr_count[1:, :] += mask_2d[:-1, :].int()
+                    nbr_count[:, :-1] += mask_2d[:, 1:].int()
+                    nbr_count[:, 1:] += mask_2d[:, :-1].int()
+                    nbr_count = nbr_count * mask_2d.int()
+
+                    safe_candidates = (mask_2d) & (nbr_count >= 2)
+                    safe_idx = torch.where(safe_candidates.view(-1))[0]
+                    if safe_idx.numel() > 0:
+                        max_nbrs = nbr_count.view(-1)[safe_idx].max()
+                        best_candidates = safe_idx[nbr_count.view(-1)[safe_idx] == max_nbrs]
+                        drop_one = best_candidates[0].item()
+                        mask_2d.view(-1)[drop_one] = False
+                    else:
+                        rem_m = torch.where(mask_2d.view(-1))[0]
+                        mask_2d.view(-1)[rem_m[0]] = False
+
+            return mask_2d.view(-1)
         else:
             fg_weights = pi_flat[fg_indices] if n_fg_total > 0 else None
             chosen_fg = sample_without_replacement(fg_indices, k_fg, weights=fg_weights, generator=generator)
+            chosen_bg = sample_without_replacement(bg_indices, k_bg, weights=None, generator=generator)
     else:
         fg_weights = pi_flat[fg_indices] if n_fg_total > 0 else None
         chosen_fg = sample_without_replacement(fg_indices, k_fg, weights=fg_weights, generator=generator)
-
-    chosen_bg = sample_without_replacement(bg_indices, k_bg, weights=None, generator=generator)
+        chosen_bg = sample_without_replacement(bg_indices, k_bg, weights=None, generator=generator)
 
     mask = torch.zeros(N, dtype=torch.bool, device=device)
     if chosen_fg.numel() > 0:

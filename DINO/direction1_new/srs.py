@@ -70,38 +70,39 @@ def static_region_swap(
     if valid2 is None:
         valid2 = torch.ones_like(pi2, dtype=torch.bool)
 
-    # 1. Xác định tập các patch tĩnh ở cả 2 frame theo ngưỡng mặc định
-    static_common = (pi < thr) & (pi2 < thr) & valid & valid2
+    # 1. Bảo vệ toàn vẹn các phương tiện giao thông của frame x1:
+    # Nhận diện vùng xe của frame 1 (pi >= 0.40) và giãn nở 1 patch nhẹ để bảo vệ đường viền xe
+    fg1 = (pi >= 0.40) & valid
+    fg1_dilated = dilate_mask_2d(fg1, radius=1)
 
-    # 2. Loại bỏ các patch kề cận vùng xe của cả hai frame để không chép dính nửa chiếc xe
-    fg_union = (pi >= 0.5) | (pi2 >= 0.5)
-    fg_dilated = dilate_mask_2d(fg_union, radius=1)
-    eligible_swap = static_common & (~fg_dilated)
+    # 2. Loại trừ các phương tiện của frame x2 (pi2 >= 0.45) để không chép đè xe "ma" vào nền mới
+    fg2 = (pi2 >= 0.45) & valid2
+
+    # 3. Tập các patch nền tĩnh chung hợp lệ để hoán đổi:
+    # Là vùng nền của frame 1 VÀ là vùng nền của frame 2
+    eligible_swap = (~fg1_dilated) & (~fg2) & valid & valid2
 
     n_eligible = int(eligible_swap.sum().item())
-    min_eligible_needed = max(16, int(0.12 * Hp * Wp))  # Tối thiểu 12% diện tích khung hình (~54 patches)
+    min_eligible_needed = max(16, int(0.15 * Hp * Wp))  # Tối thiểu 15% diện tích khung hình (~67 patches)
 
-    # 2b. Cơ chế Ngưỡng Thích ứng Dự phòng (Adaptive Fallback Guarantee):
-    # Khắc phục triệt để hiện tượng n_eligible == 0 khi pi bị nhiễu hoặc mật độ xe cao
+    # Cơ chế Ngưỡng Thích ứng Dự phòng (Adaptive Fallback Guarantee):
+    # Nếu khung hình kẹt xe quá dày đặc, nới lỏng bán kính giãn nở về 0 để bảo đảm diện tích swap
     if n_eligible < min_eligible_needed:
-        # Thử nghiệm fallback cấp 1: Giảm bán kính giãn nở về 0 (chỉ loại bỏ trực tiếp xe, không giãn biên)
-        eligible_swap_fb1 = static_common & (~fg_union)
+        eligible_swap_fb1 = (~fg1) & (~fg2) & valid & valid2
         if int(eligible_swap_fb1.sum().item()) >= min_eligible_needed:
             eligible_swap = eligible_swap_fb1
             n_eligible = int(eligible_swap.sum().item())
         else:
-            # Fallback cấp 2: Nới lỏng ngưỡng tĩnh dựa trên phân vị động của ảnh
-            # Tìm các patch có xác suất xe thấp nhất trong cả 2 khung hình
+            # Fallback cấp 2: Dùng phân vị động để tìm 40% diện tích có xác suất xe thấp nhất
             combined_fg = torch.maximum(pi, pi2)
-            # Ngưỡng thích ứng tại phân vị 35% thấp nhất
             flat_fg = combined_fg[valid & valid2].view(-1)
             if flat_fg.numel() > 0:
-                k_val = max(1, min(int(flat_fg.numel() * 0.35), flat_fg.numel() - 1))
+                k_val = max(1, min(int(flat_fg.numel() * 0.40), flat_fg.numel() - 1))
                 adapt_thr = float(torch.kthvalue(flat_fg, k_val).values.item())
-                adapt_thr = max(thr, min(adapt_thr, 0.45))
-                # Chỉ coi là xe chắc chắn nếu pi >= 0.65 (tránh false positive mặt đường)
-                fg_core = (pi >= 0.65) | (pi2 >= 0.65)
-                eligible_swap_fb2 = (pi <= adapt_thr) & (pi2 <= adapt_thr) & valid & valid2 & (~fg_core)
+                adapt_thr = max(thr, min(adapt_thr, 0.55))
+                fg_core1 = (pi >= 0.65)
+                fg_core2 = (pi2 >= 0.65)
+                eligible_swap_fb2 = (pi <= adapt_thr) & (pi2 <= adapt_thr) & valid & valid2 & (~fg_core1) & (~fg_core2)
                 if int(eligible_swap_fb2.sum().item()) > 0:
                     eligible_swap = eligible_swap_fb2
                     n_eligible = int(eligible_swap.sum().item())
@@ -109,7 +110,7 @@ def static_region_swap(
     if n_eligible == 0 or ratio <= 0.0:
         return x.clone(), torch.zeros((Hp, Wp), dtype=torch.bool, device=device)
 
-    # 3. Xác định mặt nạ hoán đổi (liền mạch hoặc lấy mẫu con theo ratio)
+    # 4. Xác định mặt nạ hoán đổi (liền mạch hoặc lấy mẫu con theo ratio)
     if continuous_bg or ratio >= 0.99:
         swap_mask_patch = eligible_swap.clone()
     else:
@@ -122,24 +123,16 @@ def static_region_swap(
         swap_mask_patch[chosen_indices] = True
         swap_mask_patch = swap_mask_patch.view(Hp, Wp)
 
-    # 4. Phóng đại mask patch lên kích thước pixel (H, W)
-    # Nếu continuous_bg, dùng bilinear trên trọng số mềm (1 - pi) kết hợp eligible_swap để biên cực mượt
-    if continuous_bg:
-        soft_patch_mask = eligible_swap.float() * (1.0 - pi.clamp(0.0, 1.0))
-        pixel_mask = F.interpolate(
-            soft_patch_mask.view(1, 1, Hp, Wp),
-            size=(H, W),
-            mode="bilinear",
-            align_corners=False,
-        )
-    else:
-        pixel_mask = F.interpolate(
-            swap_mask_patch.float().view(1, 1, Hp, Wp),
-            size=(H, W),
-            mode="nearest",
-        )  # (1, 1, H, W)
+    # 5. Phóng đại mask patch lên kích thước pixel (H, W)
+    # Phóng đại trực tiếp swap_mask_patch với bilinear interpolation để đạt trọng số đầy đủ w in [0, 1]
+    pixel_mask = F.interpolate(
+        swap_mask_patch.float().view(1, 1, Hp, Wp),
+        size=(H, W),
+        mode="bilinear",
+        align_corners=False,
+    )
 
-    # 5. Làm mềm biên với dải feather pixel bằng average pool
+    # 6. Làm mềm biên với dải feather pixel bằng average pool để ghép tự nhiên
     if feather > 0:
         k_size = 2 * feather + 1
         pixel_weight = F.avg_pool2d(pixel_mask, kernel_size=k_size, stride=1, padding=feather)

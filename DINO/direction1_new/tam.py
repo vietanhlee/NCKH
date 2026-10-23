@@ -39,7 +39,7 @@ class PositionStats(nn.Module):
         eta: float = 0.02,
         eta_w: float = 0.005,
         eps: float = 0.01,
-        frame_norm_alpha: float = 0.15,
+        frame_norm_alpha: float = 1.0,
     ):
         super().__init__()
         self.num_cams = num_cams
@@ -70,11 +70,12 @@ class PositionStats(nn.Module):
         self.register_buffer("is_initialized", torch.zeros(num_cams, dtype=torch.bool))
 
     @staticmethod
-    def normalize_frame_features(U: torch.Tensor, alpha: float = 0.15) -> torch.Tensor:
+    def normalize_frame_features(U: torch.Tensor, alpha: float = 1.0) -> torch.Tensor:
         """
         Chuẩn hóa trắc quang toàn khung hình (Frame-level Photometric Normalization).
         Khử thành phần dịch chuyển đồng biến toàn cục (do bóng mây, sương mù, chế độ hồng ngoại ban đêm)
         trước khi đưa vào thống kê theo vị trí.
+        Mặc định alpha = 1.0 (Full Centering) loại bỏ 100% độ dịch chuyển toàn cục giữa ca ngày và ca đêm.
         U: (B, P, d) hoặc (N, P, d)
         """
         if alpha <= 0.0:
@@ -339,15 +340,25 @@ class PositionStats(nn.Module):
         # gán điểm khác thường cao (2.5) để phản ánh đúng đó là vùng hoạt động tiền cảnh mạnh
         a = torch.where(valid, a, torch.tensor(2.5, device=U.device, dtype=a.dtype))
 
-        # Bộ lọc tương phản không gian cục bộ (Local High-Pass Filter):
-        # Khi mặt đường bị thay đổi ánh sáng toàn cục (đèn pha, nắng gắt), cả mảng lớn tăng a.
-        # Xe cộ là cấu trúc cục bộ có gradient không gian cao, vì vậy trừ nhẹ baseline trung bình cục bộ
-        # giúp triệt tiêu hiện tượng đỏ rực mặt đường trống.
+        # Bộ lọc tương phản không gian cục bộ tương đối (Relative Local Contrast & High-Pass Filter):
+        # Khi mặt đường bị thay đổi ánh sáng diện rộng (đèn pha, mưa ướt, phản quang), cả mảng lớn
+        # đều có điểm a cao xấp xỉ nhau -> độ phân tán cục bộ thấp và (a - local_mean) ~ 0.
+        # Sử dụng Replicate Padding để khử triệt để sai số biên do padding 0 tạo ra.
+        # Phương tiện (ô tô, xe máy) là cấu trúc cục bộ sắc nét, có độ tương phản vượt trội so với nền xung quanh.
         if P == 448 and a.dim() == 2:
-            a_2d = a.view(B, 1, 16, 28)
-            local_bg = F.avg_pool2d(a_2d, kernel_size=5, stride=1, padding=2)
-            a_filtered = (a_2d - 0.25 * local_bg).clamp(min=1e-4)
-            a = a_filtered.view(B, P)
+            a_2d = a.reshape(B, 1, 16, 28)
+            # Replicate padding 2 pixel mỗi phía để giá trị trung bình ở viền biên không bị kéo lệch
+            a_padded = F.pad(a_2d, (2, 2, 2, 2), mode="replicate")
+            local_mean = F.avg_pool2d(a_padded, kernel_size=5, stride=1, padding=0)
+            local_sq_mean = F.avg_pool2d(a_padded ** 2, kernel_size=5, stride=1, padding=0)
+            local_std = torch.sqrt(torch.clamp(local_sq_mean - local_mean ** 2, min=1e-4))
+
+            # Độ tương phản tương đối so với nền cục bộ
+            local_contrast = F.relu(a_2d - local_mean) / (local_std + 0.15)
+            # Gate mềm: Dập tắt mảng đường ướt phản quang đồng nhất, bảo toàn và khuếch đại xe cộ
+            contrast_gate = torch.sigmoid(4.0 * (local_contrast - 0.5))
+            a_filtered = a_2d * (0.05 + 0.95 * contrast_gate)
+            a = a_filtered.reshape(B, P)
 
         return a, valid
 
@@ -411,8 +422,20 @@ class GMMCalibrator:
             max_samples: Hạn ngạch số mẫu tối đa (dùng cho Warmup Equal Quota)
             subsample_ratio: Tỷ lệ lấy mẫu ngẫu nhiên (ví dụ 0.15 để giảm tương quan không gian)
         """
-        valid_mask = valid.detach().cpu().numpy().astype(bool)
-        valid_a = a.detach().cpu().numpy()[valid_mask].flatten()
+        # Chuẩn hóa theo mức nền trung vị của từng frame: loại bỏ trôi dạt phân bố tuyệt đối giữa ngày và đêm
+        if torch.is_tensor(a):
+            if a.dim() >= 2:
+                med_a = torch.median(a.clamp(min=1e-4), dim=-1, keepdim=True)[0]
+                a_norm = a / med_a.clamp(min=1e-3)
+            else:
+                med_a = torch.median(a.clamp(min=1e-4))
+                a_norm = a / med_a.clamp(min=1e-3)
+            valid_mask = valid.detach().cpu().numpy().astype(bool)
+            valid_a = a_norm.detach().cpu().numpy()[valid_mask].flatten()
+        else:
+            valid_mask = np.asarray(valid, dtype=bool)
+            valid_a = np.asarray(a)[valid_mask].flatten()
+
         if len(valid_a) == 0:
             return
 
@@ -529,11 +552,19 @@ class GMMCalibrator:
         Returns:
             pi: (B, P) Tensor xác suất tiền cảnh
         """
-        log_a = torch.log(a.clamp(min=1e-4, max=100.0))
+        # Chuẩn hóa theo mức nền trung vị của từng frame: loại bỏ trôi dạt thang đo giữa ngày và đêm
+        if a.dim() >= 2:
+            med_a = torch.median(a.clamp(min=1e-4), dim=-1, keepdim=True)[0]
+            a_norm = a / med_a.clamp(min=1e-3)
+        else:
+            med_a = torch.median(a.clamp(min=1e-4))
+            a_norm = a / med_a.clamp(min=1e-3)
+
+        log_a = torch.log(a_norm.clamp(min=1e-4, max=100.0))
 
         if not self.is_fitted:
-            # Fallback sigmoid chuẩn hóa mềm khi chưa fit
-            raw_pi = torch.sigmoid(1.5 * (log_a - 0.5))
+            # Fallback sigmoid chuẩn hóa mềm khi chưa fit (tâm ở 1.25 trên thang điểm chuẩn hóa)
+            raw_pi = torch.sigmoid(2.0 * (log_a - 0.25))
             return refine_traffic_foreground_map(raw_pi) if refine else raw_pi
 
         # Tính mật độ Gaussian của 2 thành phần
@@ -637,5 +668,19 @@ def refine_traffic_foreground_map(
         pi_sharp * (pi_sharp / max(suppress_threshold, 1e-4)),
         pi_sharp,
     )
+
+    # 3. Lọc nhiễu ô cô lập (Isolated Patch Filtering nếu pi là lưới 2D (16, 28) hoặc (B, 16, 28)):
+    # Dập tắt các patch lẻ loi đơn độc lơ lửng trên mặt đường do sai số đo
+    orig_shape = pi.shape
+    if (len(orig_shape) == 2 and orig_shape == (16, 28)) or (len(orig_shape) == 3 and orig_shape[1:] == (16, 28)):
+        is_3d = len(orig_shape) == 3
+        pi_2d = pi_refined if is_3d else pi_refined.unsqueeze(0)  # (B, 16, 28)
+        # avg_pool 3x3 để đếm mật độ hỗ trợ của 8 ô lân cận
+        nbr_support = F.avg_pool2d(pi_2d.unsqueeze(1), kernel_size=3, stride=1, padding=1).squeeze(1)
+        # Ô đơn độc có pi cao nhưng cả cụm lân cận < 0.12 -> dập tắt
+        isolated_mask = (pi_2d > 0.35) & (nbr_support < 0.12)
+        pi_2d = torch.where(isolated_mask, pi_2d * 0.15, pi_2d)
+        pi_refined = pi_2d if is_3d else pi_2d.squeeze(0)
+
     return pi_refined.clamp(0.0, 1.0)
 

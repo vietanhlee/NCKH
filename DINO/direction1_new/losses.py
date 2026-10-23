@@ -371,15 +371,16 @@ class CameraAdversarialHead(nn.Module):
 
 class PatchVarianceRegularizer(nn.Module):
     """
-    Điều hòa phương sai mức Patch (VICReg-style Variance Regularizer):
-    Ngăn chặn triệt để hiện tượng Sụp đổ Chiều (Patch Dimensional Collapse),
-    ép các chiều đặc trưng của patch tokens phải phân tán độc lập,
-    tránh việc biểu diễn co cụm về mặt phẳng 2D-3D (Top-3 PC chiếm 88% variance).
+    Ràng buộc phương sai đặc trưng patch (Patch-level Variance & Spatial Smoothness Regularizer).
+    1. Ngăn chặn hiện tượng Sụp đổ Chiều (Patch Dimensional Collapse) qua Hinge Loss trên độ lệch chuẩn std.
+    2. Ràng buộc trơn tru không gian (Spatial Smoothness): Triệt tiêu hiện tượng nhiễu hạt (checkerboard noise)
+       giữa các patch lân cận trên cùng một phương tiện xe cộ, giữ biểu diễn mượt mà chuẩn ViT.
     """
-    def __init__(self, target_std: float = 1.0, eps: float = 1e-4):
+    def __init__(self, target_std: float = 0.5, eps: float = 1e-4, smooth_weight: float = 0.05):
         super().__init__()
         self.target_std = target_std
         self.eps = eps
+        self.smooth_weight = smooth_weight
 
     def forward(self, patch_tokens: torch.Tensor, pi: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -396,11 +397,29 @@ class PatchVarianceRegularizer(nn.Module):
             if fg_mask.sum() >= max(16, D // 4):
                 flat_tokens = flat_tokens[fg_mask]
 
-        # Tính độ lệch chuẩn theo từng chiều đặc trưng D
+        # 1. Tính độ lệch chuẩn theo từng chiều đặc trưng D
         std = torch.sqrt(flat_tokens.var(dim=0) + self.eps)
-        # Hinge loss: phạt nếu std nhỏ hơn target_std
-        std_loss = torch.mean(F.relu(self.target_std - std))
-        return std_loss
+        # Hinge loss: phạt nếu std nhỏ hơn target_std (mặc định 0.5)
+        var_loss = torch.mean(F.relu(self.target_std - std))
+
+        # 2. Ràng buộc trơn tru không gian cục bộ (Spatial Smoothness Regularizer):
+        # Giảm thiểu hiện tượng checkerboard noise giữa các patch liền kề trên cùng một xe
+        smooth_loss = torch.tensor(0.0, device=patch_tokens.device)
+        if self.smooth_weight > 0.0 and N == 448:
+            tokens_2d = patch_tokens.reshape(B, 16, 28, D)
+            diff_h = torch.abs(tokens_2d[:, 1:, :, :] - tokens_2d[:, :-1, :, :])  # (B, 15, 28, D)
+            diff_w = torch.abs(tokens_2d[:, :, 1:, :] - tokens_2d[:, :, :-1, :])  # (B, 16, 27, D)
+
+            if pi is not None:
+                pi_2d = pi.reshape(B, 16, 28, 1)
+                weight_h = torch.minimum(pi_2d[:, 1:, :, :], pi_2d[:, :-1, :, :])
+                weight_w = torch.minimum(pi_2d[:, :, 1:, :], pi_2d[:, :, :-1, :])
+                smooth_loss = (diff_h * weight_h).sum() / (weight_h.sum() * D + 1e-6) + \
+                              (diff_w * weight_w).sum() / (weight_w.sum() * D + 1e-6)
+            else:
+                smooth_loss = diff_h.mean() + diff_w.mean()
+
+        return var_loss + self.smooth_weight * smooth_loss
 
 
 class FeatureAnchorLoss(nn.Module):

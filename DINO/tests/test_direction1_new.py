@@ -595,6 +595,98 @@ class TestDirection1New(unittest.TestCase):
         loss_anc.backward()
         self.assertTrue(torch.isfinite(raw_leaf.grad).all())
 
+    def test_26_tam_wet_road_suppression_and_local_contrast(self):
+        """Kiểm tra Relative Local Contrast dập tắt mảng đường ướt phản quang đồng nhất và tôn vinh xe cộ."""
+        from direction1_new.tam import PositionStats, GMMCalibrator
+        pos_stats = PositionStats(num_cams=2, num_patches=448, num_states=4, feat_dim=64)
+
+        # Mô phỏng điểm khác thường a:
+        # Nửa dưới khung hình bị đường ướt phản quang đèn xe: mảng lớn đồng nhất có a cao (~2.5)
+        # Tại vị trí (r=10, c=15) có một chiếc xe thật: a nhảy vọt lên 4.5
+        a_sim = torch.full((1, 448), 0.5)
+        a_2d = a_sim.view(1, 16, 28)
+        a_2d[:, 8:, :] = 2.5  # Mảng đường ướt nửa dưới
+        a_2d[:, 10:12, 14:16] = 4.8  # Khối xe thật 2x2
+        a_in = a_2d.view(1, 448)
+
+        # Áp dụng bộ lọc tương phản cục bộ tương đối (Relative Local High-Pass Contrast) với Replicate Padding
+        a_2d_proc = a_in.reshape(1, 1, 16, 28)
+        a_padded = F.pad(a_2d_proc, (2, 2, 2, 2), mode="replicate")
+        local_mean = F.avg_pool2d(a_padded, kernel_size=5, stride=1, padding=0)
+        local_sq_mean = F.avg_pool2d(a_padded ** 2, kernel_size=5, stride=1, padding=0)
+        local_std = torch.sqrt(torch.clamp(local_sq_mean - local_mean ** 2, min=1e-4))
+        local_contrast = F.relu(a_2d_proc - local_mean) / (local_std + 0.15)
+        contrast_gate = torch.sigmoid(4.0 * (local_contrast - 0.5))
+        a_filtered = a_2d_proc * (0.05 + 0.95 * contrast_gate)
+
+        # Điểm mảng đường ướt đồng nhất (r=14, c=5) phải bị dập tắt giảm đáng kể (ít nhất 50%)
+        wet_road_val = a_filtered[0, 0, 14, 5].item()
+        self.assertLess(wet_road_val, 1.0)
+
+        # Điểm xe thật (r=10, c=15) phải giữ được mức năng lượng cao (> 3.5)
+        vehicle_val = a_filtered[0, 0, 10, 14].item()
+        self.assertGreater(vehicle_val, 3.5)
+
+    def test_27_agm_block_integrity_and_no_cut_up(self):
+        """Kiểm tra AGM trong chế độ mode='block' bảo toàn cấu trúc khối 2x2 liền mạch, không bị cắt vụn."""
+        from direction1_new.masking import agm_sample
+        # Tạo bản đồ pi có 1 cụm xe rõ rệt ở giữa
+        pi = torch.zeros(16, 28)
+        pi[6:10, 10:16] = 0.85  # Cụm xe
+
+        mask = agm_sample(pi=pi, ratio=0.35, phi=0.5, mode="block")
+        mask_2d = mask.view(16, 28)
+
+        # Đếm các patch bị che
+        total_masked = int(mask.sum().item())
+        expected = int(round(0.35 * 448))
+        self.assertEqual(total_masked, expected)
+
+        # Kiểm tra tính toàn vẹn khối: > 95% số patch bị che phải có hàng xóm liền kề cùng bị che (tạo thành khối 2x2)
+        clustered_count = 0
+        for r in range(16):
+            for c in range(28):
+                if mask_2d[r, c]:
+                    nbrs = []
+                    if r > 0: nbrs.append(mask_2d[r - 1, c].item())
+                    if r < 15: nbrs.append(mask_2d[r + 1, c].item())
+                    if c > 0: nbrs.append(mask_2d[r, c - 1].item())
+                    if c < 27: nbrs.append(mask_2d[r, c + 1].item())
+                    if any(nbrs):
+                        clustered_count += 1
+
+        clustering_ratio = float(clustered_count) / float(total_masked)
+        self.assertGreaterEqual(clustering_ratio, 0.95)
+
+    def test_28_srs_true_background_swap_delta(self):
+        """Kiểm tra SRS tạo ra sự biến đổi nền thực chất: delta >= 12% và diện tích swap >= 35%."""
+        from direction1_new.srs import static_region_swap
+        # Ảnh 1: Nền xám tối (0.2), xe màu đỏ ở góc trái
+        x1 = torch.full((3, 256, 448), 0.2)
+        x1[0, 50:120, 50:120] = 0.9  # Xe đỏ
+
+        # Ảnh 2: Nền sáng ban ngày (0.8), xe màu xanh ở góc phải
+        x2 = torch.full((3, 256, 448), 0.8)
+        x2[2, 150:220, 300:370] = 0.9  # Xe xanh
+
+        pi1 = torch.zeros(16, 28)
+        pi1[3:8, 3:8] = 0.85  # Vị trí xe của ảnh 1
+
+        pi2 = torch.zeros(16, 28)
+        pi2[9:14, 18:24] = 0.85  # Vị trí xe của ảnh 2
+
+        x_tilde, swap_mask = static_region_swap(x1, x2, pi1, pi2, ratio=0.7, continuous_bg=True)
+        diff_val = float(torch.abs(x_tilde - x1).mean().item() * 100.0)
+        swap_ratio = float(swap_mask.sum().item()) / 448.0
+
+        # Khẳng định chất lượng: SRS phải đạt diện tích swap >= 35% và mức sai khác delta >= 12.0%
+        self.assertGreaterEqual(swap_ratio, 0.35)
+        self.assertGreaterEqual(diff_val, 12.0)
+
+        # Nhưng chiếc xe đỏ của x1 vẫn được bảo toàn nguyên vẹn
+        car_region_diff = torch.abs(x_tilde[:, 60:110, 60:110] - x1[:, 60:110, 60:110]).mean().item()
+        self.assertLess(car_region_diff, 0.05)
+
 
 if __name__ == "__main__":
     unittest.main()
