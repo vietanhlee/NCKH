@@ -494,7 +494,10 @@ def save_direction_g_visuals(
         axes[b, 0].axis("off")
 
         # 2. TAM Heatmap (16, 28) nội suy lên kích thước ảnh
-        pi_np = pi[b].detach().cpu().numpy()
+        pi_b = pi[b]
+        if pi_b.dim() == 1 and pi_b.numel() == 448:
+            pi_b = pi_b.reshape(16, 28)
+        pi_np = pi_b.detach().cpu().numpy()
         axes[b, 1].imshow(img_np)
         axes[b, 1].imshow(pi_np, cmap="jet", alpha=0.6, extent=[0, W_orig, H_orig, 0])
         axes[b, 1].set_title("Bản Đồ Tiền Cảnh TAM $\\pi$", fontsize=10, fontweight="bold")
@@ -713,7 +716,7 @@ def resolve_or_precompute_tam_cache(
     hf_token: str = "",
     weights_path: Optional[str] = None,
     tam_warmup_frames: Optional[int] = None,
-    gmm_buffer_size: int = 300000,
+    gmm_buffer_size: int = 370000,
     gmm_ema_alpha: float = 0.15,
     rebuild_cache: bool = False,
     frame_norm_alpha: float = 0.0,
@@ -933,12 +936,12 @@ def parse_args():
     )
     parser.add_argument("--resume", type=str, default=None, help="Đường dẫn checkpoint (.pth) để tiếp tục huấn luyện")
     parser.add_argument("--hf_token", type=str, default="", help="HuggingFace Token")
-    parser.add_argument("--tam_warmup_frames", type=int, default=200, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 200 frame)")
+    parser.add_argument("--tam_warmup_frames", type=int, default=490, help="Số frame mỗi camera dùng để khởi động TAM (fit PCA & K-means, mặc định: 490 frame)")
     parser.add_argument("--tam_cache_dir", type=str, default=None, help="Thư mục chứa cache pi đã tính trước bởi precompute_tam.py (tăng tốc độ nạp 2.5x)")
     parser.add_argument("--frame_norm_alpha", type=float, default=0.0, help="Hệ số trừ frame-mean trong TAM (mặc định: 0.0 để bảo toàn tuyệt đối đặc trưng DINOv3)")
     parser.add_argument("--rebuild_tam_cache", action="store_true", default=False, help="Xóa cache TAM cũ và tính toán lại từ đầu với TAM_VERSION mới")
     parser.add_argument("--tam_kmeans_iters", type=int, default=20, help="Số vòng lặp K-means khi khởi tạo cụm trạng thái nền")
-    parser.add_argument("--gmm_buffer_size", type=int, default=300000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 300000 mẫu)")
+    parser.add_argument("--gmm_buffer_size", type=int, default=370000, help="Dung lượng bộ đệm mẫu atypicality để fit GMM Calibrator (mặc định: 370000 mẫu)")
     parser.add_argument("--gmm_refit_steps", type=int, default=100, help="Chu kỳ số bước huấn luyện cập nhật lại GMM Calibrator (mặc định: 100)")
     parser.add_argument("--gmm_iters", type=int, default=30, help="Số vòng lặp EM khi fit GMM Calibrator")
     parser.add_argument("--gmm_ema_alpha", type=float, default=0.15, help="Hệ số EMA làm mượt tham số GMM khi refit (mặc định: 0.15)")
@@ -960,7 +963,7 @@ def warmup_tam_offline(
     calibrator: GMMCalibrator,
     dataset: Dataset,
     device: torch.device,
-    num_frames_per_cam: int = 200,
+    num_frames_per_cam: int = 490,
     kmeans_iters: int = 20,
     gmm_iters: int = 30,
     batch_size: int = 8,
