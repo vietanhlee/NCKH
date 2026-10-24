@@ -378,8 +378,17 @@ def save_direction_g_visuals(
                 bg_idx = corners_idx
 
             for c in range(3):
+                # 1. Căn dấu DINO gốc theo vùng nền (vùng nền có giá trị thấp hơn trung bình)
                 if v_proj[bg_idx, c].mean() > v_proj[:, c].mean():
                     v_proj[:, c] = -v_proj[:, c]
+                # 2. Căn dấu Student để ĐỒNG BỘ TUYỆT ĐỐI với DINO gốc (cùng chiều tương quan dương)
+                std_v = float(np.std(v_proj[:, c]))
+                std_s = float(np.std(s_proj[:, c]))
+                if std_v > 1e-6 and std_s > 1e-6:
+                    corr = float(np.corrcoef(v_proj[:, c], s_proj[:, c])[0, 1])
+                    if not np.isnan(corr) and corr < 0:
+                        s_proj[:, c] = -s_proj[:, c]
+                elif s_proj[bg_idx, c].mean() > s_proj[:, c].mean():
                     s_proj[:, c] = -s_proj[:, c]
 
             # Chuẩn hóa phân vị 1% - 99% chung cho 2 view của ảnh b

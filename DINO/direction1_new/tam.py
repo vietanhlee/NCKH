@@ -23,7 +23,8 @@ import torch.nn.functional as F
 #   v1: median-normalization, valid=False -> 2.5, mean centering (alpha 0.15 / 1.0)
 #   v2: trimmed-mean centering, cụm trội luôn tĩnh, gate có dilation, chuẩn hóa phân vị 25%
 #   v3: frame_norm_alpha=0.0 (chuẩn DINOv3 semantic tokens), loại bỏ local_contrast, kẹp s >= 0.08, dập tắt timestamp banner r=0
-TAM_VERSION = 3
+#   v4: Monotonic Anomaly Calibration (Sigmoid link function), loại trừ triệt để banner r=0 khỏi buffer, chống GMM tail pathology
+TAM_VERSION = 4
 
 
 def _robust_frame_scale(
@@ -410,15 +411,20 @@ class PositionStats(nn.Module):
         # Cưỡng bức dập tắt tuyệt đối hàng banner timestamp camera trên cùng (hàng r=0, 28 patch đầu tiên nếu P=448):
         # Dòng chữ timestamp/tên camera màu trắng nhảy từng giây tạo gradient tương phản cao nhưng
         # hoàn toàn không phải phương tiện giao thông.
+        # ĐẶC BIỆT: valid[:, :28] = False để ngăn không cho giá trị 0.0 lọt vào bộ đệm hồ chứa GMMCalibrator!
         if P == 448:
             if a.dim() == 2:
                 a_2d = a.clone().view(B, 16, 28)
                 a_2d[:, 0, :] = 0.0
                 a = a_2d.reshape(B, P)
+                valid = valid.clone()
+                valid[:, :28] = False
             elif a.dim() == 1:
                 a_2d = a.clone().view(16, 28)
                 a_2d[0, :] = 0.0
                 a = a_2d.reshape(-1)
+                valid = valid.clone()
+                valid[:28] = False
 
         return a, valid
 
@@ -457,13 +463,16 @@ class GMMCalibrator:
         self.size = 0          # Số lượng mẫu hiện có trong hồ chứa
         self.total_seen = 0    # Tổng số mẫu đã quan sát từ trước đến nay
 
-        # Tham số GMM (mean, std, weight của 2 thành phần)
-        # Thành phần 0: Background (log_a thấp), Thành phần 1: Foreground/Vehicle (log_a cao)
-        self.mu_bg = -1.0
-        self.mu_fg = 1.0
-        self.std_bg = 0.8
+        # Tham số phân phối nền (Background Log-Normal Null Distribution)
+        self.mu_bg = 0.0
+        self.std_bg = 0.5
+        # Tham số ngưỡng quyết định và độ dốc (Monotonic Sigmoid Decision Boundary)
+        self.theta = 1.0   # Ngưỡng log_a_norm (pi = 0.5)
+        self.tau = 0.4     # Độ dốc chuyển tiếp (temperature scale)
+        # Tham số tiền cảnh tham chiếu (cho logging và backward compatibility)
+        self.mu_fg = 1.5
         self.std_fg = 0.8
-        self.pi_weight = 0.3  # Tỷ lệ tiền cảnh ban đầu
+        self.pi_weight = 0.15
         self.is_fitted = False
 
     def push(
@@ -484,11 +493,13 @@ class GMMCalibrator:
         """
         # Chuẩn hóa theo mức nền phân vị 25% của từng frame (xem _robust_frame_scale)
         if torch.is_tensor(a):
-            a_norm = a / _robust_frame_scale(a, valid)
-            valid_mask = valid.detach().cpu().numpy().astype(bool)
+            # Lọc chỉ các patch hợp lệ và có atypicality thực tế (> 1e-4) để loại bỏ hoàn toàn banner 0.0
+            valid_mask_t = valid.bool() & (a > 1e-4)
+            a_norm = a / _robust_frame_scale(a, valid=valid_mask_t)
+            valid_mask = valid_mask_t.detach().cpu().numpy().astype(bool)
             valid_a = a_norm.detach().cpu().numpy()[valid_mask].flatten()
         else:
-            valid_mask = np.asarray(valid, dtype=bool)
+            valid_mask = np.asarray(valid, dtype=bool) & (np.asarray(a) > 1e-4)
             valid_a = np.asarray(a)[valid_mask].flatten()
 
         if len(valid_a) == 0:
@@ -536,105 +547,106 @@ class GMMCalibrator:
 
     def refit(self, max_iters: int = 30):
         """
-        Fit GMM 2 thành phần từ dữ liệu hồ chứa và làm mượt tham số qua EMA.
-        Triệt tiêu sốc ngưỡng, giữ cho phân phối dự báo ổn định lâu dài.
+        Hiệu chuẩn thống kê bền vững (Robust Monotonic Anomaly Calibration) từ dữ liệu hồ chứa:
+        1. Ước lượng phân phối giả thuyết không của nền đường tĩnh (Background Null Hypothesis H0):
+           - mu_bg = median(buffer)
+           - std_bg = 1.4826 * MAD(buffer)
+        2. Thiết lập ngưỡng quyết định bất thường theta (mức tin cậy 97.7%) và độ dốc tau:
+           - theta = mu_bg + 2.0 * std_bg
+           - tau = max(0.20, std_bg * 0.75)
+        3. Làm mượt tham số qua Polyak-Ruppert EMA để triệt tiêu dao động giữa các chu kỳ.
         """
         if self.size < 200:
             return
         data = self.buffer[:self.size]
-        
-        # EM Algorithm đơn giản 2 cụm 1 chiều
-        # Khởi tạo bằng phân vị 30% và 80%
-        c1 = float(np.percentile(data, 30))
-        c2 = float(np.percentile(data, 80))
-        s1 = float(np.std(data) * 0.5 + 1e-3)
-        s2 = float(np.std(data) * 0.5 + 1e-3)
-        w = 0.5
 
-        for _ in range(max(1, max_iters)):
-            # E-step
-            p1 = np.exp(-0.5 * ((data - c1) / s1) ** 2) / (s1 + 1e-6)
-            p2 = np.exp(-0.5 * ((data - c2) / s2) ** 2) / (s2 + 1e-6)
-            gamma2 = (w * p2) / (w * p2 + (1.0 - w) * p1 + 1e-8)
-            gamma1 = 1.0 - gamma2
+        # 1. Ước lượng bền vững tâm và độ phân tán của nền đường (chiếm > 70-80% dữ liệu quan sát)
+        cand_mu_bg = float(np.median(data))
+        mad = 1.4826 * float(np.median(np.abs(data - cand_mu_bg)))
+        cand_std_bg = float(max(0.20, mad))
 
-            # M-step
-            n1 = float(np.sum(gamma1) + 1e-6)
-            n2 = float(np.sum(gamma2) + 1e-6)
-            new_c1 = float(np.sum(gamma1 * data) / n1)
-            new_c2 = float(np.sum(gamma2 * data) / n2)
-            new_s1 = float(np.sqrt(np.sum(gamma1 * (data - new_c1) ** 2) / n1 + 1e-4))
-            new_s2 = float(np.sqrt(np.sum(gamma2 * (data - new_c2) ** 2) / n2 + 1e-4))
-            new_w = float(n2 / float(len(data)))
+        # 2. Ngưỡng quyết định bất thường (2.0 độ lệch chuẩn trên nền, tương ứng p-value < 0.023)
+        cand_theta = float(cand_mu_bg + 2.0 * cand_std_bg)
+        cand_tau = float(max(0.20, cand_std_bg * 0.75))
 
-            # Kiểm tra hội tụ sớm
-            if abs(new_c1 - c1) < 1e-4 and abs(new_c2 - c2) < 1e-4:
-                c1, c2, s1, s2, w = new_c1, new_c2, new_s1, new_s2, new_w
-                break
-            c1, c2, s1, s2, w = new_c1, new_c2, new_s1, new_s2, new_w
-
-        # Đảm bảo c2 > c1 (c2 là tiền cảnh phương tiện, c1 là nền đường tĩnh)
-        if c2 >= c1:
-            cand_mu_bg, cand_mu_fg = c1, c2
-            cand_std_bg, cand_std_fg = s1, s2
-            cand_pi = w
+        # 3. Ước lượng tham số tiền cảnh tham chiếu (cho logging và tương thích ngược)
+        fg_pts = data[data > cand_theta]
+        if len(fg_pts) >= 10:
+            cand_mu_fg = float(np.median(fg_pts))
+            cand_std_fg = float(max(0.25, 1.4826 * np.median(np.abs(fg_pts - cand_mu_fg))))
+            cand_pi = float(np.clip(len(fg_pts) / float(len(data)), 0.05, 0.40))
         else:
-            cand_mu_bg, cand_mu_fg = c2, c1
-            cand_std_bg, cand_std_fg = s2, s1
-            cand_pi = 1.0 - w
+            cand_mu_fg = float(cand_mu_bg + 3.0 * cand_std_bg)
+            cand_std_fg = float(max(0.30, cand_std_bg * 1.2))
+            cand_pi = 0.15
 
-        # Cập nhật tham số: Lần đầu gán trực tiếp, các lần sau cập nhật theo EMA làm mượt
+        # 4. Cập nhật tham số theo EMA
         if not self.is_fitted:
             self.mu_bg = cand_mu_bg
-            self.mu_fg = cand_mu_fg
             self.std_bg = cand_std_bg
+            self.theta = cand_theta
+            self.tau = cand_tau
+            self.mu_fg = cand_mu_fg
             self.std_fg = cand_std_fg
             self.pi_weight = cand_pi
             self.is_fitted = True
         else:
             alpha = self.ema_alpha
             self.mu_bg = (1.0 - alpha) * self.mu_bg + alpha * cand_mu_bg
-            self.mu_fg = (1.0 - alpha) * self.mu_fg + alpha * cand_mu_fg
             self.std_bg = (1.0 - alpha) * self.std_bg + alpha * cand_std_bg
+            self.theta = (1.0 - alpha) * self.theta + alpha * cand_theta
+            self.tau = (1.0 - alpha) * self.tau + alpha * cand_tau
+            self.mu_fg = (1.0 - alpha) * self.mu_fg + alpha * cand_mu_fg
             self.std_fg = (1.0 - alpha) * self.std_fg + alpha * cand_std_fg
             self.pi_weight = (1.0 - alpha) * self.pi_weight + alpha * cand_pi
 
     def posterior(self, a: torch.Tensor, refine: bool = False) -> torch.Tensor:
         """
-        Tính xác suất hậu nghiệm tiền cảnh pi_t(p) in [0, 1].
-        a: (B, P) Tensor điểm khác thường
-        refine: bool - có áp dụng refine_traffic_foreground_map hay không (mặc định False để tránh làm sắc nét hai lần).
-        Returns:
-            pi: (B, P) Tensor xác suất tiền cảnh
+        Tính xác suất hậu nghiệm tiền cảnh pi_t(p) in [0, 1] theo Hàm Liên Kết Log-Odds Đơn Điệu:
+        - Đảm bảo tính đơn điệu ngặt (Monotonicity): d(pi)/d(a) > 0.
+        - Khi a -> 0 (nền đường tĩnh): pi -> 0.0 TUYỆT ĐỐI (không bao giờ bị nghịch đảo).
+        - Khi a -> inf (phương tiện, xe cộ lớn): pi -> 1.0 TUYỆT ĐỐI.
         """
-        # Chuẩn hóa theo mức nền phân vị 25% của từng frame (đồng nhất với push)
-        a_norm = a / _robust_frame_scale(a)
+        # Chuẩn hóa theo mức nền phân vị 25% của các patch hợp lệ
+        valid_eval = (a > 1e-4)
+        if a.dim() >= 2 and a.shape[-1] == 448:
+            valid_eval = valid_eval.clone()
+            valid_eval.view(-1, 16, 28)[:, 0, :] = False
 
+        scale = _robust_frame_scale(a, valid=valid_eval)
+        a_norm = a / scale
         log_a = torch.log(a_norm.clamp(min=1e-4, max=100.0))
 
         if not self.is_fitted:
-            # Fallback sigmoid chuẩn hóa mềm khi chưa fit (tâm ở 1.25 trên thang điểm chuẩn hóa)
-            raw_pi = torch.sigmoid(2.0 * (log_a - 0.25))
-            return refine_traffic_foreground_map(raw_pi) if refine else raw_pi
+            theta = 0.8
+            tau = 0.4
+        else:
+            theta = self.theta
+            tau = max(0.10, self.tau)
 
-        # Tính mật độ Gaussian của 2 thành phần
-        log_p_bg = -0.5 * ((log_a - self.mu_bg) / self.std_bg) ** 2 - np.log(self.std_bg + 1e-6)
-        log_p_fg = -0.5 * ((log_a - self.mu_fg) / self.std_fg) ** 2 - np.log(self.std_fg + 1e-6)
+        # Hàm liên kết Sigmoid đơn điệu: pi(a) = sigma((log_a - theta) / tau)
+        raw_pi = torch.sigmoid((log_a - theta) / tau)
 
-        # Định lý Bayes
-        p_bg = (1.0 - self.pi_weight) * torch.exp(log_p_bg.clamp(min=-20.0, max=20.0))
-        p_fg = self.pi_weight * torch.exp(log_p_fg.clamp(min=-20.0, max=20.0))
-        pi = p_fg / (p_fg + p_bg + 1e-8)
+        # Cưỡng bức dập tắt tuyệt đối các patch nền 0 hoặc r=0
+        mask_zero = (a <= 1e-4)
+        pi = torch.where(mask_zero, torch.zeros_like(raw_pi), raw_pi)
+
+        if a.dim() >= 2 and a.shape[-1] == 448:
+            pi_2d = pi.clone().view(-1, 16, 28)
+            pi_2d[:, 0, :] = 0.0
+            pi = pi_2d.view_as(a)
+        elif a.dim() == 2 and a.shape == (16, 28):
+            pi_2d = pi.clone()
+            pi_2d[0, :] = 0.0
+            pi = pi_2d
+
         pi = pi.clamp(0.0, 1.0)
-
-        # Tinh chế làm sắc nét tiền cảnh chỉ khi được yêu cầu tường minh (tránh double-refine)
         if refine:
             return refine_traffic_foreground_map(pi)
         return pi
 
     def state_dict(self) -> dict:
         """Xuất trạng thái GMM Calibrator và snapshot hồ chứa để lưu vào checkpoint."""
-        # Lưu snapshot hồ chứa đại diện (tối đa 15,000 điểm ~ 60 KB) để resume mượt mà
         snap = self.buffer[:self.size]
         if len(snap) > 15000:
             perm = np.random.choice(len(snap), size=15000, replace=False)
@@ -645,6 +657,8 @@ class GMMCalibrator:
             "mu_fg": float(self.mu_fg),
             "std_bg": float(self.std_bg),
             "std_fg": float(self.std_fg),
+            "theta": float(self.theta),
+            "tau": float(self.tau),
             "pi_weight": float(self.pi_weight),
             "is_fitted": bool(self.is_fitted),
             "max_buffer_size": int(self.max_buffer_size),
@@ -657,16 +671,17 @@ class GMMCalibrator:
         """Khôi phục trạng thái GMM Calibrator và nạp lại snapshot hồ chứa từ checkpoint."""
         if not isinstance(state, dict):
             return
-        self.mu_bg = float(state.get("mu_bg", -1.0))
-        self.mu_fg = float(state.get("mu_fg", 1.0))
-        self.std_bg = float(state.get("std_bg", 0.8))
+        self.mu_bg = float(state.get("mu_bg", 0.0))
+        self.mu_fg = float(state.get("mu_fg", 1.5))
+        self.std_bg = float(state.get("std_bg", 0.5))
         self.std_fg = float(state.get("std_fg", 0.8))
-        self.pi_weight = float(state.get("pi_weight", 0.3))
+        self.theta = float(state.get("theta", self.mu_bg + 2.0 * self.std_bg))
+        self.tau = float(state.get("tau", max(0.20, self.std_bg * 0.75)))
+        self.pi_weight = float(state.get("pi_weight", 0.15))
         self.is_fitted = bool(state.get("is_fitted", False))
         if "max_buffer_size" in state:
             new_max = int(state["max_buffer_size"])
             if new_max != self.max_buffer_size:
-                # Điều chỉnh kích thước buffer nếu cần
                 new_buf = np.zeros(new_max, dtype=np.float32)
                 copy_len = min(self.size, new_max)
                 new_buf[:copy_len] = self.buffer[:copy_len]

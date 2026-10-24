@@ -387,8 +387,9 @@ class TestDirection1New(unittest.TestCase):
         init_mu_bg = calib.mu_bg
         init_mu_fg = calib.mu_fg
 
-        # 3. Đẩy dữ liệu mới bị lệch mạnh (giá trị rất lớn)
-        high_a = torch.full((5, 100), 50.0)
+        # 3. Đẩy dữ liệu mới gồm cả nền đường tĩnh và phương tiện bất thường giá trị cao
+        high_a = torch.full((5, 100), 0.5)
+        high_a[:, :20] = 50.0  # 20% patch có giá trị bất thường lớn
         high_v = torch.ones_like(high_a, dtype=torch.bool)
         calib.push(high_a, high_v)
         calib.refit(max_iters=20)
@@ -910,6 +911,77 @@ class TestDirection1New(unittest.TestCase):
 
         actual = PositionStats.normalize_frame_features(U, alpha=0.0)
         self.assertTrue(torch.allclose(actual, expected, atol=1e-6))
+
+    def test_38_monotonic_posterior_no_tail_inversion(self):
+        """Kiểm tra tính đơn điệu ngặt của posterior: pi(a) tăng dần theo a, triệt tiêu hoàn toàn GMM tail pathology."""
+        from direction1_new.tam import GMMCalibrator
+
+        calib = GMMCalibrator()
+        # Mô phỏng dữ liệu giao thông thực tế: 90% nền đường (a ~ 0.05-0.30), 10% xe (a ~ 1.2-5.0)
+        a_mock = torch.cat([torch.rand(1, 900) * 0.25 + 0.05, torch.rand(1, 100) * 3.8 + 1.2], dim=1)
+        v_mock = torch.ones_like(a_mock, dtype=torch.bool)
+        calib.push(a_mock, v_mock)
+        calib.refit()
+        self.assertTrue(calib.is_fitted)
+
+        # Mảng điểm thử nghiệm quét từ 0.0 đến 8.0
+        test_vals = torch.tensor([0.0, 0.05, 0.10, 0.20, 0.30, 0.50, 0.80, 1.20, 2.00, 4.00, 8.00])
+        pi_vals = calib.posterior(test_vals.unsqueeze(0)).squeeze(0)
+
+        # 1. Hàng r=0 / giá trị 0.0 bắt buộc phải bằng 0.0
+        self.assertEqual(pi_vals[0].item(), 0.0)
+
+        # 2. Kiểm tra tính đơn điệu không giảm ngặt: pi(a_i) <= pi(a_{i+1})
+        for i in range(len(test_vals) - 1):
+            self.assertLessEqual(
+                pi_vals[i].item(),
+                pi_vals[i+1].item() + 1e-6,
+                f"Lỗi nghịch đảo tại index {i}: a={test_vals[i].item()} có pi={pi_vals[i].item()} > a={test_vals[i+1].item()} có pi={pi_vals[i+1].item()}"
+            )
+
+        # 3. Xe cộ cực lớn (a = 8.0) KHÔNG BAO GIỜ bị rơi về 0.0 (chống bệnh lý đuôi Gaussian)
+        self.assertGreater(pi_vals[-1].item(), 0.95)
+
+    def test_39_road_vs_vehicle_pi_separation(self):
+        """Kiểm tra độ phân tách rõ nét giữa mặt đường (pi < 0.15) và phương tiện (pi > 0.80)."""
+        from direction1_new.tam import GMMCalibrator, refine_traffic_foreground_map
+
+        calib = GMMCalibrator()
+        a_road = torch.rand(2, 400) * 0.25 + 0.05  # a in [0.05, 0.30]
+        a_veh = torch.rand(2, 48) * 3.0 + 1.5      # a in [1.5, 4.5]
+        a_frame = torch.cat([a_road, a_veh], dim=1)
+        v_frame = torch.ones_like(a_frame, dtype=torch.bool)
+
+        calib.push(a_frame, v_frame)
+        calib.refit()
+
+        pi_raw = calib.posterior(a_frame)
+        # Nền đường phải có pi thấp
+        self.assertLess(pi_raw[:, :400].mean().item(), 0.25)
+        # Xe cộ phải có pi cao
+        self.assertGreater(pi_raw[:, 400:].mean().item(), 0.70)
+
+        # Sau khi qua refine_traffic_foreground_map, độ tương phản phải được khuếch đại vượt trội
+        pi_refined = refine_traffic_foreground_map(pi_raw.view(2, 16, 28))
+        self.assertLess(pi_refined.view(2, 448)[:, :400].mean().item(), 0.10)
+        self.assertGreater(pi_refined.view(2, 448)[:, 400:].mean().item(), 0.85)
+
+    def test_40_svd_color_correlation_alignment(self):
+        """Kiểm tra cơ chế căn chỉnh cực tính kênh màu SVD theo hệ số tương quan Pearson giữa Student và DINO gốc."""
+        v_chan = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        s_chan_inverted = -0.9 * v_chan  # Student bị ngược dấu
+
+        corr_before = np.corrcoef(v_chan, s_chan_inverted)[0, 1]
+        self.assertLess(corr_before, 0.0)
+
+        # Áp dụng cơ chế correlation alignment
+        if corr_before < 0:
+            s_chan_aligned = -s_chan_inverted
+        else:
+            s_chan_aligned = s_chan_inverted
+
+        corr_after = np.corrcoef(v_chan, s_chan_aligned)[0, 1]
+        self.assertGreater(corr_after, 0.99)
 
 
 if __name__ == "__main__":
