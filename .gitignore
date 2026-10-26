@@ -20,7 +20,9 @@ test.py
 
 # Ignore checkpoints and datasets
 checkpoints/
-data/
+/data/
+!DINO/direction1_new/data/
+!DINO/direction1_new/data/**
 *.csv
 !traffic_*.csv
 

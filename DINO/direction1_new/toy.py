@@ -96,7 +96,7 @@ def run_toy_verification():
     print("\n--- [TEST 1 & 2] Đánh giá độ khác thường TAM & Ranh giới vật tĩnh ---")
     P = (H // 16) * (W // 16)  # 16 x 28 = 448
     d = 64
-    stats = PositionStats(num_cams=1, num_patches=P, num_states=4, feat_dim=d).to(device)
+    stats = PositionStats(num_cams=1, num_patches=P, num_states=4, feat_dim=d, frame_norm_alpha=0.0).to(device)
 
     # Mô phỏng tập dữ liệu 100 frame để nạp thống kê
     n_frames = 120

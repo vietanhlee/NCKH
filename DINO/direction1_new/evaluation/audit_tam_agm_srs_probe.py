@@ -41,15 +41,21 @@ import matplotlib.pyplot as plt
 
 # Thiết lập đường dẫn import hệ thống
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_dino_root = os.path.dirname(_script_dir)
+_pkg_dir = os.path.dirname(_script_dir)
+_dino_root = os.path.dirname(_pkg_dir)
 if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
 
 from common.backbone_loader import get_dino_backbone, extract_tokens, imagenet_normalize
 from common.gpu_utils import smart_load_state_dict, unwrap_model
-from direction1_new.tam import PositionStats, GMMCalibrator, refine_traffic_foreground_map
-from direction1_new.masking import agm_sample
-from direction1_new.srs import dilate_mask_2d, static_region_swap
+from direction1_new.core import (
+    PositionStats,
+    GMMCalibrator,
+    refine_traffic_foreground_map,
+    agm_sample,
+    dilate_mask_2d,
+    static_region_swap,
+)
 
 # Sklearn cho các bài toán phân loại và hồi quy Downstream
 from sklearn.linear_model import LogisticRegression, Ridge

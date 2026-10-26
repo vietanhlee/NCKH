@@ -100,25 +100,27 @@ Hướng 1 Mới kết hợp **3 kỹ thuật cốt lõi** hoạt động ở c�
 
 ---
 
-## 🖼️ 3. Giao Thức Trực Quan Hóa Học Biểu Diễn 6 Cột Đối Chiếu
+## 🖼️ 3. Giao Thức Trực Quan Hóa Học Biểu Diễn 8 Cột Đối Chiếu
 
-Sau mỗi epoch, hệ thống tự động xuất biểu đồ trực quan hóa toàn diện [`direction1_new_progress.png`](file:///g:/nckh/checkpoints/direction1_new/direction1_new_progress.png) gồm **6 cột đối chiếu song song**:
+Sau mỗi epoch, hệ thống tự động xuất biểu đồ trực quan hóa toàn diện [`direction1_new_progress.png`](file:///g:/nckh/checkpoints/direction1_new/direction1_new_progress.png) gồm **8 cột đối chiếu song song**:
 
 ```
-[Cột 1: Ảnh Gốc x1] | [Cột 2: Bản Đồ TAM π] | [Cột 3: Mask AGM] | [Cột 4: Ghép Nền SRS] | [Cột 5: Standard PCA] | [Cột 6: Foreground DINOv2 PCA]
+[Cột 1: Ảnh Gốc x1] | [Cột 2: Bản Đồ TAM π] | [Cột 3: Mask AGM] | [Cột 4: Ghép Nền SRS] | [Cột 5: DINO Gốc PCA] | [Cột 6: Δ Feature] | [Cột 7: Student PCA Nội Tại] | [Cột 8: Student Foreground PCA]
 ```
 
 1. **Cột 1: Ảnh Gốc $x_1$**: Khung hình camera CCTV ban đầu (kích thước $256 \times 448$).
 2. **Cột 2: Bản Đồ Tiền Cảnh TAM $\pi$**: Heatmap màu `jet` chồng mờ trên ảnh gốc thể hiện xác suất xuất hiện phương tiện tại từng vị trí patch $16 \times 16$.
 3. **Cột 3: Mặt Nạ Che Phân Tầng AGM**: Ma trận nhị phân $16 \times 28$ thể hiện các patch bị che để huấn luyện nhánh tái tạo iBOT.
 4. **Cột 4: Ảnh Ghép Nền Tĩnh SRS**: Khung hình sau khi hoán đổi vùng tĩnh từ một ngày khác, giữ nguyên 100% xe cộ.
-5. **Cột 5: Standard PCA (Batch-Consistent Representation)**:
-   - Gom toàn bộ patch tokens của cả batch để tính SVD toàn cục.
-   - Chuẩn hóa phân vị $1\% - 99\%$ chung toàn batch: **Mặt đường, cây cối, xe cộ ở mọi ảnh đều có dải màu đồng nhất**, loại bỏ hoàn toàn lỗi lệch màu giữa các ảnh khi tính SVD riêng lẻ.
-6. **Cột 6: Foreground DINOv2 PCA (Object-Centric Representation)**:
-   - Ứng dụng kỹ thuật bóc tách tiền cảnh của Meta AI DINOv2: Dùng thành phần $PC_1$ kết hợp xác suất TAM $\pi > 0.30$ để lọc bỏ mặt đường tĩnh.
-   - Chạy phép phân rã SVD thứ hai **riêng biệt trên tập các patch xe cộ**.
-   - Toàn bộ dải màu RGB được dành trọn vẹn để phân biệt các chi tiết phương tiện (loại xe, đầu xe, thân xe, xe máy vs ô tô) mà không bị diện tích mặt đường áp đảo. Vùng nền được phủ tông tối nhẹ (`dark backdrop`), giúp phương tiện phát sáng và nổi bật sắc nét.
+5. **Cột 5: DINO Gốc PCA (Full-Image 3-Component PCA)**:
+   - Chiếu 3 thành phần chính ($PC_1, PC_2, PC_3$) trực tiếp trên toàn bộ 448 patch tokens của ảnh đơn lẻ (không cắt đen nền).
+   - Hiển thị trọn vẹn cấu trúc không gian của Pretrained DINOv3 làm mốc đối chứng.
+6. **Cột 6: Bản Đồ Thay Đổi Đặc Trưng $\Delta\text{Feature}$ ($1 - \cos(f_s, f_v)$)**:
+   - Đo khoảng cách góc Cosine giữa đặc trưng Student và DINO gốc tại từng patch, chứng minh mô hình tập trung tinh chỉnh biểu diễn ở vùng phương tiện.
+7. **Cột 7: Student PCA Nội Tại (Full-Image 3-Component PCA)**:
+   - Chiếu 3 thành phần chính trên toàn bộ 448 patch tokens của Student để đối chiếu trực tiếp 1-1 với Cột 5.
+8. **Cột 8: Student Foreground PCA (Object-Centric Vehicle Parts)**:
+   - Ứng dụng kỹ thuật Two-Stage Foreground PCA kết hợp xác suất tiền cảnh TAM ($\pi > 0.40$) để lọc bỏ mặt đường tĩnh (phủ nền tối `0.05`) và chạy SVD lần 2 riêng trên các patch phương tiện nhằm bóc tách chi tiết đầu xe, thân xe, bánh xe.
 
 ---
 
@@ -126,35 +128,58 @@ Sau mỗi epoch, hệ thống tự động xuất biểu đồ trực quan hóa 
 
 ### 4.1 Cặp mạng Teacher - Student
 - **Teacher (EMA)**: Nhận frame gốc $x_1$ (không swap, không mask), chạy không gradient. Trọng số cập nhật theo cấp số nhân từ Student:
-  $$\theta_{\text{teacher}} \leftarrow 0.996 \, \theta_{\text{teacher}} + 0.004 \, \theta_{\text{student}}$$
+  $$\theta_{\text{teacher}} \leftarrow m \, \theta_{\text{teacher}} + (1 - m) \, \theta_{\text{student}}$$
 - **Student**: Nhận ảnh $x_{\text{student}}$ (đã qua SRS) và mặt nạ che phân tầng `masks` (từ AGM). Tại các patch bị che, thay thế bằng Mask Token của DINOv3.
 
 ### 4.2 Tổ hợp hàm mất mát:
-$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}} + 1.0 \times \mathcal{L}_{\text{iBOT}} + 0.02 \times \mathcal{L}_{\text{KoLeo}}$$
-
-1. **$\mathcal{L}_{\text{DINO}}$ (Cross-Entropy Distillation trên `[CLS]` token)**:
-   - Truyền tri thức toàn cục từ Teacher sang Student với kỹ thuật Centering và Sharpening ($\tau_t = 0.04 \rightarrow 0.07$, $\tau_s = 0.1$) chống sụp đổ biểu diễn.
-2. **$\mathcal{L}_{\text{iBOT}}$ (Masked Image Modeling trên patch tokens)**:
-   - Tại các patch bị che bởi AGM, Student phải dự đoán phân phối xác suất prototype tương ứng của Teacher.
-3. **$\mathcal{L}_{\text{KoLeo}}$ (Kozachenko-Leonenko Differential Entropy)**:
-   - Đo khoảng cách tới láng giềng gần nhất giữa các vector `[CLS]` trong batch, ép biểu diễn phân bố đều trên mặt cầu đơn vị, chống mode collapse khi batch có nhiều frame tương tự nhau.
+$$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{DINO}} + 1.0 \times \mathcal{L}_{\text{iBOT}} + 0.02 \times \mathcal{L}_{\text{KoLeo}} + \lambda_{\text{var}}\mathcal{L}_{\text{PatchVar}} + \lambda_{\text{anc}}\mathcal{L}_{\text{Anchor}} + \lambda_{\text{ric}}\mathcal{L}_{\text{RIC}} + \lambda_{\text{adv}}\mathcal{L}_{\text{CamAdv}}$$
 
 ---
 
-## 📁 5. Cấu Trúc Thư Mục [`direction1_new/`](file:///g:/nckh/DINO/direction1_new)
+## 📁 5. Cấu Trúc Thư Mục Modular [`direction1_new/`](file:///g:/nckh/DINO/direction1_new)
 
 ```text
 direction1_new/
-├── __init__.py          # Khai báo module, xuất khẩu các class cốt lõi
-├── features.py          # Trích xuất patch tokens qua DINOv3 đóng băng và PCA 64 chiều (hỗ trợ fit_pca)
-├── tam.py               # Lớp PositionStats (K=4 cụm trạng thái) và GMMCalibrator (hỗ trợ max_iters)
-├── srs.py               # Thuật toán static_region_swap hoán đổi nền tĩnh đa ngày
-├── masking.py           # Chính sách che phân tầng agm_sample (Gumbel Top-K)
-├── losses.py            # DINOLoss, iBOTPatchLoss, KoLeoLoss (kèm clamp chống NaN)
-├── sampler.py           # Lấy mẫu theo cụm camera phục vụ SRS
-├── toy.py               # Bộ sinh dữ liệu mô phỏng để kiểm thử nhanh
-├── train.py             # Pipeline huấn luyện: Tự động TAM Warmup, Visual 6 cột, Multi-GPU, Smart Resume
-└── README.md            # Tài liệu kỹ thuật chi tiết này
+├── __init__.py                         # Public API của package direction1_new
+├── train.py                            # Entry-point huấn luyện chính (gọn sạch, chuẩn production)
+├── precompute_tam.py                   # CLI tiền xử lý và lưu bộ nhớ đệm TAM cache (.pt)
+├── toy.py                              # Kiểm thử nhanh (Smoke Test) toàn bộ pipeline
+├── README.md                           # Tài liệu kỹ thuật chi tiết
+│
+├── core/                               # 1. Lõi Thuật Toán & Kiến Trúc Mạng
+│   ├── __init__.py
+│   ├── models.py                       # DINOHead, DirectionGStudentModel, DirectionGTeacherModel
+│   ├── features.py                     # FrozenExtractor & PCA 64 chiều trên GPU
+│   ├── tam.py                          # PositionStats (K=4), GMMCalibrator & Spatial Refinement
+│   ├── masking.py                      # AGM: agm_sample, batch_agm_sample (Vectorized GPU)
+│   ├── srs.py                          # SRS: static_region_swap, batch_static_region_swap
+│   └── losses.py                       # DINOLoss, iBOTPatchLoss, KoLeoLoss, RICLoss, CamAdv, PatchVar, Anchor
+│
+├── data/                               # 2. Quản Lý Dữ Liệu & Phân Nhóm Camera
+│   ├── __init__.py
+│   ├── dataset.py                      # TrafficCameraDataset, SyntheticTrafficDataset, SimpleImageDataset
+│   └── sampler.py                      # CameraGroupedSampler (Hard negatives cùng camera)
+│
+├── engine/                             # 3. Động Cơ Huấn Luyện & Quản Lý Trạng Thái
+│   ├── __init__.py
+│   ├── config.py                       # parse_args, get_cli_specified_args
+│   ├── scheduler.py                    # build_smooth_lr_scheduler (C^0 Continuity)
+│   ├── checkpoint.py                   # resolve_resume_checkpoint
+│   └── tam_warmup.py                   # warmup_tam_offline, resolve_or_precompute_tam_cache
+│
+├── visualization/                      # 4. Trực Quan Hóa Tiến Trình & Biểu Đồ Paper
+│   ├── __init__.py
+│   ├── progress_visualizer.py          # save_direction_g_visuals (8 cột), compute_full_image_pca, compute_foreground_pca
+│   ├── visualize_attention.py          # Trực quan hóa Multi-Head Self-Attention
+│   ├── visualize_paper.py              # Xuất 4 biểu đồ chuẩn bài báo khoa học
+│   └── compare_vanilla_vs_student_pca.py # Đối chứng chuyên sâu PCA Vanilla vs Student
+│
+└── evaluation/                         # 5. Đánh Giá Định Lượng & Kiểm Toán Học Thuật
+    ├── __init__.py
+    ├── eval_camera_probe.py            # Đánh giá Shortcut Camera ID Linear Probe
+    ├── eval_downstream.py              # Đánh giá chất lượng biểu diễn, Effective Rank, Linear CKA
+    ├── audit_tam_agm_srs_probe.py      # Kiểm toán 5 câu hỏi trọng tâm (TAM, AGM, SRS, Probe)
+    └── run_ablations.py                # Tự động hóa ma trận 7 thí nghiệm Ablation Study
 ```
 
 ---

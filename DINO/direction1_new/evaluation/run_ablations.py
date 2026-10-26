@@ -29,7 +29,8 @@ if sys.platform == "win32":
         pass
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_dino_root = os.path.dirname(_script_dir)
+_pkg_dir = os.path.dirname(_script_dir)
+_dino_root = os.path.dirname(_pkg_dir)
 
 
 ABLATION_CONFIGS = [

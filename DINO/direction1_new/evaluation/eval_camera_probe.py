@@ -33,7 +33,8 @@ from PIL import Image
 import numpy as np
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_dino_root = os.path.dirname(_script_dir)
+_pkg_dir = os.path.dirname(_script_dir)
+_dino_root = os.path.dirname(_pkg_dir)
 if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
 

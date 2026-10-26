@@ -45,19 +45,15 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_dino_root = os.path.dirname(_script_dir)
+_pkg_dir = os.path.dirname(_script_dir)
+_dino_root = os.path.dirname(_pkg_dir)
 if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
 
 from common.backbone_loader import get_dino_backbone, extract_tokens, imagenet_normalize
-from direction1_new.tam import PositionStats, GMMCalibrator
-from direction1_new.features import FrozenExtractor
-from direction1_new.train import (
-    TrafficCameraDataset,
-    SyntheticTrafficDataset,
-    smart_load_state_dict,
-    unwrap_model,
-)
+from common.gpu_utils import smart_load_state_dict, unwrap_model
+from direction1_new.core import PositionStats, GMMCalibrator, FrozenExtractor
+from direction1_new.data import TrafficCameraDataset, SyntheticTrafficDataset
 
 
 # =============================================================================

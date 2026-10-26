@@ -35,11 +35,12 @@ from PIL import Image
 
 # Đảm bảo đường dẫn import tương thích mọi môi trường
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-_dino_root = os.path.dirname(_current_dir)
+_pkg_dir = os.path.dirname(_current_dir)
+_dino_root = os.path.dirname(_pkg_dir)
 if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
-if _current_dir not in sys.path:
-    sys.path.insert(0, _current_dir)
+if _pkg_dir not in sys.path:
+    sys.path.insert(0, _pkg_dir)
 
 from common.backbone_loader import get_dino_backbone, extract_tokens, imagenet_normalize
 from common.gpu_utils import smart_load_state_dict

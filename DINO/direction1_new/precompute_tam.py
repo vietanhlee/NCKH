@@ -43,64 +43,9 @@ if _dino_root not in sys.path:
     sys.path.insert(0, _dino_root)
 
 from common.backbone_loader import get_dino_backbone
-from direction1_new.features import FrozenExtractor
-from direction1_new.tam import PositionStats, GMMCalibrator
-from direction1_new.train import warmup_tam_offline, TrafficCameraDataset, SyntheticTrafficDataset
-
-
-class SimpleImageDataset(Dataset):
-    """
-    Dataset tuần tự nạp ảnh phục vụ tính trước pi.
-    Trả về ảnh tensor, relative path để lưu cache và camera ID.
-    """
-    def __init__(self, data_dir: str, img_size: Tuple[int, int] = (256, 448)):
-        super().__init__()
-        self.data_dir = data_dir
-        self.H, self.W = img_size
-
-        valid_exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
-        self.file_list = []
-        for root, _, files in os.walk(data_dir):
-            for f in files:
-                if f.lower().endswith(valid_exts):
-                    self.file_list.append(os.path.join(root, f))
-        self.file_list.sort()
-
-        if not self.file_list:
-            raise ValueError(f"Không tìm thấy ảnh hợp lệ trong '{data_dir}'!")
-
-        # Phân loại theo Camera ID tương tự TrafficCameraDataset
-        self.cam_to_files = defaultdict(list)
-        for path in self.file_list:
-            rel = os.path.relpath(path, data_dir)
-            parts = rel.split(os.sep)
-            cam_key = parts[0] if len(parts) > 1 else path.split("_")[0]
-            self.cam_to_files[cam_key].append(path)
-
-        self.cam_keys = sorted(list(self.cam_to_files.keys()))
-        self.cam_to_id = {k: i for i, k in enumerate(self.cam_keys)}
-        self.num_cams = len(self.cam_keys)
-
-        self.items = []
-        for path in self.file_list:
-            rel = os.path.relpath(path, data_dir)
-            parts = rel.split(os.sep)
-            cam_key = parts[0] if len(parts) > 1 else path.split("_")[0]
-            cid = self.cam_to_id[cam_key]
-            self.items.append((path, rel, cid))
-
-    def __len__(self) -> int:
-        return len(self.items)
-
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, str, int]:
-        path, rel, cid = self.items[idx]
-        with Image.open(path) as img:
-            img = img.convert("RGB")
-            if img.size != (self.W, self.H):
-                img = img.resize((self.W, self.H), Image.BILINEAR)
-            arr = np.array(img, dtype=np.float32) / 255.0
-            x = torch.from_numpy(arr).permute(2, 0, 1)
-        return x, rel, cid
+from direction1_new.core import FrozenExtractor, PositionStats, GMMCalibrator
+from direction1_new.data import SimpleImageDataset, TrafficCameraDataset, SyntheticTrafficDataset
+from direction1_new.engine import warmup_tam_offline
 
 
 def precompute_tam_cache(
