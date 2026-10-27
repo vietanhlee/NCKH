@@ -10,7 +10,7 @@
 """
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import matplotlib
 matplotlib.use("Agg")
@@ -335,7 +335,7 @@ def save_distribution_curves(history: Dict[str, Any], save_path: str):
 
     # Panel 2: KL Divergence
     if "kl_div" in history and history["kl_div"]:
-        ax2.plot(epochs, history["kl_div"], color="#e74c3c", linestyle="-", marker="^", linewidth=2.0, markersize=4, label="$D_{KL}(P_t \parallel P_s)$")
+        ax2.plot(epochs, history["kl_div"], color="#e74c3c", linestyle="-", marker="^", linewidth=2.0, markersize=4, label=r"$D_{KL}(P_t \parallel P_s)$")
         ax2.set_title("Độ Phân Kỳ Kullback-Leibler (Mức Độ Hội Tụ)", fontsize=11, fontweight="bold", pad=8)
         ax2.set_xlabel("Epoch", fontsize=10)
         ax2.set_ylabel("KL Divergence", fontsize=10)
