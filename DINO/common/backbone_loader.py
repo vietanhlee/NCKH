@@ -392,7 +392,7 @@ def smart_load_backbone_weights(
 
     # 2. Trích xuất state_dict con nếu có
     if isinstance(state, dict):
-        for candidate in ["model_state", "model", "student_state", "student", "teacher", "state_dict", "backbone"]:
+        for candidate in ["student_backbone", "model_state", "model", "student_state", "student", "teacher_backbone", "teacher", "state_dict", "backbone"]:
             if candidate in state and isinstance(state[candidate], dict):
                 state = state[candidate]
                 break

@@ -426,17 +426,27 @@ def build_backbone(
                             from safetensors.torch import load_file
                             state = load_file(weights_path)
                         except Exception:
-                            state = torch.load(weights_path, map_location="cpu")
+                            try:
+                                state = torch.load(weights_path, map_location="cpu", weights_only=False)
+                            except TypeError:
+                                state = torch.load(weights_path, map_location="cpu")
                     else:
-                        state = torch.load(weights_path, map_location="cpu")
+                        try:
+                            state = torch.load(weights_path, map_location="cpu", weights_only=False)
+                        except TypeError:
+                            state = torch.load(weights_path, map_location="cpu")
 
                     if isinstance(state, dict):
                         if "model" in state:
                             state = state["model"]
+                        elif "student_backbone" in state:
+                            state = state["student_backbone"]
                         elif "student" in state:
                             state = state["student"]
                         elif "state_dict" in state:
                             state = state["state_dict"]
+                        elif "teacher_backbone" in state:
+                            state = state["teacher_backbone"]
                         elif "teacher" in state:
                             state = state["teacher"]
 
