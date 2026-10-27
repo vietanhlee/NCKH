@@ -1044,7 +1044,7 @@ def train_direction_g():
 
             # Giám sát phân bố Teacher-Student (trung bình toàn epoch) và lưu vào history / training_metrics.json
             try:
-                cur_t_temp = float(dino_loss_fn.get_teacher_temp(epoch))
+                cur_t_temp = float(dino_loss_fn.teacher_temp_schedule[epoch]) if hasattr(dino_loss_fn, "teacher_temp_schedule") and epoch < len(dino_loss_fn.teacher_temp_schedule) else 0.07
                 avg_th = round(float(np.mean(epoch_teacher_h)), 4) if epoch_teacher_h else 0.0
                 avg_sh = round(float(np.mean(epoch_student_h)), 4) if epoch_student_h else 0.0
                 avg_kl = round(float(np.mean(epoch_kl_div)), 4) if epoch_kl_div else 0.0
