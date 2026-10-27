@@ -164,7 +164,7 @@ Gumbel Top-K ($1 \times 1$) & $20{,}89\%$ & $44{,}89\%$ & $55{,}11\%$ & $24{,}98
 \end{itemize}
 
 \subsection{Khảo sát biểu diễn bằng Frozen Linear Probe}
-Đóng băng toàn bộ trọng số mô hình ($100\%$ Frozen) và đánh giá bằng 5-Fold Stratified Cross-Validation đối chứng với mô hình DINOv3 gốc.
+Đóng băng toàn bộ trọng số mô hình ($100\%$ Frozen) và đánh giá bằng 5-Fold Stratified Cross-Validation đối chứng với mô hình DINOv3 gốc. Trong đó, \textbf{Foreground token} là vector đại diện cho riêng vùng phương tiện giao thông trên khung hình, được tính bằng cách gộp trung bình có trọng số các patch tokens theo bản đồ xác suất tiền cảnh TAM: $z_{\text{fg}} = \frac{\sum_{p=1}^N \pi_p z_p}{\sum_{p=1}^N \pi_p + \epsilon}$ (triệt tiêu hoàn toàn đóng góp của mặt đường và hậu cảnh tĩnh $\pi_p \approx 0$, tập trung toàn bộ trọng số vào thân xe $\pi_p \to 1$).
 
 \begin{table}[H]
 \centering
@@ -194,7 +194,7 @@ Effective rank (Patch tokens) & $280{,}9$ & $271{,}0$ & $-9{,}9$ & Duy trì bậ
 \begin{enumerate}[noitemsep, topsep=1pt]
     \item \textbf{Khoảng cách cosine ($\Delta\cos_{\text{veh-road}}$):} Được tính theo khoảng cách cosine giữa hai vector đặc trưng trung bình của patch phương tiện và patch mặt đường: $\Delta\cos = 1 - \frac{\bar{z}_{\text{veh}} \cdot \bar{z}_{\text{road}}}{\|\bar{z}_{\text{veh}}\|_2 \|\bar{z}_{\text{road}}\|_2}$. Giá trị tăng từ $0{,}1760$ lên $0{,}5980$ (gấp $3{,}4$ lần), khẳng định không gian đặc trưng đã chủ động phân tách phương tiện ra xa khỏi mặt đường.
     \item \textbf{Giảm camera shortcut:} Độ chính xác phân loại camera từ CLS token giảm $2{,}95\%$ ($98{,}11\% \to 95{,}16\%$), chứng minh mô hình giảm bớt sự phụ thuộc vào nền tĩnh đặc thù của từng góc máy.
-    \item \textbf{Số chiều hiệu dụng (Effective rank):} Được tính qua entropy của phổ trị riêng ma trận biểu diễn: $\text{erank}(Z) = \exp\left(-\sum_{i} p_i \ln p_i\right)$, trong đó $p_i = \sigma_i / \sum_j \sigma_j$ ($\sigma_i$ là các giá trị suy biến singular values). Bậc hiệu dụng của token phương tiện tăng từ $241{,}2$ lên $246{,}2$ ($+5{,}0$), xác nhận không gian biểu diễn phân bổ đồng đều trên các chiều và không bị sụp đổ số chiều (dimensional collapse).
+    \item \textbf{Số chiều hiệu dụng (Effective rank):} Được tính qua entropy của phổ trị riêng ma trận biểu diễn: $\text{erank}(Z) = \exp\left(-\sum_{i} p_i \ln p_i\right)$, trong đó $p_i = \sigma_i / \sum_j \sigma_j$ ($\sigma_i$ là các giá trị suy biến singular values). Bậc hiệu dụng của Foreground token (đặc trưng vùng phương tiện) tăng từ $241{,}2$ lên $246{,}2$ ($+5{,}0$), xác nhận không gian biểu diễn của phương tiện phân bổ đồng đều trên các chiều và không bị sụp đổ số chiều (dimensional collapse).
 \end{enumerate}
 
 \clearpage
