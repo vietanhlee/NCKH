@@ -245,3 +245,87 @@ def batch_static_region_swap(
     return x_student.clamp(0.0, 1.0), swap_mask_patch
 
 
+def batch_vehicle_photometric_jitter(
+    x_student: torch.Tensor,
+    pi1: torch.Tensor,
+    p_jitter: float = 0.8,
+    p_solarize: float = 0.2,
+    feather: int = 4,
+    generator: Optional[torch.Generator] = None,
+) -> torch.Tensor:
+    """
+    Biến dạng quang học vùng phương tiện (Foreground Vehicle Photometric Augmentation) chạy song song trên GPU.
+    Tác động trực tiếp lên vùng xe M_veh của nhánh Student (Brightness, Contrast, Saturation, RGB Channel Gain
+    và Solarization nhẹ), trong khi nhánh Teacher vẫn nhìn ảnh gốc x1.
+    Giải quyết triệt để hiện tượng cặp dương trùng khớp pixel tuyệt đối khiến RICLoss bão hòa sớm.
+
+    Args:
+        x_student: Tensor ảnh nhánh Student (B, 3, H, W) trong miền [0, 1].
+        pi1: Bản đồ xác suất tiền cảnh phương tiện (B, Hp, Wp) hoặc (B, 1, Hp, Wp).
+        p_jitter: Xác suất áp dụng biến đổi màu sắc/ánh sáng vùng xe cho từng mẫu trong batch.
+        p_solarize: Xác suất áp dụng đảo sắc nhẹ (Solarization) vùng phản xạ mạnh trên thân xe.
+        feather: Bán kính làm mềm biên pixel tránh tạo gờ nhân tạo quanh viền xe.
+        generator: Bộ sinh số ngẫu nhiên tùy chọn.
+
+    Returns:
+        x_aug: Tensor ảnh nhánh Student (B, 3, H, W) trong miền [0, 1] sau khi biến dạng vùng xe.
+    """
+    if p_jitter <= 0.0:
+        return x_student
+
+    B, C, H, W = x_student.shape
+    device = x_student.device
+    dtype = x_student.dtype
+
+    if pi1.dim() == 2:
+        pi_4d = pi1.unsqueeze(0).unsqueeze(0).expand(B, 1, -1, -1).to(dtype=dtype)
+    elif pi1.dim() == 3:
+        pi_4d = pi1.unsqueeze(1).to(dtype=dtype)
+    else:
+        pi_4d = pi1.to(dtype=dtype)
+
+    # 1. Tạo mặt nạ vùng phương tiện mượt M_veh trên lưới pixel (B, 1, H, W)
+    veh_patch_weight = ((pi_4d - 0.15) / 0.55).clamp(0.0, 1.0)
+    veh_pixel_mask = F.interpolate(veh_patch_weight, size=(H, W), mode="bilinear", align_corners=False)
+    if feather > 0:
+        k_size = 2 * feather + 1
+        veh_pixel_mask = F.avg_pool2d(veh_pixel_mask, kernel_size=k_size, stride=1, padding=feather)
+
+    # 2. Sinh tham số biến dạng quang học ngẫu nhiên độc lập cho từng mẫu trong batch
+    # Brightness scale in [0.75, 1.25]
+    b_scale = 0.75 + 0.50 * torch.rand((B, 1, 1, 1), device=device, dtype=dtype, generator=generator)
+    # Contrast scale in [0.75, 1.25]
+    c_scale = 0.75 + 0.50 * torch.rand((B, 1, 1, 1), device=device, dtype=dtype, generator=generator)
+    # Saturation scale in [0.60, 1.40]
+    s_scale = 0.60 + 0.80 * torch.rand((B, 1, 1, 1), device=device, dtype=dtype, generator=generator)
+    # RGB Channel Gain (mô phỏng lệch cân bằng trắng/nhiệt độ màu đèn đường, nắng gắt, bóng râm) in [0.85, 1.15]
+    rgb_gain = 0.85 + 0.30 * torch.rand((B, C, 1, 1), device=device, dtype=dtype, generator=generator)
+
+    # Biến đổi độ sáng và cân bằng kênh màu
+    x_jit = x_student * b_scale * rgb_gain
+
+    # Biến đổi độ tương phản quanh giá trị trung bình từng kênh
+    mean_spatial = x_jit.mean(dim=(2, 3), keepdim=True)
+    x_jit = (x_jit - mean_spatial) * c_scale + mean_spatial
+
+    # Biến đổi độ bão hòa màu quanh độ chói (Luminance Y)
+    if C == 3:
+        lum = 0.299 * x_jit[:, 0:1] + 0.587 * x_jit[:, 1:2] + 0.114 * x_jit[:, 2:3]
+        x_jit = lum + (x_jit - lum) * s_scale
+
+    x_jit = x_jit.clamp(0.0, 1.0)
+
+    # 3. Hiệu ứng Solarization nhẹ tại vùng phản xạ cao trên vỏ xe
+    if p_solarize > 0.0:
+        do_sol = (torch.rand((B, 1, 1, 1), device=device, generator=generator) < p_solarize).to(dtype=dtype)
+        x_sol = torch.where(x_jit > 0.65, 1.0 - x_jit, x_jit)
+        x_jit = (1.0 - 0.35 * do_sol) * x_jit + (0.35 * do_sol) * x_sol
+
+    # 4. Áp dụng theo xác suất p_jitter và pha trộn mượt trên vùng phương tiện M_veh
+    do_jit = (torch.rand((B, 1, 1, 1), device=device, generator=generator) < p_jitter).to(dtype=dtype)
+    effective_veh_w = (veh_pixel_mask * do_jit).clamp(0.0, 1.0)
+
+    x_aug = (1.0 - effective_veh_w) * x_student + effective_veh_w * x_jit.clamp(0.0, 1.0)
+    return x_aug.clamp(0.0, 1.0)
+
+

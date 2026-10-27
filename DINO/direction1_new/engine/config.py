@@ -115,7 +115,7 @@ def parse_args():
     parser.add_argument("--use_cam_sampler", action="store_true", default=True, help="Bật CameraGroupedSampler gom nhóm theo camera")
     parser.add_argument("--no_cam_sampler", dest="use_cam_sampler", action="store_false")
     parser.add_argument("--cams_per_batch", type=int, default=4, help="Số camera trong 1 batch của CameraGroupedSampler")
-    parser.add_argument("--frames_per_cam", type=int, default=2, help="Số frame mỗi camera trong 1 batch của CameraGroupedSampler")
+    parser.add_argument("--frames_per_cam", type=int, default=5, help="Số frame mỗi camera trong 1 batch của CameraGroupedSampler (mặc định: 5)")
     parser.add_argument("--batches_per_epoch", type=int, default=0,
                         help="Số batches mỗi epoch khi bật CameraGroupedSampler (0 = 1 lượt camera ~152 batches; -1 = duyệt trọn vẹn số mẫu dataset; >0 = số batches cụ thể, v.d. 1000, 2000)")
     parser.add_argument("--out_dim", type=int, default=4096, help="Số prototype DINO/iBOT head")

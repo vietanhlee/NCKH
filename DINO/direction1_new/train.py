@@ -65,6 +65,7 @@ from direction1_new.core import (
     batch_agm_sample,
     static_region_swap,
     batch_static_region_swap,
+    batch_vehicle_photometric_jitter,
     DINOLoss,
     iBOTPatchLoss,
     KoLeoLoss,
@@ -293,7 +294,26 @@ def train_direction_g():
     if num_gpus > 1:
         frozen_extractor = nn.DataParallel(frozen_extractor)
 
-    pos_stats = PositionStats(num_cams=16, num_patches=448, num_states=4, feat_dim=64).to(device)
+    # Xác định sớm số lượng camera từ thư mục dữ liệu hoặc checkpoint để khởi tạo đúng kích thước đầu ra ngay từ đầu
+    initial_num_cams = 16
+    if preloaded_ckpt is not None and isinstance(preloaded_ckpt, dict):
+        if "pos_stats" in preloaded_ckpt and isinstance(preloaded_ckpt["pos_stats"], dict):
+            mu_t = preloaded_ckpt["pos_stats"].get("mu")
+            if hasattr(mu_t, "shape") and len(mu_t.shape) > 0:
+                initial_num_cams = max(initial_num_cams, int(mu_t.shape[0]))
+        if "cam_adv_head" in preloaded_ckpt and isinstance(preloaded_ckpt["cam_adv_head"], dict):
+            for k_cam, v_cam in preloaded_ckpt["cam_adv_head"].items():
+                if k_cam.endswith("net.6.weight") and hasattr(v_cam, "shape"):
+                    initial_num_cams = max(initial_num_cams, int(v_cam.shape[0]))
+    if args.data_dir and os.path.isdir(args.data_dir):
+        try:
+            subdirs = [d for d in os.listdir(args.data_dir) if os.path.isdir(os.path.join(args.data_dir, d))]
+            if len(subdirs) >= 2:
+                initial_num_cams = max(initial_num_cams, len(subdirs))
+        except Exception:
+            pass
+
+    pos_stats = PositionStats(num_cams=initial_num_cams, num_patches=448, num_states=4, feat_dim=64).to(device)
     calibrator = GMMCalibrator(max_buffer_size=args.gmm_buffer_size, ema_alpha=args.gmm_ema_alpha)
 
     # 4. Losses, Metric Heads & Optimizer
@@ -343,6 +363,7 @@ def train_direction_g():
     trainable_params = [p for g in param_groups for p in g["params"]]
 
     optimizer = torch.optim.AdamW(param_groups)
+    cam_adv_head.bind_optimizer(optimizer)
     scheduler = build_smooth_lr_scheduler(
         optimizer,
         total_epochs=args.epochs,
@@ -353,7 +374,12 @@ def train_direction_g():
     # Khôi phục trạng thái từ file resume nếu có (chuẩn an toàn tuyệt đối)
     start_epoch = 0
     best_loss = float("inf")
-    history = {"total": [], "dino": [], "ibot": [], "koleo": [], "patch_var": [], "anchor": [], "ric": [], "cam_adv": []}
+    history = {
+        "total": [], "dino": [], "ibot": [], "koleo": [],
+        "patch_var": [], "anchor": [], "ric": [], "cam_adv": [],
+        "teacher_entropy": [], "student_entropy": [], "kl_div": [],
+        "active_prototypes": [], "teacher_temp": [],
+    }
 
     resume_target = args.resume
     if resume_target:
@@ -447,11 +473,17 @@ def train_direction_g():
                 raw_fe.is_pca_fitted.copy_(ckpt["is_pca_fitted"].to(device))
             print("   🧊 [FrozenExtractor] Khôi phục thành công ma trận PCA buffers từ checkpoint.")
 
-        # 7. Khôi phục Loss Centers
+        # 7. Khôi phục Loss Centers & CameraAdversarialHead
         if "dino_center" in ckpt and hasattr(dino_loss_fn, "center"):
             dino_loss_fn.center.copy_(ckpt["dino_center"].to(device))
         if "ibot_center" in ckpt and hasattr(ibot_loss_fn, "center"):
             ibot_loss_fn.center.copy_(ckpt["ibot_center"].to(device))
+        if "cam_adv_head" in ckpt and ckpt["cam_adv_head"] is not None:
+            cam_sd = clean_state_dict(ckpt["cam_adv_head"])
+            if "net.6.weight" in cam_sd and cam_sd["net.6.weight"].shape[0] != cam_adv_head.num_cams:
+                cam_adv_head.ensure_cam_capacity(int(cam_sd["net.6.weight"].shape[0]) - 1)
+            cam_adv_head.load_state_dict(cam_sd)
+            print(f"   🛡️ [CameraAdversarialHead] Khôi phục thành công bộ phân biệt đối kháng ({cam_adv_head.num_cams} cameras).")
 
         # 8. Khôi phục Optimizer
         if "optimizer" in ckpt or "optimizer_state" in ckpt:
@@ -577,6 +609,8 @@ def train_direction_g():
             print(f"✅ [Data] Nạp thành công {len(dataset)} ảnh thực tế từ '{args.data_dir}' (phân bổ qua {dataset.num_cams} camera).")
             if dataset.num_cams > pos_stats.num_cams:
                 pos_stats.ensure_cam_capacity(max(0, dataset.num_cams - 1))
+            if dataset.num_cams > cam_adv_head.num_cams:
+                cam_adv_head.ensure_cam_capacity(max(0, dataset.num_cams - 1))
         except Exception as e_data:
             print(f"⚠️ [Data] Không thể nạp ảnh từ '{args.data_dir}': {e_data}. Chuyển sang SyntheticTrafficDataset...")
             dataset = SyntheticTrafficDataset(num_samples=16, num_cams=4)
@@ -761,6 +795,10 @@ def train_direction_g():
             epoch_anchor_losses = []
             epoch_ric_losses = []
             epoch_cam_adv_losses = []
+            epoch_teacher_h = []
+            epoch_student_h = []
+            epoch_kl_div = []
+            epoch_prototypes = []
 
             pbar = tqdm(
                 loader,
@@ -811,6 +849,16 @@ def train_direction_g():
                     p_srs=args.p_srs, ratio=0.6, feather=4,
                     continuous_bg=args.srs_continuous,
                     color_match=args.cross_cam_srs,
+                )
+
+                # Bước B2: Biến dạng quang học vùng phương tiện (Foreground Vehicle Photometric Augmentation)
+                # Tác động lên vùng xe M_veh của Student để phá vỡ sự trùng khớp pixel tuyệt đối với Teacher
+                x_student = batch_vehicle_photometric_jitter(
+                    x_student=x_student,
+                    pi1=pi1,
+                    p_jitter=0.8,
+                    p_solarize=0.2,
+                    feather=4,
                 )
 
                 # Bước C: Áp dụng AGM sinh mask che phân tầng Super-block Grid 2x2 cho toàn batch (nhanh gấp 500 lần)
@@ -867,9 +915,10 @@ def train_direction_g():
                         loss_anchor = torch.tensor(0.0, device=device)
 
                     # Regional Instance Contrastive (RIC): ép mô hình tập trung vào xe qua hard-negatives cùng camera
+                    # Bật drop_prob=0.25 trên Student để kết hợp cùng Vehicle Photometric Jitter tạo cặp dương bất đối xứng
                     if args.use_ric:
-                        z_veh_s = pool_vehicle_embedding(s_patches, pi1.reshape(B, -1))
-                        z_veh_t = pool_vehicle_embedding(t_patches, pi1.reshape(B, -1))
+                        z_veh_s = pool_vehicle_embedding(s_patches, pi1.reshape(B, -1), drop_prob=0.25)
+                        z_veh_t = pool_vehicle_embedding(t_patches, pi1.reshape(B, -1), drop_prob=0.0)
                         loss_ric = ric_loss_fn(z_veh_s, z_veh_t, cids)
                     else:
                         loss_ric = torch.tensor(0.0, device=device)
@@ -922,6 +971,16 @@ def train_direction_g():
                 epoch_anchor_losses.append(loss_anchor.item())
                 epoch_ric_losses.append(loss_ric.item())
                 epoch_cam_adv_losses.append(loss_cam_adv.item())
+
+                with torch.no_grad():
+                    try:
+                        b_dist = dino_loss_fn.compute_distribution_metrics(s_dino_logits, t_dino_logits, epoch=epoch)
+                        epoch_teacher_h.append(float(b_dist["teacher_entropy"]))
+                        epoch_student_h.append(float(b_dist["student_entropy"]))
+                        epoch_kl_div.append(float(b_dist["kl_div"]))
+                        epoch_prototypes.append(int(b_dist["active_prototypes"]))
+                    except Exception:
+                        pass
 
                 # Lưu dữ liệu visual thực tế của batch cuối phục vụ fallback
                 B_vis = min(4, x1.shape[0])
@@ -983,11 +1042,22 @@ def train_direction_g():
                   f"PatchVar: {avg_patch_var:.4f}, Anchor: {avg_anchor:.4f}, "
                   f"RIC: {avg_ric:.4f}, CamAdv: {avg_cam_adv:.4f})")
 
-            # Giám sát phân bố Teacher-Student để phát hiện sớm bất thường
+            # Giám sát phân bố Teacher-Student (trung bình toàn epoch) và lưu vào history / training_metrics.json
             try:
-                dist_metrics = dino_loss_fn.compute_distribution_metrics(s_dino_logits, t_dino_logits, epoch=epoch)
-                print(f"   📈 [DINO Giám Sát] Teacher Temp: {dist_metrics['teacher_temp']} | Teacher H: {dist_metrics['teacher_entropy']} | "
-                      f"Student H: {dist_metrics['student_entropy']} | KL Div: {dist_metrics['kl_div']} | Prototypes: {dist_metrics['active_prototypes']}")
+                cur_t_temp = float(dino_loss_fn.get_teacher_temp(epoch))
+                avg_th = round(float(np.mean(epoch_teacher_h)), 4) if epoch_teacher_h else 0.0
+                avg_sh = round(float(np.mean(epoch_student_h)), 4) if epoch_student_h else 0.0
+                avg_kl = round(float(np.mean(epoch_kl_div)), 4) if epoch_kl_div else 0.0
+                avg_proto = int(round(float(np.mean(epoch_prototypes)))) if epoch_prototypes else 0
+
+                history.setdefault("teacher_entropy", []).append(avg_th)
+                history.setdefault("student_entropy", []).append(avg_sh)
+                history.setdefault("kl_div", []).append(avg_kl)
+                history.setdefault("active_prototypes", []).append(avg_proto)
+                history.setdefault("teacher_temp", []).append(round(cur_t_temp, 4))
+
+                print(f"   📈 [DINO Giám Sát] Teacher Temp: {cur_t_temp:.4f} | Teacher H: {avg_th:.4f} | "
+                      f"Student H: {avg_sh:.4f} | KL Div: {avg_kl:.4f} | Prototypes: {avg_proto}")
             except Exception:
                 pass
 

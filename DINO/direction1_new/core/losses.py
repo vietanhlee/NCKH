@@ -270,6 +270,7 @@ def pool_vehicle_embedding(
     patch_tokens: torch.Tensor,
     pi: torch.Tensor,
     eps: float = 1e-6,
+    drop_prob: float = 0.0,
 ) -> torch.Tensor:
     """
     Gộp đặc trưng vùng phương tiện (Attention-Weighted Vehicle Pooling) theo bản đồ xác suất tiền cảnh pi.
@@ -279,12 +280,19 @@ def pool_vehicle_embedding(
         patch_tokens: (B, P, D) Đặc trưng patch từ backbone.
         pi: (B, P) hoặc (B, Hp, Wp) Xác suất tiền cảnh phương tiện trong [0, 1].
         eps: Hằng số chống chia cho 0.
+        drop_prob: Xác suất loại bỏ ngẫu nhiên các patch vùng xe (Asymmetric Spatial Token Subsampling)
+                   giúp phá vỡ sự trùng lặp hoàn toàn giữa tập patch Student và Teacher trong RICLoss.
 
     Returns:
         z_veh: (B, D) Vector vùng phương tiện đã chuẩn hóa L2.
     """
     B, P, D = patch_tokens.shape
     w = pi.reshape(B, P, 1).detach().clamp(min=0.0, max=1.0)
+    if drop_prob > 0.0:
+        keep_mask = (torch.rand((B, P, 1), device=patch_tokens.device) >= drop_prob).to(w.dtype)
+        # Đảm bảo mỗi mẫu giữ lại ít nhất một số patch nếu ngẫu nhiên rơi vào trường hợp toàn 0
+        valid_keep = keep_mask.sum(dim=1, keepdim=True) > 0
+        w = torch.where(valid_keep, w * keep_mask, w)
     # Cộng thêm một sàn nhỏ 1e-3 để nếu frame hoàn toàn vắng xe, phép gộp vẫn ổn định số học
     w_safe = w + 1e-3
     pooled = (patch_tokens * w_safe).sum(dim=1) / (w_safe.sum(dim=1) + eps)
@@ -330,6 +338,7 @@ class CameraAdversarialHead(nn.Module):
         self.in_dim = in_dim
         self.num_cams = max(2, num_cams)
         self.hidden_dim = hidden_dim
+        self._optimizer: Optional[torch.optim.Optimizer] = None
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
             nn.LayerNorm(hidden_dim),
@@ -340,8 +349,12 @@ class CameraAdversarialHead(nn.Module):
             nn.Linear(hidden_dim, self.num_cams),
         )
 
+    def bind_optimizer(self, optimizer: torch.optim.Optimizer):
+        """Gắn kết optimizer để tự động đồng bộ tham số nếu số camera được mở rộng động."""
+        self._optimizer = optimizer
+
     def ensure_cam_capacity(self, max_cid: int):
-        """Mở rộng tầng phân loại nếu gặp camera ID vượt quá num_cams hiện tại."""
+        """Mở rộng tầng phân loại nếu gặp camera ID vượt quá num_cams hiện tại và đồng bộ ngay với Optimizer."""
         if max_cid < self.num_cams:
             return
         new_cams = max(max_cid + 1, self.num_cams * 2)
@@ -354,6 +367,28 @@ class CameraAdversarialHead(nn.Module):
             new_linear.bias[:self.num_cams].copy_(old_linear.bias)
         self.net[-1] = new_linear
         self.num_cams = new_cams
+
+        # Đồng bộ tham số lớp mới vào param_groups của optimizer để tránh đứt kết nối cập nhật trọng số
+        if self._optimizer is not None:
+            replaced = False
+            for group in self._optimizer.param_groups:
+                new_params = []
+                for p in group["params"]:
+                    if p is old_linear.weight:
+                        new_params.append(new_linear.weight)
+                        replaced = True
+                    elif p is old_linear.bias:
+                        new_params.append(new_linear.bias)
+                        replaced = True
+                    else:
+                        new_params.append(p)
+                group["params"] = new_params
+            if old_linear.weight in self._optimizer.state:
+                del self._optimizer.state[old_linear.weight]
+            if old_linear.bias in self._optimizer.state:
+                del self._optimizer.state[old_linear.bias]
+            if not replaced and len(self._optimizer.param_groups) > 0:
+                self._optimizer.param_groups[0]["params"].extend([new_linear.weight, new_linear.bias])
 
     def forward(self, cls_feat: torch.Tensor, cids: torch.Tensor, grl_alpha: float = 0.5) -> torch.Tensor:
         """

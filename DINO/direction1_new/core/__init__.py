@@ -8,7 +8,12 @@ from .models import DINOHead, DirectionGStudentModel, DirectionGTeacherModel
 from .features import FrozenExtractor
 from .tam import PositionStats, GMMCalibrator, refine_traffic_foreground_map
 from .masking import agm_sample, batch_agm_sample, map_pi_to_crop
-from .srs import static_region_swap, batch_static_region_swap, dilate_mask_2d
+from .srs import (
+    static_region_swap,
+    batch_static_region_swap,
+    batch_vehicle_photometric_jitter,
+    dilate_mask_2d,
+)
 from .losses import (
     DINOLoss,
     iBOTPatchLoss,
@@ -34,6 +39,7 @@ __all__ = [
     "map_pi_to_crop",
     "static_region_swap",
     "batch_static_region_swap",
+    "batch_vehicle_photometric_jitter",
     "dilate_mask_2d",
     "DINOLoss",
     "iBOTPatchLoss",
