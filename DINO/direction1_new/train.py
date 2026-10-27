@@ -92,6 +92,7 @@ from direction1_new.engine import (
 from direction1_new.visualization import (
     save_direction_g_visuals,
     save_loss_curves,
+    save_distribution_curves,
 )
 
 
@@ -979,8 +980,9 @@ def train_direction_g():
                         epoch_student_h.append(float(b_dist["student_entropy"]))
                         epoch_kl_div.append(float(b_dist["kl_div"]))
                         epoch_prototypes.append(int(b_dist["active_prototypes"]))
-                    except Exception:
-                        pass
+                    except Exception as e_dist:
+                        if batch_idx == 0:
+                            print(f"⚠️ [DINO Distribution Metric Warning] {e_dist}")
 
                 # Lưu dữ liệu visual thực tế của batch cuối phục vụ fallback
                 B_vis = min(4, x1.shape[0])
@@ -1058,8 +1060,8 @@ def train_direction_g():
 
                 print(f"   📈 [DINO Giám Sát] Teacher Temp: {cur_t_temp:.4f} | Teacher H: {avg_th:.4f} | "
                       f"Student H: {avg_sh:.4f} | KL Div: {avg_kl:.4f} | Prototypes: {avg_proto}")
-            except Exception:
-                pass
+            except Exception as e_dist_epoch:
+                print(f"⚠️ [DINO Distribution Epoch Summary Warning] {e_dist_epoch}")
 
             # Cập nhật hình ảnh trực quan hóa: Ưu tiên dùng Fixed Visual Benchmark để so sánh chuẩn xác qua các epoch
             vis_save_path = os.path.join(args.output_dir, "direction1_new_progress.png")
@@ -1150,6 +1152,10 @@ def train_direction_g():
             loss_curve_path = os.path.join(args.output_dir, "loss_curve.png")
             save_loss_curves(history, loss_curve_path)
 
+            # Cập nhật đồ thị phân phối DINO (Teacher/Student Entropy, KL Div, Active Prototypes)
+            dist_curve_path = os.path.join(args.output_dir, "dino_distribution_metrics.png")
+            save_distribution_curves(history, dist_curve_path)
+
             # Cập nhật file tóm tắt chỉ số Metrics JSON sau mỗi epoch (đảm bảo an toàn khi crash hoặc restart)
             metrics_path = os.path.join(args.output_dir, "training_metrics.json")
             try:
@@ -1176,9 +1182,11 @@ def train_direction_g():
     except KeyboardInterrupt:
         print("\n⚠️ [Dừng Sớm] Nhận tín hiệu ngắt (Ctrl+C). Đang tiến hành lưu khẩn cấp trạng thái và hình ảnh...")
 
-    # 6. Xuất đồ thị hàm mất mát Loss Curve
+    # 6. Xuất đồ thị hàm mất mát Loss Curve & Phân phối DINO
     loss_curve_path = os.path.join(args.output_dir, "loss_curve.png")
     save_loss_curves(history, loss_curve_path)
+    dist_curve_path = os.path.join(args.output_dir, "dino_distribution_metrics.png")
+    save_distribution_curves(history, dist_curve_path)
 
     # 7. Xuất file tóm tắt chỉ số Metrics JSON
     metrics_path = os.path.join(args.output_dir, "training_metrics.json")

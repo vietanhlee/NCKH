@@ -305,3 +305,67 @@ def save_loss_curves(history: Dict[str, List[float]], save_path: str):
     plt.savefig(save_path, dpi=180, bbox_inches="tight")
     plt.close()
     print(f"📊 [Đồ Thị] Đã cập nhật đường cong tổn thất tại: {save_path}")
+
+
+def save_distribution_curves(history: Dict[str, Any], save_path: str):
+    """
+    Vẽ và lưu đồ thị các chỉ số phân phối DINO (4 panels):
+    - Panel 1: Teacher Entropy H(P_t) & Student Entropy H(P_s)
+    - Panel 2: KL Divergence D_KL(P_t || P_s)
+    - Panel 3: Số lượng Active Prototypes (/ 16384)
+    - Panel 4: Lịch trình Nhiệt độ Teacher (Teacher Temp Schedule)
+    """
+    if not history or not history.get("teacher_entropy"):
+        return
+    epochs = list(range(1, len(history["teacher_entropy"]) + 1))
+    if len(epochs) == 0:
+        return
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10), dpi=180)
+
+    # Panel 1: Teacher vs Student Entropy
+    ax1.plot(epochs, history["teacher_entropy"], "g-o", linewidth=2.0, markersize=4, label="Teacher Entropy $H(P_t)$")
+    if "student_entropy" in history and history["student_entropy"]:
+        ax1.plot(epochs, history["student_entropy"], "b--s", linewidth=1.8, markersize=4, label="Student Entropy $H(P_s)$")
+    ax1.set_title("Động học Entropy Phân Phối (Teacher vs Student)", fontsize=11, fontweight="bold", pad=8)
+    ax1.set_xlabel("Epoch", fontsize=10)
+    ax1.set_ylabel("Entropy (nats)", fontsize=10)
+    ax1.grid(True, linestyle="--", alpha=0.5)
+    ax1.legend(loc="best", framealpha=0.9, fontsize=9)
+
+    # Panel 2: KL Divergence
+    if "kl_div" in history and history["kl_div"]:
+        ax2.plot(epochs, history["kl_div"], color="#e74c3c", linestyle="-", marker="^", linewidth=2.0, markersize=4, label="$D_{KL}(P_t \parallel P_s)$")
+        ax2.set_title("Độ Phân Kỳ Kullback-Leibler (Mức Độ Hội Tụ)", fontsize=11, fontweight="bold", pad=8)
+        ax2.set_xlabel("Epoch", fontsize=10)
+        ax2.set_ylabel("KL Divergence", fontsize=10)
+        ax2.grid(True, linestyle="--", alpha=0.5)
+        ax2.legend(loc="upper right", framealpha=0.9, fontsize=9)
+
+    # Panel 3: Active Prototypes
+    if "active_prototypes" in history and history["active_prototypes"]:
+        ax3.plot(epochs, history["active_prototypes"], color="#9b59b6", linestyle="-", marker="d", linewidth=2.0, markersize=4, label="Active Prototypes")
+        ax3.axhline(y=16384, color="gray", linestyle=":", label="Tổng Prototype (16.384)")
+        ax3.set_title("Số Lượng Prototype Kích Hoạt Thực Tế", fontsize=11, fontweight="bold", pad=8)
+        ax3.set_xlabel("Epoch", fontsize=10)
+        ax3.set_ylabel("Số lượng Prototypes", fontsize=10)
+        ax3.grid(True, linestyle="--", alpha=0.5)
+        ax3.legend(loc="best", framealpha=0.9, fontsize=9)
+
+    # Panel 4: Teacher Temperature Schedule
+    if "teacher_temp" in history and history["teacher_temp"]:
+        ax4.plot(epochs, history["teacher_temp"], color="#e67e22", linestyle="-", marker="p", linewidth=2.0, markersize=4, label="Teacher Temp $\\tau_t$")
+        ax4.set_title("Lịch Trình Nhiệt Độ Teacher (Warmup Phase)", fontsize=11, fontweight="bold", pad=8)
+        ax4.set_xlabel("Epoch", fontsize=10)
+        ax4.set_ylabel("Nhiệt độ $\\tau_t$", fontsize=10)
+        ax4.grid(True, linestyle="--", alpha=0.5)
+        ax4.legend(loc="lower right", framealpha=0.9, fontsize=9)
+
+    plt.suptitle("Giám Sát Động Học Phân Phối DINOv3 — Entropy, KL Divergence & Prototypes", fontsize=13, fontweight="bold", y=0.99)
+    plt.tight_layout()
+    save_dir = os.path.dirname(save_path)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+    plt.savefig(save_path, dpi=180, bbox_inches="tight")
+    plt.close()
+    print(f"📈 [Đồ Thị] Đã cập nhật biểu đồ phân phối DINO tại: {save_path}")

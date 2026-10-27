@@ -9,6 +9,7 @@ from .progress_visualizer import (
     compute_foreground_pca,
     save_direction_g_visuals,
     save_loss_curves,
+    save_distribution_curves,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "compute_foreground_pca",
     "save_direction_g_visuals",
     "save_loss_curves",
+    "save_distribution_curves",
 ]

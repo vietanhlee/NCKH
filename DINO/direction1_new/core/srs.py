@@ -75,20 +75,22 @@ def static_region_swap(
     fg1 = (pi >= 0.40) & valid
     fg1_dilated = dilate_mask_2d(fg1, radius=1)
 
-    # 2. Loại trừ các phương tiện của frame x2 (pi2 >= 0.45) để không chép đè xe "ma" vào nền mới
-    fg2 = (pi2 >= 0.45) & valid2
+    # 2. Loại trừ triệt để phương tiện của frame x2 (hạ ngưỡng pi2 >= 0.25 và giãn nở 1 patch)
+    # Ngăn chặn hoàn toàn xe ngoại lai/xe tải trắng/xe ở xa bị dán nhầm vào ảnh ghép nền
+    fg2 = (pi2 >= 0.25) & valid2
+    fg2_dilated = dilate_mask_2d(fg2, radius=1)
 
     # 3. Tập các patch nền tĩnh chung hợp lệ để hoán đổi:
-    # Là vùng nền của frame 1 VÀ là vùng nền của frame 2
-    eligible_swap = (~fg1_dilated) & (~fg2) & valid & valid2
+    # Là vùng nền của frame 1 VÀ là vùng nền sạch tuyệt đối của frame 2
+    eligible_swap = (~fg1_dilated) & (~fg2_dilated) & valid & valid2
 
     n_eligible = int(eligible_swap.sum().item())
     min_eligible_needed = max(16, int(0.15 * Hp * Wp))  # Tối thiểu 15% diện tích khung hình (~67 patches)
 
     # Cơ chế Ngưỡng Thích ứng Dự phòng (Adaptive Fallback Guarantee):
-    # Nếu khung hình kẹt xe quá dày đặc, nới lỏng bán kính giãn nở về 0 để bảo đảm diện tích swap
+    # Nếu khung hình kẹt xe quá dày đặc, nới lỏng bán kính giãn nở của x1 nhưng vẫn giữ chặt x2 sạch
     if n_eligible < min_eligible_needed:
-        eligible_swap_fb1 = (~fg1) & (~fg2) & valid & valid2
+        eligible_swap_fb1 = (~fg1) & (~fg2_dilated) & valid & valid2
         if int(eligible_swap_fb1.sum().item()) >= min_eligible_needed:
             eligible_swap = eligible_swap_fb1
             n_eligible = int(eligible_swap.sum().item())
@@ -99,9 +101,9 @@ def static_region_swap(
             if flat_fg.numel() > 0:
                 k_val = max(1, min(int(flat_fg.numel() * 0.40), flat_fg.numel() - 1))
                 adapt_thr = float(torch.kthvalue(flat_fg, k_val).values.item())
-                adapt_thr = max(thr, min(adapt_thr, 0.55))
-                fg_core1 = (pi >= 0.65)
-                fg_core2 = (pi2 >= 0.65)
+                adapt_thr = max(thr, min(adapt_thr, 0.40))
+                fg_core1 = (pi >= 0.60)
+                fg_core2 = (pi2 >= 0.25)
                 eligible_swap_fb2 = (pi <= adapt_thr) & (pi2 <= adapt_thr) & valid & valid2 & (~fg_core1) & (~fg_core2)
                 if int(eligible_swap_fb2.sum().item()) > 0:
                     eligible_swap = eligible_swap_fb2
@@ -201,18 +203,19 @@ def batch_static_region_swap(
     fg1 = (pi1 >= 0.40).float().unsqueeze(1)  # (B, 1, Hp, Wp)
     fg1_dilated = F.max_pool2d(fg1, kernel_size=3, stride=1, padding=1) > 0.5  # (B, 1, Hp, Wp)
 
-    # 2. Loại trừ vùng xe frame 2 để không chép đè xe ma vào nền
-    fg2 = (pi2 >= 0.45).unsqueeze(1)  # (B, 1, Hp, Wp)
+    # 2. Loại trừ triệt để phương tiện frame 2 (pi2 >= 0.25 và dilation radius=1) để không chép đè xe ma vào nền
+    fg2 = (pi2 >= 0.25).float().unsqueeze(1)  # (B, 1, Hp, Wp)
+    fg2_dilated = F.max_pool2d(fg2, kernel_size=3, stride=1, padding=1) > 0.5  # (B, 1, Hp, Wp)
 
     # 3. Vùng nền hợp lệ để hoán đổi
-    eligible = (~fg1_dilated) & (~fg2)  # (B, 1, Hp, Wp) bool
+    eligible = (~fg1_dilated) & (~fg2_dilated)  # (B, 1, Hp, Wp) bool
 
-    # Fallback: nếu ảnh nào có quá ít ô nền hợp lệ (< 15% diện tích khung hình), dùng (~fg1) & (~fg2)
+    # Fallback: nếu ảnh nào có quá ít ô nền hợp lệ (< 15% diện tích khung hình), nới lỏng fg1 nhưng vẫn giữ chặt (~fg2_dilated)
     sum_eligible = eligible.sum(dim=(2, 3), keepdim=True)  # (B, 1, 1, 1)
     min_needed = int(0.15 * Hp * Wp)
     fallback_mask = sum_eligible < min_needed
     if fallback_mask.any():
-        eligible_fallback = (~(fg1 > 0.5)) & (~fg2)
+        eligible_fallback = (~(fg1 > 0.5)) & (~fg2_dilated)
         eligible = torch.where(fallback_mask, eligible_fallback, eligible)
 
     # 4. Mặt nạ patch swap
