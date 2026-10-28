@@ -115,6 +115,7 @@ ABLATION_CONFIGS = [
             "--no_cam_adv",
             "--no_cam_sampler",
             "--skip_tam_warmup",
+            "--disable_tam",
         ],
     },
 ]

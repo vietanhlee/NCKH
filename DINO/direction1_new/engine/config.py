@@ -30,6 +30,7 @@ def get_cli_specified_args(argv_list: List[str]) -> set:
         "--p_srs": "p_srs",
         "--srs_continuous": "srs_continuous", "--no_srs_continuous": "srs_continuous",
         "--cross_cam_srs": "cross_cam_srs",
+        "--disable_tam": "disable_tam",
         "--random_pi": "random_pi",
         "--ibot_beta": "ibot_beta",
         "--use_ric": "use_ric", "--no_ric": "use_ric",
@@ -95,6 +96,8 @@ def parse_args():
     parser.add_argument("--srs_continuous", action="store_true", default=True, help="Hoán đổi toàn bộ nền tĩnh tự nhiên (thay vì chắp vá từng patch)")
     parser.add_argument("--no_srs_continuous", dest="srs_continuous", action="store_false")
     parser.add_argument("--cross_cam_srs", action="store_true", default=False, help="Ablation: Hoán nền từ camera khác để triệt góc máy")
+    parser.add_argument("--disable_tam", action="store_true", default=False,
+                        help="Baseline DINOv3 Continued SSL thuần túy: tắt hoàn toàn TAM, SRS, RIC, CamAdv và Photometric Jitter vùng xe")
     parser.add_argument("--refine_tam", action="store_true", default=True, help="Tự động áp dụng bộ lọc làm sắc nét tiền cảnh và khử nhiễu mặt đường khi đọc cache TAM.")
     parser.add_argument("--no_refine_tam", dest="refine_tam", action="store_false", help="Tắt bộ lọc làm sắc nét tiền cảnh khi đọc cache.")
     parser.add_argument("--random_pi", action="store_true", default=False, help="Ablation: Sử dụng bản đồ pi ngẫu nhiên thay cho TAM")

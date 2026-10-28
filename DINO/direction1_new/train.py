@@ -157,6 +157,15 @@ def train_direction_g():
                 print(f"      - {k:<15}: {curr_v} (thay vì {old_v} từ checkpoint)")
         print("=" * 80 + "\n")
 
+    # Tự động cấu hình chế độ Baseline nếu bật --disable_tam
+    if getattr(args, "disable_tam", False):
+        print("⚠️ [Baseline Mode] Kích hoạt --disable_tam: Tắt TAM, SRS, RIC, CamAdv (DINOv3 Continued SSL Baseline)")
+        args.p_srs = 0.0
+        args.ibot_beta = 0.0
+        args.use_ric = False
+        args.use_cam_adv = False
+        args.mask_mode = "random"
+
     # 1. Phát hiện phần cứng và thiết lập Multi-GPU tự động
     primary_device, num_gpus, gpu_names = get_available_devices()
     if args.device.lower() == "cpu" or num_gpus == 0:
@@ -814,8 +823,11 @@ def train_direction_g():
                 cids2 = batch.get("cid2", cids).to(device, non_blocking=(device.type == "cuda"))
                 B = x1.shape[0]
 
-                # Bước A: Xác định bản đồ tiền cảnh TAM (ưu tiên cờ random_pi nếu chạy ablation)
-                if args.random_pi:
+                # Bước A: Xác định bản đồ tiền cảnh TAM (ưu tiên cờ disable_tam / random_pi nếu chạy baseline/ablation)
+                if getattr(args, "disable_tam", False):
+                    pi1 = torch.full((B, 16, 28), 0.5, device=device)
+                    pi2 = torch.full((B, 16, 28), 0.5, device=device)
+                elif args.random_pi:
                     # Ablation độc lập: pi ngẫu nhiên, bỏ qua cache
                     pi1 = torch.rand((B, 16, 28), device=device)
                     pi2 = torch.rand((B, 16, 28), device=device)
@@ -853,14 +865,15 @@ def train_direction_g():
                 )
 
                 # Bước B2: Biến dạng quang học vùng phương tiện (Foreground Vehicle Photometric Augmentation)
-                # Tác động lên vùng xe M_veh của Student để phá vỡ sự trùng khớp pixel tuyệt đối với Teacher
-                x_student = batch_vehicle_photometric_jitter(
-                    x_student=x_student,
-                    pi1=pi1,
-                    p_jitter=0.8,
-                    p_solarize=0.2,
-                    feather=4,
-                )
+                # Tác động lên vùng xe M_veh của Student để phá vỡ sự trùng khớp pixel tuyệt đối với Teacher (nếu không bật disable_tam)
+                if not getattr(args, "disable_tam", False):
+                    x_student = batch_vehicle_photometric_jitter(
+                        x_student=x_student,
+                        pi1=pi1,
+                        p_jitter=0.8,
+                        p_solarize=0.2,
+                        feather=4,
+                    )
 
                 # Bước C: Áp dụng AGM sinh mask che phân tầng Super-block Grid 2x2 cho toàn batch (nhanh gấp 500 lần)
                 mask_batch = batch_agm_sample(
@@ -901,7 +914,8 @@ def train_direction_g():
 
                     # Patch-level Variance Regularizer: Ngăn chặn triệt để Dimensional Collapse ở mức patch!
                     if args.use_patch_var:
-                        loss_patch_var = patch_var_fn(s_patches, pi=pi1.reshape(B, 448))
+                        pv_pi = None if getattr(args, "disable_tam", False) else pi1.reshape(B, 448)
+                        loss_patch_var = patch_var_fn(s_patches, pi=pv_pi)
                     else:
                         loss_patch_var = torch.tensor(0.0, device=device)
 
