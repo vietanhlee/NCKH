@@ -950,8 +950,21 @@ def main():
                 ckpt_dict[k.strip()] = v.strip()
             else:
                 ckpt_dict[os.path.splitext(os.path.basename(item))[0]] = item.strip()
-    elif args.checkpoint and os.path.isfile(args.checkpoint):
-        ckpt_dict["student_ssl"] = args.checkpoint
+    elif args.checkpoint:
+        cand_p = args.checkpoint
+        if not os.path.isfile(cand_p):
+            # Thử tìm trong thư mục DINO
+            alt_p = os.path.join(_dino_root, cand_p)
+            if os.path.isfile(alt_p):
+                cand_p = alt_p
+            else:
+                alt_p2 = os.path.join(os.path.dirname(_dino_root), cand_p)
+                if os.path.isfile(alt_p2):
+                    cand_p = alt_p2
+        if os.path.isfile(cand_p):
+            ckpt_dict["student_ssl"] = cand_p
+        else:
+            print(f"❌ [LỖI] Không tìm thấy file checkpoint: '{args.checkpoint}'!")
 
     for m_label, ckpt_p in ckpt_dict.items():
         if not os.path.isfile(ckpt_p):
