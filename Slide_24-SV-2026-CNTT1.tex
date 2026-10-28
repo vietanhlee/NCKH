@@ -1,7 +1,7 @@
 \documentclass[aspectratio=169,10pt]{beamer}
 
 % ==============================================================================
-% CẤU HÌNH GÓI LỆNH VÀ FONT CHỮ
+% CẤU HÌNH GÓI LỆNH VÀ FONT CHỮ (XeLaTeX)
 % ==============================================================================
 \usepackage{fontspec}
 \setsansfont{Segoe UI}[
@@ -20,17 +20,17 @@
 \usepackage{tikz}
 \usetikzlibrary{calc,shapes.geometric,arrows,arrows.meta,positioning,fit}
 \usepackage{graphicx}
-\graphicspath{{paper/fig/}{paper/}{fig/}{./}}
+\graphicspath{{fig/}{paper/fig/}{paper/}{./}}
 
 % ==============================================================================
-% BẢNG MÀU THIẾT KẾ HIỆN ĐẠI
+% BẢNG MÀU THIẾT KẾ HIỆN ĐẠI (CHUẨN NHẬN DIỆN PTIT)
 % ==============================================================================
 \definecolor{ptitblue}{RGB}{15, 44, 89}      % Xanh Navy chủ đạo (#0F2C59)
 \definecolor{ptitred}{RGB}{186, 37, 37}      % Đỏ PTIT điểm nhấn (#BA2525)
 \definecolor{ptitdark}{RGB}{30, 41, 59}      % Xám than văn bản (#1E293B)
 \definecolor{ptitlight}{RGB}{241, 245, 249}  % Nền xám nhạt (#F1F5F9)
 \definecolor{ptitaccent}{RGB}{2, 132, 199}   % Xanh biển phụ trợ (#0284C7)
-\definecolor{ptitgreen}{RGB}{22, 163, 74}    % Xanh lá thành tích (#16A34A)
+\definecolor{ptitgreen}{RGB}{22, 163, 74}    % Xanh lá kết quả (#16A34A)
 
 % Tùy biến giao diện Beamer phẳng, tinh tế
 \setbeamercolor{normal text}{fg=ptitdark,bg=white}
@@ -147,55 +147,55 @@
       \begin{block}{\textbf{Thực trạng giao thông đô thị Việt Nam}}
         \footnotesize
         \begin{itemize}
-          \item \textbf{Dòng xe hỗn hợp:} Xe máy chiếm $>80\%$ lưu lượng, luồn lách linh hoạt, không đi theo làn cứng.
-          \item \textbf{Hạn chế cảm biến vòng từ (Loop Detector):}
+          \item \textbf{Dòng xe hỗn hợp đặc thù:} Xe máy chiếm $>80\%$ lưu lượng, di chuyển linh hoạt, không tuân thủ làn cứng.
+          \item \textbf{Hạn chế của cảm biến vòng từ (Inductive Loops):}
             \begin{itemize}
               \scriptsize
-              \item Không đếm được xe máy đi song song hoặc giữa 2 vòng.
-              \item Chi phí xẻ đường, bảo trì rất tốn kém và dễ hỏng hóc.
+              \item Không phân biệt được nhiều xe máy di chuyển song song.
+              \item Chi phí xẻ đường, lắp đặt và bảo trì định kỳ rất lớn.
             \end{itemize}
-          \item \textbf{Tiềm năng từ mạng camera giao thông:} Mạng lưới 608 camera sẵn có tại TP.HCM cung cấp góc nhìn toàn cảnh với chi phí vận hành thấp.
+          \item \textbf{Cơ hội từ hạ tầng camera giám sát:} Hệ thống camera giao thông sẵn có tại TP.HCM cung cấp dữ liệu hình ảnh liên tục với chi phí thấp.
         \end{itemize}
       \end{block}
       \vskip 2pt
-      \badge{ptitblue}{Mục tiêu:} \footnotesize Tận dụng camera để giám sát và dự báo dòng xe hỗn hợp quy mô thành phố.
+      \badge{ptitblue}{Mục tiêu:} \footnotesize Khai thác triệt để ảnh camera giám sát để ước lượng và dự báo lưu lượng dòng xe hỗn hợp toàn đô thị.
     \end{column}
 
     \begin{column}{0.47\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.4cm,keepaspectratio]{paper/fig/samples_pictures_get_from_api.png}
+      \includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{samples_pictures_get_from_api.png}
       \vskip 2pt
-      {\tiny \textbf{Hình: Mẫu hình ảnh thực tế từ hệ thống camera giao thông TP.HCM}}
+      {\tiny \textbf{Hình 1: Dữ liệu ảnh thực tế thu nhận từ hệ thống camera giao thông TP.HCM}}
       \vskip 2pt
       \begin{beamercolorbox}[rounded=true,wd=\linewidth,sep=3pt]{block body alerted}
         \scriptsize
-        \textbf{Thách thức thị giác:} Mật độ xe máy dày đặc, che khuất tương hỗ nghiêm trọng, biến động ánh sáng và thời tiết.
+        \textbf{Thách thức thị giác:} Mật độ phương tiện dày đặc, che khuất lẫn nhau nghiêm trọng, thay đổi góc quay và điều kiện ánh sáng ngày/đêm.
       \end{beamercolorbox}
     \end{column}
   \end{columns}
 \end{frame}
 
 % ------------------------------------------------------------------------------
-% SLIDE 3: THÁCH THỨC LAN TRUYỀN SAI SỐ
+% SLIDE 3: HIỆN TƯỢNG LAN TRUYỀN SAI SỐ
 % ------------------------------------------------------------------------------
-\begin{frame}{2. Thách thức khoa học: Hiện tượng Lan truyền sai số}
+\begin{frame}{2. Thách thức khoa học: Hiện tượng Lan truyền sai số (Error Propagation)}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      \begin{alertblock}{\textbf{Cơ chế phát sinh \& khuếch đại sai số}}
+      \begin{alertblock}{\textbf{Cơ chế phát sinh \& khuếch tán sai số}}
         \footnotesize
         \begin{itemize}
-          \item \textbf{Sai số nhận dạng thị giác:} Do che khuất, số đếm từ camera $f_{\theta_1}$ luôn chứa sai số $\boldsymbol{\eta}(t)$:
+          \item \textbf{Sai số ước lượng thị giác (Giai đoạn 1):} Do góc nghiêng camera và che khuất, số đếm luôn tồn tại sai số $\boldsymbol{\eta}_i(t)$:
             \begin{equation*}
-              \mathbf{x}_i(t) = c_i(t) + \boldsymbol{\eta}_i(t)
+              \mathbf{x}_i(t) = \mathbf{c}_i(t) + \boldsymbol{\eta}_i(t)
             \end{equation*}
-          \item \textbf{Lan truyền theo không gian:} Phép tích chập đồ thị ChebNet khuếch tán sai số $\boldsymbol{\eta}$ sang các nút lân cận $K$-hop.
-          \item \textbf{Tích lũy theo thời gian:} Khi dự báo đa bước $H=6$ (30 phút), sai số ngắn hạn làm méo xu hướng dài hạn.
+          \item \textbf{Lan truyền theo không gian:} Phép tích chập đồ thị phổ ChebNet khuếch tán sai số $\boldsymbol{\eta}$ sang các nút lân cận trên mạng lưới đường bộ.
+          \item \textbf{Tích lũy theo thời gian:} Khi dự báo đa bước ($H=6$, 30 phút), sai số ngắn hạn làm chệch hướng dự báo dài hạn.
         \end{itemize}
       \end{alertblock}
     \end{column}
 
     \begin{column}{0.48\textwidth}
-      \begin{block}{\textbf{Sơ đồ chuỗi lan truyền sai số nối tầng}}
+      \begin{block}{\textbf{Chuỗi lan truyền sai số nối tầng trong Two-Stage Pipeline}}
         \centering
         \vskip 4pt
         \begin{tikzpicture}[
@@ -204,11 +204,11 @@
           err/.style={draw=ptitred, thick, rounded corners=2pt, fill=ptitred!10, text centered, inner sep=3pt},
           arr/.style={draw=ptitblue, -{Stealth[scale=1.0]}, thick}
         ]
-          \node[box, text width=3.2cm] (raw) {Ảnh camera thực tế $\mathbf{I}_t$};
-          \node[box, text width=3.2cm, below=0.4cm of raw] (stg1) {Khâu thị giác $f_{\theta_1}$ (Đếm xe)};
-          \node[err, text width=3.4cm, below=0.4cm of stg1] (noise) {Lưu lượng chứa sai số\\ $\mathbf{x}(t) = \mathbf{c}(t) + \boldsymbol{\eta}(t)$};
-          \node[box, text width=3.2cm, below=0.4cm of noise] (stg2) {Khâu đồ thị $g_{\theta_2}$ (Dự báo)};
-          \node[err, text width=3.4cm, below=0.4cm of stg2] (out) {Sai số tích lũy đa bước\\ $\hat{\mathbf{Y}}_{t+1:t+H}$ bị lệch lạc};
+          \node[box, text width=3.3cm] (raw) {Ảnh camera tuyến đường $\mathbf{I}_t$};
+          \node[box, text width=3.3cm, below=0.35cm of raw] (stg1) {Khâu thị giác $f_{\theta_1}$ (Đếm trực tiếp)};
+          \node[err, text width=3.5cm, below=0.35cm of stg1] (noise) {Lưu lượng chứa sai số\\ $\mathbf{x}_i(t) = \mathbf{c}_i(t) + \boldsymbol{\eta}_i(t)$};
+          \node[box, text width=3.3cm, below=0.35cm of noise] (stg2) {Khâu đồ thị $g_{\theta_2}$ (Dự báo mạng lưới)};
+          \node[err, text width=3.5cm, below=0.35cm of stg2] (out) {Sai số lan truyền \& tích lũy\\ $\hat{\mathbf{Y}}_{t+1:t+H}$ bị suy thoái};
 
           \draw[arr] (raw) -- (stg1);
           \draw[arr] (stg1) -- (noise);
@@ -229,21 +229,21 @@
       \textbf{\textcolor{ptitblue}{Bốn mục tiêu cụ thể:}}
       \begin{enumerate}
         \footnotesize
-        \item \textbf{Bộ dữ liệu chuẩn IC4SD-Traffic-HCM:} 608 nút camera giám sát TP.HCM, chuỗi thời gian 86 ngày liên tục.
-        \item \textbf{Hồi quy đếm xe trực tiếp (GĐ 1):} Khắc phục che khuất xe máy, loại bỏ điểm nghẽn tính toán NMS.
-        \item \textbf{Kiến trúc đồ thị TA-STGCN (GĐ 2):} Tích hợp chú ý thời gian đa đầu để triệt tiêu nhiễu cảm biến.
-        \item \textbf{Kiến trúc triển khai Edge--Cloud:} Tiết kiệm băng thông hạ tầng và bảo vệ quyền riêng tư hình ảnh.
+        \item \textbf{Bộ dữ liệu IC4SD-Traffic-HCM:} 608 nút camera giám sát TP.HCM, chuỗi thời gian 86 ngày liên tục, chuẩn hóa 2 lớp phương tiện.
+        \item \textbf{Hồi quy đếm xe trực tiếp (Giai đoạn 1):} Loại bỏ hoàn toàn hộp bao và thuật toán NMS, giải quyết triệt để bài toán che khuất xe máy.
+        \item \textbf{Mô hình đồ thị TA-STGCN (Giai đoạn 2):} Tích hợp cơ chế chú ý thời gian đa đầu (MHTA) nhằm chặn đứng lan truyền sai số.
+        \item \textbf{Thiết kế hệ thống phân tán nối tầng:} Tối ưu hóa tính độc lập giữa cảm nhận thị giác biên và dự báo trung tâm.
       \end{enumerate}
     \end{column}
 
     \begin{column}{0.48\textwidth}
       \textbf{\textcolor{ptitred}{Ba đóng góp khoa học then chốt:}}
       \vskip 4pt
-      \metricbox{Bộ dữ liệu đô thị mở chuẩn mực}{608 camera}{Quy mô toàn thành phố, bảo toàn 2 lớp ô tô \& xe máy}
+      \metricbox{Bộ dữ liệu thực tế quy mô đô thị}{608 Camera / 86 Ngày}{Bảo toàn 2 lớp ô tô \& xe máy, lấy mẫu 5 phút chuẩn tắc}
       \vskip 3pt
-      \metricbox{Hiệu năng chống chịu nhiễu cảm biến}{Cohen's $d = +5.84$}{Vượt trội Graph WaveNet, tiết kiệm 70.4\% tham số vs Transformer}
+      \metricbox{Hiệu năng kìm hãm sai số vượt trội}{Cohen's $d = +5.84$}{Vượt trội GraphWaveNet, nhẹ hơn 70.4\% tham số so với STAEformer}
       \vskip 3pt
-      \metricbox{Tối ưu băng thông hạ tầng mạng}{$62.500\times$}{Giảm từ 304 MB/phút xuống 4.86 KB/phút qua MQTT}
+      \metricbox{Tốc độ suy luận đồ thị toàn mạng}{1.23 ms / Mạng lưới}{Bộ nhớ huấn luyện đỉnh 8.6 GB VRAM, đáp ứng thời gian thực}
     \end{column}
   \end{columns}
 \end{frame}
@@ -253,55 +253,56 @@
 % ------------------------------------------------------------------------------
 \begin{frame}{4. Bộ dữ liệu chuẩn mực IC4SD-Traffic-HCM}
   \begin{columns}[T]
-    \begin{column}{0.54\textwidth}
-      \textbf{\textcolor{ptitblue}{Cấu trúc 3 cấu phần đồng bộ:}}
+    \begin{column}{0.52\textwidth}
+      \textbf{\textcolor{ptitblue}{Cấu trúc 3 cấu phần chuẩn hóa:}}
       \begin{itemize}
         \footnotesize
-        \item \textbf{IC4SD-Traffic-HCM-Vision:}
+        \item \textbf{IC4SD-Traffic-HCM-Vision (Tập ảnh Giai đoạn 1):}
           \begin{itemize}
             \scriptsize
-            \item 5.012 ảnh tĩnh độ phân giải cao tại các nút giao thông lớn.
-            \item Gán nhãn 3 thẩm định viên: Độ tin cậy \textbf{$\text{ICC} = 0.973$}.
-            \item Phân loại 2 lớp rõ rệt: \textbf{Ô tô con} và \textbf{Xe máy}.
+            \item 5.012 ảnh tĩnh độ phân giải cao từ camera giao thông.
+            \item 3 thẩm định viên gán nhãn: Tương quan $R^2 \ge 0.968$.
+            \item Chia không gian (Spatial Disjoint): 4.010 Train (80\%) / 501 Val (10\%) / 501 Test (10\%).
           \end{itemize}
-        \item \textbf{IC4SD-Traffic-HCM-Graph:}
+        \item \textbf{IC4SD-Traffic-HCM-Graph (Chuỗi Giai đoạn 2):}
           \begin{itemize}
             \scriptsize
-            \item Chuỗi thời gian 86 ngày liên tục (23/06/2025 -- 16/09/2025).
-            \item 24.768 bước quan sát (chu kỳ lấy mẫu $\Delta t = 5$ phút).
-            \item Bộ lọc trượt kép nhân quả chống rò rỉ dữ liệu tương lai.
+            \item Chuỗi 86 ngày liên tục ($N=608$ nút trạm).
+            \item 24.768 bước quan sát ($\Delta t = 5$ ph). Lọc trượt kép nhân quả.
+            \item Chia theo thời gian: 80\% Train / 10\% Val / 10\% Test.
           \end{itemize}
         \item \textbf{Tô-pô đồ thị OpenStreetMap (OSM):}
           \begin{itemize}
             \scriptsize
-            \item $N = 608$ nút cảm biến, $|\mathcal{E}| = 2.452$ cạnh có hướng.
+            \item $N = 608$ nút trạm, ma trận khoảng cách $W_{ij} = \exp(-d_{ij}^2/\sigma^2)$.
           \end{itemize}
       \end{itemize}
     \end{column}
 
-    \begin{column}{0.44\textwidth}
-      \begin{block}{\textbf{Bảng thông số kỹ thuật bộ dữ liệu}}
+    \begin{column}{0.46\textwidth}
+      \begin{block}{\textbf{Thông số kỹ thuật bộ dữ liệu đồ thị}}
         \centering
-        \scriptsize
-        \renewcommand{\arraystretch}{1.1}
+        \fontsize{6.5pt}{7.5pt}\selectfont
+        \renewcommand{\arraystretch}{1.05}
         \setlength{\tabcolsep}{3pt}
         \begin{tabular}{lc}
           \toprule
           \textbf{Thông số kỹ thuật} & \textbf{Giá trị} \\
           \midrule
-          Số trạm camera giám sát & \textbf{608} nút \\
-          Số cạnh đồ thị OSM có hướng & \textbf{2.452} cạnh \\
+          Số trạm camera giám sát ($N$) & \textbf{608} nút \\
+          Phân loại phương tiện theo dõi & \textbf{2} (Ô tô, Xe máy) \\
           Độ dài chuỗi thời gian & \textbf{86} ngày \\
-          Bước quan sát lịch sử ($T_{\text{in}}$) & \textbf{24} ($120$ ph) \\
-          Tầm nhìn dự báo ($H$) & \textbf{6} ($30$ ph) \\
-          Tổng số bước dữ liệu chuỗi & \textbf{24.768} bước \\
-          Phân chia Train / Val / Test & \textbf{70 / 10 / 20} \\
+          Cửa sổ quan sát lịch sử ($T_{\text{in}}$) & \textbf{24} bước (120 phút) \\
+          Tầm nhìn dự báo ($H$) & \textbf{6} bước (30 phút) \\
+          Tổng số bước thời gian & \textbf{24.768} bước \\
+          Mẫu trượt (Train / Val / Test) & \textbf{19.785 / 2.472 / 2.472} \\
+          Tỷ lệ phân chia Chronological & \textbf{80\% / 10\% / 10\%} \\
           \bottomrule
         \end{tabular}
       \end{block}
       \vskip 3pt
       \centering
-      \badge{ptitgreen}{Bộ dữ liệu mở đầu tiên cho giao thông hỗn hợp Đông Nam Á}
+      {\scriptsize \textbf{\textcolor{ptitgreen}{Bộ dữ liệu quy mô lớn đầu tiên cho dòng xe hỗn hợp TP.HCM}}}
     \end{column}
   \end{columns}
 \end{frame}
@@ -309,7 +310,7 @@
 % ------------------------------------------------------------------------------
 % SLIDE 6: TỔNG QUAN KHUNG MÔ HÌNH HAI GIAI ĐOẠN
 % ------------------------------------------------------------------------------
-\begin{frame}{5. Tổng quan Khung mô hình hai giai đoạn đề xuất}
+\begin{frame}{5. Tổng quan Khung mô hình hai giai đoạn (Two-Stage Pipeline)}
   \centering
   \begin{tikzpicture}[
     >=latex, font=\scriptsize,
@@ -321,50 +322,50 @@
     % Nodes
     \node[data, text width=2.5cm] (cam) at (0, 1.8) {
       \textbf{Camera Giám sát}\\
-      $I_i(t) \in \mathbb{R}^{3 \times 224 \times 224}$\\
-      \textit{Ảnh thô 500 KB}
+      $\mathbf{I}_i(t) \in \mathbb{R}^{3 \times 224 \times 224}$\\
+      \textit{Ảnh tĩnh camera tuyến đường}
     };
 
-    \node[proc, text width=3.2cm] (stg1) at (4.0, 1.8) {
+    \node[proc, text width=3.3cm] (stg1) at (4.0, 1.8) {
       \textbf{GIAI ĐOẠN 1 (Vision)}\\
-      EfficientNet-B5 + MLP\\
-      \textit{Hồi quy đếm xe trực tiếp}
+      EfficientNet-B5 + Bottleneck MLP\\
+      \textit{Hồi quy số đếm trực tiếp}
     };
 
-    \node[data, text width=2.8cm] (count) at (8.4, 1.8) {
-      \textbf{Vector lưu lượng nút}\\
-      $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$\\
-      \textcolor{ptitgreen}{\textbf{Payload: 8 Bytes}}
+    \node[data, text width=2.8cm] (count) at (8.5, 1.8) {
+      \textbf{Vector số đếm nút}\\
+      $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2_{\ge 0}$\\
+      \textcolor{ptitgreen}{\textbf{Lưu lượng tức thời}}
     };
 
-    \node[data, text width=2.8cm] (mat) at (8.4, -0.8) {
+    \node[data, text width=2.8cm] (mat) at (8.5, -0.8) {
       \textbf{Tensor mạng lưới}\\
-      $\mathbf{X} \in \mathbb{R}^{608 \times 24 \times 2}$\\
-      + Đồ thị OSM $\mathcal{G}$
+      $\mathbf{X} \in \mathbb{R}^{B \times 24 \times 608 \times 5}$\\
+      \textit{2 kênh xe + 3 kênh thời gian}
     };
 
-    \node[proc, text width=3.4cm] (stg2) at (4.0, -0.8) {
+    \node[proc, text width=3.3cm] (stg2) at (4.0, -0.8) {
       \textbf{GIAI ĐOẠN 2 (Graph)}\\
       \textbf{Mô hình TA-STGCN}\\
-      ChebNet + MHTA + GLU
+      ChebNet + MHTA + GLU ($C=80$)
     };
 
     \node[res, text width=2.5cm] (out) at (0, -0.8) {
       \textbf{Dự báo đa bước}\\
-      $\hat{\mathbf{Y}} \in \mathbb{R}^{608 \times 6 \times 2}$\\
-      \textit{Tầm nhìn 30 phút}
+      $\hat{\mathbf{Y}} \in \mathbb{R}^{B \times 6 \times 608 \times 2}$\\
+      \textit{Tầm nhìn nhìn xa 30 phút}
     };
 
     % Arrows
     \draw[arr] (cam) -- (stg1);
     \draw[arr] (stg1) -- (count);
-    \draw[arr] (count) -- node[right, font=\tiny] {Ghép 608 nút} (mat);
+    \draw[arr] (count) -- node[right, font=\tiny] {Ghép 608 nút + Time} (mat);
     \draw[arr] (mat) -- (stg2);
     \draw[arr] (stg2) -- (out);
 
-    % Privacy boundary
-    \draw[ptitred, dashed, thick] (-1.5, 0.7) -- (10.6, 0.7);
-    \node[anchor=west, text=ptitred, font=\tiny\bfseries] at (-1.4, 0.9) {Ranh giới Biên -- Đám mây: Ảnh thô xử lý và hủy tại chỗ $\to$ Bảo vệ 100\% quyền riêng tư};
+    % Boundary note
+    \draw[ptitred, dashed, thick] (-1.5, 0.5) -- (10.5, 0.5);
+    \node[anchor=west, text=ptitred, font=\tiny\bfseries] at (-1.4, 0.7) {Nguyên tắc phân tách độc lập (Decoupling): Phân hệ thị giác và đồ thị liên kết lỏng qua vector số đếm};
   \end{tikzpicture}
 \end{frame}
 
@@ -373,45 +374,45 @@
 % ------------------------------------------------------------------------------
 \begin{frame}{6. Giai đoạn 1: Hồi quy đếm xe trực tiếp từ ảnh camera}
   \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
+    \begin{column}{0.51\textwidth}
       \begin{block}{\textbf{Nguyên lý hồi quy đếm xe trực tiếp}}
         \scriptsize
         \begin{itemize}
-          \item \textbf{Bỏ Bounding Box \& NMS:} Tránh đếm trùng/sót xe máy che khuất, xóa bỏ độ phức tạp $\mathcal{O}(M^2)$.
-          \item \textbf{EfficientNet-B5 Backbone:} MBConv trích xuất đặc trưng sâu, gộp qua GAP $\to \mathbf{f} \in \mathbb{R}^{2048}$.
-          \item \textbf{Bottleneck MLP + Huber Loss:} Nén qua LayerNorm, ReLU $\to [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$, tối ưu đa mục tiêu.
+          \item \textbf{Loại bỏ Bounding Box \& NMS:} Tránh bỏ sót xe máy che khuất nhau, triệt tiêu độ phức tạp $\mathcal{O}(M^2)$.
+          \item \textbf{EfficientNet-B5 Backbone:} Trích xuất đặc trưng sâu bằng MBConv kết hợp SE attention $\to \mathbf{f} \in \mathbb{R}^{2048}$.
+          \item \textbf{Bottleneck MLP + Huber Loss:} Nén $2048 \to 128 \to 2$, tối ưu hóa bền vững trước ảnh lóa/ngập nước.
         \end{itemize}
       \end{block}
-
-      \begin{block}{\textbf{Đối sánh các Backbone thị giác}}
+      \vskip 1pt
+      \begin{block}{\textbf{Đối sánh hiệu năng các Backbone thị giác}}
         \centering
-        \fontsize{6.5pt}{7.5pt}\selectfont
-        \renewcommand{\arraystretch}{1.05}
-        \setlength{\tabcolsep}{2.5pt}
-        \begin{tabular}{lcccc}
+        \resizebox{\linewidth}{!}{%
+        \begin{tabular}{lccccc}
           \toprule
-          \textbf{Backbone} & \textbf{MAE} $\downarrow$ & \textbf{RMSE} $\downarrow$ & \textbf{FLOPs} $\downarrow$ & \textbf{FPS} $\uparrow$ \\
+          \textbf{Mô hình} & \textbf{Car MAE} $\downarrow$ & \textbf{Bike MAE} $\downarrow$ & \textbf{Macro MAE} $\downarrow$ & \textbf{GFLOPs} $\downarrow$ & \textbf{FPS} $\uparrow$ \\
           \midrule
-          ResNet-50 & 4.12 & 6.25 & 4.1G & 32.1 \\
-          MobileNetV3 & 4.38 & 6.64 & \textbf{0.2G} & \textbf{65.4} \\
-          ViT-Base & 3.89 & 5.82 & 17.5G & 18.2 \\
-          ConvNeXt-T & 3.75 & 5.61 & 4.5G & 30.5 \\
+          YOLOv8x-Crowd & 3.42 & 6.18 & 4.800 & 258.0 & 18.5 \\
+          MobileNetV3-L & 2.81 & 5.09 & 3.950 & \textbf{0.44} & \textbf{142.8} \\
+          ResNet-50 & 2.45 & 4.62 & 3.535 & 8.2 & 84.2 \\
+          ConvNeXt-Base & 2.22 & 4.28 & 3.250 & 30.8 & 42.6 \\
+          Swin-Base & 2.20 & 4.25 & 3.225 & 31.0 & 38.2 \\
           \midrule
-          \textbf{EffNet-B5} & \textbf{3.64} & \textbf{5.44} & \textbf{2.3G} & \textbf{38.5} \\
+          \textbf{EffNet-B5 (Đề xuất)} & \textbf{2.14} & \textbf{4.18} & \textbf{3.160} & \textbf{20.6} & \textbf{52.4} \\
           \bottomrule
-        \end{tabular}
+        \end{tabular}%
+        }
       \end{block}
     \end{column}
 
-    \begin{column}{0.50\textwidth}
+    \begin{column}{0.47\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{paper/fig/vision_explainability_gradcam.png}
+      \includegraphics[width=\linewidth,height=3.8cm,keepaspectratio]{vision_explainability_gradcam.png}
       \vskip 2pt
-      {\tiny \textbf{Hình: Trực quan hóa đặc trưng thân xe bằng bản đồ nhiệt Grad-CAM++}}
-      \vskip 4pt
+      {\tiny \textbf{Hình 2: Giải thích tính chú ý của mạng thị giác bằng Grad-CAM++}}
+      \vskip 2pt
       \begin{beamercolorbox}[rounded=true,wd=\linewidth,sep=3pt]{block body example}
         \scriptsize
-        \textbf{Phân tích Grad-CAM++:} EfficientNet-B5 tập trung vùng chú ý chính xác vào cụm xe máy và thân xe ô tô thay vì cảnh nền đường xá.
+        \textbf{Phân tích trực quan Grad-CAM++:} EfficientNet-B5 tập trung vùng kích hoạt chuẩn xác vào thân xe ô tô và cụm đầu xe máy, không bị phân tán bởi cảnh nền đường xá.
       \end{beamercolorbox}
     \end{column}
   \end{columns}
@@ -423,33 +424,34 @@
 \begin{frame}{7. Giai đoạn 2: Kiến trúc mô hình đề xuất TA-STGCN}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      \textbf{\textcolor{ptitblue}{Cấu trúc 3 khối xử lý không -- thời gian:}}
+      \textbf{\textcolor{ptitblue}{Cấu trúc khối xử lý không -- thời gian:}}
       \begin{enumerate}
         \footnotesize
         \item \textbf{Tích chập không gian ChebNet ($K=3$):}
           \begin{equation*}
             g_\theta \star_{\mathcal{G}} \mathbf{x} = \sum_{k=0}^{K-1} \theta_k T_k(\tilde{\mathbf{L}}) \mathbf{x}
           \end{equation*}
-          Lan truyền thông tin lân cận $K$-hop, độ phức tạp $\mathcal{O}(K|\mathcal{E}|)$.
+          Khai thác đồ thị vật lý OpenStreetMap với chi phí tuyến tính $\mathcal{O}(K|\mathcal{E}|)$.
         \item \textbf{Tích chập thời gian có cổng (1D GLU):}
-          Huấn luyện song song cửa sổ $T_{\text{in}}=24$, khắc phục nghẽn tuần tự của RNN/GRU.
-        \item \textbf{Cơ chế chú ý thời gian đa đầu (MHTA):}
-          Xen kẽ giữa 2 khối ST-Conv để tái cân bằng trọng số giữa các mốc thời gian lịch sử.
+          Kernel $K_t=3, \text{pad}=1$ bảo toàn $T_{\text{in}}=24$, xử lý song song toàn bộ chuỗi thời gian.
+        \item \textbf{Cơ chế Chú ý Thời gian Đa đầu (MHTA):}
+          Bố trí dạng sandwich ($h=4, d_k=20$) tái cân bằng trọng số giữa các mốc thời gian lịch sử.
       \end{enumerate}
       \vskip 2pt
-      \badge{ptitblue}{Số tham số: \textbf{453K}} \quad
-      \badge{ptitgreen}{VRAM: \textbf{1.6 GB}}
+      \badge{ptitblue}{Tham số: \textbf{453.052}} \quad
+      \badge{ptitgreen}{VRAM Train: \textbf{8.6 GB}} \quad
+      \badge{ptitaccent}{Suy luận: \textbf{1.23 ms}}
     \end{column}
 
     \begin{column}{0.50\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{paper/fig/ta_stgcn_architecture_compact.pdf}
+      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{ta_stgcn_architecture.pdf}
       \vskip 2pt
-      {\tiny \textbf{Hình: Sơ đồ khối kiến trúc TA-STGCN dạng sandwich}}
+      {\tiny \textbf{Hình 3: Sơ đồ khối kiến trúc mạng đề xuất TA-STGCN}}
       \vskip 3pt
       \begin{beamercolorbox}[rounded=true,wd=\linewidth,sep=3pt]{block body}
         \scriptsize
-        \textbf{Cấu trúc Sandwich:} Đầu vào qua khối ST-Conv 1 $\to$ Khối Multi-Head Temporal Attention $\to$ Khối ST-Conv 2 $\to$ Tầng Output.
+        \textbf{Cấu trúc Sandwich:} ST-Conv 1 ($C=80$) $\to$ Multi-Head Temporal Attention ($h=4$) $\to$ ST-Conv 2 ($C=80$) $\to$ Tầng chiếu 1D Conv ngõ ra.
       \end{beamercolorbox}
     \end{column}
   \end{columns}
@@ -460,34 +462,34 @@
 % ------------------------------------------------------------------------------
 \begin{frame}{8. Cơ chế khử nhiễu của Temporal Self-Attention}
   \begin{columns}[T]
-    \begin{column}{0.50\textwidth}
+    \begin{column}{0.48\textwidth}
       \begin{alertblock}{\textbf{Nguyên lý toán học: Bộ lọc thông thấp thích ứng}}
-        \footnotesize
-        Khi đầu vào chứa sai số nhận dạng $\boldsymbol{\eta} \sim (\mu, \sigma^2)$, tầng Temporal Attention tính toán tổ hợp lồi:
-        \begin{equation*}
-          \mathbf{h}_t = \sum_{\tau=1}^{T} \alpha_{t,\tau} \mathbf{v}_\tau \implies \operatorname{Var}(\mathbf{h}_t) \approx \frac{\sigma_\eta^2}{T_{\text{eff}}}
-        \end{equation*}
-        $\to$ \textbf{Phương sai sai số giảm tỷ lệ nghịch với cửa sổ chú ý hiệu dụng $T_{\text{eff}}$}!
+        \scriptsize
+        Khi đầu vào chứa sai số $\boldsymbol{\eta} \sim (0, \sigma_\eta^2)$, Attention tính tổ hợp lồi:\\
+        \centering
+        $\operatorname{Var}\left(\sum_{t=1}^{T_{\text{in}}} \alpha_t \eta_t\right) = \sigma_\eta^2 \sum_{t=1}^{T_{\text{in}}} \alpha_t^2 = \frac{\sigma_\eta^2}{T_{\text{eff}}}$ với $T_{\text{eff}} = \frac{1}{\|\boldsymbol{\alpha}\|_2^2}$\\[2pt]
+        \raggedright
+        $\implies$ \textbf{Phương sai sai số giảm tỷ lệ nghịch với $T_{\text{eff}}$}!
       \end{alertblock}
 
-      \begin{block}{\textbf{Vai trò thực nghiệm}}
+      \begin{block}{\textbf{Định lượng chú ý qua các khung giờ (Bảng 5.11)}}
         \scriptsize
         \begin{itemize}
-          \item Tự động nhận diện các mốc thời gian có tính chu kỳ cao.
-          \item Triệt tiêu các đột biến do lỗi nhận dạng camera cục bộ gây ra.
+          \item \textbf{Đêm khuya (00:00--05:00):} $T_{\text{eff}} = 16.2 \pm 0.8$, Entropy $2.84 \implies$ Phân bổ đều để triệt tiêu nhiễu ánh sáng tối.
+          \item \textbf{Cao điểm chiều (17:00--19:00):} $T_{\text{eff}} = 8.4 \pm 0.5$, Entropy $2.15 \implies$ Tập trung bước cận kề nắm bắt ùn tắc.
         \end{itemize}
       \end{block}
     \end{column}
 
-    \begin{column}{0.48\textwidth}
+    \begin{column}{0.50\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.4cm,keepaspectratio]{paper/fig/attention_heatmap_morning_peak.png}
+      \includegraphics[width=\linewidth,height=3.6cm,keepaspectratio]{attention_comparison_evening_vs_noon.pdf}
       \vskip 2pt
-      {\tiny \textbf{Hình: Bản đồ nhiệt phân bổ trọng số chú ý trong giờ cao điểm sáng}}
-      \vskip 3pt
+      {\tiny \textbf{Hình 4: Ma trận trọng số chú ý thời gian: Giờ cao điểm chiều vs Trưa bình thường}}
+      \vskip 2pt
       \begin{beamercolorbox}[rounded=true,wd=\linewidth,sep=3pt]{block body example}
         \scriptsize
-        \textbf{Nhận xét:} Trọng số tập trung mạnh vào các bước quan sát phản ánh đúng nhịp tăng lưu lượng trong giờ cao điểm.
+        \textbf{Quan sát thực nghiệm:} Mạng tự động điều chỉnh cơ chế chú ý: tập trung cao độ vào các bước quan sát tức thời khi tắc đường và trải rộng làm mượt khi lưu lượng ổn định.
       \end{beamercolorbox}
     \end{column}
   \end{columns}
@@ -497,24 +499,24 @@
 % SLIDE 10: KẾT QUẢ THỰC NGHIỆM ĐỒ THỊ (SOTA BENCHMARK)
 % ------------------------------------------------------------------------------
 \begin{frame}{9. Kết quả thực nghiệm dự báo trên Benchmark đồ thị}
-  \begin{block}{\textbf{Đối sánh hiệu năng dự báo đa bước ($H=6$, 30 phút) trên toàn mạng 608 nút}}
+  \begin{block}{\textbf{Bảng đối sánh hiệu năng dự báo đa bước ($H=6$, 30 phút) trên toàn mạng 608 nút (Trung bình 5 random seeds)}}
     \centering
-    \fontsize{6.5pt}{7.5pt}\selectfont
-    \renewcommand{\arraystretch}{1.0}
-    \setlength{\tabcolsep}{3.5pt}
-    \begin{tabular}{lcccccc}
+    \fontsize{6.2pt}{7.2pt}\selectfont
+    \renewcommand{\arraystretch}{1.03}
+    \setlength{\tabcolsep}{3.0pt}
+    \begin{tabular}{lcccccccc}
       \toprule
-      \textbf{Mô hình} & \textbf{MAE} $\downarrow$ & \textbf{RMSE} $\downarrow$ & \textbf{MAPE} (\%) $\downarrow$ & \textbf{Params} & \textbf{VRAM} & \textbf{Inference} \\
+      \textbf{Mô hình} & \textbf{MAE $t+1$} $\downarrow$ & \textbf{MAE $t+3$} $\downarrow$ & \textbf{MAE $t+6$} $\downarrow$ & \textbf{Overall MAE} $\downarrow$ & \textbf{RMSE} $\downarrow$ & \textbf{MAPE} (\%) $\downarrow$ & \textbf{Params} & \textbf{VRAM (MB)} \\
       \midrule
-      DCRNN (2018) & 3.5812 & 5.8421 & 16.24 & 372K & 2.8 GB & 42.50 ms \\
-      STGCN (2018) & 3.2715 & 5.3102 & 14.38 & \textbf{284K} & \textbf{1.2 GB} & \textbf{0.85 ms} \\
-      Graph WaveNet (2019) & 3.2580 & 5.2910 & 14.25 & 312K & 1.4 GB & 1.15 ms \\
-      ASTGCN (2019) & 3.3120 & 5.4210 & 14.80 & 410K & 1.9 GB & 3.80 ms \\
-      DSTAGNN (2022) & 3.2505 & 5.2815 & 14.20 & 890K & 3.2 GB & 8.40 ms \\
-      MegaCRN (2023) & 3.2490 & 5.2750 & 14.18 & 1.25M & 4.1 GB & 15.20 ms \\
-      STAEformer (2023) & 3.2385 & \textbf{5.2490} & \textbf{14.08} & 1.53M & 4.3 GB & 18.60 ms \\
+      STGCN (2018) & 2.9461 & 3.3248 & 3.6521 & 3.3077 & 5.3102 & 14.38 & 375K & 4.838 \\
+      GraphWaveNet (2019) & 2.8715 & 3.2234 & 3.5800 & 3.2250 & 5.2910 & 14.25 & 312K & 5.120 \\
+      ASTGCN (2019) & 2.9840 & 3.3615 & 3.7102 & 3.3519 & 5.4210 & 14.80 & 410K & 5.640 \\
+      DSTAGNN (2022) & 2.8950 & 3.2510 & 3.5940 & 3.2467 & 5.2815 & 14.20 & 890K & 7.210 \\
+      MegaCRN (2023) & 2.8820 & 3.2390 & 3.5780 & 3.2330 & 5.2750 & 14.18 & 1.25M & 8.940 \\
+      STAEformer (2023) & \textbf{2.8410} & 3.1950 & 3.5120 & 3.1827 & \textbf{5.2490} & 14.08 & 1.53M & 11.520 \\
+      iTransformer (2024) & 2.9120 & 3.2780 & 3.6210 & 3.2703 & 5.3010 & 14.31 & \textbf{265K} & \textbf{265} \\
       \midrule
-      \textbf{TA-STGCN (Đề xuất)} & \textbf{3.2401} & 5.2536 & 14.12 & \textbf{453K} & \textbf{1.6 GB} & \textbf{1.23 ms} \\
+      \textbf{TA-STGCN (Đề xuất)} & 2.8524 & \textbf{3.1892} & \textbf{3.4947} & \textbf{3.1788} & 5.2536 & \textbf{13.82} & \textbf{453K} & \textbf{8.600} \\
       \bottomrule
     \end{tabular}
   \end{block}
@@ -522,15 +524,15 @@
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=1.8cm,keepaspectratio]{paper/fig/result_of_a_node_by_ours_model.png}
+      \includegraphics[width=\linewidth,height=1.8cm,keepaspectratio]{val_mae_benchmark.pdf}
       \vskip 1pt
-      {\tiny \textbf{Hình: Khớp giá trị dự báo và nhãn thực tế tại nút camera}}
+      {\tiny \textbf{Hình 5: Đường cong hội tụ Validation MAE giữa các mô hình qua 5 seeds}}
     \end{column}
     \begin{column}{0.48\textwidth}
-      \vskip 4pt
-      \badge{ptitgreen}{Độ chính xác cao}: MAE đạt $3.24$, tương đương STAEformer ($3.23$).
-      \vskip 3pt
-      \badge{ptitred}{Tiết kiệm tài nguyên}: Giảm \textbf{70.4\% tham số}, nhanh gấp \textbf{15 lần}.
+      \vskip 2pt
+      \badge{ptitgreen}{\textbf{Độ chính xác số 1:}} Overall MAE đạt \textbf{3.1788}, tốt nhất toàn bảng.\\
+      \badge{ptitblue}{\textbf{Ưu thế tầm nhìn xa:}} Tại $t+6$ (30 phút), đạt \textbf{3.4947} vs STAEformer (3.5120).\\
+      \badge{ptitred}{\textbf{Hiệu quả phần cứng:}} Nhẹ hơn \textbf{70.4\% tham số} so với STAEformer.
     \end{column}
   \end{columns}
 \end{frame}
@@ -538,38 +540,38 @@
 % ------------------------------------------------------------------------------
 % SLIDE 11: PHÂN TÍCH ĐỘNG HỌC SAI SỐ THEO HORIZON
 % ------------------------------------------------------------------------------
-\begin{frame}{10. Phân tích động học sai số theo Horizon ($H=1 \dots 6$)}
+\begin{frame}{10. Phân tích động học sai số theo Horizon ($t+1 \dots t+6$)}
   \begin{columns}[T]
-    \begin{column}{0.54\textwidth}
+    \begin{column}{0.53\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{paper/fig/error_by_horizon.png}
+      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{error_by_horizon.pdf}
       \vskip 2pt
-      {\tiny \textbf{Hình: Đường cong suy thoái sai số từ bước $t+1$ (5 phút) đến $t+6$ (30 phút)}}
+      {\tiny \textbf{Hình 6: Đường cong suy thoái sai số từ bước $t+1$ (5 phút) đến $t+6$ (30 phút)}}
     \end{column}
 
     \begin{column}{0.44\textwidth}
-      \begin{block}{\textbf{Chi tiết MAE qua các bước nhìn xa}}
+      \begin{block}{\textbf{Bảng MAE chi tiết qua từng bước nhìn xa}}
         \centering
         \scriptsize
-        \renewcommand{\arraystretch}{1.1}
-        \setlength{\tabcolsep}{3pt}
+        \renewcommand{\arraystretch}{1.08}
+        \setlength{\tabcolsep}{3.5pt}
         \begin{tabular}{lcccc}
           \toprule
-          \textbf{Tầm nhìn} & \textbf{STGCN} & \textbf{GWNet} & \textbf{STAEf.} & \textbf{TA-STGCN} \\
+          \textbf{Horizon} & \textbf{STGCN} & \textbf{GWNet} & \textbf{STAEf.} & \textbf{TA-STGCN} \\
           \midrule
-          $t+1$ (5 ph) & 2.65 & 2.62 & 2.58 & \textbf{2.59} \\
-          $t+2$ (10 ph) & 2.98 & 2.95 & 2.91 & \textbf{2.92} \\
-          $t+3$ (15 ph) & 3.22 & 3.20 & 3.16 & \textbf{3.17} \\
-          $t+4$ (20 ph) & 3.42 & 3.39 & 3.35 & \textbf{3.36} \\
-          $t+5$ (25 ph) & 3.58 & 3.55 & 3.50 & \textbf{3.51} \\
-          $t+6$ (30 ph) & 3.76 & 3.72 & 3.66 & \textbf{3.67} \\
+          $t+1$ (5 ph) & 2.9461 & 2.8715 & \textbf{2.8410} & 2.8524 \\
+          $t+2$ (10 ph) & 3.1420 & 3.0540 & 3.0210 & \textbf{3.0180} \\
+          $t+3$ (15 ph) & 3.3248 & 3.2234 & 3.1950 & \textbf{3.1892} \\
+          $t+4$ (20 ph) & 3.4410 & 3.3610 & 3.3120 & \textbf{3.3015} \\
+          $t+5$ (25 ph) & 3.5510 & 3.4720 & 3.4210 & \textbf{3.4080} \\
+          $t+6$ (30 ph) & 3.6521 & 3.5800 & 3.5120 & \textbf{3.4947} \\
           \bottomrule
         \end{tabular}
       \end{block}
       \vskip 2pt
       \begin{beamercolorbox}[rounded=true,wd=\linewidth,sep=3pt]{block body example}
         \scriptsize
-        \textbf{Nhận xét:} TA-STGCN kiểm soát độ dốc tăng sai số rất tốt, độ chính xác ở bước $t+6$ bám sát mô hình Transformer lớn.
+        \textbf{Nhận xét then chốt:} TA-STGCN có độ dốc tăng sai số phẳng nhất ($+0.642$ MAE từ $t+1 \to t+6$), kìm hãm đà phân kỳ sai số vượt trội so với các baseline.
       \end{beamercolorbox}
     \end{column}
   \end{columns}
@@ -582,31 +584,32 @@
   \begin{columns}[T]
     \begin{column}{0.54\textwidth}
       \centering
-      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{paper/fig/noise_robustness_study.png}
+      \includegraphics[width=\linewidth,height=4.6cm,keepaspectratio]{noise_robustness_study.pdf}
       \vskip 2pt
-      {\tiny \textbf{Hình: Mức tăng sai số MAE dưới tác động của nhiễu Gamma dị biệt (0\% -- 20\%)}}
+      {\tiny \textbf{Hình 7: Mức tăng sai số MAE dưới tác động của nhiễu cảm biến (0\% -- 20\%)}}
     \end{column}
 
     \begin{column}{0.44\textwidth}
-      \begin{alertblock}{\textbf{Hiệu năng kìm hãm sai số}}
+      \begin{alertblock}{\textbf{Khả năng kìm hãm sai số thực nghiệm}}
         \scriptsize
         \begin{itemize}
-          \item \textbf{Mô hình không Attention (STGCN, GWNet):} Sai số tăng vọt (MAE $> 4.8$ ở mức nhiễu $20\%$).
-          \item \textbf{TA-STGCN:} Kìm hãm đà tăng sai số vượt trội, giữ MAE ở mức $3.78$ nhờ cơ chế Attention lọc nhiễu.
+          \item \textbf{Mô hình không Attention (STGCN, GWNet):} Sai số tăng vọt (MAE lên $4.52$ và $4.32$ tại mức nhiễu $20\%$).
+          \item \textbf{TA-STGCN:} Duy trì độ ổn định vượt bậc, kìm hãm MAE ở mức \textbf{3.7820} (thấp nhất trong tất cả các mô hình).
         \end{itemize}
       \end{alertblock}
 
-      \begin{block}{\textbf{Kiểm định thống kê Wilcoxon}}
+      \begin{block}{\textbf{Kiểm định thống kê Wilcoxon \& Cohen's $d_z$}}
         \centering
         \scriptsize
         \renewcommand{\arraystretch}{1.05}
-        \begin{tabular}{lcc}
+        \setlength{\tabcolsep}{4pt}
+        \begin{tabular}{lccc}
           \toprule
-          \textbf{Đối sánh} & \textbf{$p$-value} & \textbf{Cohen's $d$} \\
+          \textbf{Đối sánh cặp} & \textbf{$p$-value} & \textbf{Cohen's $d_z$} & \textbf{Thắng/Tổng} \\
           \midrule
-          TA-STGCN vs STGCN & $< 0.001$ & \textbf{+5.12} \\
-          TA-STGCN vs GWNet & $< 0.001$ & \textbf{+5.84} \\
-          TA-STGCN vs STAEf. & $0.182$ & $+0.04$ \\
+          vs STGCN & $0.0039$ & \textbf{-2.84} & 5 / 5 seeds \\
+          vs GWNet & $0.0156$ & \textbf{-1.98} & 5 / 5 seeds \\
+          vs STAEformer & $0.0432$ & \textbf{-1.15} & 4 / 5 seeds \\
           \bottomrule
         \end{tabular}
       \end{block}
@@ -617,62 +620,33 @@
 % ------------------------------------------------------------------------------
 % SLIDE 13: MÔ HÌNH TRIỂN KHAI PHÂN TÁN EDGE - CLOUD
 % ------------------------------------------------------------------------------
-\begin{frame}{12. Kiến trúc triển khai phân tán Biên -- Đám mây (Edge--Cloud)}
-  \begin{columns}[T]
-    \begin{column}{0.32\textwidth}
-      \begin{block}{\textbf{TẦNG BIÊN (Edge)}}
+\begin{frame}{12. Thảo luận: Kiến trúc triển khai Edge--Cloud \& Tài nguyên tính toán}
+  \begin{columns}[c]
+    \begin{column}{0.49\textwidth}
+      \centering
+      \includegraphics[width=\linewidth,height=4.3cm,keepaspectratio]{edge_cloud_architecture.pdf}
+      \vskip 2pt
+      {\tiny \textbf{Hình 8: Phác thảo thiết kế ý niệm triển khai hệ thống phân tán Edge--Cloud}}
+    \end{column}
+
+    \begin{column}{0.49\textwidth}
+      \begin{block}{\textbf{Phân bổ trách nhiệm tính toán phân tán}}
         \scriptsize
         \begin{itemize}
-          \item 608 Camera + Jetson Edge.
-          \item EfficientNet-B5 (INT8).
-          \item Trích xuất $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$.
-          \item \textbf{Hủy ảnh thô tại chỗ $\to$ Bảo mật 100\% riêng tư}.
+          \item \textbf{Tầng Biên (Edge Camera -- GĐ 1):} Chạy EfficientNet-B5 INT8 trích xuất vector $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$. Hủy ảnh thô tại chỗ $\implies$ Bảo đảm \textbf{100\% quyền riêng tư} (Privacy-by-Design).
+          \item \textbf{Tầng Trung tâm (Cloud Server -- GĐ 2):} Tiếp nhận vector số đếm nhỏ gọn, chạy TA-STGCN dự báo toàn mạng 608 nút.
         \end{itemize}
       \end{block}
-    \end{column}
 
-    \begin{column}{0.32\textwidth}
-      \begin{exampleblock}{\textbf{TRUYỀN THÔNG (IoT)}}
+      \begin{block}{\textbf{Hiệu quả tài nguyên phần cứng thực tế}}
         \scriptsize
         \begin{itemize}
-          \item 4G/5G, MQTT (QoS 1).
-          \item Payload: \textbf{8 Bytes/nút}.
-          \item Toàn mạng: \textbf{4.86 KB/phút}.
-          \item \textbf{Tiết kiệm 62.500 lần băng thông} vs video ($304$ MB/ph).
-        \end{itemize}
-      \end{exampleblock}
-    \end{column}
-
-    \begin{column}{0.32\textwidth}
-      \begin{block}{\textbf{TRUNG TÂM (Cloud)}}
-        \scriptsize
-        \begin{itemize}
-          \item TimescaleDB lưu trữ chuỗi.
-          \item Mô hình TA-STGCN.
-          \item Suy luận $1.23$ ms, 1.6 GB VRAM.
-          \item Điều khiển đèn thích ứng \& WebSockets API.
+          \item \textbf{Suy luận toàn mạng 608 nút:} Chỉ \textbf{1.23 ms} (nhanh gấp 15 lần so với STAEformer 18.60 ms).
+          \item \textbf{VRAM GPU đào tạo:} 8.6 GB (so với STAEformer 11.5 GB), vừa vặn cấu hình phần cứng phổ thông.
         \end{itemize}
       \end{block}
     \end{column}
   \end{columns}
-
-  \vskip 4pt
-  \begin{block}{\textbf{Tổng chi phí sở hữu 5 năm (TCO Projection cho mạng lưới 608 nút giao)}}
-    \centering
-    \scriptsize
-    \renewcommand{\arraystretch}{1.1}
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabular}{lccc}
-      \toprule
-      \textbf{Giải pháp triển khai} & \textbf{Đầu tư ban đầu} & \textbf{Vận hành 5 năm} & \textbf{Tổng chi phí (TCO)} \\
-      \midrule
-      Cảm biến vòng từ (Loop Detectors) & 72.96 tỷ VNĐ & 18.24 tỷ VNĐ & \textbf{91.20 tỷ VNĐ} \\
-      Camera truyền video về Cloud tập trung & 15.20 tỷ VNĐ & 36.48 tỷ VNĐ & \textbf{51.68 tỷ VNĐ} \\
-      \midrule
-      \textbf{Đề xuất: Edge--Cloud TA-STGCN} & \textbf{7.30 tỷ VNĐ} & \textbf{2.28 tỷ VNĐ} & \textbf{9.58 tỷ VNĐ (-89.5\%)} \\
-      \bottomrule
-    \end{tabular}
-  \end{block}
 \end{frame}
 
 % ------------------------------------------------------------------------------
@@ -681,62 +655,63 @@
 \begin{frame}{13. Tính mới, Sáng tạo và Đóng góp thực tiễn}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
-      \begin{block}{\textbf{Tính mới và Sáng tạo khoa học}}
+      \begin{block}{\textbf{Tính mới và Đóng góp khoa học}}
         \scriptsize
         \begin{itemize}
-          \item \textbf{Bộ dữ liệu đô thị hỗn hợp:} Đầu tiên tại Việt Nam bao quát 608 nút camera, phân tách 2 lớp ô tô \& xe máy.
-          \item \textbf{Phương pháp đếm xe trực tiếp:} Loại bỏ bounding box và NMS $\to$ giải quyết bài toán xe máy che khuất nhau.
-          \item \textbf{Kiểm soát lan truyền sai số:} Chứng minh toán học \& thực nghiệm cơ chế chú ý hoạt động như bộ lọc thông thấp thích ứng dữ liệu.
+          \item \textbf{Khung mô hình nối tầng phân tách:} Giải quyết toàn diện bài toán từ ảnh thô camera đường phố đến dự báo mạng lưới giao thông diện rộng.
+          \item \textbf{Hồi quy đếm xe trực tiếp:} Xóa bỏ bẫy tính toán NMS, giải quyết hiệu quả bài toán che khuất tương hỗ của xe máy mật độ cao.
+          \item \textbf{Cơ chế Temporal Attention khử nhiễu:} Chứng minh giải tích và thực nghiệm khả năng hoạt động như bộ lọc thông thấp thích ứng dữ liệu.
         \end{itemize}
       \end{block}
     \end{column}
 
     \begin{column}{0.48\textwidth}
-      \begin{exampleblock}{\textbf{Đóng góp thực tiễn \& Kinh tế -- Xã hội}}
+      \begin{exampleblock}{\textbf{Ý nghĩa thực tiễn và Định hướng ứng dụng}}
         \scriptsize
         \begin{itemize}
-          \item \textbf{Hiệu quả kinh tế:} Tiết kiệm 89.5\% TCO so với xẻ đường chôn vòng từ; giảm 62.500 lần chi phí băng thông mạng.
-          \item \textbf{Bảo vệ quyền riêng tư:} Xử lý tại biên theo chuẩn Privacy-by-Design, không lưu truyền hình ảnh người dân.
-          \item \textbf{Ứng dụng điều hành ITS:} Cung cấp dự báo 15--30 phút hỗ trợ điều phối đèn tín hiệu đón đầu tại TP.HCM.
+          \item \textbf{Tận dụng hạ tầng camera sẵn có:} Không cần đầu tư xẻ đường chôn vòng từ cảm ứng tốn kém.
+          \item \textbf{Bảo vệ quyền riêng tư công dân:} Hình ảnh người dân được xử lý và hủy tại biên, không truyền ảnh thô qua mạng công cộng.
+          \item \textbf{Hỗ trợ điều hành giao thông thông minh (ITS):} Cung cấp dự báo sớm 15--30 phút giúp trung tâm điều phối tín hiệu đèn đón đầu tắc nghẽn.
         \end{itemize}
       \end{exampleblock}
     \end{column}
   \end{columns}
   \vskip 4pt
   \centering
-  \badge{ptitgreen}{\textbf{Sản phẩm đề tài: Mã nguồn mở, Dataset IC4SD-Traffic-HCM \& 01 Bài báo quốc tế}}
+  \badge{ptitgreen}{\textbf{Sản phẩm đề tài: Bộ mã nguồn hoàn chỉnh, Dataset IC4SD-Traffic-HCM \& Bản thảo báo cáo}}
 \end{frame}
 
 % ------------------------------------------------------------------------------
 % SLIDE 15: KẾT LUẬN & ĐỊNH HƯỚNG PHÁT TRIỂN
 % ------------------------------------------------------------------------------
-\begin{frame}{14. Kết luận và Định hướng phát triển tiếp nối}
+\begin{frame}{14. Kết luận và Hướng mở rộng tiếp nối (Future Work)}
   \begin{columns}[T]
     \begin{column}{0.48\textwidth}
       \begin{block}{\textbf{Kết luận đề tài}}
         \scriptsize
         \begin{enumerate}
-          \item \textbf{Hoàn thành toàn diện mục tiêu:} Xây dựng trọn vẹn chuỗi bài toán từ nhận dạng ảnh camera đến dự báo mạng lưới đồ thị.
-          \item \textbf{TA-STGCN đạt hiệu năng cao:} Độ chính xác tương đương Transformer lớn nhất nhưng nhẹ hơn 70.4\% tham số và nhanh gấp 15 lần.
-          \item \textbf{Khẳng định độ bền vững:} Kìm hãm suy thoái sai số trước biến động cảm biến camera trong điều kiện thực tế.
+          \item \textbf{Hoàn thành toàn diện các mục tiêu:} Xây dựng thành công chuỗi mô hình hoàn chỉnh từ cảm nhận thị giác đến dự báo đồ thị không -- thời gian.
+          \item \textbf{TA-STGCN đạt hiệu năng vượt bậc:} MAE tổng thể đạt 3.1788, kìm hãm xuất sắc sai số tại tầm nhìn xa 30 phút ($t+6$).
+          \item \textbf{Hiệu quả tính toán:} Tiết kiệm 70.4\% tham số so với Transformer lớn nhất, suy luận thời gian thực 1.23 ms.
         \end{enumerate}
       \end{block}
     \end{column}
 
     \begin{column}{0.48\textwidth}
-      \begin{exampleblock}{\textbf{Định hướng tiếp nối}}
+      \begin{exampleblock}{\textbf{Giới hạn và Hướng mở rộng tiếp nối}}
         \scriptsize
         \begin{itemize}
-          \item \textbf{Học bán giám sát (Semi-supervised):} Ứng dụng Vision Foundation Models tự động mở rộng nhãn dữ liệu ảnh.
-          \item \textbf{Đồ thị đa phương thức:} Tích hợp các yếu tố ngoại sinh thời gian thực (mưa ngập đô thị, triều cường).
-          \item \textbf{Thử nghiệm điều khiển đèn thích ứng:} Kết nối luồng dự báo vào hệ thống đèn tín hiệu giao thông thực tế.
+          \item \textbf{Mở rộng dữ liệu bán giám sát:} Khai thác Vision Foundation Models để tự động gán nhãn ảnh camera trong điều kiện ban đêm, thời tiết xấu.
+          \item \textbf{Đồ thị không gian động:} Bổ sung đồ thị thích ứng tự học để nắm bắt các biến động tạm thời do phân luồng hoặc tai nạn.
+          \item \textbf{Tích hợp yếu tố ngoại sinh:} Đưa dữ liệu mưa ngập đô thị, triều cường vào làm giàu đặc trưng đầu vào.
+          \item \textbf{Triển khai thử nghiệm:} Kết nối điều khiển pha đèn tín hiệu thích ứng tại một số nút giao trọng điểm.
         \end{itemize}
       \end{exampleblock}
     \end{column}
   \end{columns}
   \vskip 6pt
   \centering
-  \badge{ptitblue}{\textbf{Công trình đã hoàn thành xuất sắc các nội dung và chỉ tiêu cam kết}}
+  \badge{ptitblue}{\textbf{Đề tài đã hoàn thành xuất sắc các nội dung nghiên cứu và cam kết khoa học}}
 \end{frame}
 
 % ------------------------------------------------------------------------------

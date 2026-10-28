@@ -1,278 +1,77 @@
 \chapter{Thảo luận, mô hình triển khai và hướng phát triển}
 \label{chap:thao_luan}
 
-Chương này thảo luận toàn diện về các khía cạnh kỹ thuật, tính kinh tế phần cứng và khả năng ứng dụng thực tiễn của công trình nghiên cứu trong các hệ thống giao thông thông minh (ITS) đô thị. Trọng tâm của chương là đề xuất kiến trúc triển khai phân tán biên -- đám mây (Edge--Cloud), đánh giá tính khách quan trong thực nghiệm đối sánh, phân tích khả năng chịu lỗi của hệ thống và xác định các hướng nghiên cứu mở rộng trong tương lai.
+Chương này thảo luận sâu về ý nghĩa học thuật, tính kinh tế phần cứng trong triển khai thực tế, tính công bằng của các thực nghiệm đối sánh, đồng thời thẳng thắn chỉ ra các giới hạn hiện tại của công trình nghiên cứu và xác định các hướng mở rộng tiếp nối trong tương lai.
 
 % ==============================================================================
-\section{Đề xuất kiến trúc triển khai phân tán biên -- đám mây}
+\section{Phác thảo thiết kế kiến trúc phân tán Edge--Cloud (Định hướng tương lai)}
 \label{sec:kien_truc_trien_khai_edge_cloud}
 
-Một ưu thế ứng dụng nổi bật của mô hình hai giai đoạn là khả năng phân rã bài toán và triển khai linh hoạt theo kiến trúc phân tán giữa thiết bị biên và máy chủ trung tâm:
-\begin{itemize}
-    \item \textbf{Tại thiết bị biên (Edge Devices -- các trạm camera ngã tư):} Mô hình Giai đoạn 1 (EfficientNet-B5 hoặc MobileNetV3 được lượng tử hóa số nguyên INT8 hoặc FP16 qua runtime nhúng như TensorRT, OpenVINO) được nạp trực tiếp vào bộ nhớ thiết bị biên. Thiết bị xử lý ảnh tĩnh tại chỗ trong bộ nhớ đệm và chỉ truyền đi một gói tin nhị phân chứa vector số lượng phương tiện: $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$ với kích thước đúng 8 bytes.
-    \item \textbf{Tại máy chủ trung tâm (Cloud Server -- trung tâm chỉ huy ITS):} Tiếp nhận các vector số đếm từ 608 nút camera qua giao thức mạng nhẹ, tổng hợp thành ma trận trạng thái mạng lưới và thực thi mô hình TA-STGCN để dự báo lưu lượng toàn đô thị trong 30 phút tới.
-\end{itemize}
+Để làm rõ động lực của các lựa chọn thiết kế được đánh giá trong thực nghiệm (tính kinh tế về tham số, bộ nhớ kích hoạt GPU và cơ chế truyền tải chỉ chứa vector số đếm), nghiên cứu phác thảo ý niệm về một kiến trúc phân tán giữa thiết bị biên và máy chủ trung tâm (Edge--Cloud Split). \textbf{Cần nhấn mạnh rằng đây là bản phác thảo thiết kế định hướng ứng dụng trong tương lai (Future Work), không phải kết quả đo đạc thực nghiệm trên phần cứng nhúng}. Toàn bộ các kết quả thực nghiệm được báo cáo trong đề tài đều được thực hiện trên hệ thống xử lý tập trung chuẩn hóa đã mô tả tại Chương \ref{chap:phuong_phap} và Chương \ref{chap:thuc_nghiem}.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[
-    >=latex,
-    font=\footnotesize,
-    panel/.style={draw=black!70, thick, rounded corners=6pt, fill=black!2, inner sep=6pt},
-    header/.style={fill=black!15, draw=black!70, thick, rounded corners=3pt, font=\bfseries\footnotesize, text centered, inner sep=4pt, minimum width=3.8cm},
-    subbox/.style={draw=black!80, fill=white, rounded corners=4pt, text centered, inner sep=5pt, line width=0.6pt},
-    highlightbox/.style={draw=black!80, fill=black!5, dashed, rounded corners=4pt, text centered, inner sep=5pt, line width=0.7pt},
-    flowarrow/.style={draw=black, -{Stealth[scale=1.1]}, thick},
-    badge/.style={fill=white, draw=black!60, rounded corners=2pt, inner sep=2pt, font=\scriptsize}
-]
-
-    % =========================================================================
-    % PANEL 1: EDGE LAYER (LEFT)
-    % =========================================================================
-    \node[panel, minimum width=4.3cm, minimum height=8.4cm] (panel1) at (0, 0) {};
-    \node[header, minimum width=3.9cm] (head1) at (0, 3.8) {TẦNG THIẾT BỊ BIÊN (EDGE)};
-
-    \node[subbox, text width=3.6cm] (cam1) at (0, 2.5) {
-        \textbf{Camera Nút 1 (Jetson Edge)}\\
-        Ảnh thô $1920 \times 1080$ ($500\text{ KB}$)\\
-        $\downarrow$ EfficientNet-B5 (INT8)\\
-        $\to [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$ (\textbf{8 Bytes})\\
-        \textit{\scriptsize(Hủy ảnh thô ngay sau suy luận)}
-    };
-
-    \node[subbox, text width=3.6cm] (cam2) at (0, 0.8) {
-        \textbf{Camera Nút 2 (Jetson Edge)}\\
-        Ảnh thô $1920 \times 1080$ ($500\text{ KB}$)\\
-        $\downarrow$ EfficientNet-B5 (INT8)\\
-        $\to [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$ (\textbf{8 Bytes})\\
-        \textit{\scriptsize(Hủy ảnh thô ngay sau suy luận)}
-    };
-
-    \node at (0, -0.4) {$\boldsymbol{\vdots}$};
-
-    \node[subbox, text width=3.6cm] (camN) at (0, -1.6) {
-        \textbf{Camera Nút 608 (Jetson Edge)}\\
-        Ảnh thô $1920 \times 1080$ ($500\text{ KB}$)\\
-        $\downarrow$ EfficientNet-B5 (INT8)\\
-        $\to [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$ (\textbf{8 Bytes})\\
-        \textit{\scriptsize(Hủy ảnh thô ngay sau suy luận)}
-    };
-
-    \node[highlightbox, text width=3.6cm] (priv) at (0, -3.2) {
-        \textbf{Bảo vệ riêng tư tuyệt đối}\\
-        Không truyền video ra ngoài mạng
-    };
-
-    % =========================================================================
-    % PANEL 2: NETWORK / IOT LAYER (MIDDLE)
-    % =========================================================================
-    \node[panel, minimum width=3.6cm, minimum height=8.4cm] (panel2) at (4.7, 0) {};
-    \node[header, minimum width=3.2cm] (head2) at (4.7, 3.8) {TRUYỀN THÔNG (IoT)};
-
-    \node[subbox, text width=3.0cm] (net1) at (4.7, 2.2) {
-        \textbf{Kênh truyền thông}\\
-        Mạng di động 4G / 5G\\
-        Giao thức MQTT (QoS 1)\\
-        Bảo mật TLS / SSL
-    };
-
-    \node[subbox, text width=3.0cm] (net2) at (4.7, 0.5) {
-        \textbf{Hàng đợi trung chuyển}\\
-        EMQX / Kafka Cluster\\
-        Kiểm tra toàn vẹn gói\\
-        Khử trùng chuỗi thời gian
-    };
-
-    \node[highlightbox, text width=3.0cm] (bw_save) at (4.7, -1.8) {
-        \textbf{Tối ưu băng thông:}\\
-        $4{,}86\text{ KB/phút}$ toàn mạng\\
-        \textbf{(Tiết kiệm $62.500\times$)}\\
-        So với truyền video nén
-    };
-
-    % =========================================================================
-    % PANEL 3: CLOUD / ITS CENTER LAYER (RIGHT)
-    % =========================================================================
-    \node[panel, minimum width=4.6cm, minimum height=8.4cm] (panel3) at (9.6, 0) {};
-    \node[header, minimum width=4.2cm] (head3) at (9.6, 3.8) {MÁY CHỦ TRUNG TÂM (CLOUD)};
-
-    \node[subbox, text width=4.0cm] (cloud_db) at (9.6, 2.5) {
-        \textbf{Cơ sở dữ liệu TimescaleDB}\\
-        Lưu trữ chuỗi lưu lượng đa biến\\
-        Ghép tensor $\mathbf{X}_t \in \mathbb{R}^{608 \times 2}$
-    };
-
-    \node[subbox, text width=4.0cm] (cloud_model) at (9.6, 0.8) {
-        \textbf{Mô hình lõi TA-STGCN}\\
-        Đồ thị thực $\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathbf{W})$\\
-        $T_{\text{in}} = 24 \to H = 6$ bước ($30\text{ phút}$)\\
-        Suy luận theo chu kỳ $5\text{ phút}$
-    };
-
-    \node[subbox, text width=4.0cm] (cloud_app) at (9.6, -1.1) {
-        \textbf{Ứng dụng điều hành ITS}\\
-        Điều khiển đèn thích ứng (ATCS)\\
-        Cảnh báo nguy cơ ùn tắc sớm\\
-        WebSockets tới trung tâm TP.HCM
-    };
-
-    \node[highlightbox, text width=4.0cm] (cloud_spec) at (9.6, -2.9) {
-        \textbf{Tài nguyên vận hành:}\\
-        $1{,}23\text{ ms/suy luận}$, $1{,}6\text{ GB}$ VRAM\\
-        Khả thi trên 1 GPU thương mại
-    };
-
-    % =========================================================================
-    % CONNECTING ARROWS & FLOW
-    % =========================================================================
-    \draw[flowarrow] (cam1.east) -- (net1.west |- cam1.east);
-    \draw[flowarrow] (cam2.east) -- (net1.west |- cam2.east);
-    \draw[flowarrow] (camN.east) -- (net2.west |- camN.east);
-
-    \draw[flowarrow] (net1.south) -- (net2.north);
-    \draw[flowarrow] (net2.south) -- (bw_save.north);
-
-    \draw[flowarrow] (net1.east) -- node[above, badge, align=center] {Telemetry\\$8\text{ B/phút}$} (cloud_db.west);
-    \draw[flowarrow] (cloud_db.south) -- (cloud_model.north);
-    \draw[flowarrow] (cloud_model.south) -- (cloud_app.north);
-
-\end{tikzpicture}
-\caption{Kiến trúc phân tán Edge--Cloud tối ưu hóa băng thông, bảo vệ quyền riêng tư và vận hành suy luận thời gian thực.}
+\includegraphics[width=0.98\linewidth]{fig/edge_cloud_architecture.pdf}
+\caption{Bản phác thảo thiết kế kiến trúc phân tán Edge--Cloud định hướng ứng dụng: xử lý nhận dạng tại thiết bị biên và dự báo dòng giao thông trên đồ thị tại máy chủ trung tâm.}
 \label{fig:edge_cloud_arch_chap6}
 \end{figure}
 
-\subsection{Bài toán tiết kiệm băng thông hạ tầng truyền thông (62.500 lần)}
-Trong giải pháp thu thập tập trung truyền thống, mỗi camera phải nén và truyền luồng video hoặc ảnh tĩnh độ phân giải cao ($1920 \times 1080$) về máy chủ trung tâm qua mạng cáp quang hoặc mạng di động 4G. Giả sử ảnh nén JPEG có dung lượng trung bình $500\text{ KB}$, một mạng lưới gồm 608 camera lấy mẫu định kỳ 1 phút/lần sẽ tiêu tốn:
-\begin{align}
-    \text{Băng thông / phút} &= 608 \times 500\text{ KB} = 304.000\text{ KB} \approx 304\text{ MB/phút} \\
-    \text{Băng thông / ngày} &= 304\text{ MB} \times 60 \times 24 \approx 437.76\text{ GB/ngày}
-\end{align}
-Lượng dữ liệu gần nửa Terabyte mỗi ngày đặt ra gánh nặng chi phí đường truyền viễn thông rất lớn đối với ngân sách đô thị và dễ gây nghẽn mạng vào các khung giờ cao điểm hoặc khi thời tiết mưa bão.
-
-Khi chuyển dịch việc nhận dạng thị giác xuống thiết bị biên tại từng camera, mỗi nút chỉ truyền đi một payload nhị phân gồm hai số thực 32-bit: $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$ (đúng 8 bytes). Băng thông tiêu thụ trên toàn mạng lưới giảm xuống mức rất nhỏ:
-\begin{align}
-    \text{Băng thông / phút} &= 608 \times 8\text{ Bytes} \approx 4.86\text{ KB/phút} \\
-    \text{Băng thông / ngày} &= 4.86\text{ KB} \times 60 \times 24 \approx 7.00\text{ MB/ngày}
-\end{align}
-Tỷ lệ tiết kiệm băng thông đạt được là:
-\begin{equation}
-    \text{Tỷ lệ tiết kiệm băng thông} = \frac{500\text{ KB}}{8\text{ Bytes}} = 62.500 \text{ lần}
-\end{equation}
-Hệ thống hoàn toàn có thể vận hành ổn định trên các kênh truyền di động băng thông hẹp với độ trễ truyền gói tin dưới 10 ms.
-
-\subsection{Bảo vệ quyền riêng tư hình ảnh theo thiết kế}
-Việc truyền và lưu trữ tập trung hình ảnh camera nơi công cộng tiềm ẩn nguy cơ xâm phạm quyền riêng tư của người dân (như nhận diện biển số xe cá nhân, nhận diện khuôn mặt người tham gia giao thông) và rủi ro rò rỉ dữ liệu máy chủ.
-
-Trong kiến trúc Edge--Cloud được đề xuất, nguyên lý bảo vệ quyền riêng tư theo thiết kế (Privacy-by-Design) được thực hiện một cách triệt để:
+Trong kiến trúc định hướng triển khai (Hình \ref{fig:edge_cloud_arch_chap6}):
 \begin{itemize}
-    \item Hình ảnh camera được giải mã trực tiếp trong bộ nhớ RAM tạm thời của vi xử lý biên, đưa qua mạng nơ-ron để trích xuất số lượng xe và được giải phóng ngay lập tức.
-    \item Không có bất kỳ hình ảnh thô nào được lưu vào ổ cứng cố định hoặc truyền qua môi trường mạng Internet.
-    \item Dữ liệu rời khỏi camera chỉ là các con số thống kê vô danh (ví dụ: nút 102 có 12 ô tô, 45 xe máy), tuân thủ chặt chẽ các quy định pháp luật về bảo vệ dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP của Chính phủ.
+    \item \textbf{Tại thiết bị biên (Edge Devices -- các trạm camera quan sát):} Mô hình Giai đoạn 1 (mạng xương sống EfficientNet-B5 hoặc phương án siêu nhẹ MobileNetV3-Large sau khi lượng tử hóa số nguyên INT8 hoặc FP16 thông qua các runtime nhúng chuyên dụng như OpenVINO, TensorRT) được nạp vào bộ nhớ thiết bị biên. Thiết bị thực hiện suy luận ảnh chụp tĩnh trực tiếp trong bộ nhớ đệm và chỉ phát đi gói tin nhị phân chứa vector số lượng phương tiện theo phân lớp: $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$.
+    \item \textbf{Tại máy chủ trung tâm (Central Cloud Server):} Tiếp nhận các vector số đếm từ toàn bộ $N=608$ nút camera trên mạng lưới đường bộ đô thị, cập nhật vào ma trận trạng thái chuỗi thời gian và thực thi mô hình TA-STGCN để dự báo lưu lượng toàn mạng lưới trong 30 phút tiếp theo.
+\end{itemize}
+
+\subsection{Ý nghĩa đối với băng thông truyền thông hạ tầng}
+Trong các giải pháp giám sát giao thông truyền thống, việc truyền tải liên tục luồng video độ nét cao hoặc ảnh tĩnh độ phân giải lớn từ hàng trăm điểm quan sát về trung tâm chỉ huy gây áp lực rất lớn lên hạ tầng mạng viễn thông. 
+
+Bằng cách chuyển dịch khâu nhận dạng xuống thiết bị biên, mỗi nút quan sát chỉ cần truyền tải vector số đếm hai chiều thay vì truyền hình ảnh thô. Về mặt ý niệm lý thuyết, việc truyền một vector hai số thực (vài bytes) so với một ảnh nén JPEG kích thước hàng trăm kilobytes đem lại tiềm năng cắt giảm lưu lượng truyền dẫn rất lớn. Tuy nhiên, tỷ lệ cắt giảm lý thuyết này chưa tính đến các chi phí giao thức truyền thông (protocol overhead), cơ chế xác thực, gói tin điều khiển mạng và việc truyền lại khi rớt gói. Do đó, việc lượng hóa chính xác băng thông thực tế đòi hỏi các đo đạc thực nghiệm toàn diện trên môi trường mạng thực địa trong các nghiên cứu tương lai.
+
+\subsection{Bảo vệ quyền riêng tư hình ảnh theo thiết kế (Privacy-by-Design)}
+Việc truyền tải và lưu trữ tập trung hình ảnh camera nơi công cộng tiềm ẩn nguy cơ làm lộ lọt thông tin cá nhân của người tham gia giao thông (nhận diện khuôn mặt hoặc biển số phương tiện).
+
+Trong kiến trúc phân tán được phác thảo, nguyên lý bảo vệ quyền riêng tư được bảo đảm thông qua cơ chế xử lý nội bộ tại chỗ:
+\begin{itemize}
+    \item Khung hình camera được giải mã trực tiếp trong bộ nhớ RAM tạm thời của vi xử lý biên, đưa qua mạng nơ-ron hồi quy đếm xe và được giải phóng ngay lập tức sau khi có kết quả.
+    \item Không có bất kỳ hình ảnh thô hay đặc trưng nhận dạng cá nhân nào được lưu trữ cố định trên bộ nhớ biên hoặc truyền dẫn qua môi trường mạng Internet.
+    \item Dữ liệu rời khỏi thiết bị biên chỉ là các con số thống kê tổng hợp về lưu lượng phương tiện của tuyến đường, hoàn toàn loại bỏ nguy cơ rò rỉ dữ liệu hình ảnh nhạy cảm.
 \end{itemize}
 
 % ==============================================================================
-\section{Tính kinh tế về tham số và bộ nhớ GPU trong triển khai thực tế}
+\section{Tính kinh tế phần cứng: Bộ nhớ kích hoạt GPU đỉnh so với số lượng tham số tĩnh}
 \label{sec:tinh_kinh_te_phan_cung}
 
-Một phát hiện thực nghiệm quan trọng tại Chương 5 là số lượng tham số tĩnh ($N_{\text{params}}$) không phản ánh đầy đủ chi phí phần cứng của các mô hình đồ thị không -- thời gian. Bảng \ref{tab:tai_nguyen_phan_cung_chap6} tổng hợp các chỉ số tài nguyên khi huấn luyện trên đồ thị 608 nút.
+Một phát hiện thực nghiệm quan trọng từ các kết quả tại Chương \ref{chap:thuc_nghiem} (Bảng \ref{tab:sieu_tham_so_chap5_models}) là: \textbf{Số lượng tham số tĩnh ($N_{\text{params}}$) không phản ánh đầy đủ chi phí phần cứng thực tế của các mô hình đồ thị không -- thời gian trong môi trường đô thị quy mô lớn}.
 
-\begin{table}[htbp]
-\centering
-\caption{Đánh giá tính kinh tế tham số và bộ nhớ GPU đỉnh khi huấn luyện ($B=64, N=608$).}
-\label{tab:tai_nguyen_phan_cung_chap6}
-\small
-\begin{tabular}{lccc}
-\toprule
-\textbf{Kiến trúc mô hình} & \textbf{Tham số} & \textbf{VRAM đỉnh (MB)} & \textbf{Thời gian (s/epoch)} \\
-\midrule
-STGCN Baseline & 375K & 4.838 MB & 3.48 s \\
-Graph WaveNet & 549K & 7.731 MB & 4.91 s \\
-ASTGCN & 1.533K & 9.261 MB & 7.11 s \\
-MegaCRN & 527K & 4.850 MB & 1.69 s \\
-DSTAGNN & 911K & 9.802 MB & 3.97 s \\
-STAEformer & 568K & 11.509 MB & 5.65 s \\
-iTransformer & \textbf{150K} & \textbf{265 MB} & \textbf{0.55 s} \\
-\midrule
-\textbf{TA-STGCN (Đề xuất)} & \textbf{453K} & \textbf{8.607 MB} & \textbf{4.76 s} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Phân tích đặc tính tài nguyên phần cứng:}
 \begin{enumerate}
-    \item \textbf{Vấn đề bùng nổ bộ nhớ kích hoạt của Attention đồng thời:} Mặc dù STAEformer có số lượng tham số vừa phải (568K), cơ chế chú ý không -- thời gian kết hợp (Joint Spatio-Temporal Attention) buộc mô hình phải duy trì các tensor kích hoạt rất lớn trong VRAM, đẩy mức tiêu thụ đỉnh lên tới \textbf{11.509 MB} (chạm sát ngưỡng 12 GB của GPU phổ thông).
-    \item \textbf{Đặc điểm của mô hình iTransformer:} iTransformer tiêu tốn bộ nhớ rất thấp (265 MB) do đảo ngược chiều biến số, xem mỗi nút như một kênh độc lập mà không sử dụng ma trận không gian. Tuy nhiên, việc bỏ qua hoàn toàn thông tin hình học của mạng lưới OpenStreetMap khiến mô hình này có sai số dài hạn ở bước $t+6$ cao hơn TA-STGCN.
-    \item \textbf{Cân bằng tối ưu của TA-STGCN:} Bằng cách kết hợp tích chập phổ Chebyshev $K=3$ trên đồ thị thưa và Attention thời gian độc lập cho từng nút, TA-STGCN chỉ tiêu tốn \textbf{8.607 MB} VRAM (tiết kiệm $25.2\%$ so với STAEformer) và giảm $70.4\%$ số lượng tham số so với ASTGCN (453K so với 1.53M). Cấu hình này giúp một máy chủ sử dụng một GPU tầm trung thương mại (như RTX 4070/4080) có thể đảm nhiệm việc dự báo lưu lượng toàn thành phố một cách ổn định.
+    \item \textbf{Hiện tượng bùng nổ bộ nhớ kích hoạt (Activation Memory Explosion):} Các mô hình Transformer đồ thị tiên tiến như STAEformer duy trì lượng tham số tĩnh ở mức vừa phải ($568\text{K}$ tham số), song việc tính toán các ma trận chú ý mềm liên hợp (Joint Spatio-Temporal Attention) trên toàn bộ $N=608$ nút khiến lượng bộ nhớ kích hoạt GPU đỉnh vọt lên tới \textbf{11.509,1 MB}. Mức tiêu thụ này chạm sát ngưỡng dung lượng 12 GB của các dòng card đồ họa thương mại phổ biến, gây khó khăn lớn cho việc triển khai trên các cụm máy chủ kinh phí hạn chế.
+    \item \textbf{Bản chất thiết kế của mô hình iTransformer:} Mặc dù iTransformer đạt mức tiêu thụ bộ nhớ GPU cực kỳ thấp (\textbf{265,2 MB}), điều này hoàn toàn xuất phát từ bản chất thiết kế Inverted Transformer của mô hình: coi mỗi nút giao thông như một biến số độc lập và áp dụng cơ chế chú ý trên chiều biến số, hoàn toàn không xây dựng hay duy trì ma trận không gian $N \times N$. Do không mô hình hóa tương quan không gian qua đồ thị, iTransformer là một mô hình chuỗi thời gian đa biến thuần túy (non-graph) và được xử lý riêng biệt trong các đánh giá.
+    \item \textbf{Cân bằng tối ưu của TA-STGCN:} Bằng cách tách rời phép tích chập không gian Chebyshev ($K=3$) trên đồ thị thưa khỏi cơ chế Self-Attention trên chiều thời gian độc lập cho từng nút, TA-STGCN chỉ tiêu tốn \textbf{8.606,9 MB} bộ nhớ GPU đỉnh (tiết kiệm $25.2\%$ so với STAEformer) và giảm $70.4\%$ số lượng tham số so với ASTGCN ($453\text{K}$ so với $1.533\text{K}$). Sự cân đối đồng thời trên cả hai trục tham số và bộ nhớ kích hoạt giúp mô hình phù hợp với các hệ thống máy chủ vận hành thực tế.
 \end{enumerate}
 
 % ==============================================================================
 \section{Tính khách quan và công bằng trong so sánh thực nghiệm}
 \label{sec:tinh_cong_bang_thuc_nghiem}
 
-Nghiên cứu tuân thủ các nguyên tắc liêm chính học thuật nhằm bảo đảm tính khách quan và minh bạch của các kết luận đối sánh:
+Để đảm bảo tính nghiêm cẩn học thuật, các thực nghiệm đối sánh ở Giai đoạn 2 được thiết kế như một \textbf{thực nghiệm đối chứng có kiểm soát chặt chẽ (controlled implementation comparison)} thay vì một cuộc chạy đua tối ưu hóa riêng lẻ từng mô hình:
+
 \begin{enumerate}
-    \item \textbf{Sử dụng chung hàm mục tiêu (Unified Huber Loss):} Tất cả 8 mô hình đồ thị ở Giai đoạn 2 đều được huấn luyện dưới cùng một hàm mất mát Smooth $L_1$ Huber Loss ($\delta=1.0$). Một số mô hình gốc (như Graph WaveNet) ban đầu sử dụng $L_1$ Loss. Việc huấn luyện lại toàn bộ baseline dưới hàm Huber Loss bảo đảm đối xử đồng nhất với các điểm ngoại lai, cô lập hoàn toàn yếu tố sai khác về mặt kiến trúc.
-    \item \textbf{Không tinh chỉnh tham số mang tính thiên vị:} Toàn bộ các mô hình đối chứng đều sử dụng cấu hình siêu tham số chuẩn theo công bố của các tác giả gốc (được điều chỉnh kích thước đầu vào và đầu ra cho phù hợp với đồ thị 608 nút). Nhóm nghiên cứu không thay đổi siêu tham số theo hướng làm giảm hiệu năng của các mô hình đối chứng.
-    \item \textbf{Báo cáo trung thực và minh bạch kết quả:} Báo cáo nêu rõ rằng trên tập dữ liệu sạch, các mô hình đạt độ chính xác gần như tương đương nhau ($|d| < 0.1$). Đề tài không tuyên bố vượt trội trên dữ liệu sạch, mà xác định đóng góp khoa học cốt lõi là \textbf{độ bền vững vượt trội trước sai số nhận dạng cảm biến}.
+    \item \textbf{Sử dụng chung hàm mục tiêu (Unified Huber Objective):} Tất cả các mô hình đối chứng đều được huấn luyện dưới cùng một hàm mất mát Huber Loss ($\delta=1.0$). Một số mô hình gốc trong y văn ban đầu được đề xuất với hàm mục tiêu khác (chẳng hạn Graph WaveNet ban đầu sử dụng hàm mất mát $L_1$). Việc huấn luyện lại toàn bộ mô hình dưới hàm Huber Loss là một sự đánh đổi có chủ đích: kiểm soát đồng nhất cách mô hình phản ứng với các điểm ngoại lai để cô lập yếu tố sai khác về mặt kiến trúc. Do đó, kết quả của các mô hình đối chứng được hiểu là hiệu năng đạt được dưới hàm mục tiêu dùng chung, không phải kết quả công bố riêng lẻ của từng bài báo gốc.
+    \item \textbf{Không tinh chỉnh siêu tham số riêng biệt cho từng baseline:} Nghiên cứu không thực hiện tìm kiếm siêu tham số vét cạn riêng lẻ cho từng mô hình đối chứng trên đồ thị 608 nút; các mô hình sử dụng cấu hình chuẩn do các tác giả nguyên bản đề xuất, được điều chỉnh kích thước đầu vào và đầu ra cho tương thích. Do đó, một số mô hình đối chứng có thể đạt độ chính xác cao hơn nếu được tinh chỉnh sâu. Đây là lý do nghiên cứu không nhấn mạnh vào các chênh lệch sai số nhỏ trên dữ liệu sạch, phù hợp với kết quả kiểm định kích thước ảnh hưởng ($|d| < 0.1$) cho thấy các mô hình đồ thị đạt độ chính xác điểm gần như tương đương nhau.
+    \item \textbf{Phân định rõ ràng bản chất non-graph của iTransformer:} iTransformer được đưa vào thực nghiệm như một mô hình tham chiếu mạnh về chuỗi thời gian đa biến, không phải là mô hình dự báo cấu trúc đồ thị. Mô hình này được loại trừ khỏi các kết luận so sánh nội bộ giữa các kiến trúc đồ thị. Việc iTransformer đạt độ bền vững tốt trước nhiễu (ở Mức 4) cung cấp bằng chứng cho thấy một phần năng lực kháng nhiễu bắt nguồn từ cơ chế chú ý theo trục thời gian nói chung chứ không riêng gì cấu trúc đồ thị.
 \end{enumerate}
 
 % ==============================================================================
-\section{Khả năng tích hợp hệ thống và cơ chế chịu lỗi mạng}
-\label{sec:tich_hop_va_chiu_loi}
-
-Để có thể vận hành trong thực tế đô thị, hệ thống cần có khả năng tích hợp linh hoạt với hạ tầng công nghệ thông tin sẵn có và duy trì hoạt động khi xảy ra sự cố truyền thông.
-
-\subsection{Kiến trúc tích hợp truyền thông chuẩn mở (MQTT và WebSockets)}
-Mô hình kết nối giữa 608 nút camera biên và máy chủ trung tâm được xây dựng trên các giao thức IoT chuẩn mở:
-\begin{itemize}
-    \item \textbf{Giao thức MQTT (Message Queuing Telemetry Transport):} Mỗi camera biên hoạt động như một MQTT Publisher, định kỳ 5 phút gửi bản tin nhẹ chứa mã định danh, mốc thời gian và vector số đếm:
-    \begin{equation}
-        \texttt{\{"node\_id": 102, "timestamp": 1756801500, "car": 14, "bike": 86\}}
-    \end{equation}
-    Bản tin được gửi về MQTT Broker trung tâm với mức dịch vụ QoS 1 (At least once), bảo đảm dữ liệu không bị thất lạc khi sóng di động chập chờn.
-    \item \textbf{Cơ sở dữ liệu chuỗi thời gian TimescaleDB:} Máy chủ trung tâm lưu trữ dòng dữ liệu vào hệ cơ sở dữ liệu tối ưu hóa cho chuỗi thời gian, tự động phân vùng theo ngày để truy vấn lịch sử 24 bước với độ trễ dưới 2 ms.
-    \item \textbf{Kênh phát dự báo WebSockets:} Sau khi mô hình TA-STGCN hoàn thành lượt suy luận ($4.76$ ms/epoch), kết quả dự báo 6 bước tương lai được phát qua WebSockets đến màn hình điều hành của trung tâm chỉ huy giao thông.
-\end{itemize}
-
-\subsection{Cơ chế dự phòng và khôi phục tín hiệu khi mất kết nối}
-Trong điều kiện thực tế, hiện tượng gián đoạn kết nối do thời tiết hoặc sự cố đường truyền là khó tránh khỏi. Hệ thống được trang bị cơ chế tự phục hồi hai cấp:
-\begin{enumerate}
-    \item \textbf{Bộ đệm ngoại tuyến tại biên (Edge Offline Spooling):} Khi mất kết nối mạng, thiết bị biên tự động lưu tạm thời các vector số đếm vào bộ nhớ flash eMMC (dung lượng bộ đệm đủ lưu trữ liên tục 30 ngày). Khi kết nối mạng được tái lập, thiết bị biên tự động gửi bù (backfilling) để lấp đầy các khoảng trống dữ liệu trong quá khứ.
-    \item \textbf{Cơ chế điền khuyết không gian bằng đồ thị (Graph Spatial Imputation):} Nếu một camera bị mất tín hiệu hoàn toàn trong thời gian thực, mô hình TA-STGCN không làm gián đoạn việc dự báo toàn mạng. Nhờ toán tử tích chập ChebNet bậc $K=3$, trạng thái của nút bị khuyết được xấp xỉ tự động thông qua tổ hợp tuyến tính dòng xe từ các nút lân cận trên đồ thị OpenStreetMap. Kết quả thử nghiệm cho thấy khi ngắt tín hiệu ngẫu nhiên $10\%$ số camera, sai số dự báo toàn mạng chỉ tăng nhẹ $0.18$ xe MAE, thể hiện khả năng chịu lỗi tốt của mô hình.
-\end{enumerate}
-
-\subsection{Phân tích tổng chi phí sở hữu (TCO) trong 5 năm}
-Bảng \ref{tab:tco_analysis_chap6} so sánh chi phí ước tính cho việc triển khai và vận hành hệ thống giám sát và dự báo cho 608 nút giao thông trong vòng 5 năm giữa hai phương án: vòng từ cảm ứng truyền thống và khung mô hình camera AI của đề tài.
-
-\begin{table}[htbp]
-\centering
-\caption{Ước tính tổng chi phí sở hữu (TCO) trong 5 năm cho 608 nút giao thông (đơn vị: Tỷ VNĐ).}
-\label{tab:tco_analysis_chap6}
-\small
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
-\toprule
-\textbf{Hạng mục chi phí} & \textbf{Vòng từ cảm ứng truyền thống} & \textbf{Khung mô hình Camera AI (Đề tài)} \\
-\midrule
-Thiết bị cảm biến ban đầu & 36.5 tỷ (608 nút $\times$ 4 làn $\times$ cảm biến) & \textbf{0.0 tỷ} (Tận dụng camera sẵn có) \\
-Chi phí xẻ đường, thi công lắp đặt & 24.3 tỷ (Tổ chức thi công, rào chắn) & \textbf{3.6 tỷ} (Lắp bo mạch vi xử lý biên) \\
-Chi phí băng thông mạng viễn thông & 1.5 tỷ (Truyền dữ liệu cảm biến) & \textbf{0.4 tỷ} (Nhờ nén dữ liệu $62.500\times$) \\
-Bảo trì, duy tu mặt đường (5 năm) & 42.0 tỷ (Sụt lún, đứt dây ngầm) & \textbf{4.8 tỷ} (Bảo trì bo mạch, lau ống kính) \\
-Chi phí máy chủ trung tâm & 3.0 tỷ (Máy chủ dữ liệu) & \textbf{2.5 tỷ} (Máy chủ GPU RTX 4090) \\
-\midrule
-\textbf{Tổng chi phí 5 năm (TCO):} & \textbf{107.3 tỷ VNĐ} & \textbf{11.3 tỷ VNĐ} \\
-\multicolumn{2}{l}{\textbf{Tỷ lệ tiết kiệm ngân sách:}} & \textbf{Tiết kiệm 89.5\% (gấp 9.5 lần)} \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-% ==============================================================================
-\section{Các hạn chế của đề tài và hướng phát triển tiếp nối}
+\section{Các giới hạn học thuật của nghiên cứu và Hướng phát triển tiếp nối}
 \label{sec:han_che_va_huong_phat_trien}
 
-Mặc dù đã đạt được các kết quả thực nghiệm rõ ràng, nghiên cứu vẫn còn một số điểm cần tiếp tục hoàn thiện trong các giai đoạn tiếp theo:
+Nghiên cứu thẳng thắn nhìn nhận các giới hạn kỹ thuật hiện tại và xác định các hướng nghiên cứu mở rộng trong tương lai:
+
 \begin{enumerate}
-    \item \textbf{Quy mô bộ dữ liệu ảnh gán nhãn:} Tập dữ liệu 5.012 ảnh bước đầu đã đáp ứng mục tiêu huấn luyện, song vẫn cần tiếp tục mở rộng để bao quát thêm nhiều góc nhìn và điều kiện thời tiết cực đoan (như mưa lớn làm mờ kính hoặc ban đêm thiếu sáng nghiêm trọng). Hướng mở rộng là áp dụng kỹ thuật học bán giám sát (Semi-Supervised Learning) hoặc các mô hình nền tảng thị giác (Vision Foundation Models) để tự động sinh giả nhãn (pseudo-labeling) trên nguồn ảnh lớn chưa gán nhãn.
-    \item \textbf{Ma trận kề RBF tĩnh:} Đồ thị RBF xây dựng từ OpenStreetMap thể hiện khoảng cách vật lý cố định, chưa phản ánh tức thời các sự cố bất thường như ngập nước cục bộ, tai nạn giao thông hoặc rào chắn thi công đào đường. Hướng phát triển tiếp theo là kết hợp ma trận kề tĩnh OSM với đồ thị thích ứng tự học (Dynamic Adaptive Graph) có điều kiện biên.
-    \item \textbf{Đo kiểm trên phần cứng nhúng thực tế:} Các đo đạc hiện tại được thực hiện trên GPU máy trạm. Hướng phát triển là lượng tử hóa mô hình qua TensorRT và đo kiểm thực tế về độ trễ suy luận, tốc độ khung hình (FPS) và mức tiêu thụ điện năng trên các bo mạch nhúng chuyên dụng như NVIDIA Jetson Orin Nano, Raspberry Pi 5 và Google Coral TPU.
-    \item \textbf{Tích hợp các nguồn dữ liệu ngoại sinh:} Dòng giao thông đô thị chịu tác động đáng kể của các yếu tố bên ngoài như lượng mưa và các sự kiện tập trung đông người. Việc tích hợp thêm dữ liệu thời tiết và lịch sự kiện đô thị sẽ giúp nâng cao năng lực dự báo trong các tình huống đột biến.
+    \item \textbf{Giới hạn trần sai số phụ thuộc giữa hai giai đoạn:} Mô hình dự báo Giai đoạn 2 được huấn luyện trực tiếp trên chuỗi dữ liệu số đếm sinh ra từ Giai đoạn 1. Do đó, độ chính xác và độ tin cậy của toàn bộ hệ thống dự báo bị giới hạn trên bởi biên độ sai số của khâu nhận dạng thị giác ban đầu.
+    \item \textbf{Thách thức quy mô tính toán khi triển khai thực tế trên diện rộng:} Mặc dù mô hình đồ thị Giai đoạn 2 tương đối gọn nhẹ ($453\text{K}$ tham số), việc triển khai đồng loạt mô hình Giai đoạn 1 (EfficientNet-B5 với 28.3M tham số) trên 608 camera biên tương đương với việc vận hành tổng cộng hơn $17$ tỷ tham số trên toàn đô thị. Đây là một thách thức lớn về chi phí phần cứng biên, độ trễ và năng lượng tiêu thụ. Mặc dù MobileNetV3-Large (4.2M tham số) là một lựa chọn nhỏ gọn hơn, mô hình này phải đánh đổi bằng mức sai số Stage 1 cao hơn ($4.0126$ so với $3.6363$). Việc lượng tử hóa (INT8/FP16), chưng cất tri thức (Knowledge Distillation) và đo đạc thông lượng thực tế trên các bo mạch nhúng (như NVIDIA Jetson, Coral TPU) là hướng đi bắt buộc trước khi đưa vào ứng dụng thực tế.
+    \item \textbf{Đánh đổi của phương pháp hồi quy đếm xe trực tiếp:} Nghiên cứu định vị cơ chế hồi quy đếm xe trực tiếp từ ảnh tĩnh như một giải pháp thực tế giúp loại bỏ chi phí gán nhãn điểm/bounding box phức tạp và không đòi hỏi căn chỉnh thông số hình học từng camera. Tuy nhiên, nghiên cứu chưa thực hiện đối sánh đối đầu trực tiếp với các phương pháp ước lượng bản đồ mật độ (Density-map estimators như MCNN \cite{mcnn}, CSRNet \cite{csrnet}, CAN \cite{can}) hoặc các mô hình phát hiện kết hợp bám vết (Tracking-by-Detection như YOLO \cite{yolo} + ByteTrack) trên cùng một tập dữ liệu gán nhãn vi mô.
+    \item \textbf{Phạm vi không gian -- thời gian của bộ dữ liệu:} Bộ dữ liệu thực nghiệm được thu thập tại một đô thị đơn lẻ (TP. Hồ Chí Minh) trong khoảng thời gian 3 tháng, chưa bao quát đầy đủ các biến thiên thời tiết cực đoan theo mùa (mùa mưa ngập kéo dài hoặc sương mù dày đặc).
+    \item \textbf{Các dòng kiến trúc chuỗi thời gian mới (2024--2025):} Thực nghiệm của đề tài bao quát các kiến trúc đồ thị và Transformer tiêu biểu đến năm 2024, song chưa tích hợp các dòng mô hình mới nhất xuất hiện trong giai đoạn 2024--2025 như Spatio-Temporal State-Space Models (Mamba \cite{mamba}), Diffusion STG, hoặc các mô hình chuỗi thời gian dựa trên Patch / LLM (như PatchTST \cite{patchtst}, TimeXer). Các họ kiến trúc này chưa được chuẩn hóa cho dữ liệu đồ thị có cấu trúc phân tách chủng loại xe thu thập từ camera, đòi hỏi những nghiên cứu kỹ thuật sâu hơn trong tương lai.
+    \item \textbf{Tính thích ứng của ma trận kề không gian:} Đồ thị RBF xây dựng từ OpenStreetMap thể hiện cấu trúc kết nối hình học tĩnh, chưa thể tự thích ứng với các biến cố phi vật lý hoặc sự cố đột xuất (tai nạn giao thông làm chặn đường, ngập nước cục bộ). Hướng phát triển tiếp theo là nghiên cứu kết hợp đồ thị tĩnh với cơ chế học đồ thị thích ứng động (Dynamic Adaptive Graph Learning), đồng thời mở rộng phân tích độ bền vững dưới các phân phối nhiễu xác suất khác (như Weibull hoặc Log-normal).
 \end{enumerate}

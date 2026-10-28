@@ -1,27 +1,29 @@
 \chapter{Tổng quan và bối cảnh nghiên cứu}
 \label{chap:tong_quan}
 
-\section{Tổng quan về hệ thống giao thông thông minh (ITS)}
-Hệ thống giao thông thông minh (Intelligent Transportation Systems -- ITS) là sự kết hợp giữa công nghệ thông tin, truyền thông và các thuật toán điều khiển hiện đại nhằm nâng cao hiệu quả vận hành mạng lưới giao thông, bảo đảm an toàn, tối ưu hóa năng lượng và giảm thiểu ô nhiễm môi trường đô thị.
+\section{Khung kiến trúc hệ thống giao thông thông minh (ITS)}
+Hệ thống giao thông thông minh (Intelligent Transportation Systems -- ITS) là sự tích hợp liên ngành giữa công nghệ thông tin, viễn thông, cảm biến và các thuật toán điều khiển nhằm tối ưu hóa hiệu quả vận hành mạng lưới đường bộ, nâng cao mức độ an toàn và giảm thiểu ùn tắc cũng như ô nhiễm môi trường đô thị.
 
-Theo các khung kiến trúc chuẩn mực quốc tế (như ISO 14813), một hệ thống ITS đô thị thường gồm ba phân hệ chính:
+Theo các khung kiến trúc chuẩn mực quốc tế (như Khung kiến trúc ITS Quốc gia của Bộ Giao thông Vận tải Hoa Kỳ và Tiêu chuẩn ISO 14813), một hệ thống ITS đô thị hoàn chỉnh được vận hành dựa trên ba phân hệ trụ cột:
 \begin{enumerate}
-    \item \textbf{Hệ thống quản lý giao thông nâng cao (ATMS):} Giám sát trạng thái mạng lưới đường bộ thời gian thực qua hệ thống cảm biến, phát hiện sự cố tự động, điều khiển đèn tín hiệu thích ứng và điều phối lực lượng xử lý tình huống phát sinh.
-    \item \textbf{Hệ thống thông tin người tham gia giao thông (ATIS):} Cung cấp thông tin cập nhật liên tục về tình trạng lưu thông, thời gian hành trình dự kiến và hướng dẫn lộ trình tối ưu thông qua biển báo điện tử VMS, ứng dụng di động và đài phát thanh giao thông.
-    \item \textbf{Hệ thống vận tải công cộng nâng cao (APTS):} Hỗ trợ quản lý và tối ưu biểu đồ chạy xe buýt, metro, cung cấp thời gian đến bến dự kiến (ETA) và điều phối ưu tiên qua nút giao cho phương tiện công cộng.
+    \item \textbf{Hệ thống quản lý giao thông nâng cao (Advanced Traffic Management Systems -- ATMS):} Đóng vai trò hạt nhân điều hành, thực hiện giám sát trạng thái lưu thông thời gian thực trên mạng lưới thông qua hệ thống cảm biến, tự động phát hiện sự cố, điều khiển thích ứng chu kỳ đèn tín hiệu tại các nút giao và điều phối phân luồng dòng phương tiện.
+    \item \textbf{Hệ thống thông tin người tham gia giao thông (Advanced Traveler Information Systems -- ATIS):} Cung cấp dữ liệu cập nhật liên tục về tình trạng tắc nghẽn, thời gian hành trình dự kiến và khuyến nghị lộ trình di chuyển tối ưu tới người điều khiển phương tiện thông qua biển báo điện tử (VMS), ứng dụng di động và hệ thống định vị vệ tinh.
+    \item \textbf{Hệ thống vận tải công cộng nâng cao (Advanced Public Transportation Systems -- APTS):} Tối ưu hóa biểu đồ vận hành xe buýt, đường sắt đô thị, ước lượng thời gian đến trạm (Estimated Time of Arrival -- ETA) và thiết lập quyền ưu tiên tín hiệu đèn cho phương tiện công cộng khi tiếp cận các giao lộ.
 \end{enumerate}
 
-Trong đó, bài toán \textbf{dự báo dòng giao thông đô thị (urban traffic forecasting)} đóng vai trò trung tâm trong phân hệ ATMS và ATIS. Việc dự báo chính xác trạng thái mạng lưới trước 15 đến 30 phút cho phép các nhà quản lý chuyển từ trạng thái phản ứng bị động sang điều hành chủ động, kịp thời điều chỉnh chu kỳ đèn tín hiệu và phân luồng từ xa trước khi ùn tắc lan rộng.
+Trong cấu trúc vận hành của ATMS và ATIS, bài toán \textbf{dự báo dòng giao thông đô thị (urban traffic flow forecasting)} giữ vai trò là chức năng xử lý then chốt. Năng lực dự báo chính xác trạng thái lưu lượng mạng lưới trước một khoảng thời gian nhìn trước từ 15 đến 30 phút cho phép trung tâm chỉ huy chuyển đổi phương thức vận hành từ ``phản ứng bị động sau khi tắc nghẽn đã xảy ra'' sang ``điều tiết chủ động đón đầu dòng xe'', kịp thời điều chỉnh kế hoạch pha đèn và phân luồng từ xa trước khi điểm nghẽn tích tụ thành xung đột diện rộng.
 
-\subsection{Tiến trình phát triển của hệ thống giao thông thông minh}
-Quá trình phát triển của ITS trải qua ba giai đoạn công nghệ chính:
+\subsection{Sự tiến hóa của các phương thức thu thập dữ liệu giao thông đô thị}
+Hiệu quả của các mô hình dự báo và điều khiển giao thông phụ thuộc trực tiếp vào chất lượng, độ phủ không gian và tần suất thu nhận của hạ tầng cảm biến đầu vào. Trong quá trình phát triển của ngành giao thông đô thị, các phương thức thu thập dữ liệu đã trải qua ba hướng tiếp cận công nghệ chính:
 \begin{enumerate}
-    \item \textbf{Thế hệ ITS 1.0 (1970 -- 1990): Kỷ nguyên cảm biến cơ điện cố định.}
-    Giai đoạn này gắn liền với các cảm biến vòng từ (inductive loop detectors) chôn dưới mặt đường và hệ thống đèn tín hiệu phối hợp cố định theo thời gian trong ngày (như phương pháp Webster). Dữ liệu thu được chủ yếu phục vụ các tuyến cao tốc, thu thập lưu lượng tổng hợp trên từng làn và chưa có khả năng liên kết mạng lưới không gian cũng như phân loại phương tiện.
-    \item \textbf{Thế hệ ITS 2.0 (1990 -- 2015): Kỷ nguyên truyền thông không dây và định vị vệ tinh.}
-    Sự phổ biến của hệ thống GPS và mạng di động mở ra nguồn dữ liệu từ phương tiện di động (Floating Car Data -- FCD). Các hệ thống điều khiển đèn thích ứng như SCOOT (Anh) và SCATS (Úc) bắt đầu ứng dụng mô hình hồi quy để điều hòa lưu lượng. Tuy nhiên, chi phí đầu tư và bản quyền của các giải pháp này rất lớn, chủ yếu thiết kế cho dòng xe ô tô chiếm ưu thế tại các quốc gia phát triển.
-    \item \textbf{Thế hệ ITS 3.0 (Từ 2015 đến nay): Kỷ nguyên AIoT, thị giác máy tính và học sâu đồ thị.}
-    Sự phát triển mạnh mẽ của thị giác máy tính và mạng nơ-ron học sâu giúp tận dụng trực tiếp hạ tầng camera giám sát công cộng (CCTV) sẵn có tại các đô thị. Dữ liệu hình ảnh được chuyển hóa thành các luồng số liệu giao thông liên tục, kết hợp với các mô hình mạng nơ-ron đồ thị không -- thời gian (STGNN) để dự báo toàn mạng lưới theo thời gian thực với chi phí phần cứng hợp lý.
+    \item \textbf{Cảm biến cơ điện xâm lấn mặt đường (Intrusive In-Pavement Sensors):}
+    Điển hình là cảm biến vòng từ (Inductive Loop Detectors) và cảm biến áp điện chôn dưới lớp nhựa đường. Phương pháp này đo đạc sự thay đổi từ trường hoặc áp lực cơ học khi xe lăn bánh qua để ghi nhận số lượt phương tiện và vận tốc tức thời trên từng làn cắt ngang. Mặc dù có độ chính xác cao đối với các dòng xe ô tô di chuyển theo làn chuẩn mực trên các tuyến cao tốc (như mạng lưới cảm biến PeMS tại California, Hoa Kỳ), phương thức này bộc lộ những nhược điểm lớn khi triển khai tại các đô thị đang phát triển: chi phí cắt xẻ mặt đường và lắp đặt đắt đỏ; độ bền kém do dễ bị đứt gãy dưới tác động của nhiệt độ và tải trọng xe tải; đặc biệt là hiện tượng ``mù tín hiệu'' trước dòng xe máy di chuyển song song hoặc lấn giữa hai vòng từ cảm ứng.
+    
+    \item \textbf{Dữ liệu hành trình phương tiện di động (Probe Vehicle / Floating Car Data -- FCD):}
+    Phương thức này tận dụng dữ liệu định vị GPS và truyền thông mạng di động thu thập từ các đội xe thương mại (taxi, xe buýt, xe công nghệ) hoặc ứng dụng định vị của người tham gia giao thông. Ưu điểm nổi bật của FCD là phạm vi bao phủ không gian rộng lớn mà không đòi hỏi chi phí đầu tư hạ tầng cố định. Tuy nhiên, hạn chế cố hữu của FCD nằm ở tỷ lệ thâm nhập mẫu thấp (Penetration Rate chỉ dao động khoảng 2\%--5\% tổng lượng phương tiện lưu thông thực tế), độ trễ truyền nhận tín hiệu lớn và dữ liệu chỉ cung cấp tốc độ hành trình trung bình trên từng cung đường chứ không thể đo lường tổng lưu lượng xe thực tế cắt qua một mặt cắt ngang của tuyến đường.
+    
+    \item \textbf{Hệ thống cảm biến thị giác phi xâm lấn (Non-Intrusive Vision-Based Sensing):}
+    Sự phổ biến của mạng lưới camera giám sát giao thông công cộng (CCTV) kết hợp với các bước tiến đột phá của thị giác máy tính và học sâu đã mở ra phương thức thu thập dữ liệu giao thông thế hệ mới. Khác với cảm biến xâm lấn, camera là giải pháp phi xâm lấn hoàn toàn, không gây xáo trộn kết cấu mặt đường và có góc nhìn bao quát toàn bộ không gian nút giao. Dữ liệu hình ảnh từ camera cho phép trích xuất trực tiếp số lượng phương tiện theo từng phân lớp riêng biệt (ô tô, xe máy) và nhận thức được các biến động dòng xe bất thường. Đây chính là tiền đề thực tiễn để đề tài khai thác mạng lưới camera giao thông sẵn có tại TP.HCM nhằm xây dựng hệ thống dự báo giao thông không -- thời gian với chi phí triển khai tối ưu.
 \end{enumerate}
 
 \section{Động học dòng giao thông đô thị và bài toán dự báo đa bước}
@@ -39,6 +41,13 @@ Tại các đô thị ở Việt Nam, dòng giao thông mang những đặc thù
     \item \textbf{Đặc thù di chuyển theo cụm mật độ cao:} Khi dừng chờ đèn đỏ tại các ngã tư, hàng trăm xe máy dồn ứ lại thành cụm dày đặc phía trước ô tô. Khi đèn chuyển xanh, cụm xe này đồng loạt bứt tốc với gia tốc lớn, tạo ra dao động lưu lượng đột biến trong chu kỳ quan sát 5 phút.
     \item \textbf{Hệ số xe con quy đổi biến thiên:} Trong điều kiện lưu thông bình thường, một xe máy tương đương khoảng 0.2 -- 0.25 xe con quy đổi (PCU). Tuy nhiên trong điều kiện ùn ứ tốc độ thấp, xe máy luồn lách dễ dàng hơn trong khi ô tô chiếm dụng diện tích mặt đường lớn. Do đó, việc tách biệt chính xác số lượng ô tô và xe máy là yêu cầu quan trọng để phản ánh đúng hiện trạng tải trọng đường bộ.
 \end{itemize}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.88\linewidth]{fig/traffic_jam.jpg}
+\caption{Hình ảnh thực tế dòng giao thông hỗn hợp tại đô thị Việt Nam với sự đan xen phức tạp giữa luồng xe máy mật độ cao và ô tô trong giờ cao điểm.}
+\label{fig:traffic_jam_chap1}
+\end{figure}
 
 \subsection{Ý nghĩa của tầm nhìn dự báo 15--30 phút}
 Bài toán dự báo dòng giao thông đa bước đặt mục tiêu ước lượng lưu lượng phương tiện qua $H$ bước thời gian liên tiếp trong tương lai:
@@ -119,7 +128,7 @@ Mặc dù vậy, các mô hình này chủ yếu xử lý độc lập từng n�
     \item \textbf{Học ma trận kề thích ứng:} Tiêu biểu là GraphWaveNet (Wu et al., 2019), bổ sung ma trận kề tự học để nắm bắt tương quan tiềm ẩn giữa các nút xa nhau, kết hợp với tích chập thời gian giãn nở (TCN). Nhược điểm là ma trận kề tự học dạng dày làm tăng chi phí bộ nhớ khi số nút lớn và nhạy cảm với nhiễu.
     \item \textbf{Cơ chế chú ý không gian và thời gian phân tách:} Tiêu biểu là ASTGCN (Guo et al., 2019), tính toán ma trận chú ý động theo cả chiều không gian và thời gian. Tuy nhiên số lượng tham số lớn (1.53 triệu tham số) và chi phí tính toán tăng nhanh theo số lượng nút.
     \item \textbf{Đồ thị động và đồ thị meta:} Tiêu biểu là DSTAGNN (Lan et al., 2022) và MegaCRN (Jiang et al., 2023), xây dựng đồ thị tương quan động dựa trên khoảng cách Wasserstein hoặc phân tách biểu diễn đồ thị meta. Các mô hình này đạt độ chính xác tốt trên dữ liệu chuẩn nhưng dễ bị suy giảm khi đầu vào có nhiễu cảm biến lớn.
-    \item \textbf{Mô hình Transformer không -- thời gian:} Các công trình như STAEformer (Liu et al., 2023) và iTransformer (Liu et al., 2024) ứng dụng cơ chế chú ý tự thân trên toàn chuỗi hoặc đảo ngược theo chiều biến số. Mặc dù có năng lực biểu diễn cao, các mô hình này đòi hỏi bộ nhớ VRAM đỉnh lớn (trên 11 GB với đồ thị 608 nút) và dễ bị suy thoái sai số ở các bước dự báo xa khi dữ liệu đầu vào mang nhiễu thực tế.
+    \item \textbf{Mô hình Transformer không -- thời gian:} Các công trình như STAEformer (Liu et al., 2023) và iTransformer (Liu et al., 2024) ứng dụng cơ chế Self-Attention trên toàn chuỗi hoặc đảo ngược theo chiều biến số. Mặc dù có năng lực biểu diễn cao, các mô hình này đòi hỏi bộ nhớ VRAM đỉnh lớn (trên 11 GB với đồ thị 608 nút) và dễ bị suy thoái sai số ở các bước dự báo xa khi dữ liệu đầu vào mang nhiễu thực tế.
 \end{enumerate}
 
 \section{Hiện tượng lan truyền sai số trong hệ thống học máy nối tầng}

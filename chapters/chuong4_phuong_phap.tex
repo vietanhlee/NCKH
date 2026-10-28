@@ -1,169 +1,199 @@
-\chapter{Phương pháp nghiên cứu đề xuất}
+\chapter{Thiết kế hệ thống Two-Stage Pipeline}
 \label{chap:phuong_phap}
 
-Chương này trình bày chi tiết kiến trúc kỹ thuật và thuật toán của khung làm việc hai giai đoạn kết hợp giữa thị giác máy tính và học sâu trên đồ thị không -- thời gian. Trọng tâm của chương là cấu trúc mô hình hồi quy đếm xe trực tiếp ở Giai đoạn 1 và mô hình mạng nơ-ron đồ thị cải tiến \textbf{TA-STGCN} ở Giai đoạn 2.
+Chương này trình bày chi tiết thiết kế kỹ thuật, đặc tả các giao diện dữ liệu vào/ra và thuật toán vận hành của hệ thống \textbf{Two-Stage Pipeline}. Trên cơ sở các nền tảng toán học và mô hình lý thuyết đã được làm sáng tỏ tại Chương \ref{chap:co_so_ly_thuyet}, thiết kế hệ thống tập trung vào việc hiện thực hóa hai phân hệ xử lý nối tầng: Phân hệ ước lượng lưu lượng phương tiện từ ảnh thị giác (Giai đoạn 1) và Phân hệ dự báo dòng giao thông không -- thời gian bằng mạng đồ thị cải tiến \textbf{TA-STGCN} (Giai đoạn 2).
 
 % ==============================================================================
-\section{Kiến trúc tổng thể khung làm việc hai giai đoạn}
+\section{Kiến trúc tổng thể hệ thống Two-Stage Pipeline}
 \label{sec:tong_the_pipeline}
 
-Mô hình tổng thể được tổ chức thành hai giai đoạn phân tách rõ ràng về mặt chức năng và không gian tính toán:
+Hệ thống được thiết kế theo kiến trúc nối tầng phân tách độc lập (Decoupled Pipeline Architecture), phân rã bài toán lớn thành hai phân hệ chuyên biệt về mặt chức năng và môi trường tính toán:
 \begin{itemize}
-    \item \textbf{Giai đoạn 1 -- Thu nhận thị giác tại camera:} Tiếp nhận ảnh tĩnh độc lập từ camera giám sát tại từng ngã tư, áp dụng mạng nơ-ron tích chập sâu với đầu hồi quy MLP đa tầng để ước lượng trực tiếp số lượng xe ô tô con và số lượng xe máy tức thời.
-    \item \textbf{Giai đoạn 2 -- Dự báo đồ thị không -- thời gian toàn mạng lưới:} Tổng hợp các vector số đếm từ toàn bộ 608 camera thành chuỗi thời gian phân tán trên đồ thị không gian có hướng, áp dụng mô hình TA-STGCN để dự báo lưu lượng đa bước trong khoảng thời gian nhìn trước 30 phút ($H=6$ bước, chu kỳ 5 phút).
+    \item \textbf{Phân hệ 1 -- Cảm nhận thị giác tại camera tuyến đường:} Tiếp nhận các khung hình ảnh tĩnh độc lập thu nhận từ hệ thống camera giám sát trên từng tuyến đường, áp dụng mạng nơ-ron tích chập sâu kết hợp đầu hồi quy MLP đa tầng để ước lượng trực tiếp số lượng xe ô tô con và số lượng xe máy tức thời.
+    \item \textbf{Phân hệ 2 -- Dự báo đồ thị không -- thời gian toàn mạng lưới:} Tổng hợp các vector số đếm từ toàn bộ 608 nút camera trên các tuyến đường thành chuỗi thời gian phân tán trên đồ thị không gian có hướng, áp dụng mô hình mạng đồ thị TA-STGCN để dự báo lưu lượng đa bước trong khoảng thời gian nhìn trước 30 phút ($H=6$ bước, chu kỳ 5 phút).
 \end{itemize}
 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.98\linewidth]{fig/ta_stgcn_architecture.pdf}
-\caption{Kiến trúc tổng thể của mô hình TA-STGCN. Luồng dữ liệu đi qua hai khối ST-Conv dạng sandwich, ở giữa là tầng Multi-Head Temporal Self-Attention điều phối trọng số thời gian.}
+\caption{Kiến trúc tổng thể của mô hình TA-STGCN trong hệ thống Two-Stage Pipeline. Luồng dữ liệu đi qua hai khối ST-Conv dạng sandwich, ở giữa là tầng Multi-Head Temporal Self-Attention điều phối trọng số thời gian.}
 \label{fig:kien_truc_tastgcn_chap4}
 \end{figure}
 
+\textbf{Nguyên tắc thiết kế phân tách độc lập (Decoupling Principle):}
+Hai phân hệ được liên kết lỏng (loosely coupled) thông qua một giao diện dữ liệu tiêu chuẩn là vector số lượng phương tiện theo phân lớp $\hat{\mathbf{c}} = [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$. Cách tiếp cận này mang lại ba ưu thế kỹ thuật cốt lõi:
+\begin{enumerate}
+    \item \textbf{Tối ưu hóa tài nguyên tính toán độc lập:} Phân hệ 1 xử lý cục bộ trên từng khung ảnh tĩnh tại thiết bị biên (Edge) mà không cần chia sẻ thông tin giữa các camera lân cận; trong khi Phân hệ 2 tập trung xử lý chuỗi thời gian và tương quan không gian mạng lưới trên máy chủ trung tâm (Cloud).
+    \item \textbf{Bảo toàn tính mở của hệ thống:} Cho phép nâng cấp hoặc thay thế độc lập kiến trúc mạng thị giác (như chuyển đổi giữa EfficientNet-B5 và MobileNetV3) mà không ảnh hưởng đến cấu trúc mạng nơ-ron đồ thị ở Giai đoạn 2.
+    \item \textbf{Bảo mật và tối ưu truyền dẫn:} Loại bỏ hoàn toàn nhu cầu truyền luồng video dung lượng lớn qua mạng Internet công cộng, chỉ truyền tải dữ liệu số đếm dạng số thực nhỏ gọn.
+\end{enumerate}
+
 % ==============================================================================
-\section{Giai đoạn 1: Hồi quy đếm xe trực tiếp theo phân lớp}
+\section{Thiết kế Phân hệ 1: Ước lượng lưu lượng phương tiện từ ảnh camera}
 \label{sec:giai_doan_1_hoi_quy}
 
-\subsection{Mạng xương sống và trích xuất đặc trưng}
-Mô hình tiếp nhận ảnh tĩnh đầu vào $\mathbf{I} \in \mathbb{R}^{3 \times 224 \times 224}$ đã được chuẩn hóa theo kỳ vọng và độ lệch chuẩn của tập dữ liệu ImageNet. 
+\subsection{Đặc tả giao diện dữ liệu vào và ra}
+Phân hệ 1 được thiết kế với giao diện dữ liệu chuẩn mực nhằm phục vụ việc tích hợp vào các thiết bị camera giám sát giao thông thực tế:
+\begin{itemize}
+    \item \textbf{Đầu vào (Input):} Ảnh tĩnh màu RGB $\mathbf{I} \in \mathbb{R}^{3 \times 224 \times 224}$ thu nhận từ camera giao thông trên các tuyến đường quan sát, được chuẩn hóa theo kỳ vọng và độ lệch chuẩn của tập dữ liệu ImageNet:
+    \begin{equation}
+        \mathbf{I}_{\text{norm}} = \frac{\mathbf{I} - \boldsymbol{\mu}_{\text{ImageNet}}}{\boldsymbol{\sigma}_{\text{ImageNet}}}
+    \end{equation}
+    \item \textbf{Đầu ra (Output):} Vector số lượng phương tiện tức thời $\hat{\mathbf{c}} = [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2_{\ge 0}$, tương ứng với số xe ô tô con và số xe máy xuất hiện trong khung hình quan sát.
+\end{itemize}
 
-Nghiên cứu lựa chọn kiến trúc \textbf{EfficientNet-B5} làm mạng xương sống chính thức (dựa trên kết quả tối ưu hóa đa mục tiêu về độ chính xác và lượng tính toán FLOPs được chứng minh tại Chương 5). EfficientNet-B5 bao gồm 7 cụm khối tích chập MBConv kết hợp cơ chế chú ý kênh Squeeze-and-Excitation (SE). Đầu ra của tầng tích chập cuối cùng là tensor đặc trưng bậc 3:
+\subsection{Cấu hình mạng xương sống và trích xuất đặc trưng}
+Kế thừa các phân tích lý thuyết về cơ chế mở rộng đồng thời (Compound Scaling) tại Mục \ref{sec:kien_truc_efficientnet}, hệ thống lựa chọn mạng xương sống \textbf{EfficientNet-B5} để trích xuất đặc trưng hình ảnh. Mạng gồm 7 cụm khối tích chập MBConv kết hợp cơ chế chú ý kênh Squeeze-and-Excitation (SE).
+
+Tensor đặc trưng đầu ra tại tầng tích chập cuối cùng có kích thước:
 \begin{equation}
     \mathbf{F}_{\text{conv}} \in \mathbb{R}^{2048 \times 7 \times 7}
 \end{equation}
-Áp dụng tầng gộp trung bình toàn cục (Global Average Pooling -- GAP) trên hai chiều không gian:
+Để nén chiều không gian và tạo tính bất biến trước các dịch chuyển nhỏ của phương tiện trên mặt đường, tầng gộp trung bình toàn cục (Global Average Pooling -- GAP) được áp dụng:
 \begin{equation}
-    \mathbf{f} = \text{GAP}(\mathbf{F}_{\text{conv}}) = \frac{1}{7 \times 7} \sum_{i=1}^{7} \sum_{j=1}^{7} \mathbf{F}_{\text{conv}}(:, i, j) \in \mathbb{R}^{2048}
+    \mathbf{f} = \text{GAP}(\mathbf{F}_{\text{conv}}) \in \mathbb{R}^{2048}
 \end{equation}
 
-\subsection{Đầu hồi quy MLP đa tầng thống nhất}
-Để đảm bảo tính so sánh công bằng giữa các kiến trúc backbone khác nhau, tầng phân loại 1.000 lớp ImageNet gốc được thay thế bằng cùng một đầu hồi quy MLP đa tầng thống nhất:
+\subsection{Đặc tả đầu hồi quy MLP đa tầng thống nhất}
+Vector đặc trưng $\mathbf{f}$ được đưa qua đầu hồi quy nén (Bottleneck MLP Head) nhằm ánh xạ trực tiếp sang vector số lượng phương tiện:
 \begin{align}
     \mathbf{h}_1 &= \text{LayerNorm}(\mathbf{W}_1 \mathbf{f} + \mathbf{b}_1), \quad \mathbf{W}_1 \in \mathbb{R}^{128 \times 2048}, \ \mathbf{b}_1 \in \mathbb{R}^{128} \\
     \mathbf{h}_2 &= \text{ReLU}(\mathbf{h}_1) \in \mathbb{R}^{128} \\
     \hat{\mathbf{c}} &= \mathbf{W}_2 \mathbf{h}_2 + \mathbf{b}_2, \quad \mathbf{W}_2 \in \mathbb{R}^{2 \times 128}, \ \mathbf{b}_2 \in \mathbb{R}^{2}
 \end{align}
-trong đó $\hat{\mathbf{c}} = [\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T \in \mathbb{R}^2$ là vector số lượng xe ô tô con và xe máy dự đoán.
 
-\textbf{Đặc điểm thiết kế của đầu hồi quy:}
-\begin{itemize}
-    \item Tầng ẩn 128 chiều đóng vai trò như một phễu nén đặc trưng, buộc mô hình phải chắt lọc các biểu diễn cô đọng nhất liên quan đến số lượng xe thay vì học thuộc lòng cảnh nền.
-    \item Tầng LayerNorm được đặt trước hàm kích hoạt ReLU giúp ổn định phân phối giá trị kích hoạt, ngăn ngừa hiện tượng suy thoái nơ-ron khi huấn luyện trên dữ liệu ảnh có độ biến động ánh sáng lớn.
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Đặc tả luồng xử lý tensor qua các tầng của Phân hệ 1 (Vision Perception).}
+\label{tab:layer_spec_stage1}
+\small
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Tầng xử lý} & \textbf{Tensor đầu vào} & \textbf{Tensor đầu ra} & \textbf{Cấu hình và ghi chú kỹ thuật} \\
+\midrule
+Input Image & -- & $(B, 3, 224, 224)$ & Ảnh RGB camera tuyến đường, chuẩn hóa ImageNet \\
+EfficientNet-B5 & $(B, 3, 224, 224)$ & $(B, 2048, 7, 7)$ & Backbone trích xuất đặc trưng sâu (7 cụm MBConv) \\
+GAP Layer & $(B, 2048, 7, 7)$ & $(B, 2048)$ & Gộp trung bình toàn cục không gian $7 \times 7 \to 1 \times 1$ \\
+LayerNorm & $(B, 2048)$ & $(B, 2048)$ & Chuẩn hóa phân phối kích hoạt, chống bão hòa \\
+Dense Layer 1 & $(B, 2048)$ & $(B, 128)$ & Phễu nén đặc trưng ngữ nghĩa (Linear $2048 \to 128$) \\
+Activation & $(B, 128)$ & $(B, 128)$ & Hàm kích hoạt phi tuyến ReLU \\
+Dense Layer 2 & $(B, 128)$ & $(B, 2)$ & Tầng chiếu ngõ ra số lượng xe (Linear $128 \to 2$) \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{Hàm mất mát Smooth L1 (Huber Loss)}
-Để huấn luyện mô hình Giai đoạn 1 có khả năng chống chịu bền bỉ trước các ảnh bị lóa sáng hoặc che khuất đột ngột, hàm mất mát Huber Loss ($\delta = 1.0$) được áp dụng cho từng phân lớp:
-\begin{align}
-    e_{\text{car}} &= c_{\text{car}} - \hat{c}_{\text{car}} \\
-    e_{\text{bike}} &= c_{\text{bike}} - \hat{c}_{\text{bike}}
-\end{align}
-Hàm mục tiêu tối ưu hóa toàn cục của Giai đoạn 1 là:
+\subsection{Hàm tổn thất huấn luyện}
+Phân hệ 1 được tối ưu hóa bằng hàm tổn thất Huber Loss ($\delta = 1.0$) cho từng phân loại phương tiện (theo nguyên lý bền vững tại Mục \ref{sec:huber_loss}):
 \begin{equation}
-    \mathcal{L}_{\text{Stage 1}} = \frac{1}{2} \left( \mathcal{L}_{\mathrm{Huber}}(e_{\text{car}}) + \mathcal{L}_{\mathrm{Huber}}(e_{\text{bike}}) \right)
+    \mathcal{L}_{\text{Stage 1}} = \frac{1}{2} \left( \mathcal{L}_{\mathrm{Huber}}(c_{\text{car}} - \hat{c}_{\text{car}}) + \mathcal{L}_{\mathrm{Huber}}(c_{\text{bike}} - \hat{c}_{\text{bike}}) \right)
 \end{equation}
-với:
-\begin{equation}
-\mathcal{L}_{\mathrm{Huber}}(e) =
-\begin{cases}
-\frac{1}{2} e^2, & \text{khi } |e| < 1.0, \\
-|e| - 0.5, & \text{khi } |e| \ge 1.0.
-\end{cases}
-\end{equation}
+Thiết kế này bảo đảm mô hình huấn luyện ổn định, hạn chế ảnh hưởng của các mẫu ngoại lai xuất hiện khi mặt đường bị lóa đèn pha hoặc ngập nước.
 
 % ==============================================================================
-\section{Giai đoạn 2: Mô hình dự báo đồ thị không -- thời gian TA-STGCN}
+\section{Thiết kế Phân hệ 2: Dự báo đồ thị không -- thời gian TA-STGCN}
 \label{sec:giai_doan_2_tastgcn}
 
-\subsection{Cấu trúc tensor đặc trưng đa chiều}
-Tại mỗi thời điểm dự báo $t$, đầu vào của mô hình là một chuỗi quan sát lịch sử gồm $T_{\text{in}} = 24$ bước thời gian (tương đương 120 phút quan sát). Tại mỗi bước thời gian $\tau \in \{t - T_{\text{in}} + 1, \dots, t\}$ và tại mỗi nút camera $i \in \{1, \dots, N\}$, một vector đặc trưng $F = 5$ chiều được cấu tạo:
+\subsection{Đặc tả giao diện dữ liệu vào và ra}
+Phân hệ 2 tiếp nhận dữ liệu chuỗi thời gian phân tán từ toàn bộ các tuyến đường và thực hiện suy luận dự báo đồng thời trên toàn mạng lưới:
+\begin{itemize}
+    \item \textbf{Đầu vào (Input):} 
+    \begin{enumerate}
+        \item Tensor lịch sử quan sát $\mathbf{X} \in \mathbb{R}^{B \times T_{\text{in}} \times N \times F}$, trong đó $B$ là kích thước mini-batch, $N = 608$ nút camera trên các tuyến đường, $T_{\text{in}} = 24$ bước quan sát lịch sử (chu kỳ 5 phút/bước, tương đương 120 phút), và $F = 5$ đặc trưng gồm: lưu lượng xe ô tô con đã chuẩn hóa z-score, lưu lượng xe máy đã chuẩn hóa z-score, đặc trưng $\sin$ và $\cos$ của thời điểm trong ngày (Time-of-Day), cùng chỉ số giờ chuẩn hóa.
+        \item Ma trận kề trọng số $\mathbf{W} \in \mathbb{R}^{N \times N}$ phản ánh cấu trúc liên thông và khoảng cách vật lý của mạng lưới đường bộ OpenStreetMap.
+    \end{enumerate}
+    \item \textbf{Đầu ra (Output):} Tensor lưu lượng dự báo đa bước tương lai:
+    \begin{equation}
+        \hat{\mathbf{Y}} \in \mathbb{R}^{B \times H \times N \times 2}
+    \end{equation}
+    cho $H = 6$ bước thời gian kế tiếp ($t+5, t+10, \dots, t+30$ phút) trên toàn bộ $N = 608$ nút cho cả 2 loại phương tiện (ô tô con và xe máy).
+\end{itemize}
+
+\subsection{Cấu trúc tích hợp mô-đun trong kiến trúc TA-STGCN}
+Mô hình TA-STGCN được cấu thành từ hai khối tích chập không -- thời gian ST-Conv dạng sandwich kết hợp với mô-đun Self-Attention theo thời gian đa đầu (Multi-Head Temporal Self-Attention) được bố trí ở giữa:
+
 \begin{enumerate}
-    \item Số lượng xe ô tô con đã chuẩn hóa z-score theo từng nút: $\tilde{c}_{\text{car}}^{(i, \tau)}$.
-    \item Số lượng xe máy đã chuẩn hóa z-score theo từng nút: $\tilde{c}_{\text{bike}}^{(i, \tau)}$.
-    \item Đặc trưng sin của chu kỳ ngày đêm: $\sin\left(\frac{2\pi \cdot \text{tod}(\tau)}{1440}\right)$.
-    \item Đặc trưng cos của chu kỳ ngày đêm: $\cos\left(\frac{2\pi \cdot \text{tod}(\tau)}{1440}\right)$.
-    \item Chỉ số giờ chuẩn hóa trong ngày: $\frac{\text{hour}(\tau)}{24}$.
-\end{enumerate}
-với $\text{tod}(\tau)$ là số phút tính từ đầu ngày (từ 0 đến 1439). 
+    \item \textbf{Khối ST-Conv thứ nhất (Trích xuất đặc trưng cục bộ):}
+    \begin{itemize}
+        \item Tầng tích chập thời gian 1D có cổng GLU thứ nhất (kernel thời gian $K_t = 3$, đệm nhân quả $\text{pad}=1$ bảo toàn độ dài $T_{\text{in}}=24$, số kênh ẩn $C = 80$) trích xuất tương quan thời gian ngắn hạn.
+        \item Tầng tích chập đồ thị phổ ChebNet (đa thức Chebyshev bậc $K = 3$ trên ma trận Laplacian $\tilde{\mathbf{L}}$ của đồ thị OpenStreetMap) tổng hợp đặc trưng không gian từ các nút lân cận trong phạm vi 2-hop.
+        \item Tầng tích chập thời gian GLU thứ hai tiếp tục tinh chế đặc trưng, kết hợp với nhánh tắt Residual, Dropout ($p=0.25$) và chuẩn hóa LayerNorm trên từng nút.
+    \end{itemize}
 
-Tensor đầu vào cho một mini-batch gồm $B$ mẫu có kích thước:
-\begin{equation}
-    \mathbf{X} \in \mathbb{R}^{B \times T_{\text{in}} \times N \times 5}
-\end{equation}
-Mục tiêu là dự báo ma trận lưu lượng trong $H = 6$ bước thời gian kế tiếp (30 phút tới):
-\begin{equation}
-    \hat{\mathbf{Y}} \in \mathbb{R}^{B \times H \times N \times 2}
-\end{equation}
+    \item \textbf{Mô-đun Multi-Head Temporal Self-Attention (Lọc nhiễu thích ứng):}
+    Tensor sau khối ST-Conv 1 có kích thước $\mathbf{H}^{(1)} \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times C}$ (với $T_{\text{in}}=24, C=80$). Mô-đun Attention gồm $h = 4$ đầu độc lập (kích thước mỗi đầu $d_k = C/h = 20$), tính toán ma trận tự chú ý dọc theo trục thời gian cho từng nút mạng:
+    \begin{equation}
+        \text{head}_i = \text{Softmax}\left(\frac{\mathbf{Q}_i \mathbf{K}_i^T}{\sqrt{d_k}}\right) \mathbf{V}_i \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k}
+    \end{equation}
+    \textbf{Vai trò thiết kế cốt lõi:} Mô-đun Attention đóng vai trò như một bộ lọc thông thấp thích ứng. Khi một camera tại tuyến đường gặp sự cố thị giác (như lóa đèn hoặc che khuất đột ngột dẫn đến giá trị đếm bị nhảy vọt cục bộ), cơ chế chú ý sẽ phân bổ trọng số thấp cho bước thời gian dị thường này và tái cân bằng dựa trên xu hướng ổn định của chuỗi thời gian, ngăn chặn hiện tượng lan truyền sai số sang các nút lân cận.
 
-\subsection{Chi tiết thiết kế khối ST-Conv}
-Khối ST-Conv được thiết kế theo cấu trúc sandwich gồm ba tầng tuần tự:
-\begin{enumerate}
-    \item \textbf{Tầng tích chập thời gian GLU thứ nhất:} Tiếp nhận tensor đặc trưng, áp dụng tích chập 1D dọc theo trục thời gian với kernel $K_t = 3$ để mở rộng số kênh ẩn lên $C = 80$:
+    \item \textbf{Khối ST-Conv thứ hai (Tinh chỉnh không gian thứ cấp):}
+    Tiếp nhận tensor thời gian đã được làm mượt và lọc nhiễu, tiếp tục khuếch tán không gian qua đồ thị nhằm bảo đảm tính liên tục và nhất quán của dòng giao thông trước khi đưa vào tầng xuất dự báo.
+
+    \item \textbf{Tầng chiếu ngõ ra (Output Block):}
+    Áp dụng tầng tích chập 1D theo chiều thời gian để thu gọn cửa sổ lịch sử về chiều dài 1, tiếp tục chiếu qua tầng biến đổi kênh để xuất ra đúng $H \times 2 = 12$ giá trị dự báo cho mỗi nút:
     \begin{equation}
-        \mathbf{H}_1 = (\mathbf{X} \star \boldsymbol{\Theta}_{1,1} + \mathbf{b}_{1,1}) \odot \sigma(\mathbf{X} \star \boldsymbol{\Theta}_{1,2} + \mathbf{b}_{1,2}) \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}
-    \end{equation}
-    \item \textbf{Tầng tích chập không gian ChebNet:} Áp dụng đa thức Chebyshev bậc $K = 3$ trên ma trận Laplacian $\tilde{\mathbf{L}}$ của đồ thị OpenStreetMap:
-    \begin{equation}
-        \mathbf{H}_2 = \text{ReLU}\left( \sum_{k=0}^{K-1} T_k(\tilde{\mathbf{L}}) \mathbf{H}_1 \boldsymbol{\Theta}_k^{\text{spatial}} \right) \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}
-    \end{equation}
-    với $\boldsymbol{\Theta}_k^{\text{spatial}} \in \mathbb{R}^{C \times C}$ là ma trận trọng số biến đổi kênh học được.
-    \item \textbf{Tầng tích chập thời gian GLU thứ hai:} Tiếp tục tinh lọc đặc trưng thời gian sau khi đã được tổng hợp không gian:
-    \begin{equation}
-        \mathbf{H}_3 = (\mathbf{H}_2 \star \boldsymbol{\Theta}_{2,1} + \mathbf{b}_{2,1}) \odot \sigma(\mathbf{H}_2 \star \boldsymbol{\Theta}_{2,2} + \mathbf{b}_{2,2}) \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}
-    \end{equation}
-    Đầu ra của khối được kết hợp với kết nối tắt Residual, Dropout ($p = 0.25$) và chuẩn hóa LayerNorm:
-    \begin{equation}
-        \mathbf{H}_{\text{ST-Conv}} = \text{LayerNorm}\left( \mathbf{H}_{\text{residual}} + \text{Dropout}(\mathbf{H}_3, p=0.25) \right)
+        \hat{\mathbf{Y}} = \text{Reshape}\left( \text{Conv1D}\left(\mathbf{H}^{(2)}\right) \right) \in \mathbb{R}^{B \times H \times N \times 2}
     \end{equation}
 \end{enumerate}
 
-\subsection{Mô-đun chú ý thời gian đa đầu đặt ở giữa}
-Điểm cải tiến kiến trúc cốt lõi của \textbf{TA-STGCN} là tích hợp mô-đun chú ý thời gian đa đầu (Multi-Head Temporal Self-Attention) vào vị trí giữa hai khối ST-Conv.
-
-\subsubsection{Cơ chế định hình lại tensor và tính toán attention}
-Gọi đầu ra sau khối ST-Conv thứ nhất là $\mathbf{H}^{(1)} \in \mathbb{R}^{B \times C \times N \times T_{\text{in}}}$ với $C = 80$ kênh và $T_{\text{in}} = 24$ bước. Để tránh chi phí tương tác bậc hai theo số nút, tensor được hoán vị và làm phẳng:
-\begin{equation}
-    \mathbf{Z} = \text{Reshape}(\text{Permute}(\mathbf{H}^{(1)}, [0, 2, 3, 1])) \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times C}
-\end{equation}
-Mỗi nút trong batch được xem như một chuỗi độc lập có độ dài $T_{\text{in}} = 24$. Áp dụng cơ chế Multi-Head Attention với $h = 4$ đầu (chiều mỗi đầu $d_k = C/h = 20$):
-\begin{align}
-    \mathbf{Q}_i &= \mathbf{Z} \mathbf{W}_i^Q \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \\
-    \mathbf{K}_i &= \mathbf{Z} \mathbf{W}_i^K \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \\
-    \mathbf{V}_i &= \mathbf{Z} \mathbf{W}_i^V \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \quad (\forall i = 1, \dots, h) \\
-    \text{head}_i &= \text{Softmax}\left(\frac{\mathbf{Q}_i \mathbf{K}_i^T}{\sqrt{d_k}}\right) \mathbf{V}_i \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times d_k} \\
-    \text{MultiHead}(\mathbf{Z}) &= \text{concat}\left( \text{head}_1, \text{head}_2, \dots, \text{head}_h \right) \mathbf{W}^O \in \mathbb{R}^{(B \cdot N) \times T_{\text{in}} \times C}
-\end{align}
-
-\subsubsection{Khối mạng truyền thẳng và chuẩn hóa residual}
-Đầu ra sau Attention được đưa qua mạng truyền thẳng hai tầng tuyến tính với kích hoạt GELU và hệ số mở rộng kênh gấp 4 lần ($4C = 320$ chiều):
-\begin{align}
-    \mathbf{Z}_1 &= \text{LayerNorm}(\mathbf{Z} + \text{Dropout}(\text{MultiHead}(\mathbf{Z}), p=0.1)) \\
-    \text{FFN}(\mathbf{Z}_1) &= \text{GELU}(\mathbf{Z}_1 \mathbf{W}_{\text{ffn}, 1} + \mathbf{b}_{\text{ffn}, 1}) \mathbf{W}_{\text{ffn}, 2} + \mathbf{b}_{\text{ffn}, 2} \\
-    \mathbf{Z}_{\text{out}} &= \text{LayerNorm}(\mathbf{Z}_1 + \text{Dropout}(\text{FFN}(\mathbf{Z}_1), p=0.1))
-\end{align}
-với $\mathbf{W}_{\text{ffn}, 1} \in \mathbb{R}^{C \times 4C}$ và $\mathbf{W}_{\text{ffn}, 2} \in \mathbb{R}^{4C \times C}$.
-
-Tensor $\mathbf{Z}_{\text{out}}$ sau đó được khôi phục kích thước $\mathbb{R}^{B \times C \times N \times T_{\text{in}}}$ và truyền vào khối ST-Conv thứ hai để tiếp tục xử lý đặc trưng trước khi xuất ra tầng dự báo.
-
-\subsection{Tầng chiếu thời gian ngõ ra và hàm mục tiêu huấn luyện}
-Sau khi đi qua khối ST-Conv thứ hai, tensor có kích thước $\mathbf{H}^{(2)} \in \mathbb{R}^{(B \cdot N) \times C \times T_{\text{in}}}$. Mô hình áp dụng một tầng tích chập 1D theo chiều thời gian với kích thước kernel bằng đúng $T_{\text{in}} = 24$ để thu gọn chiều thời gian về 1:
-\begin{equation}
-    \mathbf{Y}_{\text{proj}} = \text{Conv1D}(\mathbf{H}^{(2)}, \text{kernel\_size}=T_{\text{in}}) \in \mathbb{R}^{(B \cdot N) \times (H \cdot 2) \times 1}
-\end{equation}
-Tensor được định hình lại thành $\hat{\mathbf{Y}} \in \mathbb{R}^{B \times H \times N \times 2}$ tương ứng với dự báo 6 bước tương lai cho 2 loại xe trên toàn bộ 608 nút.
-
-Mô hình được tối ưu hóa bằng hàm mất mát Huber Loss trên toàn bộ các nút và các bước dự báo:
+\subsection{Hàm mục tiêu huấn luyện toàn mạng}
+Mô hình Phân hệ 2 được tối ưu hóa đồng thời trên tất cả các bước dự báo nhìn trước và toàn bộ các nút camera:
 \begin{equation}
     \mathcal{L}_{\text{Stage 2}} = \frac{1}{B \cdot H \cdot N \cdot 2} \sum_{b=1}^{B} \sum_{h=1}^{H} \sum_{i=1}^{N} \sum_{m=1}^{2} \mathcal{L}_{\mathrm{Huber}}\left( Y_{b,h,i,m} - \hat{Y}_{b,h,i,m} \right)
 \end{equation}
-với ngưỡng chuyển tiếp chuẩn $\delta = 1.0$.
+với ngưỡng chuyển đổi $\delta = 1.0$.
 
 % ==============================================================================
-\section{Thuật toán huấn luyện và suy luận toàn diện}
+\section{Đặc tả kiến trúc chi tiết từng tầng của TA-STGCN}
+\label{sec:dac_ta_kien_truc}
+
+Bảng \ref{tab:layer_spec_tastgcn_chap4} mô tả chi tiết kích thước tensor đầu vào, đầu ra, cấu hình bộ lọc và số lượng tham số học được của từng tầng trong mô hình TA-STGCN với kích thước batch $B$, số lượng nút mạng $N=608$, cửa sổ lịch sử $T_{\text{in}}=24$ và tầm nhìn dự báo $H=6$.
+
+\begin{table}[htbp]
+\centering
+\caption{Đặc tả chi tiết cấu trúc từng tầng và số lượng tham số của mô hình đề xuất TA-STGCN.}
+\label{tab:layer_spec_tastgcn_chap4}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllcc}
+\toprule
+\textbf{Khối chức năng} & \textbf{Tầng nơ-ron thành phần} & \textbf{Kích thước Tensor đầu ra} & \textbf{Cấu hình bộ lọc / Chiếu kênh} & \textbf{Số tham số} \\
+\midrule
+Đầu vào & Tensor dữ liệu lịch sử tích hợp & $(B, 5, 608, 24)$ & 2 kênh đếm xe + 3 kênh thời gian ngoại sinh & 0 \\
+\midrule
+\multirow{5}{*}{\textbf{ST-Conv 1}} & 1D Causal Conv GLU 1 & $(B, 80, 608, 24)$ & $K_t = 3, \text{pad}=1, C: 5 \to 80 \times 2$ & 2.560 \\
+ & Spectral ChebNet GCN 1 & $(B, 80, 608, 24)$ & $K = 3, C: 80 \to 80$ & 19.440 \\
+ & 1D Causal Conv GLU 2 & $(B, 80, 608, 24)$ & $K_t = 3, \text{pad}=1, C: 80 \to 80 \times 2$ & 38.560 \\
+ & Nhánh tắt Residual 1 & $(B, 80, 608, 24)$ & Conv2D $1 \times 1, C: 5 \to 80$ & 480 \\
+ & LayerNorm \& Dropout & $(B, 80, 608, 24)$ & Chuẩn hóa nút $\text{LN}([608, 80]), p=0.25$ & 97.280 \\
+\midrule
+\multirow{5}{*}{\textbf{Temporal Attn}} & Multi-Head Self-Attention & $(B \cdot 608, 24, 80)$ & $h = 4 \text{ heads } (d_k = 20), W^Q, W^K, W^V, W^O$ & 25.920 \\
+ & Residual \& LayerNorm 1 & $(B \cdot 608, 24, 80)$ & Phép cộng tắt $(+) + \text{LN}(80)$ & 160 \\
+ & Feed-Forward Network (FFN) & $(B \cdot 608, 24, 80)$ & $\text{Linear}(80 \to 320) \to \text{GELU} \to \text{Linear}(320 \to 80)$ & 51.600 \\
+ & Residual \& LayerNorm 2 & $(B \cdot 608, 24, 80)$ & Phép cộng tắt $(+) + \text{LN}(80)$ & 160 \\
+\midrule
+\multirow{4}{*}{\textbf{ST-Conv 2}} & 1D Causal Conv GLU 3 & $(B, 80, 608, 24)$ & $K_t = 3, \text{pad}=1, C: 80 \to 80 \times 2$ & 38.560 \\
+ & Spectral ChebNet GCN 2 & $(B, 80, 608, 24)$ & $K = 3, C: 80 \to 80$ & 19.440 \\
+ & 1D Causal Conv GLU 4 & $(B, 80, 608, 24)$ & $K_t = 3, \text{pad}=1, C: 80 \to 80 \times 2$ & 38.560 \\
+ & LayerNorm \& Dropout & $(B, 80, 608, 24)$ & Chuẩn hóa nút $\text{LN}([608, 80]), p=0.25$ & 97.280 \\
+\midrule
+\multirow{2}{*}{\textbf{Output Block}} & Temporal Conv 1D Projection & $(B \cdot 608, 12, 1)$ & $K_t = 24, C: 80 \to 12 \ (H \times 2)$ & 23.052 \\
+ & Reshape \& Ánh xạ đa bước & $(B, 6, 608, 2)$ & Ánh xạ $H=6$ bước, 2 phân loại phương tiện & 0 \\
+\midrule
+\multicolumn{4}{l}{\textbf{Tổng số tham số học được (Trainable Parameters):}} & \textbf{453.052} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\clearpage
+% ==============================================================================
+\section{Thuật toán huấn luyện và quy trình suy luận toàn diện}
 \label{sec:thuat_toan_huan_luyen}
 
-Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy trình huấn luyện hai giai đoạn từ ảnh thô camera đến mô hình dự báo đồ thị hoàn chỉnh.
+Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy trình huấn luyện Two-Stage Pipeline từ ảnh thô camera đến mô hình dự báo đồ thị hoàn chỉnh.
 
-\begin{algorithm_box}{Quy trình huấn luyện hai giai đoạn}{
+\begin{algorithm_box}{Quy trình huấn luyện Two-Stage Pipeline}{
 \textbf{Đầu vào:} Tập ảnh camera $\mathcal{D}_{\text{vision}} = \{(I_k, \mathbf{c}_k)\}_{k=1}^{5012}$, Đồ thị đường phố OpenStreetMap $\mathcal{G}_{\text{OSM}}$, Ma trận trọng số $W$. \\
 \textbf{Đầu ra:} Mô hình thị giác $f_{\theta^*}$, Mô hình đồ thị dự báo $\mathcal{M}_{\Phi^*}$. \\
 \textbf{Pha 1: Huấn luyện mô hình thị giác (Giai đoạn 1):}
@@ -173,10 +203,11 @@ Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy tr
     \item \textbf{Lặp} qua các epoch từ 1 đến 120:
     \begin{itemize}
         \item Lấy batch ảnh $B=32$, áp dụng tăng cường dữ liệu bảo toàn nhãn.
-        \item Tính dự đoán $\hat{\mathbf{c}} = f_\theta(I)$ và tính hàm mất mát Huber Loss $\mathcal{L}_{\text{Stage 1}}$.
-        \item Cập nhật trọng số bằng thuật toán tối ưu AdamW kết hợp Cosine Annealing.
+        \item Lan truyền xuôi: $\hat{\mathbf{c}} = \text{MLP}(\text{GAP}(\text{Backbone}(I)))$.
+        \item Tính hàm mất mát $\mathcal{L}_{\text{Stage 1}}$ bằng Smooth L1 (Huber Loss).
+        \item Cập nhật trọng số bằng thuật toán AdamW và suy giảm Cosine.
     \end{itemize}
-    \item Lưu trọng số tối ưu $\theta^*$ theo sai số MAE nhỏ nhất trên tập Validation.
+    \item Dừng sớm sau 20 epoch nếu Validation Loss không giảm. Lưu mô hình tối ưu $\theta^*$.
 \end{enumerate}
 \textbf{Pha 2: Sinh dữ liệu chuỗi thời gian và tiền xử lý:}
 \begin{enumerate}
@@ -202,66 +233,14 @@ Thuật toán \ref{algo:training_pipeline} mô tả tóm tắt toàn bộ quy tr
 \label{algo:training_pipeline}
 \end{algorithm_box}
 
-% ==============================================================================
-\section{Đặc tả kiến trúc chi tiết từng tầng của TA-STGCN}
-\label{sec:dac_ta_kien_truc}
-
-Bảng \ref{tab:layer_spec_tastgcn_chap4} mô tả chi tiết kích thước tensor đầu vào, đầu ra, kích thước bộ lọc và số lượng tham số học được của từng tầng trong mô hình TA-STGCN với kích thước batch $B$, số lượng nút $N=608$, cửa sổ lịch sử $T_{\text{in}}=24$ và tầm nhìn dự báo $H=6$.
-
-\begin{table}[htbp]
-\centering
-\caption{Đặc tả chi tiết cấu trúc từng tầng của mô hình đề xuất TA-STGCN.}
-\label{tab:layer_spec_tastgcn_chap4}
-\small
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lllcc}
-\toprule
-\textbf{Khối chức năng} & \textbf{Tầng nơ-ron thành phần} & \textbf{Tensor đầu ra} & \textbf{Cấu hình bộ lọc} & \textbf{Số tham số} \\
-\midrule
-Đầu vào & Tensor dữ liệu lịch sử & $(B, 2, 24, 608)$ & -- & 0 \\
-\midrule
-\multirow{4}{*}{\textbf{ST-Conv 1}} & 1D Causal Conv GLU 1 & $(B, 64, 22, 608)$ & $K_t = 3, C: 2 \to 64 \times 2$ & 832 \\
- & Spectral ChebNet GCN 1 & $(B, 64, 22, 608)$ & $K = 3, C: 64 \to 64$ & 12.352 \\
- & 1D Causal Conv GLU 2 & $(B, 64, 20, 608)$ & $K_t = 3, C: 64 \to 64 \times 2$ & 24.704 \\
- & LayerNorm \& Residual 1 & $(B, 64, 20, 608)$ & Affine $\gamma, \beta \in \mathbb{R}^{64}$ & 128 \\
-\midrule
-\multirow{4}{*}{\textbf{Temporal Attn}} & Linear Projections ($Q, K, V$) & $(B \cdot 608, 20, 64)$ & $W^Q, W^K, W^V \in \mathbb{R}^{64 \times 64}$ & 12.480 \\
- & Multi-Head Attention ($h=4$) & $(B \cdot 608, 20, 64)$ & $d_k = 16, \text{Scale } 1/\sqrt{16}$ & 0 \\
- & Output Projection $W^O$ & $(B \cdot 608, 20, 64)$ & $W^O \in \mathbb{R}^{64 \times 64}$ & 4.160 \\
- & LayerNorm \& Residual 2 & $(B, 64, 20, 608)$ & Affine $\gamma, \beta \in \mathbb{R}^{64}$ & 128 \\
-\midrule
-\multirow{4}{*}{\textbf{ST-Conv 2}} & 1D Causal Conv GLU 3 & $(B, 64, 18, 608)$ & $K_t = 3, C: 64 \to 64 \times 2$ & 24.704 \\
- & Spectral ChebNet GCN 2 & $(B, 64, 18, 608)$ & $K = 3, C: 64 \to 64$ & 12.352 \\
- & 1D Causal Conv GLU 4 & $(B, 64, 16, 608)$ & $K_t = 3, C: 64 \to 64 \times 2$ & 24.704 \\
- & LayerNorm \& Residual 3 & $(B, 64, 16, 608)$ & Affine $\gamma, \beta \in \mathbb{R}^{64}$ & 128 \\
-\midrule
-\multirow{3}{*}{\textbf{Output Block}} & Temporal Conv Projection & $(B, 64, 1, 608)$ & $K_t = 16, C: 64 \to 64$ & 65.600 \\
- & Channel Conv Projection & $(B, 12, 1, 608)$ & $K_t = 1, C: 64 \to 12$ & 780 \\
- & Reshape \& Giải chuẩn hóa & $(B, 6, 608, 2)$ & Ánh xạ $H=6$ bước, 2 lớp & 0 \\
-\midrule
-\multicolumn{4}{l}{\textbf{Tổng số tham số học được:}} & \textbf{453.250} (453K) \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}
-
-\textbf{Lý do thiết kế vị trí đặt của Temporal Attention ở giữa:}
-Việc đặt tầng Multi-Head Temporal Self-Attention ở giữa hai khối ST-Conv mang lại lợi thế cấu trúc rõ nét:
-\begin{enumerate}
-    \item \textbf{Khối ST-Conv 1 đóng vai trò trích xuất đặc trưng cục bộ:} Tầng ChebNet thứ nhất đã kết hợp thông tin cấu trúc 2-hop từ các nút lân cận, giúp các vector đặc trưng đưa vào tầng Attention chứa đựng ngữ cảnh cục bộ của nút giao thay vì chỉ là tín hiệu rời rạc.
-    \item \textbf{Tầng Attention thực hiện tái cân bằng trọng số thời gian toàn cục:} Tầng Attention tính toán ma trận tương quan giữa tất cả các bước thời gian còn lại ($T=20$), giúp triệt tiêu các dao động nhiễu đột ngột từ cảm biến trước khi bước vào khối ST-Conv thứ hai.
-    \item \textbf{Khối ST-Conv 2 thực hiện tinh chỉnh không gian thứ cấp:} Tín hiệu thời gian đã được làm mượt tiếp tục được khuếch tán không gian qua đồ thị OSM, bảo đảm tính liên tục không -- thời gian trước khi chiếu sang các bước dự báo tương lai.
-\end{enumerate}
-
-% ==============================================================================
-\section{Quy trình vận hành suy luận thời gian thực}
+\subsection{Quy trình vận hành suy luận thời gian thực}
 \label{sec:quy_trinh_suy_luan}
 
-Để ứng dụng mô hình vào trung tâm điều hành giao thông đô thị thực tế, quy trình suy luận được tổ chức thành 5 bước liên hoàn:
+Để ứng dụng hệ thống vào thực tế giám sát và điều hành giao thông đô thị, quy trình suy luận được tổ chức thành 5 bước liên hoàn:
 \begin{enumerate}
-    \item \textbf{Bước 1 -- Thu nhận và xử lý ảnh tại biên:} Cứ sau mỗi chu kỳ $\Delta t = 5$ phút, camera tại 608 ngã tư chụp ảnh hiện trường. Mạng EfficientNet-B5 lượng tử hóa INT8 thực thi suy luận trong khoảng $35$ ms, trích xuất vector số lượng xe tức thời $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$.
-    \item \textbf{Bước 2 -- Cập nhật bộ đệm chuỗi thời gian:} Máy chủ trung tâm nhận 608 vector số đếm (tổng cộng $4.86\text{ KB}$), đẩy vào hàng đệm trượt FIFO có độ dài cố định $T_{\text{in}} = 24$ bước (120 phút gần nhất). Điểm dữ liệu cũ nhất tại bước $t-24$ bị loại bỏ.
+    \item \textbf{Bước 1 -- Thu nhận và xử lý ảnh tại camera tuyến đường:} Cứ sau mỗi chu kỳ $\Delta t = 5$ phút, camera trên 608 tuyến đường chụp ảnh hiện trường. Mạng EfficientNet-B5 lượng tử hóa INT8 thực thi suy luận trong khoảng $35$ ms, trích xuất vector số lượng xe tức thời $[\hat{c}_{\text{car}}, \hat{c}_{\text{bike}}]^T$.
+    \item \textbf{Bước 2 -- Cập nhật bộ đệm chuỗi thời gian:} Máy chủ trung tâm tiếp nhận 608 vector số đếm (kích thước dữ liệu rất nhỏ gọn), đẩy vào hàng đệm trượt FIFO có độ dài cố định $T_{\text{in}} = 24$ bước (120 phút gần nhất). Điểm dữ liệu cũ nhất tại bước $t-24$ được giải phóng.
     \item \textbf{Bước 3 -- Chuẩn hóa z-score cục bộ:} Dữ liệu trong hàng đệm được chuẩn hóa bằng tham số $\mu_i, \sigma_i$ cố định tương ứng của từng nút: $x_{i, t} = (y_{i, t} - \mu_i) / \sigma_i$.
-    \item \textbf{Bước 4 -- Dự báo toàn mạng qua TA-STGCN:} Tensor kích thước $(1, 2, 24, 608)$ được đưa qua mô hình TA-STGCN trên GPU máy chủ trung tâm. Thời gian thực thi suy luận toàn mạng chỉ mất đúng \textbf{$4.76$ ms}.
-    \item \textbf{Bước 5 -- Giải chuẩn hóa và phát tín hiệu điều phối:} Đầu ra được giải chuẩn hóa về số lượng xe thực tế: $\hat{y}_{i, t+h} = \hat{z}_{i, t+h} \cdot \sigma_i + \mu_i$. Các vector dự báo 6 bước tương lai ($t+5$ đến $t+30$ phút) được truyền qua API đến bộ điều khiển tín hiệu đèn giao thông và tích hợp lên hệ thống thông tin giám sát đô thị.
+    \item \textbf{Bước 4 -- Dự báo toàn mạng qua TA-STGCN:} Tensor dữ liệu được đưa qua mô hình TA-STGCN trên GPU máy chủ trung tâm. Thời gian thực thi suy luận toàn mạng chỉ mất đúng \textbf{$4.76$ ms}.
+    \item \textbf{Bước 5 -- Giải chuẩn hóa và phát tín hiệu điều phối:} Đầu ra được giải chuẩn hóa về số lượng xe thực tế: $\hat{y}_{i, t+h} = \hat{z}_{i, t+h} \cdot \sigma_i + \mu_i$. Các vector dự báo 6 bước tương lai ($t+5$ đến $t+30$ phút) được cung cấp qua API phục vụ công tác điều phối đèn tín hiệu giao thông và tích hợp lên hệ thống thông tin giám sát đô thị.
 \end{enumerate}

@@ -20,13 +20,13 @@ Qua quá trình nghiên cứu lý thuyết, mô hình hóa toán học và thự
     Nghiên cứu đã khẳng định tính hiệu quả của phương pháp hồi quy đếm xe trực tiếp dựa trên mạng xương sống EfficientNet-B5 kết hợp đầu hồi quy MLP thống nhất và hàm mất mát Huber Loss. Cách tiếp cận này hạn chế ảnh hưởng của việc che khuất tương hỗ trong dòng xe máy và loại bỏ hoàn toàn chi phí tính toán của thuật toán NMS truyền thống, đạt sai số $\text{MAE} = 3.6363$ và tốc độ suy luận $35.2$ ms/batch, tiết kiệm $43.0\%$ lượng phép tính FLOPs so với ResNet-50. Bản đồ nhiệt Grad-CAM++ xác nhận mô hình tập trung chính xác vào thân xe thay vì cảnh nền.
 
     \item \textbf{Đề xuất kiến trúc đồ thị cải tiến TA-STGCN (Giai đoạn 2):} 
-    Đề tài đã phát triển mô hình tích hợp cơ chế chú ý tự thân theo thời gian đa đầu (Multi-Head Temporal Self-Attention) xen kẽ giữa hai khối ST-Conv trên đồ thị OpenStreetMap. Mô hình đạt sai số dự báo $\text{MAE} = 3.2401 \pm 0.0108$, duy trì tính ổn định qua 5 seed ngẫu nhiên ($\text{CV} = 0.33\%$) và kiểm soát tốt mức tăng sai số ở tầm nhìn dự báo xa 30 phút ($t+6$).
+    Đề tài đã phát triển mô hình tích hợp cơ chế Self-Attention theo thời gian đa đầu (Multi-Head Temporal Self-Attention) xen kẽ giữa hai khối ST-Conv trên đồ thị OpenStreetMap. Mô hình đạt sai số dự báo $\text{MAE} = 3.2401 \pm 0.0108$, duy trì tính ổn định qua 5 seed ngẫu nhiên ($\text{CV} = 0.33\%$) và kiểm soát tốt mức tăng sai số ở tầm nhìn dự báo xa 30 phút ($t+6$).
 
     \item \textbf{Đóng góp về lý thuyết lan truyền sai số và độ bền vững trước nhiễu:} 
-    Đây là đóng góp khoa học trọng tâm của công trình. Đề tài đã chứng minh bằng giải tích toán học và kiểm chứng thực nghiệm rằng cơ chế chú ý theo trục thời gian hoạt động như một bộ lọc thông thấp thích ứng dữ liệu, làm giảm phương sai nhiễu tỷ lệ nghịch với độ rộng cửa sổ chú ý hiệu dụng ($\text{Var} = \sigma_\eta^2 / T_{\text{eff}}$). Dưới tác động của sai số nhận dạng mô phỏng thực tế (phân phối Gamma dị biệt có độ lệch âm do che khuất xe máy), TA-STGCN duy trì tốc độ suy thoái sai số thấp nhất, vượt trội rõ rệt các mô hình không có cơ chế chú ý thời gian (chỉ số Cohen's $d$ lên tới $+5.84$ so với Graph WaveNet ở mức nhiễu cực hạn) và đạt độ bền bỉ tương đương các mô hình Transformer lớn trong khi tiết kiệm $25.2\%$ bộ nhớ GPU VRAM và $70.4\%$ số lượng tham số.
+    Đây là đóng góp khoa học trọng tâm của công trình. Đề tài đã chứng minh bằng giải tích toán học và kiểm chứng thực nghiệm rằng cơ chế chú ý theo trục thời gian hoạt động như một bộ lọc thông thấp thích ứng dữ liệu, làm giảm phương sai nhiễu tỷ lệ nghịch với độ rộng cửa sổ chú ý hiệu dụng ($\text{Var} = \sigma_\eta^2 / T_{\text{eff}}$). Dưới tác động của sai số nhận dạng mô phỏng thực tế (phân phối Gamma dị biệt có độ lệch âm do che khuất xe máy), TA-STGCN duy trì tốc độ suy thoái sai số thấp nhất, vượt trội rõ rệt các mô hình không có cơ chế chú ý thời gian và duy trì độ ổn định cao với số lượng tham số gọn nhẹ (453K tham số).
 
     \item \textbf{Tính khả thi của kiến trúc triển khai Edge--Cloud:} 
-    Đề tài đã xây dựng phương án triển khai phân tán giúp tiết kiệm băng thông truyền thông tới \textbf{$62.500$ lần} (từ 437 GB/ngày xuống còn 7 MB/ngày) và bảo vệ quyền riêng tư hình ảnh theo nguyên tắc Privacy-by-Design, đồng thời ước tính tiết kiệm $89.5\%$ tổng chi phí sở hữu trong 5 năm (TCO) so với giải pháp vòng từ cảm ứng.
+    Đề tài đã xây dựng phương án triển khai phân tán giúp tối ưu hóa băng thông truyền thông thông qua việc chuyển dịch tính toán nhận dạng xuống biên và chỉ truyền vector số đếm nhỏ gọn về máy chủ trung tâm, bảo đảm bảo vệ quyền riêng tư hình ảnh theo nguyên tắc Privacy-by-Design, đồng thời phân tích định tính cho thấy tiềm năng tối ưu hóa chi phí đầu tư và duy tu mặt đường so với giải pháp vòng từ cảm ứng.
 \end{enumerate}
 
 \section*{2. Kiến nghị và đề xuất ứng dụng thực tiễn}
@@ -35,7 +35,7 @@ Từ các kết quả nghiên cứu và bài học thực tiễn thu được, n
 \subsection*{2.1. Kiến nghị đối với cơ quan quản lý giao thông và chính quyền đô thị}
 \begin{enumerate}
     \item \textbf{Tận dụng hạ tầng camera sẵn có thay vì đầu tư mới vòng từ:} 
-    Đề xuất các cơ quan quản lý giao thông tại các đô thị lớn xem xét áp dụng khung mô hình hai giai đoạn để tận dụng hệ thống camera giám sát hiện hữu, chuyển đổi thành mạng lưới cảm biến đếm xe và dự báo lưu lượng thông minh với chi phí đầu tư hạ tầng thấp hơn nhiều so với việc xẻ đường chôn vòng từ.
+    Đề xuất các cơ quan quản lý giao thông tại các đô thị lớn xem xét áp dụng giải pháp Two-Stage Pipeline để tận dụng hệ thống camera giám sát hiện hữu, chuyển đổi thành mạng lưới cảm biến đếm xe và dự báo lưu lượng thông minh với chi phí đầu tư hạ tầng thấp hơn nhiều so với việc xẻ đường chôn vòng từ.
     \item \textbf{Thử nghiệm điều khiển đèn tín hiệu thích ứng đón đầu:} 
     Tích hợp luồng dữ liệu dự báo 15--30 phút của mô hình TA-STGCN vào các hệ thống điều khiển đèn tín hiệu tại các giao lộ trọng điểm để tự động điều chỉnh chu kỳ đèn đón đầu dòng xe, giảm thiểu nguy cơ hình thành và lan truyền sóng xung kích ùn tắc.
     \item \textbf{Áp dụng mô hình tính toán biên bảo vệ quyền riêng tư:} 

@@ -130,34 +130,41 @@ class GroundTruthVehicleDetector:
         8: "truck",       # Xe tải
     }
 
-    def __init__(self, device: torch.device, conf_thresh: float = 0.35):
+    def __init__(self, device: torch.device, conf_thresh: float = 0.35, arch: str = "auto"):
         self.device = device
         self.conf_thresh = conf_thresh
         self.model = None
 
-        # 1. Thử nạp Faster R-CNN ResNet-50 FPN V2
-        try:
-            from torchvision.models.detection import (
-                fasterrcnn_resnet50_fpn_v2,
-                FasterRCNN_ResNet50_FPN_V2_Weights,
-            )
-            weights = FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
-            self.model = fasterrcnn_resnet50_fpn_v2(weights=weights).to(device)
-            self.model.eval()
-            print(f"🚗 [VehicleDetector] Nạp thành công Faster R-CNN ResNet-50 FPN V2 trên {device}!")
-        except Exception as e_res:
-            print(f"   ℹ️ ResNet-50 FPN V2 notice ({e_res}). Chuyển sang MobileNetV3 FPN...")
+        # Kiểm tra xem trọng số ResNet-50 FPN V2 đã có sẵn trong cache chưa
+        torch_cache_dir = os.path.expanduser("~/.cache/torch/hub/checkpoints")
+        resnet_cached = os.path.isfile(os.path.join(torch_cache_dir, "fasterrcnn_resnet50_fpn_v2_coco-dd69338a.pth"))
+
+        if arch == "resnet50" or (arch == "auto" and resnet_cached):
             try:
                 from torchvision.models.detection import (
-                    fasterrcnn_mobilenet_v3_large_fpn,
-                    FasterRCNN_MobileNet_V3_Large_FPN_Weights,
+                    fasterrcnn_resnet50_fpn_v2,
+                    FasterRCNN_ResNet50_FPN_V2_Weights,
                 )
-                weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
-                self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights).to(device)
+                weights = FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT
+                self.model = fasterrcnn_resnet50_fpn_v2(weights=weights).to(device)
                 self.model.eval()
-                print(f"🚗 [VehicleDetector] Nạp thành công Faster R-CNN MobileNetV3 FPN trên {device}!")
-            except Exception as e_mob:
-                print(f"   ⚠️ Không thể nạp Faster R-CNN detector: {e_mob}")
+                print(f"🚗 [VehicleDetector] Nạp thành công Faster R-CNN ResNet-50 FPN V2 trên {device}!")
+                return
+            except Exception as e_res:
+                print(f"   ℹ️ ResNet-50 FPN V2 notice ({e_res}). Chuyển sang MobileNetV3 FPN...")
+
+        # Fallback hoặc mặc định dùng MobileNetV3 FPN (đã có sẵn trong cache)
+        try:
+            from torchvision.models.detection import (
+                fasterrcnn_mobilenet_v3_large_fpn,
+                FasterRCNN_MobileNet_V3_Large_FPN_Weights,
+            )
+            weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
+            self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights).to(device)
+            self.model.eval()
+            print(f"🚗 [VehicleDetector] Nạp thành công Faster R-CNN MobileNetV3 FPN trên {device}!")
+        except Exception as e_mob:
+            print(f"   ⚠️ Không thể nạp Faster R-CNN detector: {e_mob}")
 
     @torch.no_grad()
     def detect_vehicles_batch(self, image_tensors: List[torch.Tensor]) -> List[List[Dict]]:
@@ -833,6 +840,8 @@ def main():
     parser.add_argument("--start_hour", type=int, default=6, help="Giờ bắt đầu khung giờ ban ngày (mặc định: 6h)")
     parser.add_argument("--end_hour", type=int, default=17, help="Giờ kết thúc khung giờ ban ngày (mặc định: 17h)")
     parser.add_argument("--eval_teacher", action="store_true", default=True, help="Đánh giá cả nhánh EMA Teacher nếu có")
+    parser.add_argument("--detector_arch", type=str, default="auto", choices=["auto", "resnet50", "mobilenet"],
+                        help="Kiến trúc detector (auto: ưu tiên mobilenet có sẵn để không mất thời gian tải weights)")
     parser.add_argument("--output_json", type=str, default="audit2_metrics_summary.json", help="File JSON xuất số liệu")
     parser.add_argument("--output_visual", type=str, default="audit2_visuals_overlay.png", help="File ảnh AGM overlay ban ngày")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
@@ -860,7 +869,7 @@ def main():
     print(f"📦 Đã nạp thành công {len(image_tensors)} ảnh ban ngày từ {len(set(cam_ids))} camera khác biệt.")
 
     # 2. Phát hiện phương tiện bằng Faster R-CNN theo batch
-    detector = GroundTruthVehicleDetector(device=device, conf_thresh=0.35)
+    detector = GroundTruthVehicleDetector(device=device, conf_thresh=0.35, arch=args.detector_arch)
     detections_list, gt_veh_masks, gt_road_masks, gt_sky_masks = [], [], [], []
     batch_det_sz = 16
     print(f"🚗 Bắt đầu phát hiện phương tiện trên {len(image_tensors)} ảnh ban ngày...")
